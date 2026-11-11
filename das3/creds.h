@@ -16,7 +16,7 @@
  */
 
 /** @file creds.h
- * Logins for das servers, see DasCredMngr
+ * Logins for das servers, see DasCredMgr
  */
 
 #ifndef _das_creds_h_
@@ -58,14 +58,14 @@ extern "C" {
 /* Credentials */
 
 /** How a secret is presented to a server */
-typedef enum das_auth_type {
+typedef enum das_auth_e {
 	DASAUTH_NONE,    /**< No secret is set */
 	DASAUTH_BASIC,   /**< HTTP Basic, the secret is base64 of "user:password" */
 	DASAUTH_BEARER   /**< A bearer token, as from an OAuth 2.0 login */
-} das_auth_e;
+} das_auth;
 
 /** The server refused this secret (HTTP 401).  A rejected secret is never sent
- * again on its own; a new one from DasCredMngr_setSecret() clears this. */
+ * again on its own; a new one from DasCredMgr_setSecret() clears this. */
 #define DASCRED_REJECTED 0x00000001
 
 /** The secret's expiration time has passed.  Worked out when the record is
@@ -75,34 +75,34 @@ typedef enum das_auth_type {
 /** A copy of one credential record, made for the caller
  *
  * This is how the manager reports a credential.  It never carries the secret
- * itself, see DasCredMngr_getSecret() for that.  The caller owns the string
+ * itself, see DasCredMgr_secret() for that.  The caller owns the string
  * buffers and says where they are and how big they are, usually with
- * das_cred_init(); the manager only copies into them.  A buffer pointer of
+ * init_DasCred(); the manager only copies into them.  A buffer pointer of
  * NULL with a size of 0 means that string is not wanted.
  *
  * @code
  *   char sServer[DASCRED_SRV_SZ];
  *   char sRealm[DASCRED_REALM_SZ];
- *   das_cred cred;
- *   das_cred_init(&cred, sServer, sizeof(sServer), sRealm, sizeof(sRealm),
+ *   DasCred cred;
+ *   init_DasCred(&cred, sServer, sizeof(sServer), sRealm, sizeof(sRealm),
  *                 NULL, 0);
  * @endcode
  *
  * The flags are DASCRED_REJECTED and DASCRED_EXPIRED.  The low 24 bits are
  * kept with the credential, the high 8 are worked out when it is copied.
  */
-typedef struct das_cred {
-	int16_t    nCred;      /**< The manager's ID for it, > 0 when filled */
-	uint32_t   uFlags;     /**< DASCRED_REJECTED, DASCRED_EXPIRED */
-	das_auth_e eScheme;    /**< DASAUTH_NONE if it has no secret */
-	das_datum  expires;    /**< vtLong UNIT_T1970, a null datum for never */
+typedef struct das_cred_t {
+	int16_t    id;         /**< The manager's ID for it, > 0 when filled */
+	uint32_t   flags;      /**< DASCRED_REJECTED, DASCRED_EXPIRED */
+	das_auth   scheme;     /**< DASAUTH_NONE if it has no secret */
+	DasDatum   expires;    /**< DASVT_LONG DASUNITS_T1970, a null datum for never */
 	char*  sServer;        /**< Caller's buffer for the server, or NULL */
 	size_t uServerSz;      /**< Size of sServer in bytes */
 	char*  sRealm;         /**< Caller's buffer for the realm, or NULL */
 	size_t uRealmSz;       /**< Size of sRealm in bytes */
 	char*  sDataset;       /**< Caller's buffer for the dataset, or NULL */
 	size_t uDatasetSz;     /**< Size of sDataset in bytes */
-} das_cred;
+} DasCred;
 
 /** Point a credential record at the caller's buffers
  *
@@ -116,10 +116,10 @@ typedef struct das_cred {
  * @param uRealmSz Its size in bytes, DASCRED_REALM_SZ is never short
  * @param sDataset A buffer for the dataset, or NULL
  * @param uDatasetSz Its size in bytes, DASCRED_DSET_SZ is never short
- * @memberof das_cred
+ * @memberof DasCred
  */
-DAS_API void das_cred_init(
-	das_cred* pCred, char* sServer, size_t uServerSz, char* sRealm,
+DAS_API void init_DasCred(
+	DasCred* pCred, char* sServer, size_t uServerSz, char* sRealm,
 	size_t uRealmSz, char* sDataset, size_t uDatasetSz
 );
 
@@ -129,10 +129,10 @@ DAS_API void das_cred_init(
 /** A function that asks a person for a user name and password
  *
  * The manager calls one when a server wants a login it does not have, or
- * refused the one it sent.  The built-in one is das_term_prompt(); a program
+ * refused the one it sent.  The built-in one is DasCredMgr_termPrompt(); a program
  * with a window should supply its own.
  *
- * @param pUser    Whatever was given to DasCredMngr_setPrompt()
+ * @param pUser    Whatever was given to DasCredMgr_setPrompt()
  * @param sServer  The server asking
  * @param sRealm   The realm it named, or NULL
  * @param sDataset The das2 dataset, or NULL
@@ -145,7 +145,7 @@ DAS_API void das_cred_init(
  * @returns true if the user gave a login, even an empty one, false if they
  *          declined
  */
-typedef bool (*das_prompt)(
+typedef bool (*dasfn_prompt)(
 	void* pUser, const char* sServer, const char* sRealm, const char* sDataset,
 	const char* sMessage, char* sUser, size_t uUserSz, char* sPass,
 	size_t uPassSz
@@ -161,7 +161,7 @@ typedef bool (*das_prompt)(
  * A program started with a hidden console would wait at a prompt no one can
  * see, so programs with windows should supply their own.
  */
-DAS_API bool das_term_prompt(
+DAS_API bool DasCredMgr_termPrompt(
 	void* pUser, const char* sServer, const char* sRealm, const char* sDataset,
 	const char* sMessage, char* sUser, size_t uUserSz, char* sPass,
 	size_t uPassSz
@@ -170,7 +170,7 @@ DAS_API bool das_term_prompt(
 /* ************************************************************************* */
 /* The manager */
 
-/** @class DasCredMngr creds.h <das3/creds.h>
+/** @class DasCredMgr creds.h <das3/creds.h>
  *
  * Holds the logins for a session and supplies them as servers ask.
  *
@@ -180,18 +180,18 @@ DAS_API bool das_term_prompt(
  * prompts when it has none, and remembers what worked.
  *
  * @code
- *   DasCredMngr* pMgr = new_DasCredMngr();
- *   DasCredMngr_setFileStore(pMgr, sKeyFile);
- *   DasCredMngr_load(pMgr);
- *   DasCredMngr_setPrompt(pMgr, das_term_prompt, NULL);
+ *   DasCredMgr* pMgr = new_DasCredMgr();
+ *   DasCredMgr_setStore(pMgr, sKeyFile);
+ *   DasCredMgr_load(pMgr);
+ *   DasCredMgr_setPrompt(pMgr, DasCredMgr_termPrompt, NULL);
  *
  *   DasHttpResp* pRes = new_DasHttpResp_get(sUrl, "my_prog", pMgr, 6.0);
- *   if(DasHttpResp_ok(pRes))
+ *   if(DasHttpResp_isOk(pRes))
  *       ...
  *   del_DasHttpResp(pRes);
  *
- *   DasCredMngr_save(pMgr);
- *   del_DasCredMngr(pMgr);
+ *   DasCredMgr_save(pMgr);
+ *   del_DasCredMgr(pMgr);
  * @endcode
  *
  * Nothing happens unless asked for.  A new manager reads no files and
@@ -202,14 +202,14 @@ DAS_API bool das_term_prompt(
  *
  * Each credential is a record saying where it applies (a server, an optional
  * realm, an optional das2 dataset) and one secret for it.  Records and
- * secrets are set separately: DasCredMngr_addCred() finds or makes the
- * record, DasCredMngr_setSecret() or DasCredMngr_setUserPass() gives it a
+ * secrets are set separately: DasCredMgr_addCred() finds or makes the
+ * record, DasCredMgr_setSecret() or DasCredMgr_setUserPass() gives it a
  * secret.
  *
  * @code
- *   int16_t nCred = DasCredMngr_addCred(pMgr, sUrl, "My Realm", NULL);
+ *   int16_t nCred = DasCredMgr_addCred(pMgr, sUrl, "My Realm", NULL);
  *   if(nCred > 0)
- *       DasCredMngr_setUserPass(pMgr, nCred, sUser, sPass);
+ *       DasCredMgr_setUserPass(pMgr, nCred, sUser, sPass);
  * @endcode
  *
  * The number that comes back, nCred, is the manager's ID for the record.  It
@@ -236,7 +236,7 @@ DAS_API bool das_term_prompt(
  * @par Storage
  *
  * The manager keeps credentials between runs only when given a store.  The
- * one store today is a key file, see DasCredMngr_setFileStore().  It is plain
+ * one store today is a key file, see DasCredMgr_setStore().  It is plain
  * text, protected the way ~/.netrc and ssh keys are, by being readable only
  * by its owner, not by encryption.  A key file that other users can read or
  * change is refused.  Use these functions to change it rather than editing it
@@ -245,24 +245,24 @@ DAS_API bool das_term_prompt(
  * A manager is not safe to use from two threads at once.  Two processes may
  * share one key file.
  */
-typedef struct das_credmngr DasCredMngr;
+typedef struct das_credmgr_t DasCredMgr;
 
 /** Make an empty credentials manager
  *
  * It has no credentials, no store and no prompt.
  *
  * @returns A new manager, or NULL if memory ran out
- * @memberof DasCredMngr
+ * @memberof DasCredMgr
  */
-DAS_API DasCredMngr* new_DasCredMngr(void);
+DAS_API DasCredMgr* new_DasCredMgr(void);
 
 /** Free a credentials manager
  *
  * Secrets are wiped from memory first.  Nothing is saved; call
- * DasCredMngr_save() before this to keep changes.
- * @memberof DasCredMngr
+ * DasCredMgr_save() before this to keep changes.
+ * @memberof DasCredMgr
  */
-DAS_API void del_DasCredMngr(DasCredMngr* pThis);
+DAS_API void del_DasCredMgr(DasCredMgr* pThis);
 
 /** Find or make the record for a server, realm and dataset
  *
@@ -277,17 +277,17 @@ DAS_API void del_DasCredMngr(DasCredMngr* pThis);
  * @param sDataset The das2 "dataset=" value, or NULL
  * @returns The record's ID, > 0, or -1 if a string is too long or the
  *        manager is full
- * @memberof DasCredMngr
+ * @memberof DasCredMgr
  */
-DAS_API int16_t DasCredMngr_addCred(
-	DasCredMngr* pThis, const char* sServer, const char* sRealm,
+DAS_API int16_t DasCredMgr_addCred(
+	DasCredMgr* pThis, const char* sServer, const char* sRealm,
 	const char* sDataset
 );
 
 /** Give a record its secret, replacing any it had
  *
  * The secret is stored as given and is what gets sent: for DASAUTH_BASIC the
- * base64 of "user:password" (DasCredMngr_setUserPass() makes that), for
+ * base64 of "user:password" (DasCredMgr_setUserPass() makes that), for
  * DASAUTH_BEARER the token.  Setting a secret clears DASCRED_REJECTED.
  *
  * @param pThis The manager
@@ -299,16 +299,16 @@ DAS_API int16_t DasCredMngr_addCred(
  *        datum for never
  * @returns DAS_OKAY, DASCRED_NONE for an unknown ID, or a positive error
  *        code for a secret that is too long or not a time
- * @memberof DasCredMngr
+ * @memberof DasCredMgr
  */
-DAS_API int DasCredMngr_setSecret(
-	DasCredMngr* pThis, int16_t nCred, das_auth_e eScheme, const char* sSecret,
-	const das_datum* pExpires
+DAS_API int DasCredMgr_setSecret(
+	DasCredMgr* pThis, int16_t nCred, das_auth eScheme, const char* sSecret,
+	const DasDatum* pExpires
 );
 
 /** Give a record an HTTP Basic login from a user name and password
  *
- * Makes the DASAUTH_BASIC secret and calls DasCredMngr_setSecret() with it.
+ * Makes the DASAUTH_BASIC secret and calls DasCredMgr_setSecret() with it.
  * It never expires.
  *
  * @param pThis The manager
@@ -317,21 +317,21 @@ DAS_API int DasCredMngr_setSecret(
  * @param sPass The password
  * @returns DAS_OKAY, DASCRED_NONE for an unknown ID, or a positive error
  *        code for a bad user name or a login that is too long
- * @memberof DasCredMngr
+ * @memberof DasCredMgr
  */
-DAS_API int DasCredMngr_setUserPass(
-	DasCredMngr* pThis, int16_t nCred, const char* sUser, const char* sPass
+DAS_API int DasCredMgr_setUserPass(
+	DasCredMgr* pThis, int16_t nCred, const char* sUser, const char* sPass
 );
 
 /** Forget a credential
  *
  * The record and its secret go now, and from the store at the next
- * DasCredMngr_save().
+ * DasCredMgr_save().
  *
  * @returns DAS_OKAY, or DASCRED_NONE for an unknown ID
- * @memberof DasCredMngr
+ * @memberof DasCredMgr
  */
-DAS_API int DasCredMngr_removeCred(DasCredMngr* pThis, int16_t nCred);
+DAS_API int DasCredMgr_rmCred(DasCredMgr* pThis, int16_t nCred);
 
 /** Find the credential for a server, realm and dataset
  *
@@ -339,12 +339,12 @@ DAS_API int DasCredMngr_removeCred(DasCredMngr* pThis, int16_t nCred);
  *
  * @code
  *   char sRealm[DASCRED_REALM_SZ];
- *   das_cred cred;
- *   das_cred_init(&cred, NULL, 0, sRealm, sizeof(sRealm), NULL, 0);
+ *   DasCred cred;
+ *   init_DasCred(&cred, NULL, 0, sRealm, sizeof(sRealm), NULL, 0);
  *
- *   if(DasCredMngr_getCred(pMgr, sUrl, NULL, NULL, true, &cred) == DAS_OKAY){
+ *   if(DasCredMgr_findCred(pMgr, sUrl, NULL, NULL, true, &cred) == DAS_OKAY){
  *       char sTok[DASCRED_SECRET_SZ];
- *       DasCredMngr_getSecret(pMgr, cred.nCred, sTok, sizeof(sTok));
+ *       DasCredMgr_secret(pMgr, cred.id, sTok, sizeof(sTok));
  *       ...
  *   }
  * @endcode
@@ -355,15 +355,15 @@ DAS_API int DasCredMngr_removeCred(DasCredMngr* pThis, int16_t nCred);
  * @param sDataset The das2 "dataset=" value, or NULL
  * @param bValidOnly If true, skip credentials with no secret, or one that was
  *        rejected or has expired
- * @param pOut The record to fill in, see das_cred_init()
+ * @param pOut The record to fill in, see init_DasCred()
  * @returns DAS_OKAY, DASCRED_SHORT if a buffer in pOut was too small,
  *        DASCRED_NONE if nothing matched, or a positive error code for bad
  *        arguments
- * @memberof DasCredMngr
+ * @memberof DasCredMgr
  */
-DAS_API int DasCredMngr_getCred(
-	const DasCredMngr* pThis, const char* sServer, const char* sRealm,
-	const char* sDataset, bool bValidOnly, das_cred* pOut
+DAS_API int DasCredMgr_findCred(
+	const DasCredMgr* pThis, const char* sServer, const char* sRealm,
+	const char* sDataset, bool bValidOnly, DasCred* pOut
 );
 
 /** Copy out a credential's secret
@@ -380,55 +380,55 @@ DAS_API int DasCredMngr_getCred(
  * @param uLen The size of sBuf, DASCRED_SECRET_SZ is never short
  * @returns The secret's length, 0 if the record has none, or DASCRED_NONE
  *        for an unknown ID
- * @memberof DasCredMngr
+ * @memberof DasCredMgr
  */
-DAS_API int DasCredMngr_getSecret(
-	const DasCredMngr* pThis, int16_t nCred, char* sBuf, size_t uLen
+DAS_API int DasCredMgr_secret(
+	const DasCredMgr* pThis, int16_t nCred, char* sBuf, size_t uLen
 );
 
 /** The number of credentials held
- * @memberof DasCredMngr
+ * @memberof DasCredMgr
  */
-DAS_API int DasCredMngr_numCreds(const DasCredMngr* pThis);
+DAS_API int DasCredMgr_numCreds(const DasCredMgr* pThis);
 
 /** Copy out a credential by position, for listing them
  *
- * Positions run from 0 to DasCredMngr_numCreds() - 1.  They are for walking
+ * Positions run from 0 to DasCredMgr_numCreds() - 1.  They are for walking
  * the list once; adding, removing or loading may reorder them.  Keep nCred
  * to refer to a credential later.
  *
  * @param pThis The manager
  * @param i The position
- * @param pOut The record to fill in, see das_cred_init()
+ * @param pOut The record to fill in, see init_DasCred()
  * @returns DAS_OKAY, DASCRED_SHORT if a buffer in pOut was too small, or
  *        DASCRED_NONE if i is out of range
- * @memberof DasCredMngr
+ * @memberof DasCredMgr
  */
-DAS_API int DasCredMngr_getCredByIdx(
-	const DasCredMngr* pThis, int i, das_cred* pOut
+DAS_API int DasCredMgr_credAt(
+	const DasCredMgr* pThis, int i, DasCred* pOut
 );
 
 /** Choose how the manager asks for a login
  *
  * @param pThis The manager
- * @param fPrompt The prompt, das_term_prompt() for a terminal program, or
+ * @param fPrompt The prompt, DasCredMgr_termPrompt() for a terminal program, or
  *        NULL never to ask
  * @param pUser Handed to every call of fPrompt
  * @returns The prompt it replaces
- * @memberof DasCredMngr
+ * @memberof DasCredMgr
  */
-DAS_API das_prompt DasCredMngr_setPrompt(
-	DasCredMngr* pThis, das_prompt fPrompt, void* pUser
+DAS_API dasfn_prompt DasCredMgr_setPrompt(
+	DasCredMgr* pThis, dasfn_prompt fPrompt, void* pUser
 );
 
 /** The prompt in use, NULL if none
  *
  * @param pThis The manager
  * @param ppUser If not NULL, gets the pUser given with the prompt
- * @memberof DasCredMngr
+ * @memberof DasCredMgr
  */
-DAS_API das_prompt DasCredMngr_getPrompt(
-	const DasCredMngr* pThis, void** ppUser
+DAS_API dasfn_prompt DasCredMgr_prompt(
+	const DasCredMgr* pThis, void** ppUser
 );
 
 /* ************************************************************************* */
@@ -437,7 +437,7 @@ DAS_API das_prompt DasCredMngr_getPrompt(
 /** Keep credentials in a key file
  *
  * This only says where; nothing is read or written until
- * DasCredMngr_load() or DasCredMngr_save().  Credentials already held stay,
+ * DasCredMgr_load() or DasCredMgr_save().  Credentials already held stay,
  * so loading from one store, switching, and saving moves them.
  *
  * The file is made readable only by its owner.  It need not exist yet.
@@ -448,19 +448,19 @@ DAS_API das_prompt DasCredMngr_getPrompt(
  * @param sPath The file, or NULL to have no store
  * @returns DAS_OKAY, or a positive error code for a path longer than
  *        DASCRED_STORE_SZ - 1
- * @memberof DasCredMngr
+ * @memberof DasCredMgr
  */
-DAS_API das_errcode DasCredMngr_setFileStore(
-	DasCredMngr* pThis, const char* sPath
+DAS_API das_errcode DasCredMgr_setStore(
+	DasCredMgr* pThis, const char* sPath
 );
 
 /** Where credentials are kept, for messages
  *
  * @returns "file:" and the path for a key file, or "" for no store.  The part
  *        before the colon names the kind of store.
- * @memberof DasCredMngr
+ * @memberof DasCredMgr
  */
-DAS_API const char* DasCredMngr_store(const DasCredMngr* pThis);
+DAS_API const char* DasCredMgr_store(const DasCredMgr* pThis);
 
 /** Merge credentials from the store into memory
  *
@@ -474,25 +474,25 @@ DAS_API const char* DasCredMngr_store(const DasCredMngr* pThis);
  *
  * @returns The number of credentials added or changed, or -1 if there is no
  *        store or it could not be read
- * @memberof DasCredMngr
+ * @memberof DasCredMgr
  */
-DAS_API int DasCredMngr_load(DasCredMngr* pThis);
+DAS_API int DasCredMgr_load(DasCredMgr* pThis);
 
 /** Write the credentials to the store
  *
  * The store is read again first and merged, so processes sharing a key file
  * keep each other's changes.  This manager's changes since it last loaded or
  * saved win, including removals; for everything else the store's version is
- * kept, and taken into memory as DasCredMngr_load() would.  Rejected and
+ * kept, and taken into memory as DasCredMgr_load() would.  Rejected and
  * expired credentials are saved too, with their flags.  A key file is
  * replaced whole, so a crash part way through leaves the old one, and is
- * refused for the same reasons as in DasCredMngr_load().
+ * refused for the same reasons as in DasCredMgr_load().
  *
  * @returns The number of credentials in the store afterward, or -1 if there
  *        is no store or it could not be written
- * @memberof DasCredMngr
+ * @memberof DasCredMgr
  */
-DAS_API int DasCredMngr_save(DasCredMngr* pThis);
+DAS_API int DasCredMgr_save(DasCredMgr* pThis);
 
 /** @} */
 

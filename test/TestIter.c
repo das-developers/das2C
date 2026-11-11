@@ -57,31 +57,31 @@ const char* g_sExpectFreq =
 int main(int argc, char** argv)
 {	
 	/* Exit on errors, log info messages and above */
-	das_init(argv[0], DASERR_DIS_EXIT, DASLOG_INFO, NULL);
+	daslib_init(argv[0], DASERRDISP_EXIT, DASLOG_INFO, NULL);
 
 	/* High-rank uniq-index iteration test */
 	int nTest = 1;
 	int nErr = DASERR_MAX + nTest;
-	DasStream* pSd = new_DasStream_path("TestIter", "examples/ex12_sounder_xyz.d3t");
+	DasStream* pSd = new_DasStream_file("TestIter", "examples/ex12_sounder_xyz.d3t");
 	if(pSd == NULL)
-		return das_error(nErr, "Test %d failed", nTest);
+		return daserrf(nErr, "Test %d failed", nTest);
 
-	DasDesc* pDesc = DasStream_getDesc(pSd, 1);
-	if(DasDesc_type(pDesc) != DASDESC_DS)
-		return das_error(nErr, "Test %d failed, descriptor isn't a dataset", nTest);
+	DasDesc* pDesc = DasStream_desc(pSd, 1);
+	if(DasDesc_type(pDesc) != DASDESCTYPE_DS)
+		return daserrf(nErr, "Test %d failed, descriptor isn't a dataset", nTest);
 	
 	DasDs* pDs = (DasDs*)pDesc;
-	DasDim* pFreq = DasDs_getDim(pDs, "frequency", DASDIM_COORD);
-	DasVar* pCent = DasDim_getVar(pFreq, "center");
+	DasDim* pFreq = DasDs_physDim(pDs, "frequency", DASDIMTYPE_COORD);
+	DasVar* pCent = DasDim_var(pFreq, "center");
 	
 	/* Print all unique frequencies, no matter the DS shape */
 	DasDsUniqIter iterU;
-	das_datum dm;
+	DasDatum dm;
 	char sTest[20*100] = {'\0'};
 	char* pWrite = sTest;
 	for(init_DasDsUniqIter(&iterU, pDs, pCent); !iterU.done; DasDsUniqIter_next(&iterU)){
-		DasVar_get(pCent, iterU.index, (das_byte_seq){0}, &dm);
-		das_datum_toStrValOnly(&dm, 4, pWrite, 32);
+		DasVar_datumAt(pCent, iterU.addr, (DasByteSeq){0}, &dm);
+		DasDatum_toValStr(&dm, 4, pWrite, 32);
 		pWrite += strlen(pWrite);
 		*pWrite = ' '; ++pWrite;
 	}
@@ -89,9 +89,9 @@ int main(int argc, char** argv)
 	size_t uLen = strlen(sTest);
 	for(size_t u = 0; u < uLen; ++u){
 		if(sTest[u] != g_sExpectFreq[u])
-			das_error(nErr, "Test %d failed, output change at character %zu", nTest, u);
+			daserrf(nErr, "Test %d failed, output change at character %zu", nTest, u);
 	}
-	daslog_info_v("Test %d success. Frequency sets match:\n%s\n", nTest, sTest);
+	daslog_infof("Test %d success. Frequency sets match:\n%s\n", nTest, sTest);
 	del_DasDesc((DasDesc*)pSd);
 
 	/* Depends on ex19 not changing!!
@@ -105,22 +105,22 @@ int main(int argc, char** argv)
 	 * fix.
 	 */
 	++nTest; ++nErr;
-	pSd = new_DasStream_path("TestIter", "examples/ex19_cassini_ragged_wfrm.d3t");
-	if(pSd == NULL) return das_error(nErr, "Test %d failed", nTest);
-	pDesc = DasStream_getDesc(pSd, 2);
-	if((pDesc == NULL) || (DasDesc_type(pDesc) != DASDESC_DS))
-		return das_error(nErr, "Test %d failed, descriptor isn't a dataset", nTest);
+	pSd = new_DasStream_file("TestIter", "examples/ex19_cassini_ragged_wfrm.d3t");
+	if(pSd == NULL) return daserrf(nErr, "Test %d failed", nTest);
+	pDesc = DasStream_desc(pSd, 2);
+	if((pDesc == NULL) || (DasDesc_type(pDesc) != DASDESCTYPE_DS))
+		return daserrf(nErr, "Test %d failed, descriptor isn't a dataset", nTest);
 	pDs = (DasDs*)pDesc;
 	size_t aPtsPerRow[8] = {0};
 	DasDsIter iterR;
 	for(init_DasDsIter(&iterR, pDs); !iterR.done; DasDsIter_next(&iterR))
-		aPtsPerRow[ iterR.index[0] ] += 1;
+		aPtsPerRow[ iterR.addr[0] ] += 1;
 	const size_t aExpect[3] = {2048, 1536, 2048};
 	for(int i = 0; i < 3; ++i)
 		if(aPtsPerRow[i] != aExpect[i])
-			return das_error(nErr, "Test %d failed: row %d has %zu, expected %zu",
+			return daserrf(nErr, "Test %d failed: row %d has %zu, expected %zu",
 				nTest, i, aPtsPerRow[i], aExpect[i]);
-	daslog_info_v("Test %d success. Ragged rows: %zu, %zu, %zu",
+	daslog_infof("Test %d success. Ragged rows: %zu, %zu, %zu",
 		nTest, aPtsPerRow[0], aPtsPerRow[1], aPtsPerRow[2]);
 	del_DasDesc((DasDesc*)pSd);
 

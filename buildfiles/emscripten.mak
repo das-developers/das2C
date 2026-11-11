@@ -43,11 +43,11 @@
 #                                 side drives DasNodeWalk instead; node.c,
 #                                 source.c and req.c never touch a transport
 # Dropping the network sources leaves dangling calls in util.c, io.c and
-# buffer.c.  DAS_NO_NETWORK compiles those out; das3/defs.h defines it
+# buffer.c.  DASCONF_NO_NET compiles those out; das3/defs.h defines it
 # whenever __EMSCRIPTEN__ is, so nothing here passes it.
 #
 # dft.c is in by default.  DFT=no (or any value but "yes") leaves it out and
-# defines DAS_NO_DFT, which skips FFTW setup in das_init().  FFTW is GPL, so
+# defines DAS_NO_DFT, which skips FFTW setup in daslib_init().  FFTW is GPL, so
 # a module linked with it is too, see THIRD-PARTY.txt.
 
 # Every path below is relative to the top of the source tree
@@ -361,7 +361,7 @@ $(BD)/lib_members: FORCE | $(BD)
 FORCE:
 .PHONY: FORCE
 
-# The source's git description for das_lib_version().  Asked only when this
+# The source's git description for daslib_version().  Asked only when this
 # directory is the top of its own repository, so a copy of the sources inside
 # some other checkout does not report that project's commit.  The stamp file
 # is rewritten only when the description changes: a commit rebuilds util.o,

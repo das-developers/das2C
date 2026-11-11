@@ -91,7 +91,7 @@ struct drive_log {
 /* Answer one step with candidate uIdx: feed the file or report it missing */
 static das_errcode step(DasNodeWalk* pWalk, size_t uIdx, struct drive_log* pLog)
 {
-	const char* sUrl = DasNodeWalk_url(pWalk, uIdx);
+	const char* sUrl = DasNodeWalk_urlAt(pWalk, uIdx);
 	if((pLog != NULL) && (pLog->uUrls < MAX_LOG)) pLog->aUrl[pLog->uUrls++] = sUrl;
 	size_t uLen = 0;
 	char* pDoc = readFile(sUrl, &uLen);
@@ -107,7 +107,7 @@ static das_errcode step(DasNodeWalk* pWalk, size_t uIdx, struct drive_log* pLog)
 static DasNode* drive(DasNodeWalk* pWalk, struct drive_log* pLog)
 {
 	if(pLog != NULL) pLog->uUrls = 0;
-	while(DasNodeWalk_state(pWalk) == das_walk_fetch) step(pWalk, 0, pLog);
+	while(DasNodeWalk_state(pWalk) == DASWALKSTATE_FETCH) step(pWalk, 0, pLog);
 	return DasNodeWalk_result(pWalk);
 }
 
@@ -151,14 +151,14 @@ static void test_json(void)
 	CHECK(DasNode_isCatalog(pRoot), "it is a catalog");
 	CHECK(streq(DasNode_pathUri(pRoot), ROOT_URI), "shorthand expanded: %s", DasNode_pathUri(pRoot));
 	CHECK(streq(DasNode_srcUrl(pRoot), ROOT_URL), "source URL kept");
-	CHECK(DasNode_subCount(pRoot) == 5, "five children listed, none loaded");
-	CHECK(DasNode_subType(pRoot, 4) == DASNODE_STREAM_SRC, "last child is a stream source");
+	CHECK(DasNode_numSubs(pRoot) == 5, "five children listed, none loaded");
+	CHECK(DasNode_subTypeAt(pRoot, 4) == DASNODETYPE_STREAM_SRC, "last child is a stream source");
 	del_DasNode(pRoot);
 
-	daslog_setlevel(DASLOG_CRIT);
+	daslog_setLevel(DASLOG_CRITICAL);
 	CHECK(new_DasNode_json("not json", 8, "x", NULL) == NULL, "garbage is not a node");
 	CHECK(new_DasNode_json("{\"type\":\"Nope\"}", 15, "x", NULL) == NULL, "unknown type is not a node");
-	daslog_setlevel(DASLOG_WARN);
+	daslog_setLevel(DASLOG_WARN);
 
 	const char* sDoc = "{\"type\":\"HttpStreamSrc\",\"protocol\":{}}";
 	DasNode* pNode = new_DasNode_json(sDoc, strlen(sDoc), NULL, NULL);
@@ -181,35 +181,35 @@ static void test_steps(void)
 	DasNodeWalk* pWalk = new_DasNodeWalk(pRoot, "src");
 	CHECK(pWalk != NULL, "walk starts");
 	if(pWalk == NULL){ del_DasNode(pRoot); return; }
-	CHECK(DasNodeWalk_state(pWalk) == das_walk_fetch, "a document is wanted");
-	CHECK(DasNodeWalk_urlCount(pWalk) == 1, "one candidate");
-	CHECK(streq(DasNodeWalk_url(pWalk, 0), "test/das_walk/src.json"), "the child's URL");
-	CHECK(DasNodeWalk_url(pWalk, 1) == NULL, "past the end is NULL");
+	CHECK(DasNodeWalk_state(pWalk) == DASWALKSTATE_FETCH, "a document is wanted");
+	CHECK(DasNodeWalk_numUrls(pWalk) == 1, "one candidate");
+	CHECK(streq(DasNodeWalk_urlAt(pWalk, 0), "test/das_walk/src.json"), "the child's URL");
+	CHECK(DasNodeWalk_urlAt(pWalk, 1) == NULL, "past the end is NULL");
 	CHECK(streq(DasNodeWalk_uri(pWalk), ROOT_URI "/src"), "the child's URI: %s", DasNodeWalk_uri(pWalk));
 	CHECK(DasNodeWalk_result(pWalk) == NULL, "no result yet");
 	CHECK(DasNodeWalk_nearest(pWalk, NULL) == NULL, "nothing nearest while running");
 
-	daslog_setlevel(DASLOG_CRIT);
+	daslog_setLevel(DASLOG_CRITICAL);
 	CHECK(DasNodeWalk_feed(pWalk, 1, "{}", 2, NULL) != DAS_OKAY, "feeding a candidate not on offer is refused");
-	daslog_setlevel(DASLOG_WARN);
-	CHECK(DasNodeWalk_state(pWalk) == das_walk_fetch, "and changes nothing");
+	daslog_setLevel(DASLOG_WARN);
+	CHECK(DasNodeWalk_state(pWalk) == DASWALKSTATE_FETCH, "and changes nothing");
 
 	CHECK(step(pWalk, 0, NULL) == DAS_OKAY, "the source document parses");
-	CHECK(DasNodeWalk_state(pWalk) == das_walk_done, "walk is done");
+	CHECK(DasNodeWalk_state(pWalk) == DASWALKSTATE_DONE, "walk is done");
 	DasNode* pSrc = DasNodeWalk_result(pWalk);
 	CHECK(pSrc != NULL, "result");
 	CHECK(pSrc && DasNode_isStreamSrc(pSrc), "it is a stream source");
 	CHECK(pSrc && streq(DasNode_pathUri(pSrc), ROOT_URI "/src"), "named by the walk");
 	CHECK(pSrc && streq(DasNode_srcUrl(pSrc), "test/das_walk/src.json"), "loaded from the candidate");
-	CHECK(DasNodeWalk_urlCount(pWalk) == 0, "nothing on offer when done");
-	daslog_setlevel(DASLOG_CRIT);
+	CHECK(DasNodeWalk_numUrls(pWalk) == 0, "nothing on offer when done");
+	daslog_setLevel(DASLOG_CRITICAL);
 	CHECK(DasNodeWalk_feed(pWalk, 0, "{}", 2, NULL) != DAS_OKAY, "a finished walk takes nothing");
-	daslog_setlevel(DASLOG_WARN);
+	daslog_setLevel(DASLOG_WARN);
 	del_DasNodeWalk(pWalk);
 
 	/* The result was attached: the same path needs no document now */
 	pWalk = new_DasNodeWalk(pRoot, "src");
-	CHECK(pWalk && (DasNodeWalk_state(pWalk) == das_walk_done), "second walk is done at once");
+	CHECK(pWalk && (DasNodeWalk_state(pWalk) == DASWALKSTATE_DONE), "second walk is done at once");
 	CHECK(pWalk && (DasNodeWalk_result(pWalk) == pSrc), "and finds the same node");
 	del_DasNodeWalk(pWalk);
 	pWalk = new_DasNodeWalk(pRoot, "/src");
@@ -219,9 +219,9 @@ static void test_steps(void)
 	CHECK(pWalk && (DasNodeWalk_result(pWalk) == pRoot), "empty path is the start node");
 	del_DasNodeWalk(pWalk);
 
-	daslog_setlevel(DASLOG_CRIT);
+	daslog_setLevel(DASLOG_CRITICAL);
 	CHECK(new_DasNodeWalk(pSrc, "deeper") == NULL, "no walk below a source");
-	daslog_setlevel(DASLOG_WARN);
+	daslog_setLevel(DASLOG_WARN);
 
 	del_DasNode(pSrc);   /* a child: ignored, its parent owns it */
 	CHECK(streq(DasNode_srcUrl(pSrc), "test/das_walk/src.json"), "a child is not deleted separately");
@@ -238,7 +238,7 @@ static void test_fallback(void)
 
 	/* The first mirror of "a" does not exist */
 	DasNodeWalk* pWalk = new_DasNodeWalk(pRoot, "a/b");
-	CHECK(pWalk && (DasNodeWalk_urlCount(pWalk) == 2), "two mirrors on offer");
+	CHECK(pWalk && (DasNodeWalk_numUrls(pWalk) == 2), "two mirrors on offer");
 	DasNode* pB = drive(pWalk, &log);
 	CHECK(pB != NULL, "a/b resolves through the second mirror");
 	CHECK(logIs(&log, 3, "test/das_walk/missing.json", "test/das_walk/a.json", "test/das_walk/src.json"),
@@ -250,7 +250,7 @@ static void test_fallback(void)
 
 	/* Both levels attached: "a" costs nothing now, and so does a/b */
 	pWalk = new_DasNodeWalk(pRoot, "a");
-	CHECK(pWalk && (DasNodeWalk_state(pWalk) == das_walk_done), "the intermediate node was kept");
+	CHECK(pWalk && (DasNodeWalk_state(pWalk) == DASWALKSTATE_DONE), "the intermediate node was kept");
 	DasNode* pA = pWalk ? DasNodeWalk_result(pWalk) : NULL;
 	del_DasNodeWalk(pWalk);
 	pWalk = new_DasNodeWalk(pRoot, "a/b");
@@ -282,44 +282,44 @@ static void test_fallback(void)
 	if(g_nFail) showLog(&log);
 	del_DasNodeWalk(pWalk);
 	pWalk = new_DasNodeWalk(pRoot, "a");
-	CHECK(pWalk && (DasNodeWalk_state(pWalk) == das_walk_fetch), "a dead end is not kept");
+	CHECK(pWalk && (DasNodeWalk_state(pWalk) == DASWALKSTATE_FETCH), "a dead end is not kept");
 	del_DasNodeWalk(pWalk);
 
 	/* A document that is not JSON: feed says so, the walk moves on */
 	pWalk = new_DasNodeWalk(pRoot, "junk/x");
-	daslog_setlevel(DASLOG_CRIT);
+	daslog_setLevel(DASLOG_CRITICAL);
 	das_errcode rc = step(pWalk, 0, NULL);
-	daslog_setlevel(DASLOG_WARN);
+	daslog_setLevel(DASLOG_WARN);
 	CHECK(rc == DASERR_NODE, "junk is reported to the driver");
-	CHECK(DasNodeWalk_state(pWalk) == das_walk_failed, "and nothing else to try");
+	CHECK(DasNodeWalk_state(pWalk) == DASWALKSTATE_FAILED, "and nothing else to try");
 	const char* sRest = NULL;
 	CHECK(streq(DasNodeWalk_nearest(pWalk, &sRest), ROOT_URI) && streq(sRest, "junk/x"),
 	      "nearest is the root with the whole path below it");
 	del_DasNodeWalk(pWalk);
 
 	/* Nothing listed, or listed with no URLs: failed before any step */
-	daslog_setlevel(DASLOG_CRIT);
+	daslog_setLevel(DASLOG_CRITICAL);
 	pWalk = new_DasNodeWalk(pRoot, "nothere");
-	CHECK(pWalk && (DasNodeWalk_state(pWalk) == das_walk_failed), "unknown child fails at once");
-	CHECK(pWalk && (DasNodeWalk_urlCount(pWalk) == 0), "nothing on offer");
+	CHECK(pWalk && (DasNodeWalk_state(pWalk) == DASWALKSTATE_FAILED), "unknown child fails at once");
+	CHECK(pWalk && (DasNodeWalk_numUrls(pWalk) == 0), "nothing on offer");
 	del_DasNodeWalk(pWalk);
 	pWalk = new_DasNodeWalk(pRoot, "nourls/x");
-	CHECK(pWalk && (DasNodeWalk_state(pWalk) == das_walk_failed), "a child with no URLs fails at once");
+	CHECK(pWalk && (DasNodeWalk_state(pWalk) == DASWALKSTATE_FAILED), "a child with no URLs fails at once");
 	del_DasNodeWalk(pWalk);
-	daslog_setlevel(DASLOG_WARN);
+	daslog_setLevel(DASLOG_WARN);
 
 	/* A driver that fetched the mirrors in parallel feeds the one that
 	   answered, skipping the ones before it */
 	pWalk = new_DasNodeWalk(pRoot, "a/b");
-	CHECK(pWalk && (DasNodeWalk_urlCount(pWalk) == 2), "two mirrors again on a fresh tree");
+	CHECK(pWalk && (DasNodeWalk_numUrls(pWalk) == 2), "two mirrors again on a fresh tree");
 	CHECK(step(pWalk, 1, NULL) == DAS_OKAY, "the second mirror fed directly");
-	CHECK(DasNodeWalk_state(pWalk) == das_walk_fetch, "on to the leaf");
+	CHECK(DasNodeWalk_state(pWalk) == DASWALKSTATE_FETCH, "on to the leaf");
 	CHECK(streq(DasNodeWalk_uri(pWalk), ROOT_URI "/a/b"), "leaf URI");
 	/* Abandon it here: the node loaded for "a" belongs to the walk and
 	   must go with it, see valgrind */
 	del_DasNodeWalk(pWalk);
 	pWalk = new_DasNodeWalk(pRoot, "a");
-	CHECK(pWalk && (DasNodeWalk_state(pWalk) == das_walk_fetch), "an abandoned walk attached nothing");
+	CHECK(pWalk && (DasNodeWalk_state(pWalk) == DASWALKSTATE_FETCH), "an abandoned walk attached nothing");
 	del_DasNodeWalk(pWalk);
 
 	del_DasNode(pRoot);
@@ -330,33 +330,33 @@ static void test_federated(void)
 {
 	printf("TEST: the compiled in seed\n");
 	size_t uRoots = 0;
-	const char** aRoots = das_seed_urls(&uRoots);
+	const char** aRoots = DasNode_seedUrls(&uRoots);
 
-	daslog_setlevel(DASLOG_CRIT);
+	daslog_setLevel(DASLOG_CRITICAL);
 	CHECK(new_DasNodeWalk(NULL, "src") == NULL, "a walk needs a start node");
-	daslog_setlevel(DASLOG_WARN);
+	daslog_setLevel(DASLOG_WARN);
 
 	DasNodeWalk* pWalk = new_DasNodeWalk_seed();
 	CHECK(pWalk != NULL, "seed walk starts");
 	if(pWalk == NULL) return;
-	CHECK(DasNodeWalk_state(pWalk) == das_walk_fetch, "a seed document is wanted");
-	CHECK(DasNodeWalk_urlCount(pWalk) == uRoots, "every seed URL is a candidate");
-	CHECK(streq(DasNodeWalk_url(pWalk, 0), aRoots[0]), "in order");
+	CHECK(DasNodeWalk_state(pWalk) == DASWALKSTATE_FETCH, "a seed document is wanted");
+	CHECK(DasNodeWalk_numUrls(pWalk) == uRoots, "every seed URL is a candidate");
+	CHECK(streq(DasNodeWalk_urlAt(pWalk, 0), aRoots[0]), "in order");
 	CHECK(streq(DasNodeWalk_uri(pWalk), ""), "a seed has no URI");
 
 	DasNodeWalk_fail(pWalk, 0, "no network in a unit test");
-	CHECK(DasNodeWalk_urlCount(pWalk) == uRoots - 1, "one mirror fewer");
-	CHECK(streq(DasNodeWalk_url(pWalk, 0), aRoots[1]), "the next mirror is first now");
+	CHECK(DasNodeWalk_numUrls(pWalk) == uRoots - 1, "one mirror fewer");
+	CHECK(streq(DasNodeWalk_urlAt(pWalk, 0), aRoots[1]), "the next mirror is first now");
 
 	/* A seed must be a Catalog; a source document is dropped */
 	size_t uLen = 0;
 	char* pDoc = readFile("test/das_walk/src.json", &uLen);
-	daslog_setlevel(DASLOG_CRIT);
+	daslog_setLevel(DASLOG_CRITICAL);
 	das_errcode rc = DasNodeWalk_feed(pWalk, 0, pDoc, uLen, NULL);
-	daslog_setlevel(DASLOG_WARN);
+	daslog_setLevel(DASLOG_WARN);
 	free(pDoc);
 	CHECK(rc == DASERR_NODE, "a source is not a seed");
-	CHECK(DasNodeWalk_state(pWalk) == das_walk_failed, "no mirrors left");
+	CHECK(DasNodeWalk_state(pWalk) == DASWALKSTATE_FAILED, "no mirrors left");
 	CHECK(DasNodeWalk_nearest(pWalk, NULL) == NULL, "nothing nearest when no seed loaded");
 	del_DasNodeWalk(pWalk);
 
@@ -367,7 +367,7 @@ static void test_federated(void)
 	pDoc = readFile("test/das_walk/fedroot.json", &uLen);
 	CHECK(DasNodeWalk_feed(pWalk, 0, pDoc, uLen, "https://mirror/index.json") == DAS_OKAY, "a stand in seed");
 	free(pDoc);
-	CHECK(DasNodeWalk_state(pWalk) == das_walk_done, "the seed is the result");
+	CHECK(DasNodeWalk_state(pWalk) == DASWALKSTATE_DONE, "the seed is the result");
 	DasNode* pRoot = DasNodeWalk_result(pWalk);
 	del_DasNodeWalk(pWalk);
 	CHECK(pRoot && DasNode_isCatalog(pRoot), "the seed outlives the walk");
@@ -376,10 +376,10 @@ static void test_federated(void)
 	if(pRoot == NULL) return;
 
 	pWalk = new_DasNodeWalk(pRoot, "tag:das2.org,2012:site:/src");
-	CHECK(pWalk && (DasNodeWalk_state(pWalk) == das_walk_fetch), "a full URI walks from the seed");
+	CHECK(pWalk && (DasNodeWalk_state(pWalk) == DASWALKSTATE_FETCH), "a full URI walks from the seed");
 	CHECK(pWalk && streq(DasNodeWalk_uri(pWalk), "tag:das2.org,2012:site:"), "first level named by the seed's prefix child: %s",
 	      pWalk ? DasNodeWalk_uri(pWalk) : "(null)");
-	CHECK(pWalk && streq(DasNodeWalk_url(pWalk, 0), ROOT_URL), "the fixture root stands in for site");
+	CHECK(pWalk && streq(DasNodeWalk_urlAt(pWalk, 0), ROOT_URL), "the fixture root stands in for site");
 	DasNode* pSrc = pWalk ? drive(pWalk, NULL) : NULL;
 	CHECK(pSrc && streq(DasNode_pathUri(pSrc), "tag:das2.org,2012:site:/src"), "full URI: %s",
 	      pSrc ? DasNode_pathUri(pSrc) : "(null)");
@@ -401,7 +401,7 @@ static void test_federated(void)
 /* ************************************************************************* */
 int main(int argc, char** argv)
 {
-	das_init(argv[0], DASERR_DIS_EXIT, DASLOG_WARN, NULL);
+	daslib_init(argv[0], DASERRDISP_EXIT, DASLOG_WARN, NULL);
 
 	test_json();
 	test_steps();

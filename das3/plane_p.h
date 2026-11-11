@@ -30,17 +30,17 @@
 extern "C" {
 #endif
 
-struct das_plane {
+struct das_plane_t {
 	DasDesc base;
 
-	das_plane_type_e planeType;
+	das_planetype planeType;
 	char* sName;
 	 
 	/* The encoder/decoder used to read and write values for this plane. */
 	DasEnc* pEncoding;
 	 
 	/* The units of measurement for values in this plane */
-	das_units units;
+	DasUnits units;
 	 
 	/* The number of values in each packet of this plane.
 	 * For planes other than \<yscan\>'s this is always 1
@@ -60,7 +60,7 @@ struct das_plane {
 	double rFill;  /* The fill value for this plane */
 	bool _bFillSet;  /* Flag to make sure fill value has been set */
 	
-	das_ytag_type_e ytag_spec;
+	das_ytagtype ytag_spec;
 	
 	double* pYTags;       /* Explicit Y value array <yscan>'s */
 	
@@ -68,7 +68,7 @@ struct das_plane {
 	double yTagMin;
 	double yTagMax;
 	
-	das_units yTagUnits;
+	DasUnits yTagUnits;
 	DasEnc* pYEncoding;
 	
 	/* set to true setValues or decode is called, set to false when encode is 
@@ -158,7 +158,7 @@ DasPlane* new_DasPlane_empty(void);
  * @memberof DasPlane
  */
 DasPlane* new_DasPlane_pairs(
-	DasDesc* pParent, das_plane_type_e pt, const char** attrs
+	DasDesc* pParent, das_planetype pt, const char** attrs
 );
 
 #ifdef __cplusplus

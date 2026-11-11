@@ -39,18 +39,18 @@ extern "C" {
  * @{
  */
 
-/** What das_error() does after logging, see das_init() */
-typedef enum das_errdis_e {
+/** What daserrf() does after logging, see daslib_init() */
+typedef enum das_errdisp_e {
 	
-	/** Errors end the program: das_error() logs at DASLOG_CRIT, then calls
+	/** Errors end the program: daserrf() logs at DASLOG_CRITICAL, then calls
 	 *  exit().  The default. */
-	DASERR_DIS_EXIT = 0,
+	DASERRDISP_EXIT = 0,
 	
-	/** Errors are returned: das_error() logs at DASLOG_ERROR, then returns
+	/** Errors are returned: daserrf() logs at DASLOG_ERROR, then returns
 	 *  its code */
-	DASERR_DIS_RET = 1
+	DASERRDISP_RET = 1
 	
-} das_errdis_e;
+} das_errdisp;
 
 /** Initialize any global structures in the Das2 library.
  *
@@ -79,42 +79,42 @@ typedef enum das_errdis_e {
  *
  * Most programs end on a library error and take the defaults:
  * @code
- *   das_init(argv[0], DASERR_DIS_EXIT, DASLOG_INFO, NULL);
+ *   daslib_init(argv[0], DASERRDISP_EXIT, DASLOG_INFO, NULL);
  * @endcode
  * A library binding returns on errors and sends messages to its host:
  * @code
- *   das_loghook hook = {myHandler, &myState};
- *   if(das_init("mymodule", DASERR_DIS_RET, DASLOG_INFO, &hook) != DAS_OKAY)
+ *   DasLogHook hook = {myHandler, &myState};
+ *   if(daslib_init("mymodule", DASERRDISP_RET, DASLOG_INFO, &hook) != DAS_OKAY)
  *      return NULL;
  * @endcode
  * When setup fails the hook has already been told why.
  *
  * The hook is installed before anything else is set up, so a failure inside
- * das_init() is reported through it, and is handled by the error
+ * daslib_init() is reported through it, and is handled by the error
  * disposition like any other error.
  *
  * @param sProgName The name of the program using the library.  Used in
  *        some error messages.
  *
- * @param nErrDis What das_error() does after logging: DASERR_DIS_EXIT, end
- *        the program, or DASERR_DIS_RET, return the error code to the caller.
- *        Any other value is an error, handled as DASERR_DIS_EXIT.
+ * @param nErrDis What daserrf() does after logging: DASERRDISP_EXIT, end
+ *        the program, or DASERRDISP_RET, return the error code to the caller.
+ *        Any other value is an error, handled as DASERRDISP_EXIT.
  *
  * @param nLevel The log level, one of DASLOG_TRACE, DASLOG_DEBUG,
- *        DASLOG_INFO, DASLOG_WARN, DASLOG_ERROR, DASLOG_CRIT.  With
- *        DASERR_DIS_RET a level above DASLOG_ERROR is an error, since it
- *        would hide every error message; daslog_setlevel() can still do that
+ *        DASLOG_INFO, DASLOG_WARN, DASLOG_ERROR, DASLOG_CRITICAL.  With
+ *        DASERRDISP_RET a level above DASLOG_ERROR is an error, since it
+ *        would hide every error message; daslog_setLevel() can still do that
  *        on purpose later.
  *
  * @param pHook The log hook, copied in.  NULL for the default, which prints
- *        to standard error.  See das_loghook for what a handler may and may
+ *        to standard error.  See DasLogHook for what a handler may and may
  *        not do.
  *
- * @returns DAS_OKAY, or with DASERR_DIS_RET, DASERR_INIT if setup failed.
+ * @returns DAS_OKAY, or with DASERRDISP_RET, DASERR_INIT if setup failed.
  */
-DAS_API das_errcode das_init(
-	const char* sProgName, das_errdis_e nErrDis, int nLevel,
-	const das_loghook* pHook
+DAS_API das_errcode daslib_init(
+	const char* sProgName, das_errdisp nErrDis, int nLevel,
+	const DasLogHook* pHook
 );
 
 /** Get the library version
@@ -126,7 +126,7 @@ DAS_API das_errcode das_init(
  *
  * @returns the version string, or "untagged" if the build could not tell
  */
-DAS_API const char* das_lib_version(void);
+DAS_API const char* daslib_version(void);
 
 /** One limit of this build of the library
  *
@@ -137,15 +137,15 @@ DAS_API const char* das_lib_version(void);
  * follows.
  *
  * @code
- *   const das_limit* pLimit = daslimit_get("max_packet_bytes");
- *   if((pLimit != NULL) && (uMyPacket > (size_t)pLimit->nLimit))
+ *   const DasLimit* pLimit = DasLimit_lookup("max_packet_bytes");
+ *   if((pLimit != NULL) && (uMyPacket > (size_t)pLimit->value))
  *      fprintf(stderr, "Packet too big for this das library\n");
  *
  *   // Or list them all, without knowing their names
- *   for(pLimit = daslimit_getNext(NULL); pLimit != NULL;
- *       pLimit = daslimit_getNext(pLimit)
+ *   for(pLimit = DasLimit_next(NULL); pLimit != NULL;
+ *       pLimit = DasLimit_next(pLimit)
  *   ){
- *      printf("%s = %d\n", pLimit->sName, (int)pLimit->nLimit);
+ *      printf("%s = %d\n", pLimit->name, (int)pLimit->value);
  *   }
  * @endcode
  *
@@ -162,47 +162,47 @@ DAS_API const char* das_lib_version(void);
  *   - @b max_dataset_rank      Most index dimensions in a dataset
  *   - @b das2_max_item_bytes   Widest das2 text or time item
  *
- * Only take entries from daslimit_get() and daslimit_getNext(), and don't
+ * Only take entries from DasLimit_lookup() and DasLimit_next(), and don't
  * step from one entry to the next with pointer arithmetic. 
  *
  * The internal table is constant, so these calls are thread safe and may be
- * made before das_init().
+ * made before daslib_init().
  */
-typedef struct das_limit {
-	const char* sName;  /** The limit's name, see the list above */
-	int32_t     nLimit; /** The largest value allowed */
-} das_limit;
+typedef struct das_limit_t {
+	const char* name;  /** The limit's name, see the list above */
+	int32_t     value; /** The largest value allowed */
+} DasLimit;
 
 /** Look up a library limit by name
  *
- * @param sName The name of a limit, see das_limit
+ * @param sName The name of a limit, see DasLimit
  * @returns the limit, or NULL if this library has no limit by that name
  *          (or sName is NULL)
- * @memberof das_limit
+ * @memberof DasLimit
  */
-DAS_API const das_limit* daslimit_get(const char* sName);
+DAS_API const DasLimit* DasLimit_lookup(const char* sName);
 
 /** Walk the library's limits
  *
  * @param pPrev NULL to get the first limit, otherwise a limit pointer
- *        returned by an earlier call to this function or daslimit_get()
+ *        returned by an earlier call to this function or DasLimit_lookup()
  * @returns the limit after pPrev, or NULL after the last one.  A pPrev that
- *        did not come from this library is reported with das_error() and
+ *        did not come from this library is reported with daserrf() and
  *        also returns NULL.
- * @memberof das_limit
+ * @memberof DasLimit
  */
-DAS_API const das_limit* daslimit_getNext(const das_limit* pPrev);
+DAS_API const DasLimit* DasLimit_next(const DasLimit* pPrev);
 
 
 /** A do nothing function on Unix, closes network sockets on windows */
-DAS_API void das_finish(void);
+DAS_API void daslib_finish(void);
 
-DAS_API das_errcode daserr_func(
+DAS_API das_errcode daserr_funcf(
 	const char* sFile, const char* sFunc, int nLine, das_errcode nCode,
 	const char* sFmt, ...
 ) _das_fmt_check(5, 6);
 
-DAS_API das_errcode daserr_func_fixed(
+DAS_API das_errcode daserr_func(
 	const char* sFile, const char* sFunc, int nLine, das_errcode nCode,
 	const char* sMsg
 );
@@ -214,15 +214,15 @@ DAS_API das_errcode daserr_func_fixed(
  * The message goes to the log hook, see log.h, carrying nErrCode in its nErr
  * member.  What happens next depends on the error disposition:
  *
- *   - DASERR_DIS_EXIT, the default: the message is logged at DASLOG_CRIT,
+ *   - DASERRDISP_EXIT, the default: the message is logged at DASLOG_CRITICAL,
  *     then the program calls exit(nErrCode).  The hook has returned by then,
  *     so atexit() functions run normally and may use das2C.
  *
- *   - DASERR_DIS_RET: the message is logged at DASLOG_ERROR and nErrCode is
+ *   - DASERRDISP_RET: the message is logged at DASLOG_ERROR and nErrCode is
  *     returned.
  *
  * The library keeps no copy of the message.  A program that wants the text
- * after das_error() returns saves it in its hook.
+ * after daserrf() returns saves it in its hook.
  *
  * Each source file in the code has it's own error code.  Though it's probably
  * not that useful to end users, the codes are provided here:
@@ -269,44 +269,44 @@ DAS_API das_errcode daserr_func_fixed(
  * colliding with future das2 error codes.
  *
  * @param nErrCode The value to return to the shell, should be one of the above.
- * @return With DASERR_DIS_EXIT this function does not return, with
- *         DASERR_DIS_RET it returns nErrCode.
+ * @return With DASERRDISP_EXIT this function does not return, with
+ *         DASERRDISP_RET it returns nErrCode.
  */
-#define das_error(nErrCode, ...) \
-  daserr_func(__FILE__, __func__, __LINE__, nErrCode, __VA_ARGS__ )
+#define daserrf(nErrCode, ...) \
+  daserr_funcf(__FILE__, __func__, __LINE__, nErrCode, __VA_ARGS__ )
 
 /** Signal an error condition with a message that is not a format string.
  *
  * Use this when the message comes from elsewhere (a caller, a parser, a
  * library) and may contain '%' characters.  Nothing is interpreted.
  *
- * @see das_error */
-#define das_error_str(nErrCode, sMsg) \
-  daserr_func_fixed(__FILE__, __func__, __LINE__, nErrCode, sMsg)
+ * @see daserrf */
+#define daserr(nErrCode, sMsg) \
+  daserr_func(__FILE__, __func__, __LINE__, nErrCode, sMsg)
 
 /** Raise an error and return false, for a function that reports failure as a
  * bool rather than a das_errcode.
  *
- * `return das_error(...)` is correct in the das_errcode functions that are most
- * of this library, and silently WRONG in a bool one: das_error() hands back a
+ * `return daserrf(...)` is correct in the das_errcode functions that are most
+ * of this library, and silently WRONG in a bool one: daserrf() hands back a
  * non-zero code, which as a bool is true, so the failure reports success.  The
  * types are both integers and no compiler diagnostic exists for it.  Write
- * `return das_error_false(...)` in a bool function and the question does not
+ * `return daserr_falsef(...)` in a bool function and the question does not
  * come up.
  */
-#define das_error_false(nErrCode, ...) \
-  (daserr_func(__FILE__, __func__, __LINE__, nErrCode, __VA_ARGS__), false)
+#define daserr_falsef(nErrCode, ...) \
+  (daserr_funcf(__FILE__, __func__, __LINE__, nErrCode, __VA_ARGS__), false)
 
 /** Raise an error and return NULL, for a function that answers with a pointer.
- * @see das_error_false */
-#define das_error_null(nErrCode, ...) \
-  (daserr_func(__FILE__, __func__, __LINE__, nErrCode, __VA_ARGS__), NULL)
+ * @see daserr_falsef */
+#define daserr_nullf(nErrCode, ...) \
+  (daserr_funcf(__FILE__, __func__, __LINE__, nErrCode, __VA_ARGS__), NULL)
 
 
 /** Get the library's error disposition
- * @returns DASERR_DIS_EXIT or DASERR_DIS_RET
+ * @returns DASERRDISP_EXIT or DASERRDISP_RET
  */
-DAS_API das_errdis_e daserr_disp(void);
+DAS_API das_errdisp daserr_disp(void);
 
 /** Set the error disposition, the inverse of daserr_disp()
  *
@@ -314,41 +314,41 @@ DAS_API das_errdis_e daserr_disp(void);
  * library function that changes it for a moment changes it for every
  * thread.
  *
- * @param nDisp DASERR_DIS_EXIT or DASERR_DIS_RET.  Any other value is an
+ * @param nDisp DASERRDISP_EXIT or DASERRDISP_RET.  Any other value is an
  *        error and leaves the disposition unchanged.
  */
-DAS_API void daserr_setdisp(das_errdis_e nDisp);
+DAS_API void daserr_setDisp(das_errdisp nDisp);
 
 
 /** The limit on xml packet length, in bytes.  (ascii encoding.) */
-#define DAS_XML_BUF_LEN 1000000
+#define DASXML_BUF_LEN 1000000
 
 /** The limit of xml element name length, in bytes. */
-#define DAS_XML_NODE_NAME_LEN 256
+#define DASXML_NAME_LEN 256
 
 
-/** The parts of a URL, see das_url_parse() */
-typedef enum das_url_part {
-	DASURL_SCHEME,    /**< "http", "https", "file" ... */
-	DASURL_USERINFO,  /**< "user:password" before an "@", rare and best avoided */
-	DASURL_HOST,      /**< Host name or address, brackets kept on IPv6 literals */
-	DASURL_PORT,      /**< Port number, the scheme's default if none was given */
-	DASURL_PATH,      /**< Path on the host, starting with "/" */
-	DASURL_QUERY,     /**< Everything between "?" and "#", still percent encoded */
-	DASURL_FRAGMENT,  /**< Everything after "#" */
-	DASURL_DATASET    /**< das2.2 "dataset=" value from the query, still encoded */
-} das_url_part_e;
+/** The parts of a URL, see DasUrlParts_fromStr() */
+typedef enum das_urlpart_e {
+	DASURLPART_SCHEME,    /**< "http", "https", "file" ... */
+	DASURLPART_USERINFO,  /**< "user:password" before an "@", rare and best avoided */
+	DASURLPART_HOST,      /**< Host name or address, brackets kept on IPv6 literals */
+	DASURLPART_PORT,      /**< Port number, the scheme's default if none was given */
+	DASURLPART_PATH,      /**< Path on the host, starting with "/" */
+	DASURLPART_QUERY,     /**< Everything between "?" and "#", still percent encoded */
+	DASURLPART_FRAGMENT,  /**< Everything after "#" */
+	DASURLPART_DATASET    /**< das2.2 "dataset=" value from the query, still encoded */
+} das_urlpart;
 
-/** Where the parts of a URL are, as found by das_url_parse()
+/** Where the parts of a URL are, as found by DasUrlParts_fromStr()
  *
  * A plain value that holds no text, only where each part lies in the string
  * it was parsed from.  It is small enough for the stack and needs no
- * cleanup.  The members are private, read the parts with das_url_part().
+ * cleanup.  The members are private, read the parts with DasUrlParts_get().
  */
-typedef struct das_url_parts {
-	uint16_t aOff[12];   /* indexed by das_url_part_e, room for more parts */
+typedef struct das_urlparts_t {
+	uint16_t aOff[12];   /* indexed by das_urlpart, room for more parts */
 	uint16_t aLen[12];
-} das_url_parts;
+} DasUrlParts;
 
 /** Split a URL into its parts without copying it
  *
@@ -360,13 +360,13 @@ typedef struct das_url_parts {
  * The das2.2 interface names a data source with a "dataset=" value in the
  * query, and das2 servers may want a separate login for each one (das2.2
  * ICD, https://zenodo.org/records/3588535).  That value is found here too,
- * as DASURL_DATASET, so every caller splits it out the same way.
+ * as DASURLPART_DATASET, so every caller splits it out the same way.
  *
  * @code
- *   das_url_parts parts;
- *   if(das_url_parse(&parts, sUrl)){
+ *   DasUrlParts parts;
+ *   if(DasUrlParts_fromStr(&parts, sUrl)){
  *       size_t uLen;
- *       const char* pHost = das_url_part(&parts, sUrl, DASURL_HOST, &uLen);
+ *       const char* pHost = DasUrlParts_get(&parts, sUrl, DASURLPART_HOST, &uLen);
  *       printf("host: %.*s\n", (int)uLen, pHost);
  *   }
  * @endcode
@@ -377,27 +377,27 @@ typedef struct das_url_parts {
  *          otherwise.  Nothing is logged; a caller with a user to tell
  *          decides what to say.
  */
-DAS_API bool das_url_parse(das_url_parts* pParts, const char* sUrl);
+DAS_API bool DasUrlParts_fromStr(DasUrlParts* pParts, const char* sUrl);
 
-/** Get one part of a URL split by das_url_parse()
+/** Get one part of a URL split by DasUrlParts_fromStr()
  *
  * The part is returned in place, so it is not NUL terminated.  Print it
  * with "%.*s", or copy it out with the length when a C string is needed.
  *
- * For a URL that gives no port, DASURL_PORT points to a static string with
+ * For a URL that gives no port, DASURLPART_PORT points to a static string with
  * the scheme's default, "80" for http and "443" for https; for other schemes
  * without one it is absent.
  *
- * @param pParts The result of das_url_parse()
- * @param sUrl The same string given to das_url_parse()
+ * @param pParts The result of DasUrlParts_fromStr()
+ * @param sUrl The same string given to DasUrlParts_fromStr()
  * @param ePart Which part
  * @param pLen Receives the length of the part, 0 when it is absent
  * @returns A pointer to the start of the part within sUrl (or to a static
  *          default port), or NULL if the URL has no such part.  An empty part,
  *          such as the query of "http://h/p?", is non-NULL with length 0.
  */
-DAS_API const char* das_url_part(
-	const das_url_parts* pParts, const char* sUrl, das_url_part_e ePart, size_t* pLen
+DAS_API const char* DasUrlParts_get(
+	const DasUrlParts* pParts, const char* sUrl, das_urlpart ePart, size_t* pLen
 );
 
 /** Is this string a full URI rather than a relative catalog path?
@@ -406,17 +406,17 @@ DAS_API const char* das_url_part(
  * digits, '+', '-' or '.' and then a colon, as in "tag:", "doi:" and the
  * shorthands "site:" and "test:".  A single letter before the colon is a
  * Windows drive, not a scheme.  Note that URLs are URIs too; test with
- * das_isUrlOrFile() first when the difference matters.
+ * DasCat_isNodeUrl() first when the difference matters.
  *
  */
-DAS_API bool das_isUri(const char* sPath);
+DAS_API bool dasurl_hasScheme(const char* sPath);
 
 
 /** Is the path a directory.
  * @param path The directory in question, passed to stat(2)
  * @return true if @b path can be determined to be a directory, false otherwise
  */
-DAS_API bool das_isdir(const char* path);
+DAS_API bool dasfs_isDir(const char* path);
 
 /** Insure directories to a specific location exist 
  * 
@@ -426,7 +426,7 @@ DAS_API bool das_isdir(const char* path);
  * @return true if directories up to the final location either exist, or 
  *        could be generated, false otherwise.
  */
-DAS_API das_errcode das_mkdirsto(const char* path);
+DAS_API das_errcode dasfs_mkdirsTo(const char* path);
 
 
 /** Get the home directory for the current account 
@@ -435,26 +435,26 @@ DAS_API das_errcode das_mkdirsto(const char* path);
  *         home directory, or other likely writable location if
  *         the home directory could not be determined.
  */
-DAS_API const char* das_userhome(void);
+DAS_API const char* dasfs_userHome(void);
 
 /** Get the directory for everything das keeps on behalf of the current user
  *
  * This is ".das" under the home directory on every platform, the way ssh
  * and git keep their files, or the value of the DAS_USERDIR environment
- * variable if it was set when das_init() ran, or whatever the program gave
+ * variable if it was set when daslib_init() ran, or whatever the program gave
  * das_setUserDir().  The catalog node cache and saved credentials live
  * under it.  Only the path is returned, nothing is created; whatever
  * writes under it makes the directories it needs.
  *
  * @return A pointer to a global string, never NULL or empty.
  */
-DAS_API const char* das_userdir(void);
+DAS_API const char* dasfs_userDir(void);
 
-/** Choose the directory das_userdir() reports
+/** Choose the directory dasfs_userDir() reports
  *
  * For programs that embed the library and want to set the location
  * themselves instead of relying on the environment.  Call it right after
- * das_init() and before any DasCat or other object that reads the
+ * daslib_init() and before any DasCat or other object that reads the
  * directory is made: those take their copy when constructed and are not
  * moved by a later call.
  *
@@ -462,7 +462,7 @@ DAS_API const char* das_userdir(void);
  *        back to the default, the DAS_USERDIR environment variable if set,
  *        else ".das" under the home directory.
  */
-DAS_API void das_set_userdir(const char* sDir);
+DAS_API void dasfs_setUserDir(const char* sDir);
 
 /** Copy a file to a destination creating directories as needed. 
  *
@@ -481,9 +481,9 @@ DAS_API void das_set_userdir(const char* sDir);
  * 
  */
 #ifdef _WIN32
-DAS_API bool das_copyfile(const char* src, const char* dest);
+DAS_API bool dasfs_copyFile(const char* src, const char* dest);
 #else
-DAS_API bool das_copyfile(const char* src, const char* dest, mode_t mode);
+DAS_API bool dasfs_copyFile(const char* src, const char* dest, mode_t mode);
 #endif
 
 
@@ -491,7 +491,7 @@ DAS_API bool das_copyfile(const char* src, const char* dest, mode_t mode);
  * @param path The file in question, passed to stat(2)
  * @return true if @b path can be determined to be a file, false otherwise
  */
-DAS_API bool das_isfile(const char* path);
+DAS_API bool dasfs_isFile(const char* path);
 
 /** Rename a file, replacing the destination if it exists.
  *
@@ -505,7 +505,7 @@ DAS_API bool das_isfile(const char* path);
  * @param sTo The new name, any file already there is replaced
  * @return 0 on success, -1 on failure with errno set as rename(2) would
  */
-DAS_API int das_rename(const char* sFrom, const char* sTo);
+DAS_API int dasfs_rename(const char* sFrom, const char* sTo);
 
 /** Put a stdio stream in binary mode
  *
@@ -516,7 +516,7 @@ DAS_API int das_rename(const char* sFrom, const char* sTo);
  *
  * @param pFile The stream to change, NULL is ignored
  */
-DAS_API void das_stdio_binary(FILE* pFile);
+DAS_API void dasfs_setStdioBinary(FILE* pFile);
 
 /** Get a sorted directory listing
  *
@@ -538,7 +538,7 @@ DAS_API void das_stdio_binary(FILE* pFile);
  *         '..' are returned, on failure a negative error code is returned.
  *         Item names are sorted before return.
  */
-DAS_API int das_dirlist(
+DAS_API int dasfs_listDir(
 	const char* sPath, char ppDirList[][256], size_t uMaxDirs, char cType
 );
 
@@ -561,7 +561,7 @@ DAS_API int das_dirlist(
  * 
  * @returns true if the string matches the given option, false otherwise
  */
-DAS_API bool dascmd_isArg(const char* sArg, const char* sShort, const char* sLong, bool* pLong);
+DAS_API bool dasarg_isOpt(const char* sArg, const char* sShort, const char* sLong, bool* pLong);
 
 
 /** Get the value of an argument if the current entry in argv matches
@@ -593,7 +593,7 @@ DAS_API bool dascmd_isArg(const char* sArg, const char* sShort, const char* sLon
  * 
  * @see also DAS_FIELD_SZ
  */
-DAS_API bool dascmd_getArgVal(
+DAS_API bool dasarg_getOptVal(
   char** argv, int argc, const char* sShort, const char* sLong, int* pArgIdx, 
   char* sDest, size_t uDest
 );

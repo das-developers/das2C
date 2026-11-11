@@ -77,18 +77,18 @@ typedef struct DasGen_VTbl {
 	   variable's item count: one for a scalar, ncomp for a composite.
 	   Returns the count written, or a negative das error code. */
 	int (*eval)(
-		const DasGen* pThis, const ptrdiff_t* pExtLoc, ubyte* pRun, size_t uRunMax
+		const DasGen* pThis, const ptrdiff_t* pExtAddr, uint8_t* pRun, size_t uRunMax
 	);
 
-	/* The external shape this generator can address, VARIDX_RAGGED /
-	   VARIDX_BORROW / VARIDX_UNUSED vocabulary.  For an array this is the
+	/* The external shape this generator can address, DASIDX_RAGGED /
+	   DASIDX_BORROW / DASIDX_UNUSED vocabulary.  For an array this is the
 	   array shape minus the internal indices.  For a sequence it is the
 	   declared extent. */
 	int (*extShape)(const DasGen* pThis, ptrdiff_t* pShape);
 
 	/* External length at a partial index, for ragged external runs.  Keep the
 	   MIN merge semantics that DasDs_lengthIn already relies on. */
-	ptrdiff_t (*lengthIn)(const DasGen* pThis, int nIdx, ptrdiff_t* pLoc);
+	ptrdiff_t (*lengthIn)(const DasGen* pThis, int nIdx, ptrdiff_t* pAddr);
 
 	/* A pointer to the item run IN PLACE, for values that are views rather
 	   than copies: a string datum carries a pointer into the backing array,
@@ -96,8 +96,8 @@ typedef struct DasGen_VTbl {
 	   buffer.  Only a backed generator can answer (gtArray); computed
 	   sources return NULL, a computed string having no home to point at.
 	   *pCount receives the run element count (ragged aware). */
-	const ubyte* (*at)(
-		const DasGen* pThis, const ptrdiff_t* pExtLoc, size_t* pCount
+	const uint8_t* (*at)(
+		const DasGen* pThis, const ptrdiff_t* pExtAddr, size_t* pCount
 	);
 
 	/* Hand back a rectangular DasAry covering the external range [pMin,pMax)
@@ -109,7 +109,7 @@ typedef struct DasGen_VTbl {
 
 	   The returned array holds one reference for the caller and saves its
 	   memory owner, exactly as new_DasAry() would 
-	   @see DasAry_subSetIn. 
+	   @see new_DasAry_slice. 
 	*/
 	DasAry* (*subsetView)(
 		const DasGen* pThis, int nExtRank, const ptrdiff_t* pMin,
@@ -129,7 +129,7 @@ typedef struct DasGen_VTbl {
 	   Returns item runs written, or a negative das error code. */
 	int (*subsetInto)(
 		const DasGen* pThis, int nExtRank, const ptrdiff_t* pMin,
-		const ptrdiff_t* pMax, ubyte* pBuf, size_t uBufLen
+		const ptrdiff_t* pMax, uint8_t* pBuf, size_t uBufLen
 	);
 
 	void (*destroy)(DasGen* pThis);   /* called by DasGen_decRef at zero */
@@ -146,7 +146,7 @@ struct das_generator {
 	/* Element types are answered by the generator, because "what one element
 	   holds" is a fact about the source, not the index presentation or the
 	   mathematical formalism. */
-	das_elem_type elem;
+	das_et elem;
 
 	int nRef;
 };
@@ -202,25 +202,25 @@ int DasGen_decRef(DasGen* pThis);
  * rather than inventing a value there.
  *
  * @param pThis the generator to read
- * @param pExtLoc the external location, one index per external rank
+ * @param pExtAddr the external location, one index per external rank
  * @param pRun receives the elements
  * @param uRunMax the size of pRun in BYTES
  * @returns the element count written, or a negative das error code.
  * @memberof DasGen
  */
 int DasGen_eval(
-	const DasGen* pThis, const ptrdiff_t* pExtLoc, ubyte* pRun, size_t uRunMax
+	const DasGen* pThis, const ptrdiff_t* pExtAddr, uint8_t* pRun, size_t uRunMax
 );
 
 /** The external shape this generator can address.
  *
- * Speaks the VARIDX_RAGGED / VARIDX_BORROW / VARIDX_UNUSED vocabulary.  For an
+ * Speaks the DASIDX_RAGGED / DASIDX_BORROW / DASIDX_UNUSED vocabulary.  For an
  * array this is the backing shape minus the internal indices; for a computed
  * source it is the extent it was declared with.
  *
  * @param pThis the generator to measure
- * @param pShape an array of VARIDX_MAX entries.  All of them are written, the
- *        ones past this generator's rank as VARIDX_UNUSED, so the caller need
+ * @param pShape an array of DASIDX_MAX entries.  All of them are written, the
+ *        ones past this generator's rank as DASIDX_UNUSED, so the caller need
  *        not pre-fill the buffer.
  * @returns the external rank.
  * @memberof DasGen
@@ -231,12 +231,12 @@ int DasGen_extShape(const DasGen* pThis, ptrdiff_t* pShape);
  *
  * @param pThis the generator to measure
  * @param nIdx the index to report on
- * @param pLoc values for the indices before nIdx
- * @returns the length there, or VARIDX_UNUSED if this generator does not run
+ * @param pAddr values for the indices before nIdx
+ * @returns the length there, or DASIDX_UNUSED if this generator does not run
  *          along nIdx.  Keeps the MIN merge semantics DasDs_lengthIn needs.
  * @memberof DasGen
  */
-ptrdiff_t DasGen_lengthIn(const DasGen* pThis, int nIdx, ptrdiff_t* pLoc);
+ptrdiff_t DasGen_lengthIn(const DasGen* pThis, int nIdx, ptrdiff_t* pAddr);
 
 /** Point at an item run in place, rather than copying it out.
  *
@@ -245,14 +245,14 @@ ptrdiff_t DasGen_lengthIn(const DasGen* pThis, int nIdx, ptrdiff_t* pLoc);
  * answer; a computed string has no home to point at.
  *
  * @param pThis the generator to read
- * @param pExtLoc the external location
+ * @param pExtAddr the external location
  * @param pCount receives the run's element count, ragged aware
  * @returns a pointer into the backing store, or NULL if this generator has
  *          nothing to point at.
  * @memberof DasGen
  */
-const ubyte* DasGen_at(
-	const DasGen* pThis, const ptrdiff_t* pExtLoc, size_t* pCount
+const uint8_t* DasGen_at(
+	const DasGen* pThis, const ptrdiff_t* pExtAddr, size_t* pCount
 );
 
 /** Hand back an external index range without copying it, if that is possible.
@@ -286,7 +286,7 @@ DasAry* DasGen_subsetView(
  */
 int DasGen_subsetInto(
 	const DasGen* pThis, int nExtRank, const ptrdiff_t* pMin,
-	const ptrdiff_t* pMax, ubyte* pBuf, size_t uBufLen
+	const ptrdiff_t* pMax, uint8_t* pBuf, size_t uBufLen
 );
 
 /** The value standing in for data this generator can't produce.
@@ -299,7 +299,7 @@ int DasGen_subsetInto(
  *          can miss.
  * @memberof DasGen
  */
-const ubyte* DasGen_getFill(const DasGen* pThis);
+const uint8_t* DasGen_getFill(const DasGen* pThis);
 
 /** How many elements make up one item run.
  *
@@ -366,10 +366,10 @@ typedef struct das_gen_array {
 
 	DasAry* pAry;               /* referenced (incRef held), owned by the dataset */
 
-	/* external index -> array index; VARIDX_UNUSED marks a degenerate
+	/* external index -> array index; DASIDX_UNUSED marks a degenerate
 	   external index.  Array indices past the mapped ones are the item run. */
 	int  nExtRank;
-	int8_t idxmap[VARIDX_MAX];
+	int8_t idxmap[DASIDX_MAX];
 
 	/* elements in one item run, product of the unmapped (internal) array
 	   extents.  v1 handles cubic internal shapes; a ragged INTERNAL extent
@@ -379,22 +379,22 @@ typedef struct das_gen_array {
 
 /* Every intercept and slope sits in a slot this wide, the largest element,
    a broken-down time */
-#define DASGEN_SEQ_SLOT sizeof(das_time)
+#define DASGEN_SEQ_SLOT sizeof(DasTime)
 
 typedef struct das_gen_seq {
 	DasGen base;
 
 	/* One intercept per component, one interval per (component, external
 	   index), in one heap block sized by the component count: a sequence has
-	   as many components as the item it fills.  For etTime the intercept is a
-	   das_time and the slopes are doubles in seconds (the affine rule at the
+	   as many components as the item it fills.  For DASET_TIME the intercept is a
+	   DasTime and the slopes are doubles in seconds (the affine rule at the
 	   storage layer). */
 	int    nComps;               /* 1 for a scalar sequence */
-	ubyte* pIntercept;           /* nComps slots */
-	ubyte* pInterval;            /* nComps * VARIDX_MAX slots, component major */
+	uint8_t* pIntercept;           /* nComps slots */
+	uint8_t* pInterval;            /* nComps * DASIDX_MAX slots, component major */
 
 	int       nExtRank;                 /* declared extent, since a sequence  */
-	ptrdiff_t aExtShape[VARIDX_MAX];    /* has no backing store to derive one */
+	ptrdiff_t aExtShape[DASIDX_MAX];    /* has no backing store to derive one */
 } DasGenSeq;
 
 /** The intercept slot of component c.  @relates DasGenSeq */
@@ -402,14 +402,14 @@ typedef struct das_gen_seq {
 
 /** The slope slot of component c along external index i.  @relates DasGenSeq */
 #define DasGenSeq_interval(P,c,i) \
-	((P)->pInterval + ((size_t)(c)*VARIDX_MAX + (size_t)(i))*DASGEN_SEQ_SLOT)
+	((P)->pInterval + ((size_t)(c)*DASIDX_MAX + (size_t)(i))*DASGEN_SEQ_SLOT)
 
 typedef struct das_gen_const {
 	DasGen base;
-	ubyte aValue[sizeof(double)];
+	uint8_t aValue[sizeof(double)];
 
 	int       nExtRank;
-	ptrdiff_t aExtShape[VARIDX_MAX];
+	ptrdiff_t aExtShape[DASIDX_MAX];
 } DasGenConst;
 
 /* gtUnop / gtBinop.  The generator stays formalism-ignorant: it holds a bare
@@ -417,8 +417,8 @@ typedef struct das_gen_const {
    it from the binop registry.  Scalar-only in v1: children must produce
    one-element runs, fail loud otherwise. */
 typedef bool (*das_gen_applyfn)(
-	das_elem_type etL, das_elem_type etR,
-	const ubyte* pL, const ubyte* pR, ubyte* pOut
+	das_et etL, das_et etR,
+	const uint8_t* pL, const uint8_t* pR, uint8_t* pOut
 );
 
 typedef struct das_gen_op {
@@ -449,7 +449,7 @@ typedef struct das_gen_op {
  *
  * @param pIdxMap The mapping of external indices to DasAry indices.  The
  *        offset into this array is the external index; the value is the
- *        array index.  VARIDX_UNUSED marks a degenerate external index.
+ *        array index.  DASIDX_UNUSED marks a degenerate external index.
  *        Not every external index needs to be mapped, and array indices
  *        not consumed by the map are the item run (the internal shape).
  *
@@ -458,19 +458,19 @@ DasGen* new_DasGenAry(DasAry* pAry, int nExtRank, const int8_t* pIdxMap);
 
 /** A computed intercept + interval value source.
  *
- * @param et element type; etLong, etFloat, etDouble and etTime.  An etTime
- *        sequence takes a das_time intercept and DOUBLE slopes in seconds.
+ * @param et element type; DASET_LONG, DASET_FLOAT, DASET_DOUBLE and DASET_TIME.  An DASET_TIME
+ *        sequence takes a DasTime intercept and DOUBLE slopes in seconds.
  * @param pMinVal one element, the value at index zero
  * @param nExtRank number of external indices
  * @param pInterVal nExtRank slope slots at the SLOPE element's stride
- *        (double for etTime, the element size otherwise); zero for an index
+ *        (double for DASET_TIME, the element size otherwise); zero for an index
  *        this sequence does not vary in
- * @param pExtShape nExtRank declared extents (VARIDX_RAGGED / VARIDX_BORROW
+ * @param pExtShape nExtRank declared extents (DASIDX_RAGGED / DASIDX_BORROW
  *        allowed)
  * @returns a new generator, or NULL on a loud error.  @memberof DasGen */
 DasGen* new_DasGenSeq(
-	das_elem_type et, const ubyte* pMinVal, int nExtRank,
-	const ubyte* pInterVal, const ptrdiff_t* pExtShape
+	das_et et, const uint8_t* pMinVal, int nExtRank,
+	const uint8_t* pInterVal, const ptrdiff_t* pExtShape
 );
 
 /** A per-component sequence source: the item run at external index I is
@@ -484,8 +484,8 @@ DasGen* new_DasGenSeq(
  *        stride (see new_DasGenSeq)
  * @returns a new generator, or NULL on a loud error.  @memberof DasGen */
 DasGen* new_DasGenSeqN(
-	das_elem_type et, int nComps, const ubyte* pMinVals, int nExtRank,
-	const ubyte* pInterVals, const ptrdiff_t* pExtShape
+	das_et et, int nComps, const uint8_t* pMinVals, int nExtRank,
+	const uint8_t* pInterVals, const ptrdiff_t* pExtShape
 );
 
 /** One value, everywhere.
@@ -500,7 +500,7 @@ DasGen* new_DasGenSeqN(
  * @memberof DasGen
  */
 DasGen* new_DasGenConst(
-	das_elem_type et, const ubyte* pVal, int nExtRank, const ptrdiff_t* pExtShape
+	das_et et, const uint8_t* pVal, int nExtRank, const ptrdiff_t* pExtShape
 );
 
 /** A binary operation over two child generators.
@@ -518,7 +518,7 @@ DasGen* new_DasGenConst(
  * @memberof DasGen
  */
 DasGen* new_DasGenBinop(
-	das_gen_applyfn apply, das_elem_type etOut, DasGen* pLeft, DasGen* pRight,
+	das_gen_applyfn apply, das_et etOut, DasGen* pLeft, DasGen* pRight,
 	double rRightScale
 );
 

@@ -201,7 +201,7 @@ $(BD)/lib_members: FORCE | $(BD)
 FORCE:
 .PHONY: FORCE
 
-# The source's git description for das_lib_version(), see Linux.mak
+# The source's git description for daslib_version(), see Linux.mak
 GIT_DESC:=$(shell [ "$$(git rev-parse --show-toplevel 2>/dev/null)" = "$(CURDIR)" ] && git describe --tags --always --dirty 2>/dev/null)
 
 $(BD)/git_desc: FORCE | $(BD)

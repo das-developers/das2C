@@ -66,13 +66,13 @@ const char *sVersion="das2_from_tagged_das1 Ver 0.7 (formerly dasI2dasII)";
 
 double timestr_to_epoc_1958(char *sTime)
 {	
-	das_time dt;
+	DasTime dt;
 	int i,nDays;
 	double dTime;
 
 
-	if(! dt_parsetime(&dt, sTime)){
-		fprintf(stderr,"dt_parsetime(%s) failed\n",sTime);
+	if(! DasTime_fromStr(&dt, sTime)){
+		fprintf(stderr,"DasTime_fromStr(%s) failed\n",sTime);
 		exit(1);
 	}
 
@@ -103,8 +103,8 @@ typedef struct {        /* Defaults: */
 	int nTimeFormat;     /* EPOCH_1958 */
 	double dInterpWidth; /* 128.0 */
 	double dInterpHeight;/* 0.0 */
-	das_units utYvals;    /* UNIT_HZ (see units.h) */
-	das_units utZvals;    /* UNIT_E_SPECDENS (see units.h) */
+	DasUnits utYvals;    /* UNIT_HZ (see units.h) */
+	DasUnits utZvals;    /* DASUNITS_E_SPECDENS (see units.h) */
 	double dFillValue;   /* 1E31 */
 	double dBaseTime;    /* Required input */
 	bool bDump;          /* Diagnostic output instead of das2 stream */
@@ -196,14 +196,14 @@ void getCmdOpts(int argc, char** argv, Options* pOpts){
 	  }
 	  else if(!strcmp("-yUnit",*argv)){
 	    --argc;  ++argv;
-	    if( (pOpts->utYvals = Units_fromStr(*argv)) == NULL){
+	    if( (pOpts->utYvals = DasUnits_fromStr(*argv)) == NULL){
 	      fprintf(stderr, "Can't use '%s' as Y units, use -h for more info\n", *argv);
 	      exit(1);
 	    }
 	  }
 	  else if(!strcmp("-zUnit",*argv)){
 	    --argc;  ++argv;
-	    if( (pOpts->utZvals = Units_fromStr(*argv)) == NULL){
+	    if( (pOpts->utZvals = DasUnits_fromStr(*argv)) == NULL){
 	      fprintf(stderr, "Can't use '%s' as Z units, use -h for more info\n", *argv);
 	      exit(1);
 	    }
@@ -235,15 +235,15 @@ bool hasMatchingYTags(
 	DasPkt* pPd, const char* sPlane, const double* pYTags, size_t uTags
 ){
 	/* Must have a plane with this name */
-	DasPlane* pPlane = DasPkt_getPlaneByName(pPd, sPlane);
+	DasPlane* pPlane = DasPkt_planeByName(pPd, sPlane);
 	if(pPlane == NULL) return false;
 	
 	/* Must have same number of ytags */
-	if(DasPlane_getNItems(pPlane) != uTags) return false;
+	if(DasPlane_numItems(pPlane) != uTags) return false;
 	
 	/* Must be a YScan Plane */
 	const double* pCkTags = NULL;
-	if( (pCkTags = DasPlane_getYTags(pPlane)) == NULL) return false;
+	if( (pCkTags = DasPlane_yTags(pPlane)) == NULL) return false;
 	
 	/* Tags must match */
 	for(size_t u = 0; u<uTags; ++u) if(pCkTags[u] != pYTags[u]) return false;
@@ -272,14 +272,14 @@ DasPkt* sendPktDesc(
 		
 	/* Try the last one */
 	if(g_nLastPdId != 0){
-		pPd = DasStream_getPkt(pSd, g_nLastPdId);		
+		pPd = DasStream_pkt(pSd, g_nLastPdId);		
 		if(hasMatchingYTags(pPd, "amplitude", pFreqs, uFreqs)) return pPd;
 	}
 	
 	/* Okay, search all of them */
 	pPd = NULL;
 	for(int id = 1; id < 100; ++id){
-		if( (pPd = DasStream_getPkt(pSd, id)) == NULL) continue;
+		if( (pPd = DasStream_pkt(pSd, id)) == NULL) continue;
 		
 		if(hasMatchingYTags(pPd, "amplitude", pFreqs, uFreqs)){ 
 			g_nLastPdId = id;
@@ -301,11 +301,11 @@ DasPkt* sendPktDesc(
 		error checking code will never run */
 	
 	if(pOpts->nTimeFormat == EPOCH_1958){
-		pPd = DasStream_createPkt(pSd, pTimeEnc, UNIT_MJ1958);
+		pPd = DasStream_createPkt(pSd, pTimeEnc, DASUNITS_MJ1958);
 		if(!pOpts->bSilent)  fprintf(stderr,"MJ1958...");
 	}
 	else{
-		pPd = DasStream_createPkt(pSd, pTimeEnc, UNIT_US2000);
+		pPd = DasStream_createPkt(pSd, pTimeEnc, DASUNITS_US2000);
 		if(!pOpts->bSilent)  fprintf(stderr,"US2000...");
 	}
 	
@@ -341,7 +341,7 @@ DasPkt* sendPktDesc(
 	DasPkt_addPlane(pPd, pPlane);
 	
 	if(!pOpts->bSilent)  fprintf(stderr,"done\n  DasIO_writeDesc...");
-	if(!pOpts->bDump) DasIO_writeDesc(pOut, (DasDesc*)pPd, DasStream_getPktId(pSd, (DasDesc*)pPd));
+	if(!pOpts->bDump) DasIO_writeDesc(pOut, (DasDesc*)pPd, DasStream_pktId(pSd, (DasDesc*)pPd));
 	if(!pOpts->bSilent)  fprintf(stderr,"done\n");
 	
 	++g_nPktType;
@@ -354,7 +354,7 @@ DasPkt* sendPktDesc(
    little endian hosts */
 static void _swapIfHostLE(unsigned char* p, size_t uItems)
 {
-#ifdef HOST_IS_LSB_FIRST
+#ifdef DASHOST_LSB_FIRST
 	for(size_t u = 0; u < uItems; ++u, p += 4){
 		unsigned char b = p[0]; p[0] = p[3]; p[3] = b;
 		b = p[1]; p[1] = p[2]; p[2] = b;
@@ -445,10 +445,10 @@ int main(int argc,char *argv[])
 	char* sProgName = argv[0];
 		
 	Options opts = {false, ST_FLOAT, EPOCH_1958, 128.0, 0.0,
-	                UNIT_HERTZ, UNIT_E_SPECDENS, -1E31, -1.0, false};
+	                DASUNITS_HERTZ, DASUNITS_E_SPECDENS, -1E31, -1.0, false};
 				
 	/* Exit on errors, log info messages and above */
-	das_init(argv[0], DASERR_DIS_EXIT, DASLOG_INFO, NULL);
+	daslib_init(argv[0], DASERRDISP_EXIT, DASLOG_INFO, NULL);
 	/* double arDas2Offset[MAX_ITEMS]; */ /* das2 interface for offset is doubles only */
 		  
 	fprintf(stderr,"%s\n",sVersion);
@@ -465,12 +465,12 @@ int main(int argc,char *argv[])
 	DasStream* pSd = new_DasStream();
 	
 	if(opts.dInterpWidth!=0.0)
-	  DasDesc_setDatum((DasDesc*)pSd, "xTagWidth",opts.dInterpWidth,UNIT_SECONDS);
+	  DasDesc_setValDatum((DasDesc*)pSd, "xTagWidth",opts.dInterpWidth,DASUNITS_SECONDS);
 
 	if(opts.dInterpHeight!=0.0)
-	  DasDesc_setDatum((DasDesc*)pSd, "yTagWidth", opts.dInterpHeight, UNIT_HERTZ);
+	  DasDesc_setValDatum((DasDesc*)pSd, "yTagWidth", opts.dInterpHeight, DASUNITS_HERTZ);
 
-	DasDesc_setDouble((DasDesc*)pSd,"zFill", opts.dFillValue);
+	DasDesc_setValDouble((DasDesc*)pSd,"zFill", opts.dFillValue);
 	
 	if(!opts.bSilent)  fprintf(stderr,"done,  Send Stream Header...");
 	if(!opts.bDump)  DasIO_writeStreamDesc(pOut, pSd);
@@ -523,25 +523,25 @@ int main(int argc,char *argv[])
 		}
 		*/
 		
-		DasPlane* pX = DasPkt_getXPlane(pPd);
+		DasPlane* pX = DasPkt_xPlane(pPd);
 	  
 		dDas2Time=opts.dBaseTime + arTime[0]/(24.0*60.0*60.0);
 		if(opts.nTimeFormat != EPOCH_1958){ 
 			dDas2Time-=15340;
 			dDas2Time*=(24.0*60.0*60.0*1E6);  /* uSec from 2000-001 */
 		}
-		DasPlane_setValue(pX, 0, dDas2Time);
+		DasPlane_setValAt(pX, 0, dDas2Time);
 		
-		DasPlane* pYScan = DasPkt_getPlaneByName(pPd, "amplitude");
+		DasPlane* pYScan = DasPkt_planeByName(pPd, "amplitude");
 	  
 		for(i=0;i<nItems;i++){
 			if(arAmpl[arSort[i]] < 1.0E-25)
-				DasPlane_setValue(pYScan, i, opts.dFillValue);
+				DasPlane_setValAt(pYScan, i, opts.dFillValue);
 			else
-				DasPlane_setValue(pYScan, i, arAmpl[arSort[i]]);
+				DasPlane_setValAt(pYScan, i, arAmpl[arSort[i]]);
 		}
 			
-	  	if(!opts.bDump) DasIO_writeData(pOut, (DasDesc*)pPd, DasStream_getPktId(pSd, (DasDesc*)pPd));
+	  	if(!opts.bDump) DasIO_writeData(pOut, (DasDesc*)pPd, DasStream_pktId(pSd, (DasDesc*)pPd));
 	  
 		++nNumPkt;
 	}

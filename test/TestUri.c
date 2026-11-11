@@ -46,7 +46,7 @@
 /* Create all directory components of sPath (like mkdir -p).  EEXIST is ok. */
 static int makedirs(const char* sPath)
 {
-	char sBuf[DURI_MAX_PATH];
+	char sBuf[DASURITPLT_PATH_SZ];
 	strncpy(sBuf, sPath, sizeof(sBuf) - 1);
 	sBuf[sizeof(sBuf) - 1] = '\0';
 	for(char* p = sBuf + 1; *p; ++p) {
@@ -73,8 +73,8 @@ static int touch(const char* sPath)
  * Returns 0 on success, -1 on failure (error printed to stderr). */
 static int mkfile(const char* sBase, const char* sSub)
 {
-	char sPath[DURI_MAX_PATH];
-	char sDir[DURI_MAX_PATH];
+	char sPath[DASURITPLT_PATH_SZ];
+	char sDir[DASURITPLT_PATH_SZ];
 
 	snprintf(sPath, sizeof(sPath), "%s/%s", sBase, sSub);
 
@@ -120,20 +120,20 @@ static int make_files(const char* sBase, const char** psFiles)
  */
 
 /* Named ranges for the iterator, built the way a caller would: the bounds
-   as a das_range, then the dimension name */
-static das_errcode _dr_utc(das_dim_range* pDr, const char* sBeg, const char* sEnd)
+   as a DasRng, then the dimension name */
+static das_errcode _dr_utc(DasDimRng* pDr, const char* sBeg, const char* sEnd)
 {
-	das_range rng;
-	das_errcode nRet = das_range_fromUtc(&rng, sBeg, sEnd);
+	DasRng rng;
+	das_errcode nRet = DasRng_fromIso(&rng, sBeg, sEnd);
 	if(nRet != DAS_OKAY) return nRet;
-	return das_dim_range_init(pDr, "time", &rng);
+	return DasDimRng_set(pDr, "time", &rng);
 }
 
-static void _dr_int(das_dim_range* pDr, const char* sDim, int64_t nBeg, int64_t nEnd)
+static void _dr_int(DasDimRng* pDr, const char* sDim, int64_t nBeg, int64_t nEnd)
 {
-	das_range rng;
-	das_range_fromInt(&rng, nBeg, nEnd);
-	das_dim_range_init(pDr, sDim, &rng);
+	DasRng rng;
+	DasRng_fromInt(&rng, nBeg, nEnd);
+	DasDimRng_set(pDr, sDim, &rng);
 }
 
 /* per-day files with version suffixes; v02 should beat v01, v1/v01 collision */
@@ -151,28 +151,28 @@ int test_wildver(const char* sBase)
 
 	if(make_files(sBase, g_wildver_files) != 0) { printf("FAIL\n"); return 1; }
 
-	char sTplt[DURI_MAX_PATH];
+	char sTplt[DASURITPLT_PATH_SZ];
 	snprintf(sTplt, sizeof(sTplt),
 	         "%s/wildver/$Y/$j/data_$Y$j_$(v;type=int).cdf", sBase);
 
 	DasUriTplt* pTplt = new_DasUriTplt();
 	if(pTplt == NULL){ printf("FAIL\n"); return 1; }
 
-	if(DasUriTplt_register(pTplt, das_time_uridef()) != DAS_OKAY){
+	if(DasUriTplt_register(pTplt, DasUriSegDef_timeToks()) != DAS_OKAY){
 		del_DasUriTplt(pTplt); printf("FAIL\n"); return 1;
 	}
 
-	if(DasUriTplt_pattern(pTplt, sTplt) != DAS_OKAY){
+	if(DasUriTplt_setPattern(pTplt, sTplt) != DAS_OKAY){
 		del_DasUriTplt(pTplt); printf("FAIL\n"); return 1;
 	}
 
 	/* Exercise DasUriTplt_toStr: the reconstructed pattern should round-trip
 	 * back to a string close to the original (scheme-stripped, file:// absent). */
-	char sDesc[DURI_MAX_PATH];
+	char sDesc[DASURITPLT_PATH_SZ];
 	printf("\n       pattern: %s",
 	       DasUriTplt_toStr(pTplt, sDesc, sizeof(sDesc)));
 
-	das_dim_range rTime;
+	DasDimRng rTime;
 	if(_dr_utc(&rTime, "2025-001", "2025-003") != DAS_OKAY){
 		del_DasUriTplt(pTplt); printf("FAIL\n"); return 1;
 	}
@@ -183,7 +183,7 @@ int test_wildver(const char* sBase)
 	}
 
 	int nFound = 0;
-	char sPath[DURI_MAX_PATH];
+	char sPath[DASURITPLT_PATH_SZ];
 	while(DasUriIter_next(&iter, sPath, sizeof(sPath)) != NULL){
 		printf("\n       %s", sPath);
 		++nFound;
@@ -225,39 +225,39 @@ int test_time(const char* sBase)
 
 	if(make_files(sBase, g_time_files) != 0){ printf("FAIL\n"); return 1; }
 
-	char sTplt[DURI_MAX_PATH];
+	char sTplt[DASURITPLT_PATH_SZ];
 	snprintf(sTplt, sizeof(sTplt),
 	         "%s/time/$Y/$j/instrument_$Y$j_v$v.cdf", sBase);
 
 	DasUriTplt* pTplt = new_DasUriTplt();
 	if(pTplt == NULL){ printf("FAIL\n"); return 1; }
 
-	if(DasUriTplt_register(pTplt, das_time_uridef()) != DAS_OKAY){
+	if(DasUriTplt_register(pTplt, DasUriSegDef_timeToks()) != DAS_OKAY){
 		del_DasUriTplt(pTplt); printf("FAIL\n"); return 1;
 	}
 
-	if(DasUriTplt_pattern(pTplt, sTplt) != DAS_OKAY){
+	if(DasUriTplt_setPattern(pTplt, sTplt) != DAS_OKAY){
 		del_DasUriTplt(pTplt); printf("FAIL\n"); return 1;
 	}
 
 	/* Verify render produces the expected path for a known time.
 	 * 2025-10-15 is day-of-year 288. */
-	das_dim_range rRender;
+	DasDimRng rRender;
 	if(_dr_utc(&rRender, "2025-10-15", "2025-10-16") != DAS_OKAY){
 		del_DasUriTplt(pTplt); printf("FAIL\n"); return 1;
 	}
 
-	char sBuf[DURI_MAX_PATH] = {'\0'};
-	char* sRendered = DasUriTplt_render(pTplt, 1, &rRender, sBuf, DURI_MAX_PATH);
+	char sBuf[DASURITPLT_PATH_SZ] = {'\0'};
+	char* sRendered = DasUriTplt_render(pTplt, 1, &rRender, sBuf, DASURITPLT_PATH_SZ);
 	if(sRendered == NULL){
 		del_DasUriTplt(pTplt); printf("FAIL\n"); return 1;
 	}
 
-	char sExpected[DURI_MAX_PATH];
+	char sExpected[DASURITPLT_PATH_SZ];
 	snprintf(sExpected, sizeof(sExpected),
 	         "%s/time/2025/288/instrument_2025288_v*.cdf", sBase);
 #ifdef _WIN32
-	/* Templates normalize file path separators to '/', see DasUriTplt_pattern */
+	/* Templates normalize file path separators to '/', see DasUriTplt_setPattern */
 	for(char* q = sExpected; *q; ++q)
 		if(*q == '\\') *q = '/';
 #endif
@@ -269,7 +269,7 @@ int test_time(const char* sBase)
 	}
 
 	/* Iterate over days 288-289 */
-	das_dim_range rQuery;
+	DasDimRng rQuery;
 	if(_dr_utc(&rQuery, "2025-288", "2025-290") != DAS_OKAY){
 		del_DasUriTplt(pTplt); printf("FAIL\n"); return 1;
 	}
@@ -279,7 +279,7 @@ int test_time(const char* sBase)
 		del_DasUriTplt(pTplt); printf("FAIL\n"); return 1;
 	}
 	int nFound = 0;
-	char sPath[DURI_MAX_PATH];
+	char sPath[DASURITPLT_PATH_SZ];
 	while(DasUriIter_next(&iter, sPath, sizeof(sPath)) != NULL) ++nFound;
 	fini_DasUriIter(&iter);
 	del_DasUriTplt(pTplt);
@@ -364,18 +364,18 @@ int test_sclk(const char* sBase)
 	/* Define the Voyager SCLK coordinate on the stack.  DasUriTplt_register()
 	 * will deep-copy everything before this function returns. */
 	DasUriField aSclkFlds[] = {
-		{ .cShort = 'P', .sLong = "partition", .nWidth = 0, .nMin = 0, .nMax =    10 }, /* variable width: P9, P10 */
-		{ .cShort = 'M', .sLong = "mod64k",    .nWidth = 5, .nMin = 0, .nMax = 65535 },
-		{ .cShort = 'S', .sLong = "mod60",     .nWidth = 2, .nMin = 0, .nMax =    59 },
+		{ .shortChar = 'P', .longName = "partition", .width = 0, .min = 0, .max =    10 }, /* variable width: P9, P10 */
+		{ .shortChar = 'M', .longName = "mod64k",    .width = 5, .min = 0, .max = 65535 },
+		{ .shortChar = 'S', .longName = "mod60",     .width = 2, .min = 0, .max =    59 },
 	};
 	DasUriSegDef sclkDef = {
-		.uVersion = DAS_URISEG_VER,
-		.sCoord   = "sclk",
-		.nFields  = (int)(sizeof(aSclkFlds) / sizeof(DasUriField)),
-		.pFields  = aSclkFlds
+		.uStructVer = DASURISEGDEF_VER,
+		.coord   = "sclk",
+		.numFields  = (int)(sizeof(aSclkFlds) / sizeof(DasUriField)),
+		.fields  = aSclkFlds
 	};
 
-	char sTplt[DURI_MAX_PATH];
+	char sTplt[DASURITPLT_PATH_SZ];
 	snprintf(sTplt, sizeof(sTplt),
 	         "%s/VGPW_1001/P$P/V1P$P_$x/C$M$S.DAT", sBase);
 
@@ -390,9 +390,9 @@ int test_sclk(const char* sBase)
 		return 1;
 	}
 
-	if(DasUriTplt_pattern(pTplt, sTplt) != DAS_OKAY){
+	if(DasUriTplt_setPattern(pTplt, sTplt) != DAS_OKAY){
 		del_DasUriTplt(pTplt);
-		printf("ERROR: test_sclk: DasUriTplt_pattern\n");
+		printf("ERROR: test_sclk: DasUriTplt_setPattern\n");
 		return 1;
 	}
 
@@ -401,7 +401,7 @@ int test_sclk(const char* sBase)
 
 	printf("INFO: test_sclk A: partition 1, mod64k 12000-13000 ... ");
 
-	das_dim_range aA[2];
+	DasDimRng aA[2];
 	_dr_int(&aA[0], "sclk.partition", 1, 2);
 	_dr_int(&aA[1], "sclk.mod64k", 12000, 13001);
 
@@ -410,7 +410,7 @@ int test_sclk(const char* sBase)
 		del_DasUriTplt(pTplt); printf("FAIL\n"); return 1;
 	}
 	int nFoundA = 0;
-	char sPath[DURI_MAX_PATH];
+	char sPath[DASURITPLT_PATH_SZ];
 	while(DasUriIter_next(&iterA, sPath, sizeof(sPath)) != NULL){
 		printf("\n       %s", sPath);
 		++nFoundA;
@@ -434,7 +434,7 @@ int test_sclk(const char* sBase)
 
 	printf("INFO: test_sclk B: cross-partition 9/63986.00 to 10/05943.03 ... ");
 
-	das_dim_range aB[2];
+	DasDimRng aB[2];
 	_dr_int(&aB[0], "sclk.partition", 9, 11);
 	_dr_int(&aB[1], "sclk.mod64k", 63986, 5944);  /* nBeg > nEnd: rollover P9->P10 */
 
@@ -494,24 +494,24 @@ int test_semver(const char* sBase)
 
 	if(make_files(sBase, g_semver_files) != 0){ printf("FAIL\n"); return 1; }
 
-	char sTplt[DURI_MAX_PATH];
+	char sTplt[DASURITPLT_PATH_SZ];
 	snprintf(sTplt, sizeof(sTplt),
 	         "%s/L2/$Y/$j/ts2_l2_mag_bac_$Y$j_v$v.cdf", sBase);
 
 	DasUriTplt* pTplt = new_DasUriTplt();
 	if(pTplt == NULL){ printf("FAIL (new_DasUriTplt)\n"); return 1; }
 
-	if(DasUriTplt_register(pTplt, das_time_uridef()) != DAS_OKAY){
+	if(DasUriTplt_register(pTplt, DasUriSegDef_timeToks()) != DAS_OKAY){
 		del_DasUriTplt(pTplt);
 		printf("FAIL (register)\n"); return 1;
 	}
 
-	if(DasUriTplt_pattern(pTplt, sTplt) != DAS_OKAY){
+	if(DasUriTplt_setPattern(pTplt, sTplt) != DAS_OKAY){
 		del_DasUriTplt(pTplt);
 		printf("FAIL (pattern)\n"); return 1;
 	}
 
-	das_dim_range rTime;
+	DasDimRng rTime;
 	if(_dr_utc(&rTime, "2026-107", "2026-109") != DAS_OKAY){
 		del_DasUriTplt(pTplt);
 		printf("FAIL (range)\n"); return 1;
@@ -525,13 +525,13 @@ int test_semver(const char* sBase)
 
 	/* Copy each returned path -- the iterator owns the buffer, and the next
 	 * next() call can overwrite it before we get to assert. */
-	char aFound[4][DURI_MAX_PATH];
+	char aFound[4][DASURITPLT_PATH_SZ];
 	int nFound = 0;
-	char sPath[DURI_MAX_PATH];
+	char sPath[DASURITPLT_PATH_SZ];
 	while(DasUriIter_next(&iter, sPath, sizeof(sPath)) != NULL){
 		if(nFound < 4){
-			strncpy(aFound[nFound], sPath, DURI_MAX_PATH - 1);
-			aFound[nFound][DURI_MAX_PATH - 1] = '\0';
+			strncpy(aFound[nFound], sPath, DASURITPLT_PATH_SZ - 1);
+			aFound[nFound][DASURITPLT_PATH_SZ - 1] = '\0';
 		}
 		++nFound;
 	}
@@ -580,9 +580,9 @@ int test_semver(const char* sBase)
 
 
 /* ========================================================================= */
-/* Test 5 -- das_uri_list() single-block convenience function
+/* Test 5 -- DasUriTplt_newList() single-block convenience function
  *
- * Verifies that das_uri_list() returns the right count of paths and that
+ * Verifies that DasUriTplt_newList() returns the right count of paths and that
  * the returned block can be released with a single free() call (no leak).
  * Reuses the TRACERS semver fixture created by test_semver().
  */
@@ -591,17 +591,17 @@ int test_uri_list(const char* sBase)
 {
 	printf("INFO: test_uri_list: convenience list builder ... ");
 
-	char sTplt[DURI_MAX_PATH];
+	char sTplt[DASURITPLT_PATH_SZ];
 	snprintf(sTplt, sizeof(sTplt),
 	         "%s/L2/$Y/$j/ts2_l2_mag_bac_$Y$j_v$v.cdf", sBase);
 
-	das_dim_range rTime;
+	DasDimRng rTime;
 	if(_dr_utc(&rTime, "2026-107", "2026-109") != DAS_OKAY){
 		printf("FAIL (range)\n"); return 1;
 	}
 
 	size_t nCount = 0;
-	char** ppList = das_uri_list(sTplt, das_time_uridef(), 1, &rTime, &nCount);
+	char** ppList = DasUriTplt_newList(sTplt, DasUriSegDef_timeToks(), 1, &rTime, &nCount);
 
 	if(ppList == NULL || nCount != 2){
 		printf("FAIL: got %zu path(s), expected 2\n", nCount);
@@ -652,7 +652,7 @@ int test_longform_time(const char* sBase)
 
 	if(make_files(sBase, g_longform_files) != 0){ printf("FAIL\n"); return 1; }
 
-	char sTplt[DURI_MAX_PATH];
+	char sTplt[DASURITPLT_PATH_SZ];
 	snprintf(sTplt, sizeof(sTplt),
 	         "%s/longform/$(time.year)/$(time.yday)"
 	         "/inst_$(time.year)$(time.yday)_v$v.cdf", sBase);
@@ -660,18 +660,18 @@ int test_longform_time(const char* sBase)
 	DasUriTplt* pTplt = new_DasUriTplt();
 	if(pTplt == NULL){ printf("FAIL (new_DasUriTplt)\n"); return 1; }
 
-	if(DasUriTplt_register(pTplt, das_time_uridef()) != DAS_OKAY){
+	if(DasUriTplt_register(pTplt, DasUriSegDef_timeToks()) != DAS_OKAY){
 		del_DasUriTplt(pTplt); printf("FAIL (register)\n"); return 1;
 	}
-	if(DasUriTplt_pattern(pTplt, sTplt) != DAS_OKAY){
+	if(DasUriTplt_setPattern(pTplt, sTplt) != DAS_OKAY){
 		del_DasUriTplt(pTplt); printf("FAIL (pattern)\n"); return 1;
 	}
 
 	/* toStr emits short tokens since all time fields have cShort */
-	char sDesc[DURI_MAX_PATH];
+	char sDesc[DASURITPLT_PATH_SZ];
 	printf("       toStr: %s\n", DasUriTplt_toStr(pTplt, sDesc, sizeof(sDesc)));
 
-	das_dim_range rTime;
+	DasDimRng rTime;
 	if(_dr_utc(&rTime, "2025-288", "2025-290") != DAS_OKAY){
 		del_DasUriTplt(pTplt); printf("FAIL (range)\n"); return 1;
 	}
@@ -681,13 +681,13 @@ int test_longform_time(const char* sBase)
 		del_DasUriTplt(pTplt); printf("FAIL (init_DasUriIter)\n"); return 1;
 	}
 
-	char aFound[4][DURI_MAX_PATH];
+	char aFound[4][DASURITPLT_PATH_SZ];
 	int nFound = 0;
-	char sPath[DURI_MAX_PATH];
+	char sPath[DASURITPLT_PATH_SZ];
 	while(DasUriIter_next(&iter, sPath, sizeof(sPath)) != NULL){
 		if(nFound < 4){
-			strncpy(aFound[nFound], sPath, DURI_MAX_PATH - 1);
-			aFound[nFound][DURI_MAX_PATH - 1] = '\0';
+			strncpy(aFound[nFound], sPath, DASURITPLT_PATH_SZ - 1);
+			aFound[nFound][DASURITPLT_PATH_SZ - 1] = '\0';
 		}
 		++nFound;
 	}
@@ -737,14 +737,14 @@ static const char* g_orbit_files[] = {
 
 /* Run one orbit iterator sub-test and return the found count, or -1 on error. */
 static int _run_orbit_iter(
-	const DasUriTplt* pTplt, const das_dim_range* pRng, const char* sLabel
+	const DasUriTplt* pTplt, const DasDimRng* pRng, const char* sLabel
 ){
 	DasUriIter iter;
 	if(init_DasUriIter(&iter, pTplt, 1, pRng) != DAS_OKAY){
 		printf("FAIL (%s init_DasUriIter)\n", sLabel); return -1;
 	}
 	int nFound = 0;
-	char sPath[DURI_MAX_PATH];
+	char sPath[DASURITPLT_PATH_SZ];
 	while(DasUriIter_next(&iter, sPath, sizeof(sPath)) != NULL){
 		printf("       %s\n", sPath);
 		++nFound;
@@ -761,20 +761,20 @@ int test_orbit(const char* sBase)
 
 	/* Orbit coordinate: one field, no short token -- must use $() form. */
 	DasUriField aOrbFlds[] = {
-		{ .cShort = '\0', .sLong = "number", .nWidth = 4, .nMin = 0, .nMax = 99999 },
+		{ .shortChar = '\0', .longName = "number", .width = 4, .min = 0, .max = 99999 },
 	};
 	DasUriSegDef orbDef = {
-		.uVersion = DAS_URISEG_VER,
-		.sCoord   = "orbit",
-		.nFields  = (int)(sizeof(aOrbFlds) / sizeof(DasUriField)),
-		.pFields  = aOrbFlds
+		.uStructVer = DASURISEGDEF_VER,
+		.coord   = "orbit",
+		.numFields  = (int)(sizeof(aOrbFlds) / sizeof(DasUriField)),
+		.fields  = aOrbFlds
 	};
 
-	das_dim_range rOrbit;
+	DasDimRng rOrbit;
 	_dr_int(&rOrbit, "orbit.number", 51, 54);
 
-	char sDesc[DURI_MAX_PATH];
-	char sTplt[DURI_MAX_PATH];
+	char sDesc[DASURITPLT_PATH_SZ];
+	char sTplt[DASURITPLT_PATH_SZ];
 
 	/* ------------------------------------------------------------------ */
 	/* Sub-test A: qualified form $(orbit.number)                          */
@@ -791,7 +791,7 @@ int test_orbit(const char* sBase)
 	if(DasUriTplt_register(pTplt, &orbDef) != DAS_OKAY){
 		del_DasUriTplt(pTplt); printf("FAIL (register A)\n"); return 1;
 	}
-	if(DasUriTplt_pattern(pTplt, sTplt) != DAS_OKAY){
+	if(DasUriTplt_setPattern(pTplt, sTplt) != DAS_OKAY){
 		del_DasUriTplt(pTplt); printf("FAIL (pattern A)\n"); return 1;
 	}
 
@@ -821,7 +821,7 @@ int test_orbit(const char* sBase)
 	if(DasUriTplt_register(pTplt, &orbDef) != DAS_OKAY){
 		del_DasUriTplt(pTplt); printf("FAIL (register B)\n"); return 1;
 	}
-	if(DasUriTplt_pattern(pTplt, sTplt) != DAS_OKAY){
+	if(DasUriTplt_setPattern(pTplt, sTplt) != DAS_OKAY){
 		del_DasUriTplt(pTplt); printf("FAIL (pattern B)\n"); return 1;
 	}
 
@@ -893,16 +893,16 @@ int test_time_orbit(const char* sBase)
 	/* Orbit coordinate: $O short token does not conflict with time's
 	 * $Y/$m/$d/$j/$H/$M/$S.  Width 4 matches the four-digit fixture filenames. */
 	DasUriField aOrbFlds[] = {
-		{ .cShort = 'O', .sLong = "number", .nWidth = 2, .nMin = 0, .nMax = 99 },
+		{ .shortChar = 'O', .longName = "number", .width = 2, .min = 0, .max = 99 },
 	};
 	DasUriSegDef orbDef = {
-		.uVersion = DAS_URISEG_VER,
-		.sCoord   = "orbit",
-		.nFields  = (int)(sizeof(aOrbFlds) / sizeof(DasUriField)),
-		.pFields  = aOrbFlds
+		.uStructVer = DASURISEGDEF_VER,
+		.coord   = "orbit",
+		.numFields  = (int)(sizeof(aOrbFlds) / sizeof(DasUriField)),
+		.fields  = aOrbFlds
 	};
 
-	char sTplt[DURI_MAX_PATH];
+	char sTplt[DASURITPLT_PATH_SZ];
 	snprintf(sTplt, sizeof(sTplt),
 	         "%s/juno/data/$Y$j_ORBIT_$O/WAV_$Y$j_E_V$v.CSV", sBase);
 
@@ -910,20 +910,20 @@ int test_time_orbit(const char* sBase)
 	if(pTplt == NULL){ printf("FAIL (new_DasUriTplt)\n"); return 1; }
 
 	/* Both defs must be registered before pattern() is called. */
-	if(DasUriTplt_register(pTplt, das_time_uridef()) != DAS_OKAY){
+	if(DasUriTplt_register(pTplt, DasUriSegDef_timeToks()) != DAS_OKAY){
 		del_DasUriTplt(pTplt); printf("FAIL (register time)\n"); return 1;
 	}
 	if(DasUriTplt_register(pTplt, &orbDef) != DAS_OKAY){
 		del_DasUriTplt(pTplt); printf("FAIL (register orbit)\n"); return 1;
 	}
-	if(DasUriTplt_pattern(pTplt, sTplt) != DAS_OKAY){
+	if(DasUriTplt_setPattern(pTplt, sTplt) != DAS_OKAY){
 		del_DasUriTplt(pTplt); printf("FAIL (pattern)\n"); return 1;
 	}
 
-	char sDesc[DURI_MAX_PATH];
+	char sDesc[DASURITPLT_PATH_SZ];
 	printf("       toStr: %s\n", DasUriTplt_toStr(pTplt, sDesc, sizeof(sDesc)));
 
-	das_dim_range aRanges[2];
+	DasDimRng aRanges[2];
 	if(_dr_utc(&aRanges[0], "2020-001", "2020-005") != DAS_OKAY){
 		del_DasUriTplt(pTplt); printf("FAIL (time range)\n"); return 1;
 	}
@@ -934,14 +934,14 @@ int test_time_orbit(const char* sBase)
 		del_DasUriTplt(pTplt); printf("FAIL (init_DasUriIter)\n"); return 1;
 	}
 
-	char aFound[4][DURI_MAX_PATH];
+	char aFound[4][DASURITPLT_PATH_SZ];
 	int nFound = 0;
-	char sPath[DURI_MAX_PATH];
+	char sPath[DASURITPLT_PATH_SZ];
 	while(DasUriIter_next(&iter, sPath, sizeof(sPath)) != NULL){
 		printf("       %s\n", sPath);
 		if(nFound < 4){
-			strncpy(aFound[nFound], sPath, DURI_MAX_PATH - 1);
-			aFound[nFound][DURI_MAX_PATH - 1] = '\0';
+			strncpy(aFound[nFound], sPath, DASURITPLT_PATH_SZ - 1);
+			aFound[nFound][DASURITPLT_PATH_SZ - 1] = '\0';
 		}
 		++nFound;
 	}
@@ -986,14 +986,14 @@ int test_time_orbit(const char* sBase)
 
 	DasUriTplt* pTpltB = new_DasUriTplt();
 	if(pTpltB == NULL){ printf("FAIL sub-B (new)\n"); return 1; }
-	if(DasUriTplt_register(pTpltB, das_time_uridef()) != DAS_OKAY){
+	if(DasUriTplt_register(pTpltB, DasUriSegDef_timeToks()) != DAS_OKAY){
 		del_DasUriTplt(pTpltB); printf("FAIL sub-B (register)\n"); return 1;
 	}
-	if(DasUriTplt_pattern(pTpltB, sTplt) != DAS_OKAY){
+	if(DasUriTplt_setPattern(pTpltB, sTplt) != DAS_OKAY){
 		del_DasUriTplt(pTpltB); printf("FAIL sub-B (pattern)\n"); return 1;
 	}
 
-	das_dim_range rTimeB;
+	DasDimRng rTimeB;
 	if(_dr_utc(&rTimeB, "2020-001", "2020-004") != DAS_OKAY){
 		del_DasUriTplt(pTpltB); printf("FAIL sub-B (range)\n"); return 1;
 	}
@@ -1035,11 +1035,11 @@ int test_time_orbit(const char* sBase)
 	if(DasUriTplt_register(pTpltC, &orbDef) != DAS_OKAY){
 		del_DasUriTplt(pTpltC); printf("FAIL sub-C (register)\n"); return 1;
 	}
-	if(DasUriTplt_pattern(pTpltC, sTplt) != DAS_OKAY){
+	if(DasUriTplt_setPattern(pTpltC, sTplt) != DAS_OKAY){
 		del_DasUriTplt(pTpltC); printf("FAIL sub-C (pattern)\n"); return 1;
 	}
 
-	das_dim_range rOrbC;
+	DasDimRng rOrbC;
 	_dr_int(&rOrbC, "orbit.number", 43, 46);
 
 	DasUriIter iterC;
@@ -1067,7 +1067,7 @@ int test_time_orbit(const char* sBase)
  *
  * Two coord fields both with nWidth == 0 side-by-side in a template are
  * ambiguous: the match routine has no way to know where one field ends and
- * the next begins.  DasUriTplt_pattern() must return a non-zero error code
+ * the next begins.  DasUriTplt_setPattern() must return a non-zero error code
  * before the iterator is ever constructed.
  *
  * Sub-test A: $A$B (no delimiter)  -> pattern() must FAIL
@@ -1083,17 +1083,17 @@ int test_adjacent_varwidth(const char* sBase)
 	printf("INFO: test_adjacent_varwidth: adjacent variable-width fields\n");
 
 	DasUriField aAmbFlds[] = {
-		{ .cShort = 'A', .sLong = "alpha", .nWidth = 0, .nMin = 0, .nMax = 9999 }, /* variable width */
-		{ .cShort = 'B', .sLong = "beta",  .nWidth = 0, .nMin = 0, .nMax = 9999 }, /* variable width */
+		{ .shortChar = 'A', .longName = "alpha", .width = 0, .min = 0, .max = 9999 }, /* variable width */
+		{ .shortChar = 'B', .longName = "beta",  .width = 0, .min = 0, .max = 9999 }, /* variable width */
 	};
 	DasUriSegDef ambDef = {
-		.uVersion = DAS_URISEG_VER,
-		.sCoord   = "amb",
-		.nFields  = (int)(sizeof(aAmbFlds) / sizeof(DasUriField)),
-		.pFields  = aAmbFlds
+		.uStructVer = DASURISEGDEF_VER,
+		.coord   = "amb",
+		.numFields  = (int)(sizeof(aAmbFlds) / sizeof(DasUriField)),
+		.fields  = aAmbFlds
 	};
 
-	char sTplt[DURI_MAX_PATH];
+	char sTplt[DASURITPLT_PATH_SZ];
 	DasUriTplt* pTplt;
 
 	/* Sub-test A: $A$B -- must be rejected */
@@ -1103,7 +1103,7 @@ int test_adjacent_varwidth(const char* sBase)
 		del_DasUriTplt(pTplt); printf("FAIL (register A)\n"); return 1;
 	}
 	snprintf(sTplt, sizeof(sTplt), "%s/ambt/$A$B.dat", sBase);
-	if(DasUriTplt_pattern(pTplt, sTplt) == DAS_OKAY){
+	if(DasUriTplt_setPattern(pTplt, sTplt) == DAS_OKAY){
 		del_DasUriTplt(pTplt);
 		printf("FAIL sub-A: pattern() accepted adjacent variable-width $A$B\n");
 		return 1;
@@ -1118,7 +1118,7 @@ int test_adjacent_varwidth(const char* sBase)
 		del_DasUriTplt(pTplt); printf("FAIL (register B)\n"); return 1;
 	}
 	snprintf(sTplt, sizeof(sTplt), "%s/ambt/$A_$B.dat", sBase);
-	if(DasUriTplt_pattern(pTplt, sTplt) != DAS_OKAY){
+	if(DasUriTplt_setPattern(pTplt, sTplt) != DAS_OKAY){
 		del_DasUriTplt(pTplt);
 		printf("FAIL sub-B: pattern() rejected valid $A_$B template\n");
 		return 1;
@@ -1133,7 +1133,7 @@ int test_adjacent_varwidth(const char* sBase)
 		del_DasUriTplt(pTplt); printf("FAIL (register C)\n"); return 1;
 	}
 	snprintf(sTplt, sizeof(sTplt), "%s/ambt/$A$(amb.beta).dat", sBase);
-	if(DasUriTplt_pattern(pTplt, sTplt) == DAS_OKAY){
+	if(DasUriTplt_setPattern(pTplt, sTplt) == DAS_OKAY){
 		del_DasUriTplt(pTplt);
 		printf("FAIL sub-C: pattern() accepted adjacent $A$(amb.beta)\n");
 		return 1;
@@ -1151,7 +1151,7 @@ int test_adjacent_varwidth(const char* sBase)
  *
  * _match_entry uses look-ahead to delimit the wild span and records only the
  * first $x or $v token; a second one at the same level would be silently
- * ignored, producing misleading best-match behaviour.  DasUriTplt_pattern()
+ * ignored, producing misleading best-match behaviour.  DasUriTplt_setPattern()
  * (via _decompose_levels) must reject such templates before an iterator is
  * ever constructed.
  *
@@ -1164,17 +1164,17 @@ int test_duplicate_wild(const char* sBase)
 {
 	printf("INFO: test_duplicate_wild: duplicate $x/$v in one path component\n");
 
-	char sTplt[DURI_MAX_PATH];
+	char sTplt[DASURITPLT_PATH_SZ];
 	DasUriTplt* pTplt;
 
 	/* Sub-test A: $x_jedi_$Y$j_$x.cdf -- two $x at file level -> must fail */
 	pTplt = new_DasUriTplt();
 	if(pTplt == NULL){ printf("FAIL (new A)\n"); return 1; }
-	if(DasUriTplt_register(pTplt, das_time_uridef()) != DAS_OKAY){
+	if(DasUriTplt_register(pTplt, DasUriSegDef_timeToks()) != DAS_OKAY){
 		del_DasUriTplt(pTplt); printf("FAIL (register A)\n"); return 1;
 	}
 	snprintf(sTplt, sizeof(sTplt), "%s/dw/$x_jedi_$Y$j_$x.cdf", sBase);
-	if(DasUriTplt_pattern(pTplt, sTplt) == DAS_OKAY){
+	if(DasUriTplt_setPattern(pTplt, sTplt) == DAS_OKAY){
 		del_DasUriTplt(pTplt);
 		printf("FAIL sub-A: two $x in one filename was accepted\n"); return 1;
 	}
@@ -1185,7 +1185,7 @@ int test_duplicate_wild(const char* sBase)
 	pTplt = new_DasUriTplt();
 	if(pTplt == NULL){ printf("FAIL (new B)\n"); return 1; }
 	snprintf(sTplt, sizeof(sTplt), "%s/dw/$x_$v.cdf", sBase);
-	if(DasUriTplt_pattern(pTplt, sTplt) == DAS_OKAY){
+	if(DasUriTplt_setPattern(pTplt, sTplt) == DAS_OKAY){
 		del_DasUriTplt(pTplt);
 		printf("FAIL sub-B: $x and $v in one filename was accepted\n"); return 1;
 	}
@@ -1195,11 +1195,11 @@ int test_duplicate_wild(const char* sBase)
 	/* Sub-test C: $x/$Y$j_$v.cdf -- $x in dir level, $v in file level -> must succeed */
 	pTplt = new_DasUriTplt();
 	if(pTplt == NULL){ printf("FAIL (new C)\n"); return 1; }
-	if(DasUriTplt_register(pTplt, das_time_uridef()) != DAS_OKAY){
+	if(DasUriTplt_register(pTplt, DasUriSegDef_timeToks()) != DAS_OKAY){
 		del_DasUriTplt(pTplt); printf("FAIL (register C)\n"); return 1;
 	}
 	snprintf(sTplt, sizeof(sTplt), "%s/dw/$x/$Y$j_$v.cdf", sBase);
-	if(DasUriTplt_pattern(pTplt, sTplt) != DAS_OKAY){
+	if(DasUriTplt_setPattern(pTplt, sTplt) != DAS_OKAY){
 		del_DasUriTplt(pTplt);
 		printf("FAIL sub-C: valid $x dir + $v file was rejected\n"); return 1;
 	}
@@ -1212,7 +1212,7 @@ int test_duplicate_wild(const char* sBase)
 
 
 /* ========================================================================= */
-/* Test 11 -- Upper-bound round-up semantics for vtTime ranges
+/* Test 11 -- Upper-bound round-up semantics for DASVT_TIME ranges
  *
  * An entry is kept when the interval it covers overlaps the half-open query.
  * "2025-01-01" is the first instant of day 1, so a query ending there takes
@@ -1227,7 +1227,7 @@ int test_duplicate_wild(const char* sBase)
  * In E/F the end "2025-03-01" is the first instant of March, so the whole
  * month is out unless the end carries a time of day.
  *
- * SCLK uses vtInt (das_range_fromInt) where the caller controls nEnd directly;
+ * SCLK uses DASVT_INT (DasRng_fromInt) where the caller controls nEnd directly;
  * no new code path exists for SCLK -- test_sclk() already covers that boundary.
  */
 
@@ -1269,13 +1269,13 @@ static int _time_iter_count(
 ){
 	DasUriTplt* pTplt = new_DasUriTplt();
 	if(pTplt == NULL){ printf("FAIL: %s (new)\n", sLabel); return 1; }
-	if(DasUriTplt_register(pTplt, das_time_uridef()) != DAS_OKAY){
+	if(DasUriTplt_register(pTplt, DasUriSegDef_timeToks()) != DAS_OKAY){
 		del_DasUriTplt(pTplt); printf("FAIL: %s (register)\n", sLabel); return 1;
 	}
-	if(DasUriTplt_pattern(pTplt, sTplt) != DAS_OKAY){
+	if(DasUriTplt_setPattern(pTplt, sTplt) != DAS_OKAY){
 		del_DasUriTplt(pTplt); printf("FAIL: %s (pattern)\n", sLabel); return 1;
 	}
-	das_dim_range rng;
+	DasDimRng rng;
 	if(_dr_utc(&rng, sBeg, sEnd) != DAS_OKAY){
 		del_DasUriTplt(pTplt); printf("FAIL: %s (range)\n", sLabel); return 1;
 	}
@@ -1284,7 +1284,7 @@ static int _time_iter_count(
 		del_DasUriTplt(pTplt); printf("FAIL: %s (init)\n", sLabel); return 1;
 	}
 	int nFound = 0;
-	char sPath[DURI_MAX_PATH];
+	char sPath[DASURITPLT_PATH_SZ];
 	while(DasUriIter_next(&iter, sPath, sizeof(sPath)) != NULL) ++nFound;
 	fini_DasUriIter(&iter);
 	del_DasUriTplt(pTplt);
@@ -1300,7 +1300,7 @@ int test_roundup_utc(const char* sBase)
 {
 	printf("INFO: test_roundup_utc: upper-bound round-up semantics\n");
 
-	char sTplt[DURI_MAX_PATH];
+	char sTplt[DASURITPLT_PATH_SZ];
 	int nFail = 0;
 
 	/* Group 1: yday boundary -- sub-day content determines whether day 063 passes */
@@ -1376,7 +1376,7 @@ int test_multiyr_time(const char* sBase)
 
 	if(make_files(sBase, g_multiyr_files) != 0){ printf("FAIL\n"); return 1; }
 
-	char sTplt[DURI_MAX_PATH];
+	char sTplt[DASURITPLT_PATH_SZ];
 	snprintf(sTplt, sizeof(sTplt), "%s/multiyr/$Y/$j.dat", sBase);
 
 	return _time_iter_count(
@@ -1414,7 +1414,7 @@ int test_dir_edges(const char* sBase)
 
 	if(make_files(sBase, g_mdy_files) != 0){ printf("FAIL\n"); return 1; }
 
-	char sTplt[DURI_MAX_PATH];
+	char sTplt[DASURITPLT_PATH_SZ];
 	snprintf(sTplt, sizeof(sTplt), "%s/mdy/$Y/$m/$d/data_$Y$m$d.dat", sBase);
 
 	int nFail = 0;
@@ -1479,13 +1479,13 @@ static int _verday_check(
 ){
 	DasUriTplt* pTplt = new_DasUriTplt();
 	if(pTplt == NULL){ printf("FAIL: %s (new)\n", sLabel); return 1; }
-	if(DasUriTplt_register(pTplt, das_time_uridef()) != DAS_OKAY){
+	if(DasUriTplt_register(pTplt, DasUriSegDef_timeToks()) != DAS_OKAY){
 		del_DasUriTplt(pTplt); printf("FAIL: %s (register)\n", sLabel); return 1;
 	}
-	if(DasUriTplt_pattern(pTplt, sTplt) != DAS_OKAY){
+	if(DasUriTplt_setPattern(pTplt, sTplt) != DAS_OKAY){
 		del_DasUriTplt(pTplt); printf("FAIL: %s (pattern)\n", sLabel); return 1;
 	}
-	das_dim_range rng;
+	DasDimRng rng;
 	if(_dr_utc(&rng, sBeg, sEnd) != DAS_OKAY){
 		del_DasUriTplt(pTplt); printf("FAIL: %s (range)\n", sLabel); return 1;
 	}
@@ -1494,12 +1494,12 @@ static int _verday_check(
 		del_DasUriTplt(pTplt); printf("FAIL: %s (init)\n", sLabel); return 1;
 	}
 
-	char aFound[VERDAY_CAP][DURI_MAX_PATH];
+	char aFound[VERDAY_CAP][DASURITPLT_PATH_SZ];
 	int nFound = 0;
-	char sPath[DURI_MAX_PATH];
+	char sPath[DASURITPLT_PATH_SZ];
 	while((nFound < VERDAY_CAP) && (DasUriIter_next(&iter, sPath, sizeof(sPath)) != NULL)){
-		strncpy(aFound[nFound], sPath, DURI_MAX_PATH - 1);
-		aFound[nFound][DURI_MAX_PATH - 1] = '\0';
+		strncpy(aFound[nFound], sPath, DASURITPLT_PATH_SZ - 1);
+		aFound[nFound][DASURITPLT_PATH_SZ - 1] = '\0';
 		++nFound;
 	}
 	fini_DasUriIter(&iter);
@@ -1533,8 +1533,8 @@ int test_ver_per_interval(const char* sBase)
 
 	if(make_files(sBase, g_flatv_files) != 0){ printf("FAIL\n"); return 1; }
 
-	char sFlat[DURI_MAX_PATH];
-	char sMon[DURI_MAX_PATH];
+	char sFlat[DASURITPLT_PATH_SZ];
+	char sMon[DASURITPLT_PATH_SZ];
 	snprintf(sFlat, sizeof(sFlat), "%s/flatv/d_$Y$m$d_v$v.dat", sBase);
 	snprintf(sMon,  sizeof(sMon),  "%s/monv/$Y/$m/d_$Y$m$d_v$v.dat", sBase);
 
@@ -1565,37 +1565,37 @@ int test_ver_per_interval(const char* sBase)
  * dropped so the result can go straight to fopen().  No fixture is needed.
  */
 
-/* das_range_fromTime() once went through text: yday from the caller, seconds
-   cut to milliseconds.  A das_time with only month/mday set must render the
+/* DasRng_fromTime() once went through text: yday from the caller, seconds
+   cut to milliseconds.  A DasTime with only month/mday set must render the
    same day of year, and the begin time must come back unchanged. */
 int test_range_from_time(void)
 {
-	printf("INFO: test_range_from_time: das_time ranges keep every field\n");
+	printf("INFO: test_range_from_time: DasTime ranges keep every field\n");
 
-	das_time dtBeg = {0}, dtEnd = {0};
+	DasTime dtBeg = {0}, dtEnd = {0};
 	dtBeg.year = 2025; dtBeg.month = 10; dtBeg.mday = 15;
 	dtBeg.hour = 6; dtBeg.second = 1.123456789;          /* yday left 0 */
 	dtEnd = dtBeg; dtEnd.mday = 16;
 
-	das_range rTime;
-	das_range_fromTime(&rTime, &dtBeg, &dtEnd);
-	das_dim_range rng;
-	das_dim_range_init(&rng, "time", &rTime);
+	DasRng rTime;
+	DasRng_fromTime(&rTime, &dtBeg, &dtEnd);
+	DasDimRng rng;
+	DasDimRng_set(&rng, "time", &rTime);
 
 	int nFail = 0;
-	das_time dtBack;
-	das_datum_toTime(&rng.rng.dmBeg, &dtBack);
+	DasTime dtBack;
+	DasDatum_toTime(&rng.range.begin, &dtBack);
 	if((dtBack.yday != 288)||(dtBack.second != dtBeg.second)){
 		printf("FAIL: begin came back as yday %d, second %.9f\n", dtBack.yday, dtBack.second);
 		++nFail;
 	}
 
 	DasUriTplt* pTplt = new_DasUriTplt();
-	char sBuf[DURI_MAX_PATH] = {'\0'};
+	char sBuf[DASURITPLT_PATH_SZ] = {'\0'};
 	const char* sWant = "/data/2025/288/f_20251015.cdf";
-	if((DasUriTplt_register(pTplt, das_time_uridef()) != DAS_OKAY)
-	   || (DasUriTplt_pattern(pTplt, "/data/$Y/$j/f_$Y$m$d.cdf") != DAS_OKAY)
-	   || (DasUriTplt_render(pTplt, 1, &rng, sBuf, DURI_MAX_PATH) == NULL)
+	if((DasUriTplt_register(pTplt, DasUriSegDef_timeToks()) != DAS_OKAY)
+	   || (DasUriTplt_setPattern(pTplt, "/data/$Y/$j/f_$Y$m$d.cdf") != DAS_OKAY)
+	   || (DasUriTplt_render(pTplt, 1, &rng, sBuf, DASURITPLT_PATH_SZ) == NULL)
 	   || (strcmp(sBuf, sWant) != 0)){
 		printf("FAIL: rendered '%s', expected '%s'\n", sBuf, sWant);
 		++nFail;
@@ -1623,7 +1623,7 @@ int test_open_ranges(const char* sBase)
 	printf("INFO: test_open_ranges: half-open and fully open ranges\n");
 	int nFail = 0;
 
-	char sTplt[DURI_MAX_PATH];
+	char sTplt[DASURITPLT_PATH_SZ];
 	if(make_files(sBase, g_multiyr_files) != 0){ printf("FAIL\n"); return 1; }
 	snprintf(sTplt, sizeof(sTplt), "%s/multiyr/$Y/$j.dat", sBase);
 
@@ -1633,33 +1633,33 @@ int test_open_ranges(const char* sBase)
 
 	if(make_files(sBase, g_orbit_files) != 0){ printf("FAIL\n"); return 1; }
 	DasUriField aOrbFlds[] = {
-		{ .cShort = '\0', .sLong = "number", .nWidth = 4, .nMin = 0, .nMax = 99999 },
+		{ .shortChar = '\0', .longName = "number", .width = 4, .min = 0, .max = 99999 },
 	};
 	DasUriSegDef orbDef = {
-		DASURISEGDEF_INIT, .sCoord = "orbit", .nFields = 1, .pFields = aOrbFlds
+		DASURISEGDEF_INIT, .coord = "orbit", .numFields = 1, .fields = aOrbFlds
 	};
 	snprintf(sTplt, sizeof(sTplt),
 	         "%s/juno/orb$(orbit.number)/juno_orbit$(orbit.number)_fgm.cdf", sBase);
 
 	DasUriTplt* pTplt = new_DasUriTplt();
 	if((pTplt == NULL)||(DasUriTplt_register(pTplt, &orbDef) != DAS_OKAY)||
-	   (DasUriTplt_pattern(pTplt, sTplt) != DAS_OKAY)){
+	   (DasUriTplt_setPattern(pTplt, sTplt) != DAS_OKAY)){
 		printf("FAIL: orbit template setup\n");
 		del_DasUriTplt(pTplt);
 		return nFail + 1;
 	}
 
-	das_datum dm;
-	das_range rng;
-	das_dim_range rOrb;
+	DasDatum dm;
+	DasRng rng;
+	DasDimRng rOrb;
 	struct { const char* sLabel; bool bIsBeg; double rVal; int nExpect; } aCase[] = {
 		{"orbit open end, from 53",       true,  53.0, 2},
 		{"orbit open begin, before 52",   false, 52.0, 2},
 	};
 	for(size_t u = 0; u < sizeof(aCase)/sizeof(aCase[0]); ++u){
-		das_datum_fromDbl(&dm, aCase[u].rVal, UNIT_DIMENSIONLESS);
-		das_range_fromDatum(&rng, aCase[u].bIsBeg ? &dm : NULL, aCase[u].bIsBeg ? NULL : &dm);
-		das_dim_range_init(&rOrb, "orbit.number", &rng);
+		DasDatum_fromDouble(&dm, aCase[u].rVal, DASUNITS_DIMENSIONLESS);
+		DasRng_fromDatum(&rng, aCase[u].bIsBeg ? &dm : NULL, aCase[u].bIsBeg ? NULL : &dm);
+		DasDimRng_set(&rOrb, "orbit.number", &rng);
 		int nFound = _run_orbit_iter(pTplt, &rOrb, aCase[u].sLabel);
 		if(nFound != aCase[u].nExpect){
 			printf("FAIL: %s: found %d, expected %d\n",
@@ -1671,8 +1671,8 @@ int test_open_ranges(const char* sBase)
 	}
 
 	/* Render: an open dmBeg has no value to write, so the field is a glob */
-	char sBuf[DURI_MAX_PATH];
-	das_dim_range_init(&rOrb, "orbit.number", NULL);
+	char sBuf[DASURITPLT_PATH_SZ];
+	DasDimRng_set(&rOrb, "orbit.number", NULL);
 	if(DasUriTplt_render(pTplt, 1, &rOrb, sBuf, sizeof(sBuf)) == NULL ||
 	   strstr(sBuf, "orb*/") == NULL){
 		printf("FAIL: open render gave '%s'\n", sBuf);
@@ -1699,7 +1699,7 @@ int test_render_scheme(void)
 		{NULL, NULL}
 	};
 
-	das_dim_range rng;
+	DasDimRng rng;
 	if(_dr_utc(&rng, "2025-10-15", "2025-10-16") != DAS_OKAY){
 		printf("FAIL (range)\n"); return 1;
 	}
@@ -1708,10 +1708,10 @@ int test_render_scheme(void)
 	for(int i = 0; aCase[i][0] != NULL; ++i){
 		DasUriTplt* pTplt = new_DasUriTplt();
 		if(pTplt == NULL){ printf("FAIL (new)\n"); return 1; }
-		char sBuf[DURI_MAX_PATH] = {'\0'};
-		if((DasUriTplt_register(pTplt, das_time_uridef()) != DAS_OKAY)
-		   || (DasUriTplt_pattern(pTplt, aCase[i][0]) != DAS_OKAY)
-		   || (DasUriTplt_render(pTplt, 1, &rng, sBuf, DURI_MAX_PATH) == NULL)
+		char sBuf[DASURITPLT_PATH_SZ] = {'\0'};
+		if((DasUriTplt_register(pTplt, DasUriSegDef_timeToks()) != DAS_OKAY)
+		   || (DasUriTplt_setPattern(pTplt, aCase[i][0]) != DAS_OKAY)
+		   || (DasUriTplt_render(pTplt, 1, &rng, sBuf, DASURITPLT_PATH_SZ) == NULL)
 		){
 			printf("FAIL: %s did not render\n", aCase[i][0]);
 			++nFail;
@@ -1745,25 +1745,25 @@ int test_iter_buffer(const char* sBase)
 	printf("INFO: test_iter_buffer: short buffers stop, zeroed reads done\n");
 	int nFail = 0;
 
-	char sTplt[DURI_MAX_PATH];
+	char sTplt[DASURITPLT_PATH_SZ];
 	if(make_files(sBase, g_multiyr_files) != 0){ printf("FAIL\n"); return 1; }
 	snprintf(sTplt, sizeof(sTplt), "%s/multiyr/$Y/$j.dat", sBase);
 
 	DasUriTplt* pTplt = new_DasUriTplt();
-	if((pTplt == NULL)||(DasUriTplt_register(pTplt, das_time_uridef()) != DAS_OKAY)||
-	   (DasUriTplt_pattern(pTplt, sTplt) != DAS_OKAY)){
+	if((pTplt == NULL)||(DasUriTplt_register(pTplt, DasUriSegDef_timeToks()) != DAS_OKAY)||
+	   (DasUriTplt_setPattern(pTplt, sTplt) != DAS_OKAY)){
 		printf("FAIL: template setup\n");
 		del_DasUriTplt(pTplt);
 		return 1;
 	}
 
-	das_dim_range dr;
-	das_dim_range_init(&dr, "time", NULL);
+	DasDimRng dr;
+	DasDimRng_set(&dr, "time", NULL);
 
 	/* Room for the path, then not */
 	DasUriIter iter;
 	init_DasUriIter(&iter, pTplt, 1, &dr);
-	char sPath[DURI_MAX_PATH];
+	char sPath[DASURITPLT_PATH_SZ];
 	char sTiny[8];
 	if(DasUriIter_next(&iter, sPath, sizeof(sPath)) == NULL){
 		printf("FAIL: first path did not fit a full buffer\n"); ++nFail;
@@ -1771,7 +1771,7 @@ int test_iter_buffer(const char* sBase)
 	if(DasUriIter_next(&iter, sTiny, sizeof(sTiny)) != NULL){
 		printf("FAIL: a path fit in 8 bytes: %s\n", sTiny); ++nFail;
 	}
-	if(DasUriIter_err(&iter) == DAS_OKAY){
+	if(DasUriIter_errCode(&iter) == DAS_OKAY){
 		printf("FAIL: a short buffer left no error\n"); ++nFail;
 	}
 	if(DasUriIter_next(&iter, sPath, sizeof(sPath)) != NULL){
@@ -1783,9 +1783,9 @@ int test_iter_buffer(const char* sBase)
 	init_DasUriIter(&iter, pTplt, 1, &dr);
 	int nFound = 0;
 	while(DasUriIter_next(&iter, sPath, sizeof(sPath)) != NULL) ++nFound;
-	if((nFound != 7)||(DasUriIter_err(&iter) != DAS_OKAY)||(iter.nState != DURI_ITER_DONE)){
+	if((nFound != 7)||(DasUriIter_errCode(&iter) != DAS_OKAY)||(iter.nState != DASURIITER_DONE)){
 		printf("FAIL: full run found %d, err %d, state %d\n",
-		       nFound, DasUriIter_err(&iter), iter.nState);
+		       nFound, DasUriIter_errCode(&iter), iter.nState);
 		++nFail;
 	}
 	fini_DasUriIter(&iter);
@@ -1793,7 +1793,7 @@ int test_iter_buffer(const char* sBase)
 
 	DasUriIter zero;
 	memset(&zero, 0, sizeof(zero));
-	if((DasUriIter_next(&zero, sPath, sizeof(sPath)) != NULL)||(DasUriIter_err(&zero) != DAS_OKAY)){
+	if((DasUriIter_next(&zero, sPath, sizeof(sPath)) != NULL)||(DasUriIter_errCode(&zero) != DAS_OKAY)){
 		printf("FAIL: a zeroed iterator is not done\n"); ++nFail;
 	}
 
@@ -1803,21 +1803,21 @@ int test_iter_buffer(const char* sBase)
 
 
 /* ************************************************************************* */
-/* A coordinate table written without DAS_URISEG_VER is refused, its layout
+/* A coordinate table written without DASURISEGDEF_VER is refused, its layout
    is unknown.  Prints two intentional ERROR lines. */
 int test_seg_version(void)
 {
-	printf("INFO: test_seg_version: definitions must carry DAS_URISEG_VER\n");
+	printf("INFO: test_seg_version: definitions must carry DASURISEGDEF_VER\n");
 
 	DasUriField aFlds[] = {
-		{ .cShort = '\0', .sLong = "number", .nWidth = 4, .nMin = 0, .nMax = 9999 },
+		{ .shortChar = '\0', .longName = "number", .width = 4, .min = 0, .max = 9999 },
 	};
 	/* Identical but for the version */
-	DasUriSegDef noVer = { .uVersion = 0, .sCoord = "orbit", .nFields = 1, .pFields = aFlds };
+	DasUriSegDef noVer = { .uStructVer = 0, .coord = "orbit", .numFields = 1, .fields = aFlds };
 	DasUriSegDef later = noVer;
 	DasUriSegDef good  = noVer;
-	later.uVersion = DAS_URISEG_VER + 1;
-	good.uVersion  = DAS_URISEG_VER;
+	later.uStructVer = DASURISEGDEF_VER + 1;
+	good.uStructVer  = DASURISEGDEF_VER;
 
 	DasUriTplt* pTplt = new_DasUriTplt();
 	int nFail = 0;
@@ -1836,7 +1836,7 @@ int test_seg_version(void)
 
 int main(int argc, char** argv)
 {
-	das_init(argv[0], DASERR_DIS_RET, DASLOG_INFO, NULL);
+	daslib_init(argv[0], DASERRDISP_RET, DASLOG_INFO, NULL);
 
 	if(argc != 2){
 		fprintf(stderr, "Usage: %s <test-dir>\n", argv[0]);

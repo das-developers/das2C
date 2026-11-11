@@ -54,7 +54,7 @@
 #include "info_p.h"
 #include "form_p.h"
 
-#define REFUSE(...) (das_error(DASERR_FORM, __VA_ARGS__), dbsRefuse)
+#define REFUSE(...) (daserrf(DASERR_FORM, __VA_ARGS__), dbsRefuse)
 
 #define VEC_DEG2RAD 0.017453292519943295
 #define VEC_RAD2DEG 57.29577951308232
@@ -97,81 +97,81 @@
 
    cspice draws the same distinctions (recsph_c vs reclat_c, which disagree
    about both the angle and which slot holds the longitude), and
-   test/TestSpice.c checks das_vsys_toCart() and das_vsys_fromCart() against
+   test/TestSpice.c checks dasvecsys_toCart() and dasvecsys_fromCart() against
    it.  This table is the authority for which slot means what. */
 
 /* Canonical direction symbols, indexed by system code then direction.  A code
    past the geometric six (complex's, say) returns NULL rather than guessing. */
-static const char* g_aSysSym[DAS_VSYS_MAX + 1][3] = {
-	{  "",   "",   ""},   /* DAS_VSYS_UNKNOWN */
-	{ "x",  "y",  "z"},   /* DAS_VSYS_CART    */
-	{ "ρ",  "φ",  "z"},   /* DAS_VSYS_CYL     */
-	{ "r",  "θ",  "φ"},   /* DAS_VSYS_SPH     */
-	{ "r",  "λ",  "φ"},   /* DAS_VSYS_CENTRIC */
-	{ "λ",  "φ",  "h"},   /* DAS_VSYS_DETIC   */
-	{ "φ",  "λ",  "h"}    /* DAS_VSYS_GRAPHIC */
+static const char* g_aSysSym[DASVECSYS_MAX + 1][3] = {
+	{  "",   "",   ""},   /* DASVECSYS_UNKNOWN */
+	{ "x",  "y",  "z"},   /* DASVECSYS_CART    */
+	{ "ρ",  "φ",  "z"},   /* DASVECSYS_CYL     */
+	{ "r",  "θ",  "φ"},   /* DASVECSYS_SPH     */
+	{ "r",  "λ",  "φ"},   /* DASVECSYS_CENTRIC */
+	{ "λ",  "φ",  "h"},   /* DASVECSYS_DETIC   */
+	{ "φ",  "λ",  "h"}    /* DASVECSYS_GRAPHIC */
 };
 
 /* Reluctantly we have Spelled-out twins of the symbol tables for CDF
    readers and other external transport formats.
-   same row order: DAS_VSYS_UNKNOWN through DAS_VSYS_GRAPHIC.  */
-static const char* g_aSysName[DAS_VSYS_MAX + 1][3] = {
-	{ "",       "",       ""     },   /* DAS_VSYS_UNKNOWN */
-	{ "x",      "y",      "z"    },   /* DAS_VSYS_CART    */
-	{ "rho",    "phi",    "z"    },   /* DAS_VSYS_CYL     */
-	{ "r",      "theta",  "phi"  },   /* DAS_VSYS_SPH     */
-	{ "r",      "lambda", "phi"  },   /* DAS_VSYS_CENTRIC */
-	{ "lambda", "phi",    "h"    },   /* DAS_VSYS_DETIC   */
-	{ "phi",    "lambda", "h"    }    /* DAS_VSYS_GRAPHIC */
+   same row order: DASVECSYS_UNKNOWN through DASVECSYS_GRAPHIC.  */
+static const char* g_aSysName[DASVECSYS_MAX + 1][3] = {
+	{ "",       "",       ""     },   /* DASVECSYS_UNKNOWN */
+	{ "x",      "y",      "z"    },   /* DASVECSYS_CART    */
+	{ "rho",    "phi",    "z"    },   /* DASVECSYS_CYL     */
+	{ "r",      "theta",  "phi"  },   /* DASVECSYS_SPH     */
+	{ "r",      "lambda", "phi"  },   /* DASVECSYS_CENTRIC */
+	{ "lambda", "phi",    "h"    },   /* DASVECSYS_DETIC   */
+	{ "phi",    "lambda", "h"    }    /* DASVECSYS_GRAPHIC */
 };
 
-const char* das_vsys_toStr(ubyte uSys)
+const char* dasvecsys_name(uint8_t uSys)
 {
-	switch(uSys & DAS_VSYS_TYPE_MASK){
-	case DAS_VSYS_CART:    return "cartesian";
-	case DAS_VSYS_CYL:     return "cylindrical";
-	case DAS_VSYS_SPH:     return "spherical";
-	case DAS_VSYS_CENTRIC: return "centric";
-	case DAS_VSYS_DETIC:   return "detic";
-	case DAS_VSYS_GRAPHIC: return "graphic";
+	switch(uSys & DASVECSYS_TYPE_MASK){
+	case DASVECSYS_CART:    return "cartesian";
+	case DASVECSYS_CYL:     return "cylindrical";
+	case DASVECSYS_SPH:     return "spherical";
+	case DASVECSYS_CENTRIC: return "centric";
+	case DASVECSYS_DETIC:   return "detic";
+	case DASVECSYS_GRAPHIC: return "graphic";
 	}
 	return NULL;
 }
 
-ubyte das_vsys_fromStr(const char* sSys)
+uint8_t dasvecsys_id(const char* sSys)
 {
-	if(sSys == NULL) return DAS_VSYS_UNKNOWN;
+	if(sSys == NULL) return DASVECSYS_UNKNOWN;
 
 	/* Prefix matching, because the wire has always accepted "cart" for
 	   "cartesian" and streams in the wild use both. */
-	if(strncasecmp(sSys, "cart", 4) == 0) return DAS_VSYS_CART;
-	if(strncasecmp(sSys, "cyl",  3) == 0) return DAS_VSYS_CYL;
-	if(strncasecmp(sSys, "sph",  3) == 0) return DAS_VSYS_SPH;
-	if(strncasecmp(sSys, "cent", 4) == 0) return DAS_VSYS_CENTRIC;
-	if(strncasecmp(sSys, "detic", 5) == 0) return DAS_VSYS_DETIC;
-	if(strncasecmp(sSys, "graph", 5) == 0) return DAS_VSYS_GRAPHIC;
+	if(strncasecmp(sSys, "cart", 4) == 0) return DASVECSYS_CART;
+	if(strncasecmp(sSys, "cyl",  3) == 0) return DASVECSYS_CYL;
+	if(strncasecmp(sSys, "sph",  3) == 0) return DASVECSYS_SPH;
+	if(strncasecmp(sSys, "cent", 4) == 0) return DASVECSYS_CENTRIC;
+	if(strncasecmp(sSys, "detic", 5) == 0) return DASVECSYS_DETIC;
+	if(strncasecmp(sSys, "graph", 5) == 0) return DASVECSYS_GRAPHIC;
 
-	return DAS_VSYS_UNKNOWN;
+	return DASVECSYS_UNKNOWN;
 }
 
-const char* das_vsys_desc(ubyte uSys)
+const char* dasvecsys_info(uint8_t uSys)
 {
-	switch(uSys & DAS_VSYS_TYPE_MASK){
-	case DAS_VSYS_CART:
+	switch(uSys & DASVECSYS_TYPE_MASK){
+	case DASVECSYS_CART:
 	return "A standard orthogonal coordinate system. The full component set "
 	       "is (x,y,z). Missing components are assumed to be 0.";
-	case DAS_VSYS_CYL:
+	case DASVECSYS_CYL:
 	return "An ISO 31-11 standard cylindrical system. The full component set "
 	       "is (ρ,φ,z) where ρ is distance to the z-axis, φ is eastward "
 	       "angle.  Z is assumed to be 0 if missing, ρ assumed to be 1, in "
 	       "the variable's units, if missing.";
-	case DAS_VSYS_SPH:
+	case DASVECSYS_SPH:
 	return "An ISO 31-11 standard spherical system. The full component set "
 	       "is (r,θ,φ) where r is the radial direction, θ is the colatitude "
 	       "(which is 0° at the north pole) and φ is the eastward angle. "
 	       "Both θ, φ are assumed to be 0° if missing and r is assumed to "
 	       "be 1, in the variable's units, if missing.";
-	case DAS_VSYS_CENTRIC:
+	case DASVECSYS_CENTRIC:
 	return "A spherical system measured from the body center, with no "
 	       "reference surface.  The full component set is (r, λ, φ) where "
 	       "'r' is the radial direction, 'λ' is the eastward longitude and "
@@ -179,7 +179,7 @@ const char* das_vsys_desc(ubyte uSys)
 	       "are assumed to be 0° if missing and 'r' is assumed to be 1, in the "
 	       "variable's units, if not specified.";
 
-	case DAS_VSYS_DETIC:
+	case DASVECSYS_DETIC:
 	return "An ellipsoidal coordinate system defined with respect to a "
 	       "reference surface. Normals from the surface do not intersect "
 	       "the origin except at the equator and poles.  The full "
@@ -188,7 +188,7 @@ const char* das_vsys_desc(ubyte uSys)
 	       "'h' is the distance outside the ellipsoid along that normal. "
 	       "All of 'λ', 'φ' and 'h' are assumed to be 0 if absent.";
 
-	case DAS_VSYS_GRAPHIC:
+	case DASVECSYS_GRAPHIC:
 	return "An ellipsoidal coordinate system differing from detic only in "
 	       "the sense of the longitude, which runs WESTWARD.  The component "
 	       "order differs as well: the full set is (φ, λ, h), latitude "
@@ -201,43 +201,43 @@ const char* das_vsys_desc(ubyte uSys)
 	return NULL;
 }
 
-const char* das_vsys_symbol(ubyte uSys, int iDir)
+const char* dasvecsys_dirSym(uint8_t uSys, int iDir)
 {
-	int nSys = uSys & DAS_VSYS_TYPE_MASK;
-	if((nSys < DAS_VSYS_MIN)||(nSys > DAS_VSYS_MAX)) return NULL;
+	int nSys = uSys & DASVECSYS_TYPE_MASK;
+	if((nSys < DASVECSYS_MIN)||(nSys > DASVECSYS_MAX)) return NULL;
 	if((iDir < 0)||(iDir > 2)) return NULL;
 
 	return g_aSysSym[nSys][iDir];
 }
 
-int8_t das_vsys_index(ubyte uSys, const char* sSymbol)
+int8_t dasvecsys_symToDir(uint8_t uSys, const char* sSymbol)
 {
 	if(sSymbol == NULL) return -1;
 
 	for(int8_t i = 0; i < 3; ++i){
-		const char* sHave = das_vsys_symbol(uSys, i);
+		const char* sHave = dasvecsys_dirSym(uSys, i);
 		if((sHave != NULL)&&(strcasecmp(sSymbol, sHave) == 0)) return i;
 	}
 	return -1;
 }
 
-const char* das_vsys_name(ubyte uSys, int iDir)
+const char* dasvecsys_dirName(uint8_t uSys, int iDir)
 {
-	int nSys = uSys & DAS_VSYS_TYPE_MASK;
-	if((nSys < DAS_VSYS_MIN)||(nSys > DAS_VSYS_MAX)||(iDir < 0)||(iDir > 2))
+	int nSys = uSys & DASVECSYS_TYPE_MASK;
+	if((nSys < DASVECSYS_MIN)||(nSys > DASVECSYS_MAX)||(iDir < 0)||(iDir > 2))
 		return NULL;
 	return g_aSysName[nSys][iDir];
 }
 
-int8_t das_vsys_nameIndex(ubyte uSys, const char* sName)
+int8_t dasvecsys_nameToDir(uint8_t uSys, const char* sName)
 {
 	if(sName == NULL) return -1;
 
 	for(int8_t i = 0; i < 3; ++i){
-		const char* sHave = das_vsys_name(uSys, i);
+		const char* sHave = dasvecsys_dirName(uSys, i);
 		if((sHave != NULL)&&(strcasecmp(sName, sHave) == 0)) return i;
 	}
-	return das_vsys_index(uSys, sName);
+	return dasvecsys_symToDir(uSys, sName);
 }
 
 /* DEFAULT VALUE PER DIRECTION.  A das stream may send FEWER components than a
@@ -250,16 +250,16 @@ int8_t das_vsys_nameIndex(ubyte uSys, const char* sName)
    units: a unit direction for an angles-only vector. Detic and graphic have no
    radius and fall through to zero in every slot.
 
-   das_vsys_desc() states these same numbers in prose; edit the two together.
+   dasvecsys_info() states these same numbers in prose; edit the two together.
    The ACI location notes once said r=1 while the code said 0. */
-double das_vsys_default(ubyte uSys, int iDir)
+double dasvecsys_dirDefault(uint8_t uSys, int iDir)
 {
 	if(iDir != 0) return 0.0;
 
 	switch(uSys){
-	case DAS_VSYS_CYL:      /* rho */
-	case DAS_VSYS_SPH:      /* r   */
-	case DAS_VSYS_CENTRIC:  /* r   */
+	case DASVECSYS_CYL:      /* rho */
+	case DASVECSYS_SPH:      /* r   */
+	case DASVECSYS_CENTRIC:  /* r   */
 		return 1.0;
 	}
 	return 0.0;             /* cartesian x, and every non-radial slot */
@@ -267,16 +267,16 @@ double das_vsys_default(ubyte uSys, int iDir)
 
 /* Every case copies what it needs out of pIn before writing pOut, which is
    what lets the header promise in-place conversion. */
-bool das_vsys_toCart(ubyte uSys, const double* pIn, double* pOut)
+bool dasvecsys_toCart(uint8_t uSys, const double* pIn, double* pOut)
 {
 	double r, a1, a2;
 
 	switch(uSys){
-	case DAS_VSYS_CART:
+	case DASVECSYS_CART:
 		pOut[0] = pIn[0]; pOut[1] = pIn[1]; pOut[2] = pIn[2];
 		return true;
 
-	case DAS_VSYS_CYL:                       /* rho, phi, z */
+	case DASVECSYS_CYL:                       /* rho, phi, z */
 		r  = pIn[0];
 		a1 = pIn[1] * VEC_DEG2RAD;
 		pOut[0] = r * cos(a1);
@@ -284,7 +284,7 @@ bool das_vsys_toCart(ubyte uSys, const double* pIn, double* pOut)
 		pOut[2] = pIn[2];
 		return true;
 
-	case DAS_VSYS_SPH:                       /* r, colatitude, phi */
+	case DASVECSYS_SPH:                       /* r, colatitude, phi */
 		r  = pIn[0];
 		a1 = pIn[1] * VEC_DEG2RAD;           /* colatitude from +z */
 		a2 = pIn[2] * VEC_DEG2RAD;
@@ -293,7 +293,7 @@ bool das_vsys_toCart(ubyte uSys, const double* pIn, double* pOut)
 		pOut[2] = r * cos(a1);
 		return true;
 
-	case DAS_VSYS_CENTRIC:                   /* r, phi, latitude */
+	case DASVECSYS_CENTRIC:                   /* r, phi, latitude */
 		r  = pIn[0];
 		a1 = pIn[1] * VEC_DEG2RAD;
 		a2 = pIn[2] * VEC_DEG2RAD;           /* latitude from the equator */
@@ -305,43 +305,43 @@ bool das_vsys_toCart(ubyte uSys, const double* pIn, double* pOut)
 
 	/* Detic and graphic land here: converting them needs the reference
 	   ellipsoid, which this signature does not carry. */
-	const char* sSys = das_vsys_toStr(uSys);
+	const char* sSys = dasvecsys_name(uSys);
 	if(sSys == NULL)
-		return das_error_false(DASERR_FORM,
+		return daserr_falsef(DASERR_FORM,
 			"No kernel-free conversion from component system %hhu to cartesian",
 			uSys
 		);
-	return das_error_false(DASERR_FORM,
+	return daserr_falsef(DASERR_FORM,
 		"No kernel-free conversion from %s to cartesian; the ellipsoidal "
 		"systems are measured against a reference surface, which this "
 		"conversion does not take", sSys
 	);
 }
 
-bool das_vsys_fromCart(ubyte uSys, const double* pIn, double* pOut)
+bool dasvecsys_fromCart(uint8_t uSys, const double* pIn, double* pOut)
 {
 	double x = pIn[0], y = pIn[1], z = pIn[2];
 	double r;
 
 	switch(uSys){
-	case DAS_VSYS_CART:
+	case DASVECSYS_CART:
 		pOut[0] = x; pOut[1] = y; pOut[2] = z;
 		return true;
 
-	case DAS_VSYS_CYL:
+	case DASVECSYS_CYL:
 		pOut[0] = sqrt(x*x + y*y);
 		pOut[1] = atan2(y, x) * VEC_RAD2DEG;
 		pOut[2] = z;
 		return true;
 
-	case DAS_VSYS_SPH:
+	case DASVECSYS_SPH:
 		r = sqrt(x*x + y*y + z*z);
 		pOut[0] = r;
 		pOut[1] = (r > 0.0) ? acos(z / r) * VEC_RAD2DEG : 0.0;  /* colatitude */
 		pOut[2] = atan2(y, x) * VEC_RAD2DEG;
 		return true;
 
-	case DAS_VSYS_CENTRIC:
+	case DASVECSYS_CENTRIC:
 		r = sqrt(x*x + y*y + z*z);
 		pOut[0] = r;
 		pOut[1] = atan2(y, x) * VEC_RAD2DEG;
@@ -349,7 +349,7 @@ bool das_vsys_fromCart(ubyte uSys, const double* pIn, double* pOut)
 		return true;
 	}
 
-	return das_error_false(DASERR_FORM,
+	return daserr_falsef(DASERR_FORM,
 		"No kernel-free conversion from cartesian to component system %hhu",
 		uSys
 	);
@@ -374,32 +374,32 @@ typedef struct das_form_vec {
 	char  sSysOrder[16];            /* "" only before validate() and with no
 	                                   order given, see _DasFormVec_validate */
 
-	ubyte uSysType;    /* DAS_VSYS_*, never an ellipsoidal one */
-	ubyte aDirs[3];    /* slot -> canonical direction */
+	uint8_t uSysType;    /* DAS_VSYS_*, never an ellipsoidal one */
+	uint8_t aDirs[3];    /* slot -> canonical direction */
 
 	/* How many of the three slots this variable actually uses.  The count is
 	   the VARIABLE's (intern=), so the form cannot know it at construction --
 	   validate() is handed the internal shape and is the one place it becomes
 	   available.  0 until then, meaning "not yet checked". */
-	ubyte uComps;
+	uint8_t uComps;
 } DasFormVec;
 
 static DasForm* _new_DasFormVec_empty(void)
 {
 	DasFormVec* pThis = (DasFormVec*)calloc(1, sizeof(DasFormVec));
-	pThis->base.pVTbl = &das_form_vec_vtbl;
-	pThis->uSysType   = DAS_VSYS_CART;
+	pThis->base.pVTbl = &DasFormVec_vtable;
+	pThis->uSysType   = DASVECSYS_CART;
 	pThis->aDirs[0] = 0; pThis->aDirs[1] = 1; pThis->aDirs[2] = 2;
 	return &(pThis->base);
 }
 
 DasForm* new_DasFormVec(
-	const char* sFrame, ubyte uSysType, const ubyte* pDirs
+	const char* sFrame, uint8_t uSysType, const uint8_t* pDirs
 ){
 	/* A RANGE check, not a list of the systems this refuses: everything past
-	   DAS_VSYS_VEC_MAX either needs an origin or is not geometric at all. */
-	if((uSysType < DAS_VSYS_MIN)||(uSysType > DAS_VSYS_VEC_MAX)){
-		das_error(DASERR_FORM,
+	   DASVECSYS_VEC_MAX either needs an origin or is not geometric at all. */
+	if((uSysType < DASVECSYS_MIN)||(uSysType > DASVECSYS_VEC_MAX)){
+		daserrf(DASERR_FORM,
 			"Component system %hhu is not one a free vector can use.  The "
 			"ellipsoidal systems are measured on a body and have no meaning "
 			"without an origin; use <ops kind=\"position\">", uSysType
@@ -421,20 +421,20 @@ DasForm* new_DasFormVec(
 }
 
 #define VEC_GET(FN, FIELD) \
-	ubyte FN(const DasForm* pThis){ \
-		if(!DasForm_isKind(pThis, DAS_FORM_VEC)){ \
-			das_error(DASERR_FORM, "Not a vector formalism"); \
+	uint8_t FN(const DasForm* pThis){ \
+		if(!DasForm_isKind(pThis, DASFORM_VEC)){ \
+			daserrf(DASERR_FORM, "Not a vector formalism"); \
 			return 0; \
 		} \
 		return ((const DasFormVec*)pThis)->FIELD; \
 	}
 
-VEC_GET(DasFormVec_sysType, uSysType)
+VEC_GET(DasFormVec_sysId, uSysType)
 
-const ubyte* DasFormVec_dirs(const DasForm* pThis)
+const uint8_t* DasFormVec_dirs(const DasForm* pThis)
 {
-	if(!DasForm_isKind(pThis, DAS_FORM_VEC)){
-		das_error(DASERR_FORM, "Not a vector formalism");
+	if(!DasForm_isKind(pThis, DASFORM_VEC)){
+		daserrf(DASERR_FORM, "Not a vector formalism");
 		return NULL;
 	}
 	return ((const DasFormVec*)pThis)->aDirs;
@@ -442,8 +442,8 @@ const ubyte* DasFormVec_dirs(const DasForm* pThis)
 
 const char* DasFormVec_frame(const DasForm* pThis)
 {
-	if(!DasForm_isKind(pThis, DAS_FORM_VEC)){
-		das_error(DASERR_FORM, "Not a vector formalism");
+	if(!DasForm_isKind(pThis, DASFORM_VEC)){
+		daserrf(DASERR_FORM, "Not a vector formalism");
 		return NULL;
 	}
 	/* "" and NULL both mean frameless, and callers kept getting that wrong
@@ -454,7 +454,7 @@ const char* DasFormVec_frame(const DasForm* pThis)
 
 static const char* _DasFormVec_compSym(const DasForm* pThis, int iComp)
 {
-	if(!DasForm_isKind(pThis, DAS_FORM_VEC)||(iComp < 0)) return NULL;
+	if(!DasForm_isKind(pThis, DASFORM_VEC)||(iComp < 0)) return NULL;
 
 	const DasFormVec* pV = (const DasFormVec*)pThis;
 
@@ -466,7 +466,7 @@ static const char* _DasFormVec_compSym(const DasForm* pThis, int iComp)
 	   has not met its variable does not know what it is describing. */
 	if(iComp >= pV->uComps) return NULL;
 
-	return das_vsys_symbol(pV->uSysType, pV->aDirs[iComp]);
+	return dasvecsys_dirSym(pV->uSysType, pV->aDirs[iComp]);
 }
 
 /* --- parameters ---------------------------------------------------------- */
@@ -474,12 +474,12 @@ static const char* _DasFormVec_compSym(const DasForm* pThis, int iComp)
 /* "1;0;2": storage slot i holds canonical direction sOrd[2i] */
 static das_errcode _DasFormVec_setOrder(DasFormVec* pThis, const char* sOrd)
 {
-	ubyte aDir[3] = {0, 1, 2};
+	uint8_t aDir[3] = {0, 1, 2};
 	int iComp = 0;
 	for(const char* p = sOrd; (*p != '\0')&&(iComp < 3); ++p){
-		if((*p >= '0')&&(*p <= '2')){ aDir[iComp] = (ubyte)(*p - '0'); ++iComp; }
+		if((*p >= '0')&&(*p <= '2')){ aDir[iComp] = (uint8_t)(*p - '0'); ++iComp; }
 		else if(*p != ';')
-			return das_error(DASERR_FORM, "Bad sysorder token '%s'", sOrd);
+			return daserrf(DASERR_FORM, "Bad sysorder token '%s'", sOrd);
 	}
 	for(int i = 0; i < 3; ++i) pThis->aDirs[i] = aDir[i];
 	strncpy(pThis->sSysOrder, sOrd, sizeof(pThis->sSysOrder) - 1);
@@ -492,18 +492,18 @@ static das_errcode _DasFormVec_setParam(
 	DasFormVec* pThis = (DasFormVec*)pBase;
 
 	if(strcmp(sName, "system") == 0){
-		/* das_vsys_fromStr() knows all six, so the free-vector rule is enforced
+		/* dasvecsys_id() knows all six, so the free-vector rule is enforced
 		   HERE, by range, the same way new_DasFormVec() does it.  The
 		   ellipsoidal arm keeps the porting hint that an author coming from
 		   kind="geovec" actually needs. */
-		ubyte uSys = das_vsys_fromStr(sVal);
-		if(uSys == DAS_VSYS_UNKNOWN)
-			return das_error(DASERR_FORM,
+		uint8_t uSys = dasvecsys_id(sVal);
+		if(uSys == DASVECSYS_UNKNOWN)
+			return daserrf(DASERR_FORM,
 				"Unknown component system '%s' for kind=\"vector\"; expected "
 				"cartesian, cylindrical, spherical or centric", sVal
 			);
-		if(uSys > DAS_VSYS_VEC_MAX)
-			return das_error(DASERR_FORM,
+		if(uSys > DASVECSYS_VEC_MAX)
+			return daserrf(DASERR_FORM,
 				"Component system '%s' is not available for kind=\"vector\".  "
 				"The ellipsoidal systems (detic, graphic) are measured on a "
 				"body, so they describe a POSITION -- use "
@@ -522,13 +522,13 @@ static das_errcode _DasFormVec_setParam(
 	   name the frame's center, and an author porting one needs to hear that
 	   the frame definition carries that now. */
 	if(strcmp(sName, "body") == 0)
-		return das_error(DASERR_FORM,
+		return daserrf(DASERR_FORM,
 			"body= names an origin, which makes the values positions rather "
 			"than free vectors, use <ops kind=\"position\"> instead."
 		);
 
 	if(strcmp(sName, "surface") == 0)
-		return das_error(DASERR_FORM,
+		return daserrf(DASERR_FORM,
 			"surface= names an ellipsoid to measure against, use "
 			"<ops kind=\"position\"> instead."
 		);
@@ -541,7 +541,7 @@ static das_errcode _DasFormVec_setParam(
 	/* A reader that CLAIMS a kind must not skip a misspelling in it.  This is
 	   where "sysOrder" gets caught instead of silently producing a wrongly
 	   ordered vector. */
-	return das_error(DASERR_FORM,
+	return daserrf(DASERR_FORM,
 		"<ops kind=\"vector\"> has no parameter '%s'", sName
 	);
 }
@@ -563,9 +563,9 @@ static das_errcode _DasFormVec_encode(
 	/* cartesian is the default, so naming it says nothing.  Same reasoning
 	   as the ascending sysorder below: emit a parameter only when it
 	   differs from what a reader would assume. */
-	if(pThis->uSysType != DAS_VSYS_CART){
+	if(pThis->uSysType != DASVECSYS_CART){
 		if((nRet = DasBuf_printf(pBuf, " system=\"%s\"",
-		                         das_vsys_toStr(pThis->uSysType))) != DAS_OKAY)
+		                         dasvecsys_name(pThis->uSysType))) != DAS_OKAY)
 			return nRet;
 	}
 
@@ -586,17 +586,17 @@ static das_errcode _DasFormVec_validate(
 	/* One level, one to three components.  A vector with four is not a vector
 	   that lost a slot, it is a different thing wearing the name. */
 	if(nIntRank != 1)
-		return das_error(DASERR_FORM,
+		return daserrf(DASERR_FORM,
 			"A vector is one level of components, but this variable declares "
 			"%d internal levels", nIntRank
 		);
 
 	if((pIntShape[0] < 1)||(pIntShape[0] > 3))
-		return das_error(DASERR_FORM,
+		return daserrf(DASERR_FORM,
 			"A vector has 1 to 3 components, not %zd", pIntShape[0]
 		);
 
-	pThis->uComps = (ubyte)pIntShape[0];
+	pThis->uComps = (uint8_t)pIntShape[0];
 
 	/* Respell the order now that the count is known.  Before this a two
 	   component vector reported sysorder 0;1;2, and one built by
@@ -607,7 +607,7 @@ static das_errcode _DasFormVec_validate(
 }
 
 static const char* _DasFormVec_getParam(
-	const DasForm* pBase, const char* sName, ubyte* pType
+	const DasForm* pBase, const char* sName, uint8_t* pType
 )
 {
 	const DasFormVec* pThis = (const DasFormVec*)pBase;
@@ -618,7 +618,7 @@ static const char* _DasFormVec_getParam(
 	}
 	if(strcmp(sName, "system") == 0){
 		if(pType != NULL) *pType = DASPROP_STRING | DASPROP_SINGLE;
-		return das_vsys_toStr(pThis->uSysType);
+		return dasvecsys_name(pThis->uSysType);
 	}
 	if(strcmp(sName, "sysorder") == 0){
 		if(pType != NULL) *pType = DASPROP_INT | DASPROP_SET;
@@ -637,17 +637,17 @@ static const char* _DasFormVec_paramName(const DasForm* pBase, int iParam)
 /* --- presentation -------------------------------------------------------- */
 
 static char* _DasFormVec_prnRun(
-	const DasForm* pForm, const ubyte* pRun, uint32_t nElems,
-	das_val_type et, char* sBuf, size_t uLen
+	const DasForm* pForm, const uint8_t* pRun, uint32_t nElems,
+	das_vt et, char* sBuf, size_t uLen
 ){
 	const DasFormVec* pThis = (const DasFormVec*)pForm;
 
-	int n = _prn_catf(sBuf, uLen, 0, "%s[", das_vsys_toStr(pThis->uSysType));
+	int n = _prn_catf(sBuf, uLen, 0, "%s[", dasvecsys_name(pThis->uSysType));
 
 	for(uint32_t u = 0; u < nElems; ++u){
 		double d = 0.0;
-		if(das_value_binXform(et, pRun + u*das_vt_size(et), NULL, vtDouble,
-		                      (ubyte*)&d, NULL, 0) != DAS_OKAY)
+		if(dasval_convert(et, pRun + u*dasvt_size(et), NULL, DASVT_DOUBLE,
+		                      (uint8_t*)&d, NULL, 0) != DAS_OKAY)
 			break;
 		n = _prn_catf(sBuf, uLen, n, "%s%.6g", (u > 0) ? " " : "", d);
 	}
@@ -656,21 +656,21 @@ static char* _DasFormVec_prnRun(
 }
 
 static bool _DasFormVec_pack(
-	const DasForm* pBase, const das_operand* pOp, const ubyte* pRun,
-	das_datum* pOut
+	const DasForm* pBase, const das_operand* pOp, const uint8_t* pRun,
+	DasDatum* pOut
 ){
 	if((pOp->nIntRank != 1)||(pOp->aIntShape[0] < 1)||(pOp->aIntShape[0] > 3))
-		return das_error_false(DASERR_FORM,
+		return daserr_falsef(DASERR_FORM,
 			"A vector has 1 to 3 components in one level"
 		);
 
-	return das_datum_box(
+	return DasDatum_wrapElems(
 		pOut, pBase, pRun, pOp->nIntRank, pOp->aIntShape, pOp->vtElem,
 		pOp->units
 	);
 }
 
-static das_val_type _DasFormVec_datumType(const DasForm* pBase){ return vtComposite; }
+static das_vt _DasFormVec_datumType(const DasForm* pBase){ return DASVT_COMP; }
 
 static DasForm* _DasFormVec_copy(const DasForm* pBase)
 {
@@ -688,7 +688,7 @@ static void _DasFormVec_release(DasForm* pBase){ free(pBase); }
 typedef struct das_binop_vector {
 	DasBinOp base;
 
-	das_val_type vtL, vtR;
+	das_vt vtL, vtR;
 	int    nOp;
 	int    nComp;
 
@@ -698,10 +698,10 @@ typedef struct das_binop_vector {
 
 	/* Storage slot -> canonical direction, per side, so the walk can gather
 	   into canonical order before converting. */
-	ubyte  aDirL[3];
-	ubyte  aDirR[3];
-	ubyte  uSysL, uSysR, uSysOut;
-	ubyte  aDirOut[3];
+	uint8_t  aDirL[3];
+	uint8_t  aDirR[3];
+	uint8_t  uSysL, uSysR, uSysOut;
+	uint8_t  aDirOut[3];
 
 	/* CARTESIAN UNION PATH.  Cartesian components are independent, so two
 	   partial vectors add slot-wise with no trip through anything, and the
@@ -712,20 +712,20 @@ typedef struct das_binop_vector {
 	   aSrcL[i] is the source slot in the left operand for result slot i, or
 	   VEC_ABSENT when that direction is missing and takes its default. */
 	bool   bCartUnion;
-	ubyte  aSrcL[3];
-	ubyte  aSrcR[3];
+	uint8_t  aSrcL[3];
+	uint8_t  aSrcR[3];
 } DasBinOpVector;
 
 #define VEC_ABSENT 0xFF
 
 static bool _vec_gather(
-	const ubyte* pRun, das_val_type et, size_t uSz, int nComp,
-	const ubyte* pDirs, double* pOut
+	const uint8_t* pRun, das_vt et, size_t uSz, int nComp,
+	const uint8_t* pDirs, double* pOut
 ){
 	pOut[0] = pOut[1] = pOut[2] = 0.0;
 	for(int i = 0; i < nComp; ++i){
 		double d;
-		if(das_value_binXform(et, pRun + i*uSz, NULL, vtDouble, (ubyte*)&d,
+		if(dasval_convert(et, pRun + i*uSz, NULL, DASVT_DOUBLE, (uint8_t*)&d,
 		                      NULL, 0) != DAS_OKAY)
 			return false;
 		pOut[pDirs[i]] = d;
@@ -734,39 +734,39 @@ static bool _vec_gather(
 }
 
 static bool _DasBinOpVector_apply(
-	const DasBinOp* pOp, const ubyte* pLRun, const ubyte* pRRun, ubyte* pOutRun
+	const DasBinOp* pOp, const uint8_t* pLRun, const uint8_t* pRRun, uint8_t* pOutRun
 ){
 	const DasBinOpVector* pThis = (const DasBinOpVector*)pOp;
 
-	size_t uL   = das_vt_size(pThis->vtL);
-	size_t uR   = das_vt_size(pThis->vtR);
-	size_t uOut = das_vt_size(pOp->vtOut);
+	size_t uL   = dasvt_size(pThis->vtL);
+	size_t uR   = dasvt_size(pThis->vtR);
+	size_t uOut = dasvt_size(pOp->vtOut);
 
 	/* --- vector times a plain number ------------------------------------ */
 	if(pThis->bScale){
-		const ubyte* pVec = pThis->bVecLeft ? pLRun : pRRun;
-		const ubyte* pNum = pThis->bVecLeft ? pRRun : pLRun;
-		das_val_type vtVec = pThis->bVecLeft ? pThis->vtL : pThis->vtR;
-		das_val_type vtNum = pThis->bVecLeft ? pThis->vtR : pThis->vtL;
+		const uint8_t* pVec = pThis->bVecLeft ? pLRun : pRRun;
+		const uint8_t* pNum = pThis->bVecLeft ? pRRun : pLRun;
+		das_vt vtVec = pThis->bVecLeft ? pThis->vtL : pThis->vtR;
+		das_vt vtNum = pThis->bVecLeft ? pThis->vtR : pThis->vtL;
 		size_t uVec = pThis->bVecLeft ? uL : uR;
 
 		/* Scaling is magnitude only, so it acts on the radial component of a
 		   curvilinear vector and on every component of a cartesian one.
 		   Angles must NOT be scaled -- that would rotate the vector. */
-		int nScale = (pThis->uSysL == DAS_VSYS_CART) ? pThis->nComp : 1;
+		int nScale = (pThis->uSysL == DASVECSYS_CART) ? pThis->nComp : 1;
 
 		for(int i = 0; i < pThis->nComp; ++i){
 			if(i >= nScale){
 				/* an angle: carry it through untouched */
-				if(das_value_binXform(vtVec, pVec + i*uVec, NULL, pOp->vtOut,
+				if(dasval_convert(vtVec, pVec + i*uVec, NULL, pOp->vtOut,
 				                      pOutRun + i*uOut, NULL, 0) != DAS_OKAY)
 					return false;
 				continue;
 			}
 			das_errcode nRet = pThis->bVecLeft
-				? das_value_binop(pThis->nOp, vtVec, pVec + i*uVec,
+				? dasval_binOp(pThis->nOp, vtVec, pVec + i*uVec,
 				                  vtNum, pNum, pOp->vtOut, pOutRun + i*uOut)
-				: das_value_binop(pThis->nOp, vtNum, pNum,
+				: dasval_binOp(pThis->nOp, vtNum, pNum,
 				                  vtVec, pVec + i*uVec, pOp->vtOut, pOutRun + i*uOut);
 			if(nRet != DAS_OKAY) return false;
 		}
@@ -779,19 +779,19 @@ static bool _DasBinOpVector_apply(
 			double rL = 0.0, rR = 0.0;   /* every cartesian default is zero */
 
 			if((pThis->aSrcL[i] != VEC_ABSENT)&&
-			   (das_value_binXform(pThis->vtL, pLRun + pThis->aSrcL[i]*uL, NULL,
-			                       vtDouble, (ubyte*)&rL, NULL, 0) != DAS_OKAY))
+			   (dasval_convert(pThis->vtL, pLRun + pThis->aSrcL[i]*uL, NULL,
+			                       DASVT_DOUBLE, (uint8_t*)&rL, NULL, 0) != DAS_OKAY))
 				return false;
 
 			if((pThis->aSrcR[i] != VEC_ABSENT)&&
-			   (das_value_binXform(pThis->vtR, pRRun + pThis->aSrcR[i]*uR, NULL,
-			                       vtDouble, (ubyte*)&rR, NULL, 0) != DAS_OKAY))
+			   (dasval_convert(pThis->vtR, pRRun + pThis->aSrcR[i]*uR, NULL,
+			                       DASVT_DOUBLE, (uint8_t*)&rR, NULL, 0) != DAS_OKAY))
 				return false;
 
 			rR *= pThis->rRightScale;
-			double d = (pThis->nOp == D2BOP_SUB) ? (rL - rR) : (rL + rR);
+			double d = (pThis->nOp == DASOP_SUB) ? (rL - rR) : (rL + rR);
 
-			if(das_value_binXform(vtDouble, (const ubyte*)&d, NULL, pOp->vtOut,
+			if(dasval_convert(DASVT_DOUBLE, (const uint8_t*)&d, NULL, pOp->vtOut,
 			                      pOutRun + i*uOut, NULL, 0) != DAS_OKAY)
 				return false;
 		}
@@ -810,20 +810,20 @@ static bool _DasBinOpVector_apply(
 	   through cartesian and the result comes back in the LEFT operand's
 	   system.  Returning a representation neither operand used would be
 	   surprising, and the left side names the result everywhere else. */
-	if(!das_vsys_toCart(pThis->uSysL, aL, aLc)) return false;
-	if(!das_vsys_toCart(pThis->uSysR, aR, aRc)) return false;
+	if(!dasvecsys_toCart(pThis->uSysL, aL, aLc)) return false;
+	if(!dasvecsys_toCart(pThis->uSysR, aR, aRc)) return false;
 
 	for(int i = 0; i < 3; ++i){
 		double rRight = aRc[i] * pThis->rRightScale;
-		aSum[i] = (pThis->nOp == D2BOP_SUB) ? (aLc[i] - rRight)
+		aSum[i] = (pThis->nOp == DASOP_SUB) ? (aLc[i] - rRight)
 		                                    : (aLc[i] + rRight);
 	}
 
-	if(!das_vsys_fromCart(pThis->uSysOut, aSum, aOut)) return false;
+	if(!dasvecsys_fromCart(pThis->uSysOut, aSum, aOut)) return false;
 
 	for(int i = 0; i < pThis->nComp; ++i){
 		double d = aOut[pThis->aDirOut[i]];
-		if(das_value_binXform(vtDouble, (const ubyte*)&d, NULL, pOp->vtOut,
+		if(dasval_convert(DASVT_DOUBLE, (const uint8_t*)&d, NULL, pOp->vtOut,
 		                      pOutRun + i*uOut, NULL, 0) != DAS_OKAY)
 			return false;
 	}
@@ -845,7 +845,7 @@ static const DasBinOp_VTbl g_vtblVector = { _DasBinOpVector_apply, _DasBinOpVect
 static int _vector_comps(const das_operand* pOp)
 {
 	if((pOp->nIntRank != 1)||(pOp->aIntShape[0] < 1)||(pOp->aIntShape[0] > 3)){
-		das_error(DASERR_FORM, "A vector has 1 to 3 components in one level");
+		daserrf(DASERR_FORM, "A vector has 1 to 3 components in one level");
 		return 0;
 	}
 	return (int)pOp->aIntShape[0];
@@ -862,11 +862,11 @@ static das_binop_stat _vector_scale(
 	if(pNum->nIntRank != 0)
 		return REFUSE("Scaling a vector needs a single number, not a run");
 
-	if((nOp != D2BOP_MUL)&&(nOp != D2BOP_DIV))
+	if((nOp != DASOP_MUL)&&(nOp != DASOP_DIV))
 		return REFUSE("A vector and a plain number combine under '*' or '/', "
-		              "not '%s'", das_op_toStr(nOp, NULL));
+		              "not '%s'", dasop_name(nOp, NULL));
 
-	if((nOp == D2BOP_DIV)&&!bVecLeft)
+	if((nOp == DASOP_DIV)&&!bVecLeft)
 		return REFUSE("Dividing a number by a vector is not defined");
 
 	int nComp = _vector_comps(pVec);
@@ -885,15 +885,15 @@ static das_binop_stat _vector_scale(
 	pRes->uSysL    = pV->uSysType;
 	pRes->rRightScale = 1.0;
 
-	pRes->base.units = (nOp == D2BOP_MUL)
-		? Units_multiply(pVec->units, pNum->units)
-		: Units_divide(pVec->units, pNum->units);
+	pRes->base.units = (nOp == DASOP_MUL)
+		? DasUnits_mul(pVec->units, pNum->units)
+		: DasUnits_div(pVec->units, pNum->units);
 
 	/* Magnitude changes; frame, system and order do not */
 	pRes->base.pForm = new_DasFormVec(
 		pV->sFrame, pV->uSysType, pV->aDirs
 	);
-	pRes->base.vtOut        = das_vt_merge(pRes->vtL, nOp, pRes->vtR);
+	pRes->base.vtOut        = dasvt_merge(pRes->vtL, nOp, pRes->vtR);
 	pRes->base.nIntRank     = 1;
 	pRes->base.aIntShape[0] = nComp;
 
@@ -907,20 +907,20 @@ static das_binop_stat _DasFormVec_binOpLeft(
 ){
 	const DasFormVec* pThis = (const DasFormVec*)pBase;
 
-	if(DasForm_isKind(pR->pForm, DAS_FORM_LIN))
+	if(DasForm_isKind(pR->pForm, DASFORM_LIN))
 		return _vector_scale(pL, pR, nOp, true, ppOut);
 
-	if(!DasForm_isKind(pR->pForm, DAS_FORM_VEC)) return dbsDecline;
+	if(!DasForm_isKind(pR->pForm, DASFORM_VEC)) return dbsDecline;
 
 	const DasFormVec* pRv = (const DasFormVec*)pR->pForm;
 
 	/* '*' between two vectors is genuinely ambiguous -- dot, cross, or
 	   elementwise are three different answers -- so it is refused rather than
 	   guessed.  Named products get their own operators when they arrive. */
-	if((nOp != D2BOP_ADD)&&(nOp != D2BOP_SUB))
+	if((nOp != DASOP_ADD)&&(nOp != DASOP_SUB))
 		return REFUSE("'%s' between two vectors is ambiguous (dot? cross?); "
 		              "only addition and subtraction are defined",
-		              das_op_toStr(nOp, NULL));
+		              dasop_name(nOp, NULL));
 
 	/* THIS is where a frame mismatch fails loud.  Two vectors in different
 	   frames have no sum until one is rotated, and adding the components
@@ -942,8 +942,8 @@ static das_binop_stat _DasFormVec_binOpLeft(
 	   and the result carries the UNION of the directions present.  Anything
 	   curvilinear must go through cartesian, which is undefined on a partial
 	   vector, so those need all three. */
-	bool bBothCart = (pThis->uSysType == DAS_VSYS_CART)&&
-	                 (pRv->uSysType   == DAS_VSYS_CART);
+	bool bBothCart = (pThis->uSysType == DASVECSYS_CART)&&
+	                 (pRv->uSysType   == DASVECSYS_CART);
 
 	if(!bBothCart && ((nCompL != 3)||(nCompR != 3)))
 		return REFUSE("Only cartesian vectors may be partial; converting "
@@ -954,10 +954,10 @@ static das_binop_stat _DasFormVec_binOpLeft(
 
 	double rRightScale = 1.0;
 	if(pL->units != pR->units){
-		if(!Units_canConvert(pR->units, pL->units))
+		if(!DasUnits_canConvert(pR->units, pL->units))
 			return REFUSE("Can not combine vectors in %s and %s",
-			              Units_toStr(pL->units), Units_toStr(pR->units));
-		rRightScale = Units_convertTo(1.0, pR->units, pL->units);
+			              DasUnits_toStr(pL->units), DasUnits_toStr(pR->units));
+		rRightScale = DasUnits_convert(1.0, pR->units, pL->units);
 	}
 
 	DasBinOpVector* pRes = (DasBinOpVector*)calloc(1, sizeof(DasBinOpVector));
@@ -979,28 +979,28 @@ static das_binop_stat _DasFormVec_binOpLeft(
 		pRes->aDirOut[i] = pThis->aDirs[i];
 	}
 
-	ubyte aOutDirs[3];
+	uint8_t aOutDirs[3];
 	for(int i = 0; i < 3; ++i) aOutDirs[i] = pThis->aDirs[i];
 
 	if(bBothCart){
 		/* Which canonical directions does each side actually carry? */
-		ubyte aFromL[3] = {VEC_ABSENT, VEC_ABSENT, VEC_ABSENT};
-		ubyte aFromR[3] = {VEC_ABSENT, VEC_ABSENT, VEC_ABSENT};
-		for(int i = 0; i < nCompL; ++i) aFromL[pRes->aDirL[i]] = (ubyte)i;
-		for(int i = 0; i < nCompR; ++i) aFromR[pRes->aDirR[i]] = (ubyte)i;
+		uint8_t aFromL[3] = {VEC_ABSENT, VEC_ABSENT, VEC_ABSENT};
+		uint8_t aFromR[3] = {VEC_ABSENT, VEC_ABSENT, VEC_ABSENT};
+		for(int i = 0; i < nCompL; ++i) aFromL[pRes->aDirL[i]] = (uint8_t)i;
+		for(int i = 0; i < nCompR; ++i) aFromR[pRes->aDirR[i]] = (uint8_t)i;
 
 		/* The result carries their UNION, in ascending canonical order.  A
 		   direction neither side sends is simply not in the result: adding two
 		   x-only vectors keeps one component on the wire rather than padding
 		   out to three zeros nobody measured. */
-		ubyte aOutDir[3] = {0, 0, 0};
+		uint8_t aOutDir[3] = {0, 0, 0};
 		nComp = 0;
 		for(int iDir = 0; iDir < 3; ++iDir){
 			if((aFromL[iDir] == VEC_ABSENT)&&(aFromR[iDir] == VEC_ABSENT))
 				continue;
 			pRes->aSrcL[nComp] = aFromL[iDir];
 			pRes->aSrcR[nComp] = aFromR[iDir];
-			aOutDir[nComp] = (ubyte)iDir;
+			aOutDir[nComp] = (uint8_t)iDir;
 			++nComp;
 		}
 		for(int i = 0; i < 3; ++i) aOutDirs[i] = aOutDir[i];
@@ -1012,8 +1012,8 @@ static das_binop_stat _DasFormVec_binOpLeft(
 	pRes->base.pForm = new_DasFormVec(
 		pThis->sFrame, pThis->uSysType, aOutDirs
 	);
-	pRes->base.vtOut        = das_vt_merge(
-		pL->vtElem, nOp, (rRightScale != 1.0) ? vtDouble : pR->vtElem
+	pRes->base.vtOut        = dasvt_merge(
+		pL->vtElem, nOp, (rRightScale != 1.0) ? DASVT_DOUBLE : pR->vtElem
 	);
 	pRes->base.nIntRank     = 1;
 	pRes->base.aIntShape[0] = nComp;
@@ -1030,12 +1030,12 @@ static das_binop_stat _DasFormVec_binOpRight(
 	const DasForm* pBase, const das_operand* pL, int nOp,
 	const das_operand* pR, DasBinOp** ppOut
 ){
-	if(!DasForm_isKind(pL->pForm, DAS_FORM_LIN)) return dbsDecline;
+	if(!DasForm_isKind(pL->pForm, DASFORM_LIN)) return dbsDecline;
 
 	return _vector_scale(pR, pL, nOp, false, ppOut);
 }
 
-const DasForm_VTbl das_form_vec_vtbl = {
+const DasFormVTable DasFormVec_vtable = {
 	"vector",
 	_new_DasFormVec_empty,
 	_DasFormVec_setParam,

@@ -42,10 +42,10 @@ void prnConvert(double rET){
 	
 	char sBuf[40] = {'\0'};
 	et2utc_c(rET, "ISOC", 9, sizeof(sBuf), sBuf);
-	das_time dt;
-	dt_parsetime(&dt, sBuf);
+	DasTime dt;
+	DasTime_fromStr(&dt, sBuf);
 
-	int64_t nTT = dt_to_tt2k(&dt);
+	int64_t nTT = DasTime_toTt2k(&dt);
 	printf("ET    %20.9f is %s UTC, %17" PRId64 " TT (TT-ET is %f)\n", rET, sBuf, nTT, nTT*1e-9 - rET);
 	
 	/* TT and ET have the same epoch, so once you get to TT it's just: 
@@ -73,7 +73,7 @@ void prnConvert(double rET){
 /* ************************************************************************* */
 /* Component system conversions vs. cspice
  *
- * libdas3 does its own trig for das_vsys_toCart()/fromCart() so its numbers
+ * libdas3 does its own trig for dasvecsys_toCart()/fromCart() so its numbers
  * never depend on whether cspice is linked.  The risk in that is not
  * rounding, it is convention: recsph_c returns colatitude while reclat_c
  * returns latitude, and they put longitude in different slots.  A slot mix-up
@@ -99,32 +99,32 @@ static bool _lenEq(double rA, double rB, double rScale)
 }
 
 /* cspice in das canonical order, angles in degrees */
-static void _spiceFromCart(ubyte uSys, const double* pIn, double* pOut)
+static void _spiceFromCart(uint8_t uSys, const double* pIn, double* pOut)
 {
 	switch(uSys){
-	case DAS_VSYS_CYL:     reccyl_c((double*)pIn, pOut, pOut+1, pOut+2); break;
-	case DAS_VSYS_SPH:     recsph_c((double*)pIn, pOut, pOut+1, pOut+2); break;
-	case DAS_VSYS_CENTRIC: reclat_c((double*)pIn, pOut, pOut+1, pOut+2); break;
+	case DASVECSYS_CYL:     reccyl_c((double*)pIn, pOut, pOut+1, pOut+2); break;
+	case DASVECSYS_SPH:     recsph_c((double*)pIn, pOut, pOut+1, pOut+2); break;
+	case DASVECSYS_CENTRIC: reclat_c((double*)pIn, pOut, pOut+1, pOut+2); break;
 	}
 	pOut[1] *= dpr_c();
-	if(uSys != DAS_VSYS_CYL) pOut[2] *= dpr_c();
+	if(uSys != DASVECSYS_CYL) pOut[2] *= dpr_c();
 }
 
-static void _spiceToCart(ubyte uSys, const double* pIn, double* pOut)
+static void _spiceToCart(uint8_t uSys, const double* pIn, double* pOut)
 {
 	switch(uSys){
-	case DAS_VSYS_CYL:
+	case DASVECSYS_CYL:
 		cylrec_c(pIn[0], pIn[1]*rpd_c(), pIn[2], pOut); break;
-	case DAS_VSYS_SPH:
+	case DASVECSYS_SPH:
 		sphrec_c(pIn[0], pIn[1]*rpd_c(), pIn[2]*rpd_c(), pOut); break;
-	case DAS_VSYS_CENTRIC:
+	case DASVECSYS_CENTRIC:
 		latrec_c(pIn[0], pIn[1]*rpd_c(), pIn[2]*rpd_c(), pOut); break;
 	}
 }
 
-static bool _isAngle(ubyte uSys, int i)
+static bool _isAngle(uint8_t uSys, int i)
 {
-	return (i == 1) || ((i == 2) && (uSys != DAS_VSYS_CYL));
+	return (i == 1) || ((i == 2) && (uSys != DASVECSYS_CYL));
 }
 
 static int _checkVsys(void)
@@ -138,14 +138,14 @@ static int _checkVsys(void)
 		{ 7.0e4, -2.5e3, 1.2e4}, { 0.0,  0.0,  0.0}
 	};
 	const size_t uPts = sizeof(aPts) / sizeof(aPts[0]);
-	const ubyte aSys[3] = {DAS_VSYS_CYL, DAS_VSYS_SPH, DAS_VSYS_CENTRIC};
+	const uint8_t aSys[3] = {DASVECSYS_CYL, DASVECSYS_SPH, DASVECSYS_CENTRIC};
 
 	int nFail = 0;
 	bool bCylWide = false;
 
 	for(int iSys = 0; iSys < 3; ++iSys){
-		ubyte uSys = aSys[iSys];
-		const char* sSys = das_vsys_toStr(uSys);
+		uint8_t uSys = aSys[iSys];
+		const char* sSys = dasvecsys_name(uSys);
 
 		for(size_t u = 0; u < uPts; ++u){
 			const double* pP = aPts[u];
@@ -153,7 +153,7 @@ static int _checkVsys(void)
 			double aD[3], aS[3], aDc[3], aSc[3], aTmp[3];
 
 			/* cartesian -> system */
-			if(!das_vsys_fromCart(uSys, pP, aD)) return 1;
+			if(!dasvecsys_fromCart(uSys, pP, aD)) return 1;
 			_spiceFromCart(uSys, pP, aS);
 			for(int i = 0; i < 3; ++i){
 				bool bOk = _isAngle(uSys, i) ? _angEq(aD[i], aS[i]) :
@@ -165,10 +165,10 @@ static int _checkVsys(void)
 					++nFail;
 				}
 			}
-			if((uSys == DAS_VSYS_CYL)&&(aS[1] > 180.0)) bCylWide = true;
+			if((uSys == DASVECSYS_CYL)&&(aS[1] > 180.0)) bCylWide = true;
 
 			/* system -> cartesian, each library from its own angles */
-			if(!das_vsys_toCart(uSys, aD, aDc)) return 1;
+			if(!dasvecsys_toCart(uSys, aD, aDc)) return 1;
 			_spiceToCart(uSys, aS, aSc);
 			for(int i = 0; i < 3; ++i){
 				if(!_lenEq(aDc[i], aSc[i], rScale) || !_lenEq(aDc[i], pP[i], rScale)){
@@ -182,13 +182,13 @@ static int _checkVsys(void)
 			/* In place must be bit-identical to separate buffers, the header
 			   promises it */
 			memcpy(aTmp, pP, sizeof(aTmp));
-			das_vsys_fromCart(uSys, aTmp, aTmp);
+			dasvecsys_fromCart(uSys, aTmp, aTmp);
 			if(memcmp(aTmp, aD, sizeof(aTmp)) != 0){
 				printf("ERROR: %s fromCart in place differs for (%g,%g,%g)\n",
 				       sSys, pP[0], pP[1], pP[2]);
 				++nFail;
 			}
-			das_vsys_toCart(uSys, aTmp, aTmp);
+			dasvecsys_toCart(uSys, aTmp, aTmp);
 			if(memcmp(aTmp, aDc, sizeof(aTmp)) != 0){
 				printf("ERROR: %s toCart in place differs for (%g,%g,%g)\n",
 				       sSys, pP[0], pP[1], pP[2]);
@@ -197,16 +197,16 @@ static int _checkVsys(void)
 		}
 	}
 
-	/* The @note on das_vsys_fromCart() in form_vec.h says reccyl_c returns
+	/* The @note on dasvecsys_fromCart() in form_vec.h says reccyl_c returns
 	   [0, 360); keep the doc honest. */
 	if(!bCylWide){
 		printf("ERROR: reccyl_c never returned an angle above 180 deg, fix the "
-		       "range note on das_vsys_fromCart() in form_vec.h\n");
+		       "range note on dasvecsys_fromCart() in form_vec.h\n");
 		++nFail;
 	}
 
 	if(nFail == 0)
-		printf("INFO: das_vsys_toCart/fromCart agree with cspice for cyl, sph, "
+		printf("INFO: dasvecsys_toCart/fromCart agree with cspice for cyl, sph, "
 		       "centric (%zu points each, in place too), good\n", uPts);
 	return nFail;
 }
@@ -215,9 +215,9 @@ int main(int argc, char** argv)
 {
 	
 	/* Exit on errors, log info messages and above */
-	das_init(argv[0], DASERR_DIS_EXIT, DASLOG_INFO, NULL);
+	daslib_init(argv[0], DASERRDISP_EXIT, DASLOG_INFO, NULL);
 	
-	das_spice_err_setup();  /* Make sure spice errors don't go to stdout */
+	dasspice_catchErrors();  /* Make sure spice errors don't go to stdout */
 
 	printf("INFO: Can redirect spice errors from stdout, good\n");
 

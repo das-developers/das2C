@@ -28,7 +28,7 @@
  * manner.  To send a SPICE error as a stream exception:
  * @code
  *   if(failed_c())
- *       DasIO_exception_v(pOut, DAS_EX_SERVER_ERR, "%s", das_get_spice_error());
+ *       DasIO_exceptionf(pOut, DASEXCEPTTYPE_SERVER_ERR, "%s", dasspice_error());
  * @endcode
  * 
  * This header has no library code behind it, the functions are all defined
@@ -45,7 +45,7 @@
 
 #include <SpiceUsr.h>
 
-#include <das3/util.h>  /* das_error */
+#include <das3/util.h>  /* daserrf */
 
 /** @addtogroup spice
  * @{
@@ -81,7 +81,7 @@ static inline void _das_spice_getmsg(char* sBuf, int nLen)
  * Das2 readers (and unix programs in general) are only supposed to output
  * data to standard out, not error messages.
  */
-static inline void das_spice_err_setup(void)
+static inline void dasspice_catchErrors(void)
 {
 	errprt_c("SET", 4, "ALL");    /* Want all error text */
 	erract_c("SET", 7, "RETURN"); /* Just return on error, we'll check for it */
@@ -97,7 +97,7 @@ static inline void das_spice_err_setup(void)
  *  string if there is no current spice error.  Each source file that calls
  *  this has its own buffer.
  */
-static inline const char* das_get_spice_error(void)
+static inline const char* dasspice_error(void)
 {
 	static char sBuf[2048];
 	_das_spice_getmsg(sBuf, (int)sizeof(sBuf));
@@ -111,7 +111,7 @@ static inline const char* das_get_spice_error(void)
  * @returns DASERR_SPICE, you can return this to the calling shell if you
  *      like, or call reset_c() to process different spice input
  */
-static inline int das_print_spice_error(const char* sProgName)
+static inline int dasspice_prnError(const char* sProgName)
 {
 	char sMsg[2048];
 	_das_spice_getmsg(sMsg, (int)sizeof(sMsg));

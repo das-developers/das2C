@@ -39,55 +39,55 @@
 /* ************************************************************************* */
 /* Datum functions and structures */
 
-void das_datum_init(
-   das_datum* pThis, const ubyte* pSrc, das_val_type vt, uint32_t vsize, 
-   das_units units
+void DasDatum_set(
+   DasDatum* pThis, const uint8_t* pSrc, das_vt vt, uint32_t vsize, 
+   DasUnits units
 ){
 	/* Null holds nothing, whatever pSrc points at */
-	if(vt == vtNull){
-		das_datum_initNull(pThis);
+	if(vt == DASVT_NULL){
+		DasDatum_setNull(pThis);
 		return;
 	}
 
 	pThis->vt = vt;
-	pThis->units = (units != NULL) ? units : UNIT_DIMENSIONLESS;
+	pThis->units = (units != NULL) ? units : DASUNITS_DIMENSIONLESS;
 
 	switch(vt){
-	case vtUnknown:
-	case vtText:
+	case DASVT_UNK:
+	case DASVT_TEXT:
 		memcpy(pThis->bytes, pSrc, sizeof(void*));
 		pThis->vsize = vsize;
 		break;
 	/* pointer AND length: copying only the pointer leaves a garbage size that
 	   nothing downstream can detect */
-	case vtByteSeq:
-		memcpy(pThis->bytes, pSrc, sizeof(das_cbyte_seq));
+	case DASVT_BYTESEQ:
+		memcpy(pThis->bytes, pSrc, sizeof(DasCByteSeq));
 		pThis->vsize = vsize;
 		break;
 	default:
-		pThis->vsize = das_vt_size(vt);
-		assert(pThis->vsize <= DATUM_BUF_SZ);
+		pThis->vsize = dasvt_size(vt);
+		assert(pThis->vsize <= DASDATUM_BUF_SZ);
 		memcpy(pThis->bytes, pSrc, pThis->vsize);
 		break;
 	}
 }
 
-void das_datum_initNull(das_datum* pThis)
+void DasDatum_setNull(DasDatum* pThis)
 {
-	memset(pThis, 0, sizeof(das_datum));
-	pThis->vt = vtNull;
-	pThis->units = UNIT_DIMENSIONLESS;
+	memset(pThis, 0, sizeof(DasDatum));
+	pThis->vt = DASVT_NULL;
+	pThis->units = DASUNITS_DIMENSIONLESS;
 }
 
-bool das_datum_isNull(const das_datum* pThis)
+bool DasDatum_isNull(const DasDatum* pThis)
 {
-	if(pThis->vt != vtNull) return false;
+	if(pThis->vt != DASVT_NULL) return false;
 
 #ifndef NDEBUG
-	/* Zeroed memory and das_datum_initNull() both pass.  Anything else typed
-	   vtNull was built by hand. */
+	/* Zeroed memory and DasDatum_setNull() both pass.  Anything else typed
+	   DASVT_NULL was built by hand. */
 	bool bZero = (pThis->vsize == 0);
-	for(int i = 0; bZero && (i < DATUM_BUF_SZ); ++i)
+	for(int i = 0; bZero && (i < DASDATUM_BUF_SZ); ++i)
 		bZero = (pThis->bytes[i] == 0);
 	if(!bZero)
 		daslog_debug("inconsistent null datum");
@@ -97,24 +97,24 @@ bool das_datum_isNull(const das_datum* pThis)
 }
 
 
-bool das_datum_fromDbl(das_datum* pDatum, double value, das_units units)
+bool DasDatum_fromDouble(DasDatum* pDatum, double value, DasUnits units)
 {
-	memset(pDatum, 0, sizeof(das_datum));
-	pDatum->vt = vtDouble;
-	pDatum->vsize = das_vt_size(vtDouble);
+	memset(pDatum, 0, sizeof(DasDatum));
+	pDatum->vt = DASVT_DOUBLE;
+	pDatum->vsize = dasvt_size(DASVT_DOUBLE);
 	memcpy(pDatum->bytes, &value, sizeof(double));
-	pDatum->units = (units != NULL) ? units : UNIT_DIMENSIONLESS;
+	pDatum->units = (units != NULL) ? units : DASUNITS_DIMENSIONLESS;
 	return true;
 }
 
 /* Initialize a small structure using a string, works for any string 
    but might not give you the results you expected */
-bool das_datum_fromStr(das_datum* pDatum, const char* sStr)
+bool DasDatum_fromStr(DasDatum* pDatum, const char* sStr)
 {
 	char sBuf[128] = {'\0'};
-	das_time dt = {0};
+	DasTime dt = {0};
 
-	das_datum_initNull(pDatum);   /* what a failed parse leaves behind */
+	DasDatum_setNull(pDatum);   /* what a failed parse leaves behind */
 
 	const char* pRead = sStr;
 	const char* pAhead = sStr + 1;
@@ -125,7 +125,7 @@ bool das_datum_fromStr(das_datum* pDatum, const char* sStr)
 	/* Nothing but whitespace is the null datum, the inverse of how null prints */
 	while(isspace((unsigned char)*pRead)) ++pRead;
 	if(*pRead == '\0'){
-		das_datum_initNull(pDatum);
+		DasDatum_setNull(pDatum);
 		return true;
 	}
 	pRead = sStr;
@@ -158,10 +158,10 @@ bool das_datum_fromStr(das_datum* pDatum, const char* sStr)
 	if(bTryTime){
 		strncpy(sBuf, sStr, 127);
 		sBuf[ pRead - sStr] = '\0';
-		if(dt_parsetime(&dt, sBuf) ){ 
-			pDatum->units = UNIT_UTC;
-			memcpy(pDatum->bytes, &dt, sizeof(das_time));
-			pDatum->vt = vtTime;
+		if(DasTime_fromStr(&dt, sBuf) ){ 
+			pDatum->units = DASUNITS_UTC;
+			memcpy(pDatum->bytes, &dt, sizeof(DasTime));
+			pDatum->vt = DASVT_TIME;
 			return true;
 		}
 	}
@@ -170,22 +170,22 @@ bool das_datum_fromStr(das_datum* pDatum, const char* sStr)
 	size_t uCopy = pRead - sStr < 127 ? pRead - sStr : 127;
 	
 	strncpy(sBuf, sStr, uCopy);
-	if( ! das_str2double(sBuf, (double*)pDatum->bytes )){
-		das_datum_initNull(pDatum);   /* the attempt may have left bytes behind */
+	if( ! dasstr_toDouble(sBuf, (double*)pDatum->bytes )){
+		DasDatum_setNull(pDatum);   /* the attempt may have left bytes behind */
 		return false;
 	}
-	pDatum->vt = vtDouble;
+	pDatum->vt = DASVT_DOUBLE;
 	
 	if(*pRead == '\0'){
-		pDatum->units = UNIT_DIMENSIONLESS;
+		pDatum->units = DASUNITS_DIMENSIONLESS;
 		return true;
 	}
 		
 	/* The rest is the units.  Hand it over whole: a copy cut to fit a buffer
 	   could parse as different units than were written. */
-	pDatum->units = Units_fromStr(pRead);
+	pDatum->units = DasUnits_fromStr(pRead);
 	if(pDatum->units == NULL){
-		das_datum_initNull(pDatum);
+		DasDatum_setNull(pDatum);
 		return false;
 	}
 
@@ -199,25 +199,25 @@ bool das_datum_fromStr(das_datum* pDatum, const char* sStr)
  * storage the caller supplied, so a composite datum is good for exactly as
  * long as that storage is.  Nothing here is copied and nothing is owned.
  *
- * A string or byte run is not one of these; those are vtText and vtByteSeq,
+ * A string or byte run is not one of these; those are DASVT_TEXT and DASVT_BYTESEQ,
  * which have their own boxes.  A composite is always a run of numeric elements.
  */
 typedef struct das_composite_t {
 
 	/* FIRST, so the cast-to-your-type idiom still works */
-	const ubyte* pRun;
+	const uint8_t* pRun;
 
 	/* What the run means.  Never NULL: an unrecognized kind still gets a
 	   generic form, so there is no "composite with no formalism" state. */
-	const struct das_form* pForm;
+	const struct das_form_t* pForm;
 
 	/* Only when DASCOMP_BIGSHAPE is set, NULL otherwise.  Small shapes ride in
 	   uInfo so the common vector carries no second buffer to keep alive. */
 	const ptrdiff_t* pShape;
 
-	/* bits  0-3   rank, 0 to VARIDX_MAX
+	/* bits  0-3   rank, 0 to DASIDX_MAX
 	   bits  4-7   DASCOMP_* flags
-	   bits  8-15  das_val_type of one element, a full byte so the enum can grow
+	   bits  8-15  das_vt of one element, a full byte so the enum can grow
 	   bits 16-63  three 16-bit extents, valid only without DASCOMP_BIGSHAPE
 
 	   One uint64_t read with masks rather than a bitfield: bitfield layout is
@@ -233,39 +233,39 @@ typedef struct das_composite_t {
 #define DASCOMP_BIGSHAPE 0x10
 
 #define DASCOMP_RANK(U)  ((int)((U) & 0xF))
-#define DASCOMP_ET(U)    ((das_val_type)(((U) >> 8) & 0xFF))
+#define DASCOMP_ET(U)    ((das_vt)(((U) >> 8) & 0xFF))
 #define DASCOMP_EXT(U,I) ((ptrdiff_t)(((U) >> (16 + 16*(I))) & 0xFFFF))
 
 #define DASCOMP_INLINE_RANK 3
 #define DASCOMP_INLINE_MAX  0xFFFF
 
-/* The box rides inside a das_datum's byte array, so it has to fit.  32 bytes
+/* The box rides inside a DasDatum's byte array, so it has to fit.  32 bytes
    on a 64-bit host and 24 on wasm32 where pointers are four; nothing should
    assume which, only that it fits. */
 typedef char _das_composite_fits[
-	(sizeof(das_composite) <= DATUM_BUF_SZ) ? 1 : -1
+	(sizeof(das_composite) <= DASDATUM_BUF_SZ) ? 1 : -1
 ];
 
 /* Declared here rather than by including form.h: form.h already includes
    datum.h because pack() hands one back, so including it back would close a
    cycle.  One extern beats a function pointer in every datum. */
-extern char* DasForm_prnRun(
-	const struct das_form* pThis, const ubyte* pRun, uint32_t nElems,
-	das_val_type et, char* sBuf, size_t uLen
+extern char* DasForm_valToStr(
+	const struct das_form_t* pThis, const uint8_t* pRun, uint32_t nElems,
+	das_vt et, char* sBuf, size_t uLen
 );
 
-bool das_datum_box(
-	das_datum* pThis, const struct das_form* pForm, const ubyte* pRun,
-	int nRank, const ptrdiff_t* pShape, das_val_type et, das_units units
+bool DasDatum_wrapElems(
+	DasDatum* pThis, const struct das_form_t* pForm, const uint8_t* pRun,
+	int nRank, const ptrdiff_t* pShape, das_vt et, DasUnits units
 ){
 	if((pThis == NULL)||(pForm == NULL)||(pRun == NULL))
-		return das_error_false(DASERR_DATUM, "Null pointer boxing a composite");
+		return daserr_falsef(DASERR_DATUM, "Null pointer boxing a composite");
 
-	if((nRank < 0)||(nRank > ARYIDX_MAX))
-		return das_error_false(DASERR_DATUM, "Invalid composite rank %d", nRank);
+	if((nRank < 0)||(nRank > DASIDX_MAX))
+		return daserr_falsef(DASERR_DATUM, "Invalid composite rank %d", nRank);
 
 	if((nRank > 0)&&(pShape == NULL))
-		return das_error_false(DASERR_DATUM,
+		return daserr_falsef(DASERR_DATUM,
 			"A rank %d composite needs extents", nRank
 		);
 
@@ -288,29 +288,29 @@ bool das_datum_box(
 		for(int i = 0; i < nRank; ++i)
 			pC->uInfo |= ((uint64_t)pShape[i] & 0xFFFF) << (16 + 16*i);
 
-	pThis->vt    = vtComposite;
+	pThis->vt    = DASVT_COMP;
 	pThis->vsize = sizeof(das_composite);
-	pThis->units = (units != NULL) ? units : UNIT_DIMENSIONLESS;
+	pThis->units = (units != NULL) ? units : DASUNITS_DIMENSIONLESS;
 	return true;
 }
 
-const struct das_form* das_datum_form(const das_datum* pThis)
+const struct das_form_t* DasDatum_form(const DasDatum* pThis)
 {
-	if(pThis->vt != vtComposite) return NULL;
+	if(pThis->vt != DASVT_COMP) return NULL;
 	return ((const das_composite*)pThis)->pForm;
 }
 
-const ubyte* das_datum_run(const das_datum* pThis)
+const uint8_t* DasDatum_elems(const DasDatum* pThis)
 {
-	if(pThis->vt != vtComposite) return NULL;
+	if(pThis->vt != DASVT_COMP) return NULL;
 	return ((const das_composite*)pThis)->pRun;
 }
 
-int das_datum_shape(const das_datum* pThis, ptrdiff_t* pShape)
+int DasDatum_shape(const DasDatum* pThis, ptrdiff_t* pShape)
 {
 	switch(pThis->vt){
 
-	case vtComposite: {
+	case DASVT_COMP: {
 		const das_composite* pC = (const das_composite*)pThis;
 		int nRank = DASCOMP_RANK(pC->uInfo);
 		if(pShape != NULL){
@@ -326,17 +326,17 @@ int das_datum_shape(const das_datum* pThis, ptrdiff_t* pShape)
 	/* The datum boxes the address, so the string is one dereference away.
 	   Exactly what strlen reports: the NUL that DASARY_AS_STRING puts in the
 	   array is das2C's storage choice, not part of the encoded value. */
-	case vtText: {
+	case DASVT_TEXT: {
 		const char* sVal = *((const char* const*)pThis);
 		if(pShape != NULL)
 			pShape[0] = (sVal == NULL) ? 0 : (ptrdiff_t)strlen(sVal);
 		return 1;
 	}
 
-	/* A das_cbyte_seq rides inline, pointer and length together */
-	case vtByteSeq:
+	/* A DasCByteSeq rides inline, pointer and length together */
+	case DASVT_BYTESEQ:
 		if(pShape != NULL)
-			pShape[0] = (ptrdiff_t)((const das_cbyte_seq*)pThis)->sz;
+			pShape[0] = (ptrdiff_t)((const DasCByteSeq*)pThis)->size;
 		return 1;
 
 	default:
@@ -344,10 +344,10 @@ int das_datum_shape(const das_datum* pThis, ptrdiff_t* pShape)
 	}
 }
 
-size_t das_datum_nElems(const das_datum* pThis)
+size_t DasDatum_numElems(const DasDatum* pThis)
 {
-	ptrdiff_t aShape[ARYIDX_MAX];
-	int nRank = das_datum_shape(pThis, aShape);
+	ptrdiff_t aShape[DASIDX_MAX];
+	int nRank = DasDatum_shape(pThis, aShape);
 
 	size_t uElems = 1;
 	for(int i = 0; i < nRank; ++i){
@@ -357,83 +357,83 @@ size_t das_datum_nElems(const das_datum* pThis)
 	return uElems;
 }
 
-size_t das_datum_runBytes(const das_datum* pThis)
+size_t DasDatum_elemsBytes(const DasDatum* pThis)
 {
-	if(pThis->vt != vtComposite) return 0;
+	if(pThis->vt != DASVT_COMP) return 0;
 
-	size_t uElems = das_datum_nElems(pThis);
+	size_t uElems = DasDatum_numElems(pThis);
 	if(uElems == 0) return 0;
-	return uElems * das_vt_size(DASCOMP_ET(((const das_composite*)pThis)->uInfo));
+	return uElems * dasvt_size(DASCOMP_ET(((const das_composite*)pThis)->uInfo));
 }
 
-das_val_type das_datum_elemType(const das_datum* pThis)
+das_vt DasDatum_et(const DasDatum* pThis)
 {
 	switch(pThis->vt){
-	case vtText: return vtUByte;
-	case vtByteSeq: return vtUByte;
-	case vtComposite: return DASCOMP_ET(((const das_composite*)pThis)->uInfo);
+	case DASVT_TEXT: return DASVT_UBYTE;
+	case DASVT_BYTESEQ: return DASVT_UBYTE;
+	case DASVT_COMP: return DASCOMP_ET(((const das_composite*)pThis)->uInfo);
 	default:  return pThis->vt;
 	}
 }
 
 /* This one is simple */
-/* Argument order matches das_datum_fromDbl and _byteSeq: value, then units.
-   das_units is a const char*, so a swap here compiles clean and silently
+/* Argument order matches DasDatum_fromDouble and _byteSeq: value, then units.
+   DasUnits is a const char*, so a swap here compiles clean and silently
    trades the two -- the header is the contract. */
-bool das_datum_wrapStr(das_datum* pThis, const char* sStr, das_units units)
+bool DasDatum_wrapStr(DasDatum* pThis, const char* sStr, DasUnits units)
 {
 	/* Careful, we are copying an address, not a value at an address*/
 	memcpy(pThis->bytes, &sStr,  sizeof(const char*));
-	pThis->vt = vtText;
-	pThis->units = (units != NULL) ? units : UNIT_DIMENSIONLESS;
+	pThis->vt = DASVT_TEXT;
+	pThis->units = (units != NULL) ? units : DASUNITS_DIMENSIONLESS;
 	pThis->vsize = sizeof(const char*);
 	return true;
 }
 
-bool das_datum_byteSeq(
-	das_datum* pDatum, das_cbyte_seq seq, das_units units
+bool DasDatum_wrapBytes(
+	DasDatum* pDatum, DasCByteSeq seq, DasUnits units
 ){
-	memcpy(pDatum->bytes, &seq, sizeof(das_cbyte_seq));
-	pDatum->vt = vtByteSeq;
-	pDatum->vsize = sizeof(das_cbyte_seq);
-	pDatum->units = (units != NULL) ? units : UNIT_DIMENSIONLESS;
+	memcpy(pDatum->bytes, &seq, sizeof(DasCByteSeq));
+	pDatum->vt = DASVT_BYTESEQ;
+	pDatum->vsize = sizeof(DasCByteSeq);
+	pDatum->units = (units != NULL) ? units : DASUNITS_DIMENSIONLESS;
 	return true;
 }
 
-int das_datum_toDoubles(const das_datum* pThis, double* pOut, int nMax)
+int DasDatum_toDoubles(const DasDatum* pThis, double* pOut, int nMax)
 {
 	if((pThis == NULL)||(pOut == NULL)||(nMax < 1))
-		return -1 * das_error(DASERR_DATUM, "Invalid inputs to das_datum_toDoubles");
+		return -1 * daserrf(DASERR_DATUM, "Invalid inputs to DasDatum_toDoubles");
 
 	/* A scalar is the one-component case of the same question, so a caller
 	   holding a datum of unknown class does not have to test for composite
 	   before it can ask. */
-	if(pThis->vt != vtComposite){
-		if(!das_datum_toDbl(pThis, pOut)) return -1 * DASERR_DATUM;
+	if(pThis->vt != DASVT_COMP){
+		if(!DasDatum_toDouble(pThis, pOut)) return -1 * DASERR_DATUM;
 		return 1;
 	}
 
-	const ubyte* pRun = das_datum_run(pThis);
+	const uint8_t* pRun = DasDatum_elems(pThis);
 	if(pRun == NULL)
-		return -1 * das_error(DASERR_DATUM, "Datum carries no component run");
+		return -1 * daserrf(DASERR_DATUM, "Datum carries no component run");
 
-	int nElems = (int)das_datum_nElems(pThis);
-	das_val_type et = das_datum_elemType(pThis);
+	int nElems = (int)DasDatum_numElems(pThis);
+	das_vt et = DasDatum_et(pThis);
 
 	/* Short runs are legal.  A stream may ship fewer components than its
 	   system defines, so slots past the count are left EXACTLY as the caller
 	   set them; what an absent component means belongs to the formalism, and
-	   das_vsys_default() is where that answer lives. */
+	   dasvecsys_dirDefault() is where that answer lives. */
 	int n = (nElems < nMax) ? nElems : nMax;
 
 	/* One type test for the whole item rather than one per component.  These
 	   two arms carry most real traffic and neither can fail, so the general
 	   path below is left for the storage types that need checking. */
 	switch(et){
-	case vtDouble:
+	case DASVT_DOUBLE:
 		memcpy(pOut, pRun, (size_t)n * sizeof(double));
 		return n;
-	case vtFloat: {
+	case DASVT_FLOAT: {
 		const float* pF = (const float*)pRun;
 		for(int i = 0; i < n; ++i) pOut[i] = pF[i];
 		return n;
@@ -441,174 +441,174 @@ int das_datum_toDoubles(const das_datum* pThis, double* pOut, int nMax)
 	default: break;
 	}
 
-	size_t uSz = das_vt_size(et);
+	size_t uSz = dasvt_size(et);
 	for(int i = 0; i < n; ++i){
-		if(das_value_binXform(et, pRun + i*uSz, NULL, vtDouble,
-		                      (ubyte*)(pOut + i), NULL, 0) != DAS_OKAY)
-			return -1 * das_error(DASERR_DATUM, "Bad component %d", i);
+		if(dasval_convert(et, pRun + i*uSz, NULL, DASVT_DOUBLE,
+		                      (uint8_t*)(pOut + i), NULL, 0) != DAS_OKAY)
+			return -1 * daserrf(DASERR_DATUM, "Bad component %d", i);
 	}
 	return n;
 }
 
-bool das_datum_toDbl(const das_datum* pThis, double* pOut)
+bool DasDatum_toDouble(const DasDatum* pThis, double* pOut)
 {
 	if((pThis == NULL)||(pOut == NULL))
-		return das_error_false(DASERR_DATUM, "Invalid inputs to das_datum_toDbl");
+		return daserr_falsef(DASERR_DATUM, "Invalid inputs to DasDatum_toDouble");
 
 	switch(pThis->vt){
-	case vtNull:
-		return das_error_false(DASERR_DATUM, "A null datum has no numeric value");
-	case vtUByte:  *pOut = *((ubyte*)pThis);    return true;
-	case vtByte:   *pOut = *((int8_t*)pThis);   return true;
-	case vtUShort: *pOut = *((uint16_t*)pThis); return true;
-	case vtShort:  *pOut = *((int16_t*)pThis);  return true;
-	case vtUInt:   *pOut = *((uint32_t*)pThis); return true;
-	case vtInt:    *pOut = *((int32_t*)pThis);  return true;
-	case vtULong:  *pOut = *((uint64_t*)pThis); return true;
-	case vtLong:   *pOut = *((int64_t*)pThis);  return true;
-	case vtFloat:  *pOut = *((float*)pThis);    return true;
-	case vtDouble: *pOut = *((double*)pThis);   return true;
+	case DASVT_NULL:
+		return daserr_falsef(DASERR_DATUM, "A null datum has no numeric value");
+	case DASVT_UBYTE:  *pOut = *((uint8_t*)pThis);    return true;
+	case DASVT_BYTE:   *pOut = *((int8_t*)pThis);   return true;
+	case DASVT_USHORT: *pOut = *((uint16_t*)pThis); return true;
+	case DASVT_SHORT:  *pOut = *((int16_t*)pThis);  return true;
+	case DASVT_UINT:   *pOut = *((uint32_t*)pThis); return true;
+	case DASVT_INT:    *pOut = *((int32_t*)pThis);  return true;
+	case DASVT_ULONG:  *pOut = *((uint64_t*)pThis); return true;
+	case DASVT_LONG:   *pOut = *((int64_t*)pThis);  return true;
+	case DASVT_FLOAT:  *pOut = *((float*)pThis);    return true;
+	case DASVT_DOUBLE: *pOut = *((double*)pThis);   return true;
 
 	/* Attempt string conversion */
-	case vtText:
-		if(!das_str2double((const char*)pThis, pOut))
-			return das_error_false(DASERR_DATUM, "Couldn't convert %s to a double",
+	case DASVT_TEXT:
+		if(!dasstr_toDouble((const char*)pThis, pOut))
+			return daserr_falsef(DASERR_DATUM, "Couldn't convert %s to a double",
 			                       (const char*)pThis);
 		return true;
 
 	default: break;
 	}
 
-	/* vtTime lands here on purpose.  A calendar time has no reading as a plain
-	   double until an epoch is named, which is das_datum_toEpoch()'s job. */
-	return das_error_false(DASERR_DATUM,
+	/* DASVT_TIME lands here on purpose.  A calendar time has no reading as a plain
+	   double until an epoch is named, which is DasDatum_toPoint()'s job. */
+	return daserr_falsef(DASERR_DATUM,
 		"Don't know how to convert items of type %s to doubles.",
-		das_vt_toStr(pThis->vt)
+		dasvt_name(pThis->vt)
 	);
 }
 
 /* Like toDbl but cares about scale and epoch */
-bool das_datum_toEpoch(
-	const das_datum* pThis, das_units epoch, double* pResult
+bool DasDatum_toPoint(
+	const DasDatum* pThis, DasUnits epoch, double* pResult
 ){
-	if(!Units_haveCalRep(epoch) || (epoch == UNIT_UTC)) return false;
-	if(pThis->vt == vtNull)
-		return das_error_false(DASERR_DATUM, "A null datum has no time value");
+	if(!DasUnits_isTimePoint(epoch) || (epoch == DASUNITS_UTC)) return false;
+	if(pThis->vt == DASVT_NULL)
+		return daserr_falsef(DASERR_DATUM, "A null datum has no time value");
 
-	das_time dt;
+	DasTime dt;
 	
-	if(pThis->vt == vtTime){ 
-		*pResult = Units_convertFromDt((das_time*)pThis, epoch);
-		return (*pResult != DAS_FILL_VALUE);
+	if(pThis->vt == DASVT_TIME){ 
+		*pResult = DasTime_toPoint((DasTime*)pThis, epoch);
+		return (*pResult != DASVAL_FILL);
 	}
 	
 	/* text is interesting, because it could be 2017-01-01 or something
 	   like "2.37455" which are handle very differently */
 	
 	double rDbl = 0.0;
-	if(pThis->vt == vtText){
-		if( dt_parsetime(&dt, (const char*)pThis)){
-			return Units_convertFromDt(&dt, epoch);
+	if(pThis->vt == DASVT_TEXT){
+		if( DasTime_fromStr(&dt, (const char*)pThis)){
+			return DasTime_toPoint(&dt, epoch);
 		}
 		else{
 			/* parsetime failed, try to convert as an ASCII real */
-			if( ! das_str2double((const char*)pThis, &rDbl)) return false;
+			if( ! dasstr_toDouble((const char*)pThis, &rDbl)) return false;
 			
 			/* have a real, see if I'm in non UTC epoch units */
-			if(!Units_haveCalRep(pThis->units) || (pThis->units == UNIT_UTC)) 
+			if(!DasUnits_isTimePoint(pThis->units) || (pThis->units == DASUNITS_UTC)) 
 				return false;
 			
-			*pResult = Units_convertTo(rDbl, pThis->units, epoch);
-			return (*pResult != DAS_FILL_VALUE);
+			*pResult = DasUnits_convert(rDbl, pThis->units, epoch);
+			return (*pResult != DASVAL_FILL);
 		}
 	}
 	
 	/* for the rest, I have to have an epoch of my own or I don't 
 	   know where zero is at */
-	if(!Units_haveCalRep(pThis->units) || (pThis->units == UNIT_UTC)) 
+	if(!DasUnits_isTimePoint(pThis->units) || (pThis->units == DASUNITS_UTC)) 
 		return false;
 
 	switch(pThis->vt){
-	case vtUByte:  rDbl = *((uint8_t*)pThis); break;
-	case vtByte:   rDbl = *((int8_t*)pThis); break;
-	case vtUShort: rDbl = *((uint16_t*)pThis); break;
-	case vtShort:  rDbl = *((int16_t*)pThis); break;
-	case vtUInt:   rDbl = *((uint32_t*)pThis); break;
-	case vtInt:    rDbl = *((int32_t*)pThis); break;
-	case vtULong:  rDbl = *((uint64_t*)pThis); break;
-	case vtLong:   rDbl = *((int64_t*)pThis); break;
-	case vtFloat:  rDbl = *((float*)pThis); break;
-	case vtDouble: rDbl = *((double*)pThis); break;
+	case DASVT_UBYTE:  rDbl = *((uint8_t*)pThis); break;
+	case DASVT_BYTE:   rDbl = *((int8_t*)pThis); break;
+	case DASVT_USHORT: rDbl = *((uint16_t*)pThis); break;
+	case DASVT_SHORT:  rDbl = *((int16_t*)pThis); break;
+	case DASVT_UINT:   rDbl = *((uint32_t*)pThis); break;
+	case DASVT_INT:    rDbl = *((int32_t*)pThis); break;
+	case DASVT_ULONG:  rDbl = *((uint64_t*)pThis); break;
+	case DASVT_LONG:   rDbl = *((int64_t*)pThis); break;
+	case DASVT_FLOAT:  rDbl = *((float*)pThis); break;
+	case DASVT_DOUBLE: rDbl = *((double*)pThis); break;
 	default:
-		das_error(DASERR_DATUM, "Don't know how to convert items of type %s"
-		          " to epoch times", das_vt_toStr(pThis->vt));
+		daserrf(DASERR_DATUM, "Don't know how to convert items of type %s"
+		          " to epoch times", dasvt_name(pThis->vt));
 		return false;
 	}
 	
-	*pResult = Units_convertTo(rDbl, pThis->units, epoch);
-	return (*pResult != DAS_FILL_VALUE);
+	*pResult = DasUnits_convert(rDbl, pThis->units, epoch);
+	return (*pResult != DASVAL_FILL);
 }
 
-bool das_datum_toTime(const das_datum* pThis, das_time* pDt)
+bool DasDatum_toTime(const DasDatum* pThis, DasTime* pDt)
 {
-	if(pThis->vt == vtNull)
-		return das_error_false(DASERR_DATUM, "A null datum has no time value");
+	if(pThis->vt == DASVT_NULL)
+		return daserr_falsef(DASERR_DATUM, "A null datum has no time value");
 
-	if(pThis->vt == vtTime){
-		memcpy(pDt, pThis, sizeof(das_time));
+	if(pThis->vt == DASVT_TIME){
+		memcpy(pDt, pThis, sizeof(DasTime));
 		return true;
 	}
-	if(pThis->vt == vtText)
-		return dt_parsetime(pDt, (const char*)pThis);
+	if(pThis->vt == DASVT_TEXT)
+		return DasTime_fromStr(pDt, (const char*)pThis);
 	
-	if(!Units_haveCalRep(pThis->units) || (pThis->units == UNIT_UTC)) 
+	if(!DasUnits_isTimePoint(pThis->units) || (pThis->units == DASUNITS_UTC)) 
 		return false;
 
 	/* Special case for TT2000 long integers, need to preserve resolution */
-	if((pThis->vt == vtLong)&&(pThis->units == UNIT_TT2000)){
-		dt_from_tt2k(pDt, *((int64_t*)pThis) );
+	if((pThis->vt == DASVT_LONG)&&(pThis->units == DASUNITS_TT2000)){
+		DasTime_fromTt2k(pDt, *((int64_t*)pThis) );
 		return true;
 	}
 
 	double rDbl = 0.0;
 	switch(pThis->vt){
-	case vtUByte:  rDbl = *((uint8_t*)pThis); break;
-	case vtByte:   rDbl = *((int8_t*)pThis); break;
-	case vtUShort: rDbl = *((uint16_t*)pThis); break;
-	case vtShort:  rDbl = *((int16_t*)pThis); break;
-	case vtUInt:   rDbl = *((uint32_t*)pThis); break;
-	case vtInt:    rDbl = *((int32_t*)pThis); break;
-	case vtULong:  rDbl = *((uint64_t*)pThis); break;
-	case vtLong:   rDbl = *((int64_t*)pThis); break;
-	case vtFloat:  rDbl = *((float*)pThis); break;
-	case vtDouble: rDbl = *((double*)pThis); break;
+	case DASVT_UBYTE:  rDbl = *((uint8_t*)pThis); break;
+	case DASVT_BYTE:   rDbl = *((int8_t*)pThis); break;
+	case DASVT_USHORT: rDbl = *((uint16_t*)pThis); break;
+	case DASVT_SHORT:  rDbl = *((int16_t*)pThis); break;
+	case DASVT_UINT:   rDbl = *((uint32_t*)pThis); break;
+	case DASVT_INT:    rDbl = *((int32_t*)pThis); break;
+	case DASVT_ULONG:  rDbl = *((uint64_t*)pThis); break;
+	case DASVT_LONG:   rDbl = *((int64_t*)pThis); break;
+	case DASVT_FLOAT:  rDbl = *((float*)pThis); break;
+	case DASVT_DOUBLE: rDbl = *((double*)pThis); break;
 	default:
-		das_error(DASERR_DATUM, "Don't know how to convert items of type %s"
-		          " to epoch times", das_vt_toStr(pThis->vt));
+		daserrf(DASERR_DATUM, "Don't know how to convert items of type %s"
+		          " to epoch times", dasvt_name(pThis->vt));
 		return false;
 	}
 
-	return (Units_convertToDt(pDt, rDbl, pThis->units) == DAS_OKAY);
+	return (DasTime_fromPoint(pDt, rDbl, pThis->units) == DAS_OKAY);
 }
 
 /* Rendering reads both yday and month/mday, and yday is output only in a
-   das_time, so normalize to recompute it.  dt_tnorm() would roll a leap
+   DasTime, so normalize to recompute it.  DasTime_normalize() would roll a leap
    second into the next minute, hold :59 while it runs. */
-bool das_datum_fromTime(das_datum* pThis, const das_time* pDt)
+bool DasDatum_fromTime(DasDatum* pThis, const DasTime* pDt)
 {
 	if(pDt == NULL){
-		das_datum_initNull(pThis);
-		return das_error_false(DASERR_DATUM, "No das_time to make a datum from");
+		DasDatum_setNull(pThis);
+		return daserr_falsef(DASERR_DATUM, "No DasTime to make a datum from");
 	}
 
-	das_time dt = *pDt;
+	DasTime dt = *pDt;
 	double rSec = dt.second;
 	bool bLeap = (rSec >= 60.0) && (rSec < 61.0);
 	if(bLeap) dt.second = 59.0;
-	dt_tnorm(&dt);
+	DasTime_normalize(&dt);
 	if(bLeap) dt.second = rSec;
 
-	das_datum_init(pThis, (const ubyte*)&dt, vtTime, sizeof(das_time), UNIT_UTC);
+	DasDatum_set(pThis, (const uint8_t*)&dt, DASVT_TIME, sizeof(DasTime), DASUNITS_UTC);
 	return true;
 }
 
@@ -618,31 +618,31 @@ bool das_datum_fromTime(das_datum* pThis, const das_time* pDt)
    at or past uLen means the text was cut off, which is all the public
    wrappers need to know. */
 static int _das_datum_prn(
-	const das_datum* pThis, char* sBuf, size_t uLen, int nFracDigits,
+	const DasDatum* pThis, char* sBuf, size_t uLen, int nFracDigits,
 	bool bPrnUnits, const char* sSep
 ){
 	if(uLen > 0) sBuf[0] = '\0';
 
 	/* Null prints as nothing, units included, so it parses back to null */
-	if(pThis->vt == vtNull) return 0;
+	if(pThis->vt == DASVT_NULL) return 0;
 
 	char sFmt[32] = {'\0'};
 	int n = 0;
 
 	switch(pThis->vt){
 
-	case vtByte:   n = _prn_catf(sBuf, uLen, n, "%hhd", *((int8_t*)pThis));   break;
-	case vtUByte:  n = _prn_catf(sBuf, uLen, n, "%hhu", *((uint8_t*)pThis));  break;
-	case vtUShort: n = _prn_catf(sBuf, uLen, n, "%hu",  *((uint16_t*)pThis)); break;
-	case vtShort:  n = _prn_catf(sBuf, uLen, n, "%hd",  *((int16_t*)pThis));  break;
-	case vtUInt:   n = _prn_catf(sBuf, uLen, n, "%u",   *((uint32_t*)pThis)); break;
-	case vtInt:    n = _prn_catf(sBuf, uLen, n, "%d",   *((int32_t*)pThis));  break;
+	case DASVT_BYTE:   n = _prn_catf(sBuf, uLen, n, "%hhd", *((int8_t*)pThis));   break;
+	case DASVT_UBYTE:  n = _prn_catf(sBuf, uLen, n, "%hhu", *((uint8_t*)pThis));  break;
+	case DASVT_USHORT: n = _prn_catf(sBuf, uLen, n, "%hu",  *((uint16_t*)pThis)); break;
+	case DASVT_SHORT:  n = _prn_catf(sBuf, uLen, n, "%hd",  *((int16_t*)pThis));  break;
+	case DASVT_UINT:   n = _prn_catf(sBuf, uLen, n, "%u",   *((uint32_t*)pThis)); break;
+	case DASVT_INT:    n = _prn_catf(sBuf, uLen, n, "%d",   *((int32_t*)pThis));  break;
 
 	/* PRIu64/PRId64 are the portable int64 codes from inttypes.h */
-	case vtULong:  n = _prn_catf(sBuf, uLen, n, "%" PRIu64, *((uint64_t*)pThis)); break;
-	case vtLong:   n = _prn_catf(sBuf, uLen, n, "%" PRId64, *((int64_t*)pThis));  break;
+	case DASVT_ULONG:  n = _prn_catf(sBuf, uLen, n, "%" PRIu64, *((uint64_t*)pThis)); break;
+	case DASVT_LONG:   n = _prn_catf(sBuf, uLen, n, "%" PRId64, *((int64_t*)pThis));  break;
 		
-	case vtFloat:
+	case DASVT_FLOAT:
 		/* A negative digit count means "no guidance, pick a default".  Use a
 		   round-trippable width (9 sig figs covers a 32-bit float) rather than
 		   pasting the negative straight into the format and emitting garbage. */
@@ -650,37 +650,37 @@ static int _das_datum_prn(
 		n = _prn_catf(sBuf, uLen, n, sFmt, *((float*)pThis));
 		break;
 
-	case vtDouble:
+	case DASVT_DOUBLE:
 		/* Likewise, 17 sig figs round-trips a 64-bit double exactly. */
 		snprintf(sFmt, 31, "%%.%de", (nFracDigits < 0) ? 16 : nFracDigits);
 		n = _prn_catf(sBuf, uLen, n, sFmt, *((double*)pThis));
 		break;
 		
-	case vtTime: {
+	case DASVT_TIME: {
 		char sTime[64] = {'\0'};
-		dt_isoc((const das_time*)pThis, nFracDigits, sTime, sizeof(sTime));
+		DasTime_toIsoC((const DasTime*)pThis, nFracDigits, sTime, sizeof(sTime));
 		n = _prn_catf(sBuf, uLen, n, "%s", sTime);
 		break;
 	}
 		
-	case vtText: {
+	case DASVT_TEXT: {
 		const char* sText = *((const char**)pThis);
 		n = _prn_catf(sBuf, uLen, n, "%s", (sText != NULL) ? sText : "");
 		break;
 	}
 		
-	case vtByteSeq: {
+	case DASVT_BYTESEQ: {
 		/* Two hex digits per byte with sSep between.  Only whole bytes are
 		   written, a reader can't use half of one, so writing stops at the
 		   first pair that doesn't fit while counting goes on. */
-		const das_cbyte_seq* pBs = (das_cbyte_seq*)pThis;
+		const DasCByteSeq* pBs = (DasCByteSeq*)pThis;
 		bool bStop = false;
-		for(size_t u = 0; u < pBs->sz; ++u){
+		for(size_t u = 0; u < pBs->size; ++u){
 			const char* sPre = (u > 0) ? sSep : "";
 			int nPair = (int)strlen(sPre) + 2;
 			if(!bStop && ((size_t)(n + nPair) < uLen))
 				snprintf(sBuf + n, uLen - (size_t)n, "%s%02hhX", sPre, 
-				         ((const ubyte*)pBs->ptr)[u]);
+				         ((const uint8_t*)pBs->data)[u]);
 			else
 				bStop = true;
 			n += nPair;
@@ -688,15 +688,15 @@ static int _das_datum_prn(
 		break;
 	}
 	
-	case vtComposite: {
+	case DASVT_COMP: {
 		const das_composite* pC = (const das_composite*)pThis;
-		size_t uElems = das_datum_nElems(pThis);
+		size_t uElems = DasDatum_numElems(pThis);
 
 		/* The formalism renders if it has an opinion.  It usually does, and it
 		   is the only thing that knows a run of three is a vector rather than
 		   three unrelated numbers.  It clips rather than counts, so a full
 		   buffer is taken as cut off. */
-		if((uLen > 0) && (DasForm_prnRun(
+		if((uLen > 0) && (DasForm_valToStr(
 			pC->pForm, pC->pRun, (uint32_t)uElems, DASCOMP_ET(pC->uInfo),
 			sBuf, uLen
 		) != NULL)){
@@ -707,12 +707,12 @@ static int _das_datum_prn(
 
 		/* Otherwise the elements, separated and bracketed.  Enough to read, and
 		   it needs nothing from the form layer. */
-		das_val_type etElem = DASCOMP_ET(pC->uInfo);
-		size_t uElemSz = das_vt_size(etElem);
+		das_vt etElem = DASCOMP_ET(pC->uInfo);
+		size_t uElemSz = dasvt_size(etElem);
 		n = _prn_catf(sBuf, uLen, n, "[");
 		for(size_t v = 0; v < uElems; ++v){
-			das_datum dmElem;
-			das_datum_init(
+			DasDatum dmElem;
+			DasDatum_set(
 				&dmElem, pC->pRun + v*uElemSz, etElem, (uint32_t)uElemSz,
 				pThis->units
 			);
@@ -724,7 +724,7 @@ static int _das_datum_prn(
 		break;
 	}
 
-	case vtIndex: {
+	case DASVT_INDEX: {
 		const das_idx_info* pInfo = (const das_idx_info*)pThis;
 		n = _prn_catf(sBuf, uLen, n, "Offset:%zd%sCount:%zu", pInfo->nOffset, 
 		              sSep, pInfo->uCount);
@@ -737,30 +737,30 @@ static int _das_datum_prn(
 	}
 
 	/* Write the units */
-	if((pThis->units != UNIT_DIMENSIONLESS)&&(bPrnUnits))
-		n = _prn_catf(sBuf, uLen, n, " %s", Units_toStr(pThis->units));
+	if((pThis->units != DASUNITS_DIMENSIONLESS)&&(bPrnUnits))
+		n = _prn_catf(sBuf, uLen, n, " %s", DasUnits_toStr(pThis->units));
 		
 	return n;
 }
 
-char* das_datum_toStr(
-	const das_datum* pThis, int nFracDigits, char* sStr, size_t uLen
+char* DasDatum_toStr(
+	const DasDatum* pThis, int nFracDigits, char* sStr, size_t uLen
 ){
 	return _prn_fit(sStr, uLen, 
 		_das_datum_prn(pThis, sStr, uLen, nFracDigits, true, ";")
 	);
 }
 
-char* das_datum_toStrValOnly(
-	const das_datum* pThis, int nFracDigits, char* sStr, size_t uLen
+char* DasDatum_toValStr(
+	const DasDatum* pThis, int nFracDigits, char* sStr, size_t uLen
 ){
 	return _prn_fit(sStr, uLen,
 		_das_datum_prn(pThis, sStr, uLen, nFracDigits, false, ";")
 	);
 }
 
-char* das_datum_toStrValOnlySep(
-	const das_datum* pThis, int nFracDigits, const char* sSep, char* sStr, 
+char* DasDatum_toValStrSep(
+	const DasDatum* pThis, int nFracDigits, const char* sSep, char* sStr, 
 	size_t uLen
 ){
 	return _prn_fit(sStr, uLen,
@@ -771,103 +771,103 @@ char* das_datum_toStrValOnlySep(
 /* ************************************************************************* */
 /* Ranges which support +/- infinity */
 
-void das_range_init(das_range* pRng)
+void DasRng_setOpen(DasRng* pRng)
 {
-	das_datum_initNull(&pRng->dmBeg);
-	das_datum_initNull(&pRng->dmEnd);
+	DasDatum_setNull(&pRng->begin);
+	DasDatum_setNull(&pRng->end);
 }
 
-bool das_range_hasBeg(const das_range* pRng)
+bool DasRng_hasBeg(const DasRng* pRng)
 {
-	return !das_datum_isNull(&pRng->dmBeg);
+	return !DasDatum_isNull(&pRng->begin);
 }
 
-bool das_range_hasEnd(const das_range* pRng)
+bool DasRng_hasEnd(const DasRng* pRng)
 {
-	return !das_datum_isNull(&pRng->dmEnd);
+	return !DasDatum_isNull(&pRng->end);
 }
 
 /* One end of a time range from text: "" stays open, anything else must be
    a time.  A plain number would make a "time" range consumers ignore. */
-static das_errcode _das_datum_utc_edge(das_datum* pDm, const char* sVal, const char* sWhich)
+static das_errcode _das_datum_utc_edge(DasDatum* pDm, const char* sVal, const char* sWhich)
 {
-	if(!das_datum_fromStr(pDm, sVal))
-		return das_error(DASERR_DATUM,
-			"das_range_fromUtc: cannot parse %s time '%s'", sWhich, sVal);
-	if(das_datum_isNull(pDm) || (pDm->vt == vtTime))
+	if(!DasDatum_fromStr(pDm, sVal))
+		return daserrf(DASERR_DATUM,
+			"DasRng_fromIso: cannot parse %s time '%s'", sWhich, sVal);
+	if(DasDatum_isNull(pDm) || (pDm->vt == DASVT_TIME))
 		return DAS_OKAY;
 
-	das_datum_initNull(pDm);
-	return das_error(DASERR_DATUM,
-		"das_range_fromUtc: %s '%s' is not a time", sWhich, sVal);
+	DasDatum_setNull(pDm);
+	return daserrf(DASERR_DATUM,
+		"DasRng_fromIso: %s '%s' is not a time", sWhich, sVal);
 }
 
-das_errcode das_range_fromUtc(das_range* pRng, const char* sBeg, const char* sEnd)
+das_errcode DasRng_fromIso(DasRng* pRng, const char* sBeg, const char* sEnd)
 {
-	das_range_init(pRng);
-	das_errcode nRet = _das_datum_utc_edge(&pRng->dmBeg, sBeg, "begin");
+	DasRng_setOpen(pRng);
+	das_errcode nRet = _das_datum_utc_edge(&pRng->begin, sBeg, "begin");
 	if(nRet != DAS_OKAY) return nRet;
-	return _das_datum_utc_edge(&pRng->dmEnd, sEnd, "end");
+	return _das_datum_utc_edge(&pRng->end, sEnd, "end");
 }
 
-void das_range_fromTime(
-	das_range* pRng, const das_time* dtBeg, const das_time* dtEnd
+void DasRng_fromTime(
+	DasRng* pRng, const DasTime* dtBeg, const DasTime* dtEnd
 ){
-	/* das_range_init() leaves both ends null, a NULL das_time keeps one open */
-	das_range_init(pRng);
-	if(dtBeg != NULL) das_datum_fromTime(&pRng->dmBeg, dtBeg);
-	if(dtEnd != NULL) das_datum_fromTime(&pRng->dmEnd, dtEnd);
+	/* DasRng_setOpen() leaves both ends null, a NULL DasTime keeps one open */
+	DasRng_setOpen(pRng);
+	if(dtBeg != NULL) DasDatum_fromTime(&pRng->begin, dtBeg);
+	if(dtEnd != NULL) DasDatum_fromTime(&pRng->end, dtEnd);
 }
 
-void das_range_fromInt(das_range* pRng, int64_t nBeg, int64_t nEnd)
+void DasRng_fromInt(DasRng* pRng, int64_t nBeg, int64_t nEnd)
 {
-	das_datum_fromDbl(&pRng->dmBeg, (double)nBeg, UNIT_DIMENSIONLESS);
-	das_datum_fromDbl(&pRng->dmEnd, (double)nEnd, UNIT_DIMENSIONLESS);
+	DasDatum_fromDouble(&pRng->begin, (double)nBeg, DASUNITS_DIMENSIONLESS);
+	DasDatum_fromDouble(&pRng->end, (double)nEnd, DASUNITS_DIMENSIONLESS);
 }
 
-das_errcode das_range_fromDatum(
-	das_range* pRng, const das_datum* dmBeg, const das_datum* dmEnd
+das_errcode DasRng_fromDatum(
+	DasRng* pRng, const DasDatum* dmBeg, const DasDatum* dmEnd
 ){
-	das_range_init(pRng);
+	DasRng_setOpen(pRng);
 
-	/* A das_range outlives the call that fills it, so it can only hold datums
+	/* A DasRng outlives the call that fills it, so it can only hold datums
 	   that own their bytes. Null is local */
-	if((dmBeg != NULL)&&(!das_datum_islocal(dmBeg)))
-		return das_error(DASERR_DATUM,
+	if((dmBeg != NULL)&&(!DasDatum_isLocal(dmBeg)))
+		return daserrf(DASERR_DATUM,
 			"Range begin is a %s datum, a reference to memory the range would "
-			"not own", das_vt_toStr(dmBeg->vt)
+			"not own", dasvt_name(dmBeg->vt)
 		);
-	if((dmEnd != NULL)&&(!das_datum_islocal(dmEnd)))
-		return das_error(DASERR_DATUM,
+	if((dmEnd != NULL)&&(!DasDatum_isLocal(dmEnd)))
+		return daserrf(DASERR_DATUM,
 			"Range end is a %s datum, a reference to memory the range would "
-			"not own", das_vt_toStr(dmEnd->vt)
+			"not own", dasvt_name(dmEnd->vt)
 		);
 
-	/* NULL leaves the end as das_range_init() made it, open */
-	if(dmBeg != NULL) pRng->dmBeg = *dmBeg;
-	if(dmEnd != NULL) pRng->dmEnd = *dmEnd;
+	/* NULL leaves the end as DasRng_setOpen() made it, open */
+	if(dmBeg != NULL) pRng->begin = *dmBeg;
+	if(dmEnd != NULL) pRng->end = *dmEnd;
 	return DAS_OKAY;
 }
 
 /* ************************************************************************* */
 /* Ranges on a named dimension */
 
-das_errcode das_dim_range_init(
-	das_dim_range* pThis, const char* sDim, const das_range* pRng
+das_errcode DasDimRng_set(
+	DasDimRng* pThis, const char* sDim, const DasRng* pRng
 ){
-	memset(pThis, 0, sizeof(das_dim_range));
-	if(pRng != NULL) pThis->rng = *pRng;
-	else             das_range_init(&pThis->rng);
+	memset(pThis, 0, sizeof(DasDimRng));
+	if(pRng != NULL) pThis->range = *pRng;
+	else             DasRng_setOpen(&pThis->range);
 
 	/* Stored lower case: uri.c matches these against registered coordinate
 	   and field names, which are lower case by rule */
 	size_t i = 0;
-	for(; (sDim[i] != '\0') && (i < sizeof(pThis->sDim) - 1); ++i)
-		pThis->sDim[i] = (char)tolower((unsigned char)sDim[i]);
-	pThis->sDim[i] = '\0';
+	for(; (sDim[i] != '\0') && (i < sizeof(pThis->physDim) - 1); ++i)
+		pThis->physDim[i] = (char)tolower((unsigned char)sDim[i]);
+	pThis->physDim[i] = '\0';
 	if(sDim[i] != '\0')
-		return das_error(DASERR_DATUM,
-			"Dimension name '%s' exceeds %zu-char limit", sDim, sizeof(pThis->sDim) - 1
+		return daserrf(DASERR_DATUM,
+			"Dimension name '%s' exceeds %zu-char limit", sDim, sizeof(pThis->physDim) - 1
 		);
 	return DAS_OKAY;
 }

@@ -72,53 +72,53 @@ static bool streq(const char* a, const char* b)
  * test output */
 static das_errcode quiet(das_errcode (*f)(DasCat*, const char*), DasCat* p, const char* s)
 {
-	daslog_setlevel(DASLOG_CRIT);
+	daslog_setLevel(DASLOG_CRITICAL);
 	das_errcode n = f(p, s);
-	daslog_setlevel(DASLOG_WARN);
+	daslog_setLevel(DASLOG_WARN);
 	return n;
 }
 /* for the two-string setters, argument order is (url, uri) as in catalog.h */
 static das_errcode quiet2(
 	das_errcode (*f)(DasCat*, const char*, const char*), DasCat* p, const char* a, const char* b
 ){
-	daslog_setlevel(DASLOG_CRIT);
+	daslog_setLevel(DASLOG_CRITICAL);
 	das_errcode n = f(p, a, b);
-	daslog_setlevel(DASLOG_WARN);
+	daslog_setLevel(DASLOG_WARN);
 	return n;
 }
 static DasNode* quietResolve(DasCat* p, const char* s)
 {
-	daslog_setlevel(DASLOG_CRIT);
+	daslog_setLevel(DASLOG_CRITICAL);
 	DasNode* pNode = DasCat_resolve(p, s);
-	daslog_setlevel(DASLOG_WARN);
+	daslog_setLevel(DASLOG_WARN);
 	return pNode;
 }
 
 /* ************************************************************************* */
 static void test_isUrlOrFile(void)
 {
-	printf("TEST: das_isUrlOrFile\n");
-	CHECK(das_isUrlOrFile("http://a/b.json"), "http");
-	CHECK(das_isUrlOrFile("https://a/b"), "https");
-	CHECK(das_isUrlOrFile("file:///x/y"), "file scheme");
-	CHECK(das_isUrlOrFile("./node.json"), "dot path");
-	CHECK(das_isUrlOrFile("/abs/node"), "absolute path");
-	CHECK(das_isUrlOrFile("C:\\nodes\\x"), "windows drive path by backslash");
-	CHECK(das_isUrlOrFile("test/das_fetch/cat/site.json"), "relative path ending in .json");
-	CHECK(!das_isUrlOrFile("uiowa/juno/wav/survey"), "catalog path");
-	CHECK(!das_isUrlOrFile("tag:das2.org,2012:site:/uiowa"), "catalog URI");
-	CHECK(!das_isUrlOrFile("site:/uiowa"), "shorthand URI");
-	CHECK(!das_isUrlOrFile(NULL), "NULL");
-	CHECK(!das_isUrlOrFile(""), "empty");
+	printf("TEST: DasCat_isNodeUrl\n");
+	CHECK(DasCat_isNodeUrl("http://a/b.json"), "http");
+	CHECK(DasCat_isNodeUrl("https://a/b"), "https");
+	CHECK(DasCat_isNodeUrl("file:///x/y"), "file scheme");
+	CHECK(DasCat_isNodeUrl("./node.json"), "dot path");
+	CHECK(DasCat_isNodeUrl("/abs/node"), "absolute path");
+	CHECK(DasCat_isNodeUrl("C:\\nodes\\x"), "windows drive path by backslash");
+	CHECK(DasCat_isNodeUrl("test/das_fetch/cat/site.json"), "relative path ending in .json");
+	CHECK(!DasCat_isNodeUrl("uiowa/juno/wav/survey"), "catalog path");
+	CHECK(!DasCat_isNodeUrl("tag:das2.org,2012:site:/uiowa"), "catalog URI");
+	CHECK(!DasCat_isNodeUrl("site:/uiowa"), "shorthand URI");
+	CHECK(!DasCat_isNodeUrl(NULL), "NULL");
+	CHECK(!DasCat_isNodeUrl(""), "empty");
 
-	printf("TEST: das_isUri\n");
-	CHECK(das_isUri("tag:das2.org,2012:site:/uiowa"), "tag URI");
-	CHECK(das_isUri("doi:10.1037/a0040251/"), "doi URI");
-	CHECK(das_isUri("site:/uiowa") && das_isUri("test:x"), "shorthands");
-	CHECK(das_isUri("https://host/x.json"), "a URL is a URI too");
-	CHECK(!das_isUri("uiowa/juno/wav:x"), "relative path, colon after a slash");
-	CHECK(!das_isUri("C:\\nodes\\x") && !das_isUri("C:/x"), "drive letters are not schemes");
-	CHECK(!das_isUri("1tag:x") && !das_isUri(":x") && !das_isUri("") && !das_isUri(NULL), "not schemes");
+	printf("TEST: dasurl_hasScheme\n");
+	CHECK(dasurl_hasScheme("tag:das2.org,2012:site:/uiowa"), "tag URI");
+	CHECK(dasurl_hasScheme("doi:10.1037/a0040251/"), "doi URI");
+	CHECK(dasurl_hasScheme("site:/uiowa") && dasurl_hasScheme("test:x"), "shorthands");
+	CHECK(dasurl_hasScheme("https://host/x.json"), "a URL is a URI too");
+	CHECK(!dasurl_hasScheme("uiowa/juno/wav:x"), "relative path, colon after a slash");
+	CHECK(!dasurl_hasScheme("C:\\nodes\\x") && !dasurl_hasScheme("C:/x"), "drive letters are not schemes");
+	CHECK(!dasurl_hasScheme("1tag:x") && !dasurl_hasScheme(":x") && !dasurl_hasScheme("") && !dasurl_hasScheme(NULL), "not schemes");
 }
 
 /* ************************************************************************* */
@@ -127,13 +127,13 @@ static void test_policy(void)
 	printf("TEST: prefix, seed and mount setters\n");
 	DasCat* pCat = new_DasCat(NULL, "TestCat");
 	CHECK(pCat != NULL, "new_DasCat");
-	CHECK(DasCat_credMngr(pCat) == NULL, "no manager");
+	CHECK(DasCat_credMgr(pCat) == NULL, "no manager");
 	CHECK(streq(DasCat_agent(pCat), "TestCat"), "agent copied");
-	CHECK(streq(DasCat_prefix(pCat), DASCAT_DEF_PREFIX), "default prefix");
+	CHECK(streq(DasCat_prefix(pCat), DASCAT_SITE_PREFIX), "default prefix");
 	CHECK(!DasCat_hasSeed(pCat), "no seed yet");
 	CHECK(DasCat_seedUrl(pCat) == NULL, "no seed url");
-	CHECK(streq(DasCat_prefix(pCat), DASCAT_DEF_PREFIX), "no seed: paths start at the default prefix");
-	CHECK(DasCat_mountCount(pCat) == 0, "no mounts");
+	CHECK(streq(DasCat_prefix(pCat), DASCAT_SITE_PREFIX), "no seed: paths start at the default prefix");
+	CHECK(DasCat_numMounts(pCat) == 0, "no mounts");
 	CHECK(DasCat_lastUri(pCat) == NULL, "no resolve yet");
 
 	CHECK(DasCat_setPrefix(pCat, "site:/uiowa") == DAS_OKAY, "prefix shorthand");
@@ -156,7 +156,7 @@ static void test_policy(void)
 	CHECK(streq(DasCat_prefix(pCat), ""), "the seed superseded the prefix set before it");
 	CHECK(streq(DasCat_prefix(pCat), ""), "a seed without a prefix is a root, paths start at nothing");
 	CHECK(DasCat_mount(pCat, UIOWA, UIOWA_URI) == DAS_OKAY, "a mount joins an offline catalog");
-	CHECK(DasCat_mountCount(pCat) == 1, "the seed is not a mount");
+	CHECK(DasCat_numMounts(pCat) == 1, "the seed is not a mount");
 	CHECK(DasCat_covers(pCat, UIOWA_URI "/x") && !DasCat_covers(pCat, "tag:das2.org,2012:site:/swri"),
 	      "covered by the mount, walled off elsewhere");
 	del_DasCat(pCat);
@@ -175,12 +175,12 @@ static void test_policy(void)
 	pCat = new_DasCat(NULL, NULL);
 	CHECK(DasCat_mount(pCat, UIOWA, UIOWA_URI) == DAS_OKAY, "mount one");
 	CHECK(DasCat_mount(pCat, SITE, "site:swri") == DAS_OKAY, "mount two, slash left out");
-	CHECK(DasCat_mountCount(pCat) == 2, "two mounts");
+	CHECK(DasCat_numMounts(pCat) == 2, "two mounts");
 	CHECK(!DasCat_hasSeed(pCat), "mounts are not a seed");
 	CHECK(DasCat_covers(pCat, "tag:das2.org,2012:site:/swri/x"), "slash supplied in the mount URI");
 	CHECK(DasCat_covers(pCat, "tag:das2.org,2012:site:/lanl"), "mounts fall through");
 	CHECK(DasCat_setSeed(pCat, SITE, "test:/") == DAS_OKAY, "a seed after mounts isolates them");
-	CHECK(DasCat_hasSeed(pCat) && (DasCat_mountCount(pCat) == 2), "two mounts, the seed is not one");
+	CHECK(DasCat_hasSeed(pCat) && (DasCat_numMounts(pCat) == 2), "two mounts, the seed is not one");
 	CHECK(!DasCat_covers(pCat, "tag:das2.org,2012:site:/lanl"), "no fall through now");
 	del_DasCat(pCat);
 }
@@ -219,8 +219,8 @@ static void test_seed(void)
 
 	DasNode* pUiowa = DasCat_resolve(pCat, "uiowa");
 	CHECK(pUiowa && DasNode_isCatalog(pUiowa), "intermediate node");
-	CHECK(pUiowa && (DasNode_subCount(pUiowa) == 3), "uiowa lists three children");
-	CHECK(pUiowa && (DasNode_subType(pUiowa, 2) == DASNODE_INV), "unknown child type is DASNODE_INV");
+	CHECK(pUiowa && (DasNode_numSubs(pUiowa) == 3), "uiowa lists three children");
+	CHECK(pUiowa && (DasNode_subTypeAt(pUiowa, 2) == DASNODETYPE_INV), "unknown child type is DASNODETYPE_INV");
 
 	/* Misses, and what the catalog can say about them */
 	CHECK(quietResolve(pCat, "uiowa/nope/deeper") == NULL, "bad child fails");
@@ -398,21 +398,21 @@ static void test_userdir(void)
 	/* The default, unless this test's environment set DAS_USERDIR */
 	const char* sEnv = getenv("DAS_USERDIR");
 	if((sEnv == NULL)||(sEnv[0] == '\0'))
-		CHECK(endsWith(das_userdir(), DAS_DSEPS ".das"), "default is .das under home, got %s", das_userdir());
+		CHECK(endsWith(dasfs_userDir(), DASFS_SEPS ".das"), "default is .das under home, got %s", dasfs_userDir());
 	else
-		CHECK(streq(das_userdir(), sEnv), "DAS_USERDIR is honored, got %s", das_userdir());
+		CHECK(streq(dasfs_userDir(), sEnv), "DAS_USERDIR is honored, got %s", dasfs_userDir());
 
-	das_set_userdir(TEST_USERDIR);
-	CHECK(streq(das_userdir(), TEST_USERDIR), "setter is honored, got %s", das_userdir());
+	dasfs_setUserDir(TEST_USERDIR);
+	CHECK(streq(dasfs_userDir(), TEST_USERDIR), "setter is honored, got %s", dasfs_userDir());
 
 	DasCat* pCat = new_DasCat(NULL, NULL);
-	CHECK(streq(DasCat_cacheDir(pCat), TEST_USERDIR DAS_DSEPS "cache" DAS_DSEPS "nodes"),
+	CHECK(streq(DasCat_cacheDir(pCat), TEST_USERDIR DASFS_SEPS "cache" DASFS_SEPS "nodes"),
 	      "new session caches under the user directory, got %s",
 	      DasCat_cacheDir(pCat) ? DasCat_cacheDir(pCat) : "(off)");
-	CHECK(DasCat_cacheAge(pCat) == DASCAT_DEF_CACHE_SEC, "default cache age");
+	CHECK(DasCat_cacheAge(pCat) == DASCAT_NODE_TTL_SEC, "default cache age");
 
 	DasCat_setCache(pCat, DasCat_cacheDir(pCat), 0);   /* aliasing is allowed */
-	CHECK(streq(DasCat_cacheDir(pCat), TEST_USERDIR DAS_DSEPS "cache" DAS_DSEPS "nodes"),
+	CHECK(streq(DasCat_cacheDir(pCat), TEST_USERDIR DASFS_SEPS "cache" DASFS_SEPS "nodes"),
 	      "age change keeps the directory");
 	CHECK(DasCat_cacheAge(pCat) == 0, "age changed to always fetch");
 
@@ -428,19 +428,19 @@ static void test_userdir(void)
 
 	/* A later change does not move a session already made */
 	pCat = new_DasCat(NULL, NULL);
-	das_set_userdir("moved_after_the_fact");
-	CHECK(streq(DasCat_cacheDir(pCat), TEST_USERDIR DAS_DSEPS "cache" DAS_DSEPS "nodes"),
+	dasfs_setUserDir("moved_after_the_fact");
+	CHECK(streq(DasCat_cacheDir(pCat), TEST_USERDIR DASFS_SEPS "cache" DASFS_SEPS "nodes"),
 	      "session keeps the directory it was made with");
 	del_DasCat(pCat);
 
-	das_set_userdir(NULL);
-	CHECK(!streq(das_userdir(), "moved_after_the_fact"), "NULL restores the default");
+	dasfs_setUserDir(NULL);
+	CHECK(!streq(dasfs_userDir(), "moved_after_the_fact"), "NULL restores the default");
 }
 
 /* ************************************************************************* */
 int main(int argc, char** argv)
 {
-	das_init(argv[0], DASERR_DIS_EXIT, DASLOG_WARN, NULL);
+	daslib_init(argv[0], DASERRDISP_EXIT, DASLOG_WARN, NULL);
 
 	test_userdir();
 	test_isUrlOrFile();

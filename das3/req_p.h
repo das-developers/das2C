@@ -31,7 +31,7 @@
 struct das_req_entry {
 	char* sKey;                 /* owned, as the client typed it */
 	char* sVal;                 /* owned, never NULL, may be "" */
-	das_req_verdict_e verdict;
+	das_reqverdict verdict;
 	char* sWhy;                 /* owned, NULL unless bad */
 	bool bDerived;
 	int nProp;                  /* index of the source property the last check
@@ -44,7 +44,7 @@ struct das_req_raw {
 	char* sVal;
 };
 
-struct das_req {
+struct das_req_t {
 	char* sPath;                /* stamp, each "" when unknown */
 	char* sUrl;
 	char* sVersion;
@@ -71,7 +71,7 @@ void _DasReq_dropDerived(DasReq* pThis);
 
 /* Set the verdict of an entry, with a reason for a bad one (ignored
  * otherwise).  sWhy is copied. */
-void _DasReq_setVerdict(DasReq* pThis, size_t uIdx, das_req_verdict_e verdict, const char* sWhy);
+void _DasReq_setVerdict(DasReq* pThis, size_t uIdx, das_reqverdict verdict, const char* sWhy);
 
 /* Mark every entry unchecked.  DasReq_set() does this for the one entry
  * it touches; a check that is about to validate everything again calls this. */

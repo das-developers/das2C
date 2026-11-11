@@ -82,7 +82,7 @@ void fail (const char *msg)
   exit (D1ERR);
 } /* fail */
 
-int fgetpkt (FILE* fin, char *ph, ubyte *data, int max)
+int fgetpkt (FILE* fin, char *ph, uint8_t *data, int max)
 {
   int datsize;
   int mask = *(int *)":\0\0:";
@@ -115,7 +115,7 @@ int fgetpkt (FILE* fin, char *ph, ubyte *data, int max)
 }
 
 
-int getpkt (char *ph, ubyte *data, int max)
+int getpkt (char *ph, uint8_t *data, int max)
 {
   int datsize;
   int mask = *(int *)":\0\0:";
@@ -145,7 +145,7 @@ int getpkt (char *ph, ubyte *data, int max)
   return datsize;
 }
 
-int putpkt (const char *ph, const ubyte *data, const int bytes)
+int putpkt (const char *ph, const uint8_t *data, const int bytes)
 {
   char hex[5];
   int mask = *(int *)":\0\0:";
@@ -156,7 +156,7 @@ int putpkt (const char *ph, const ubyte *data, const int bytes)
   if (!fwrite (ph, 4, 1, stdout)) return 0;
   if (!fwrite (hex, 4, 1, stdout)) return 0;
   
-#ifdef HOST_IS_LSB_FIRST
+#ifdef DASHOST_LSB_FIRST
   int items = 0;
   float f;
   for(int i = 0; i < bytes/4; ++i){
@@ -258,13 +258,13 @@ void ms2hms (int* pHour, int* pMin, float* pSec, double ms_of_day)
    *pHour = (int) fmod ((double) (ms_of_day / 3600000.0), 24.0);
 }
 
-/* dt_from_1958() is part of libdas3, see das3/time.h */
+/* DasTime_fromDays1958() is part of libdas3, see das3/time.h */
 
 /* ************************************************************************* */
-/* das1 time functions on top of das_time */
+/* das1 time functions on top of DasTime */
 
 static void _toParts(
-	const das_time* pDt, int* year, int* month, int* mday, int* yday,
+	const DasTime* pDt, int* year, int* month, int* mday, int* yday,
 	int* hour, int* minute, double* second
 ){
 	*year = pDt->year;  *month = pDt->month;   *mday = pDt->mday;
@@ -276,8 +276,8 @@ int parsetime(
 	const char* string, int* year, int* month, int* mday, int* yday,
 	int* hour, int* minute, double* second
 ){
-	das_time dt;
-	if(!dt_parsetime(&dt, string))
+	DasTime dt;
+	if(!DasTime_fromStr(&dt, string))
 		return 1;
 	_toParts(&dt, year, month, mday, yday, hour, minute, second);
 	return 0;
@@ -288,19 +288,19 @@ double ttime(
 	int* year, int* month, int* mday, int* yday, int* hour, int* minute,
 	double* second
 ){
-	das_time dt;
-	dt_set(&dt, *year, *month, *mday, *yday, *hour, *minute, *second);
-	dt_tnorm(&dt);
+	DasTime dt;
+	DasTime_set(&dt, *year, *month, *mday, *yday, *hour, *minute, *second);
+	DasTime_normalize(&dt);
 	_toParts(&dt, year, month, mday, yday, hour, minute, second);
-	return dt_ttime(&dt);
+	return DasTime_toSec1958(&dt);
 }
 
 void emitt(
 	double tt, int* year, int* month, int* mday, int* yday, int* hour,
 	int* minute, double* second
 ){
-	das_time dt;
-	dt_emitt(&dt, tt);
+	DasTime dt;
+	DasTime_fromSec1958(&dt, tt);
 	_toParts(&dt, year, month, mday, yday, hour, minute, second);
 }
 
@@ -308,9 +308,9 @@ void tnorm(
 	int* year, int* month, int* mday, int* yday, int* hour, int* minute,
 	double* second
 ){
-	das_time dt;
-	dt_set(&dt, *year, *month, *mday, *yday, *hour, *minute, *second);
-	dt_tnorm(&dt);
+	DasTime dt;
+	DasTime_set(&dt, *year, *month, *mday, *yday, *hour, *minute, *second);
+	DasTime_normalize(&dt);
 	_toParts(&dt, year, month, mday, yday, hour, minute, second);
 }	
 

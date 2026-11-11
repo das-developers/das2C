@@ -42,7 +42,7 @@ bool g_bAnnotations = true;
 das_errcode onStreamHdr(DasStream* pSdIn, void* vpOut)
 {
 	DasIO* pOut = (DasIO*)vpOut;
-	g_pSdOut = DasStream_copy(pSdIn);               /* Copy input descriptor */
+	g_pSdOut = new_DasStream_copy(pSdIn);               /* Copy input descriptor */
 	return DasIO_writeStreamDesc(pOut, g_pSdOut);   /* Write output stream hdr */
 }
 
@@ -58,17 +58,17 @@ das_errcode OnPktHdr(DasStream* pSdIn, DasPkt* pPdIn, int nPktId, void* vpOut)
 	DasEnc* pNewEnc = NULL;
 	
 	/* Handle packet re-definitions */
-	DasDesc* pOld = DasStream_getDesc(g_pSdOut, nPktId);
+	DasDesc* pOld = DasStream_desc(g_pSdOut, nPktId);
 	if(pOld != NULL)
 		DasStream_freeDesc(g_pSdOut, pOld);
 	
-   pPdOut = DasStream_clonePktById(g_pSdOut, pSdIn, nPktId);
+   pPdOut = DasStream_clonePkt(g_pSdOut, pSdIn, nPktId);
 	
 	/* Possibly swap out encodings for some of the planes */
-	for(i=0; i<DasPkt_getNPlanes(pPdOut); i++){
+	for(i=0; i<DasPkt_numPlanes(pPdOut); i++){
 		
-		pPlane = DasPkt_getPlane(pPdOut, i);
-		pCurEnc = DasPlane_getValEncoder(pPlane);
+		pPlane = DasPkt_planeAt(pPdOut, i);
+		pCurEnc = DasPlane_valEnc(pPlane);
 		pNewEnc = NULL;
 		
 		/* If encoder is already ascii, it's fine as it is */
@@ -76,20 +76,20 @@ das_errcode OnPktHdr(DasStream* pSdIn, DasPkt* pPdIn, int nPktId, void* vpOut)
 			continue;
 
 		/* Convert binary time units in a different manner than non-time units */
-		if(strcmp(DasPlane_getUnits(pPlane), UNIT_US2000) == 0 ||
-		   strcmp(DasPlane_getUnits(pPlane), UNIT_MJ1958) == 0 ||
-			strcmp(DasPlane_getUnits(pPlane), UNIT_T2000) == 0 ||
-			strcmp(DasPlane_getUnits(pPlane), UNIT_T1970) == 0   ){
+		if(strcmp(DasPlane_units(pPlane), DASUNITS_US2000) == 0 ||
+		   strcmp(DasPlane_units(pPlane), DASUNITS_MJ1958) == 0 ||
+			strcmp(DasPlane_units(pPlane), DASUNITS_T2000) == 0 ||
+			strcmp(DasPlane_units(pPlane), DASUNITS_T1970) == 0   ){
 			
 			if(g_sTimeFmt == NULL)
 				pNewEnc = new_DasEnc(DAS2DT_TIME, 24, NULL);
 			else
 				pNewEnc = new_DasEnc(DAS2DT_TIME, g_nTimeWidth, g_sTimeFmt);
 	
-			DasPlane_setValEncoder(pPlane, pNewEnc);
+			DasPlane_setValEnc(pPlane, pNewEnc);
 			
 			/* Also switch to us2000 if we are here anyway. */
-			/* DasPlane_setUnits(pPlane, UNIT_US2000); */
+			/* DasPlane_setUnits(pPlane, DASUNITS_US2000); */
 			continue;
 		}
 		
@@ -99,15 +99,15 @@ das_errcode OnPktHdr(DasStream* pSdIn, DasPkt* pPdIn, int nPktId, void* vpOut)
 			case 8: pNewEnc = new_DasEnc(DAS2DT_ASCII, g_n8ByteWidth, NULL); break;
 			case 4: pNewEnc = new_DasEnc(DAS2DT_ASCII, g_n4ByteWidth, NULL); break;
 			default:
-				return das_error(100, "Don't know how to deal with %d byte wide "
+				return daserrf(100, "Don't know how to deal with %d byte wide "
 						"binary reals", DasEnc_width(pCurEnc));
 			}
-			DasPlane_setValEncoder(pPlane, pNewEnc);
+			DasPlane_setValEnc(pPlane, pNewEnc);
 			continue;
 		}
 		
 		char sType[32] = {'\0'};
-		return das_error(100, "Don't know what to do with value type %s in plane "
+		return daserrf(100, "Don't know what to do with value type %s in plane "
 		                  "index %d of packet ID %02d",
 		                  DasEnc_toStr(pCurEnc, sType, sizeof(sType)) ? sType : "unknown",
 		                  i, nPktId);
@@ -120,14 +120,14 @@ das_errcode OnPktHdr(DasStream* pSdIn, DasPkt* pPdIn, int nPktId, void* vpOut)
 das_errcode onPktData(DasPkt* pPdIn, int nPktId, void* vpOut )
 {
 	DasIO* pOut = (DasIO*)vpOut;
-	DasPkt* pPdOut = DasStream_getPkt(g_pSdOut, nPktId);
+	DasPkt* pPdOut = DasStream_pkt(g_pSdOut, nPktId);
 	DasPlane* pInPlane = NULL;
 	DasPlane* pOutPlane = NULL;
 	
-	for(size_t u=0; u<DasPkt_getNPlanes(pPdIn); u++ ){
-		pInPlane = DasPkt_getPlane(pPdIn, u);
-		pOutPlane = DasPkt_getPlane(pPdOut, u);
-		DasPlane_setValues(pOutPlane, DasPlane_getValues(pInPlane));
+	for(size_t u=0; u<DasPkt_numPlanes(pPdIn); u++ ){
+		pInPlane = DasPkt_planeAt(pPdIn, u);
+		pOutPlane = DasPkt_planeAt(pPdOut, u);
+		DasPlane_setVals(pOutPlane, DasPlane_vals(pInPlane));
 	}
 
 	return DasIO_writeData(pOut, (DasDesc*)pPdOut, nPktId);
@@ -154,7 +154,7 @@ das_errcode onClose(DasStream* sd, const DasExcept* pExcept, void* vpOut)
 	else
 		DasIO_close(pOut);
 
-	if((pExcept == NULL)||(DasExcept_type(pExcept) == DAS_EX_NO_DATA))
+	if((pExcept == NULL)||(DasExcept_type(pExcept) == DASEXCEPTTYPE_NO_DATA))
 		return DAS_OKAY;
 	return DASERR_OOB;
 }
@@ -222,7 +222,7 @@ int main( int argc, char *argv[]) {
 	char sTimeFmt[64] = {'\0'};
 	
 	/* Exit on errors, log info messages and above */
-	das_init(argv[0], DASERR_DIS_EXIT, DASLOG_INFO, NULL);
+	daslib_init(argv[0], DASERRDISP_EXIT, DASLOG_INFO, NULL);
 
 	for(i = 1; i < argc; i++){
 		if(strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0 ){
@@ -247,7 +247,7 @@ int main( int argc, char *argv[]) {
 		}
 		
 		if(strcmp(argv[i], "-v") == 0 || strcmp(argv[i], "--version") == 0){
-			printf("das2_ascii (das2C %s)\n", das_lib_version());
+			printf("das2_ascii (das2C %s)\n", daslib_version());
 			return 0;
 		}
 		
@@ -297,17 +297,17 @@ int main( int argc, char *argv[]) {
 	/* Create an input processor, provide the output processor as a user data
 	   object so that the callbacks have access to it without using a global
 	   variable. */
-	das_stream_proc proc;
-	das_stream_proc_init(&proc, pOut);
+	DasIOProc proc;
+	init_DasIOProc(&proc, pOut);
 	
-	proc.onStreamDesc = onStreamHdr;
-	proc.onPktDesc    = OnPktHdr;
+	proc.onStream = onStreamHdr;
+	proc.onPkt    = OnPktHdr;
 	proc.onPktData    = onPktData;
 	proc.onComment    = onComment;
 	proc.onClose      = onClose;
 
 	DasIO* pIn = new_DasIO("Standard Input", new_DasXport_stdin(), NULL);
-	DasIO_addProcessor(pIn, &proc);
+	DasIO_addProc(pIn, &proc);
 	
 	status = DasIO_readAll(pIn);
 

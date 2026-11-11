@@ -26,7 +26,7 @@
  * For more information, please refer to <http://unlicense.org/>
  */
 
-/* das_url_parse() splits a URL in place.  The properties under test are that
+/* DasUrlParts_fromStr() splits a URL in place.  The properties under test are that
  * every part is found whole, that the das2.2 dataset= value is only taken as
  * a whole parameter, and that anything a server request can't carry safely is
  * refused.
@@ -53,96 +53,96 @@ static int g_nPass = 0;
 }while(0)
 
 /* Is the part present and equal to sWant?  NULL sWant means absent. */
-static bool partIs(const char* sUrl, const das_url_parts* pParts, das_url_part_e e,
+static bool partIs(const char* sUrl, const DasUrlParts* pParts, das_urlpart e,
                    const char* sWant)
 {
 	size_t uLen = 0;
-	const char* p = das_url_part(pParts, sUrl, e, &uLen);
+	const char* p = DasUrlParts_get(pParts, sUrl, e, &uLen);
 	if(sWant == NULL) return (p == NULL);
 	return (p != NULL) && (uLen == strlen(sWant)) && (strncmp(p, sWant, uLen) == 0);
 }
 
 static void testParse(void)
 {
-	das_url_parts parts;
+	DasUrlParts parts;
 	const char* sUrl;
 
 	printf("INFO: Splitting well formed URLs\n");
 
 	sUrl = "http://host/path?a=1";
-	CHECK(das_url_parse(&parts, sUrl), "plain http parses");
-	CHECK(partIs(sUrl, &parts, DASURL_SCHEME, "http"), "scheme");
-	CHECK(partIs(sUrl, &parts, DASURL_HOST, "host"), "host");
-	CHECK(partIs(sUrl, &parts, DASURL_PORT, "80"), "default http port");
-	CHECK(partIs(sUrl, &parts, DASURL_PATH, "/path"), "path");
-	CHECK(partIs(sUrl, &parts, DASURL_QUERY, "a=1"), "query");
-	CHECK(partIs(sUrl, &parts, DASURL_DATASET, NULL), "no dataset");
-	CHECK(partIs(sUrl, &parts, DASURL_USERINFO, NULL), "no userinfo");
-	CHECK(partIs(sUrl, &parts, DASURL_FRAGMENT, NULL), "no fragment");
+	CHECK(DasUrlParts_fromStr(&parts, sUrl), "plain http parses");
+	CHECK(partIs(sUrl, &parts, DASURLPART_SCHEME, "http"), "scheme");
+	CHECK(partIs(sUrl, &parts, DASURLPART_HOST, "host"), "host");
+	CHECK(partIs(sUrl, &parts, DASURLPART_PORT, "80"), "default http port");
+	CHECK(partIs(sUrl, &parts, DASURLPART_PATH, "/path"), "path");
+	CHECK(partIs(sUrl, &parts, DASURLPART_QUERY, "a=1"), "query");
+	CHECK(partIs(sUrl, &parts, DASURLPART_DATASET, NULL), "no dataset");
+	CHECK(partIs(sUrl, &parts, DASURLPART_USERINFO, NULL), "no userinfo");
+	CHECK(partIs(sUrl, &parts, DASURLPART_FRAGMENT, NULL), "no fragment");
 
 	sUrl = "https://space.physics.uiowa.edu:8443/das/stream/source/tracers/flex"
 	       "?read.time.min=2026-01-01T00%3A00#top";
-	CHECK(das_url_parse(&parts, sUrl), "https with port parses");
-	CHECK(partIs(sUrl, &parts, DASURL_PORT, "8443"), "explicit port");
+	CHECK(DasUrlParts_fromStr(&parts, sUrl), "https with port parses");
+	CHECK(partIs(sUrl, &parts, DASURLPART_PORT, "8443"), "explicit port");
 	size_t uLen = 0;
-	const char* pPort = das_url_part(&parts, sUrl, DASURL_PORT, &uLen);
+	const char* pPort = DasUrlParts_get(&parts, sUrl, DASURLPART_PORT, &uLen);
 	CHECK((pPort >= sUrl) && (pPort < sUrl + strlen(sUrl)), "explicit port points into the URL");
-	CHECK(partIs(sUrl, &parts, DASURL_PATH, "/das/stream/source/tracers/flex"), "path");
-	CHECK(partIs(sUrl, &parts, DASURL_QUERY, "read.time.min=2026-01-01T00%3A00"),
+	CHECK(partIs(sUrl, &parts, DASURLPART_PATH, "/das/stream/source/tracers/flex"), "path");
+	CHECK(partIs(sUrl, &parts, DASURLPART_QUERY, "read.time.min=2026-01-01T00%3A00"),
 	      "query stops at #, still encoded");
-	CHECK(partIs(sUrl, &parts, DASURL_FRAGMENT, "top"), "fragment");
+	CHECK(partIs(sUrl, &parts, DASURLPART_FRAGMENT, "top"), "fragment");
 
 	sUrl = "https://host";
-	CHECK(das_url_parse(&parts, sUrl), "bare host parses");
-	CHECK(partIs(sUrl, &parts, DASURL_PORT, "443"), "default https port");
-	CHECK(partIs(sUrl, &parts, DASURL_PATH, ""), "empty path is present, length 0");
-	CHECK(partIs(sUrl, &parts, DASURL_QUERY, NULL), "no query");
+	CHECK(DasUrlParts_fromStr(&parts, sUrl), "bare host parses");
+	CHECK(partIs(sUrl, &parts, DASURLPART_PORT, "443"), "default https port");
+	CHECK(partIs(sUrl, &parts, DASURLPART_PATH, ""), "empty path is present, length 0");
+	CHECK(partIs(sUrl, &parts, DASURLPART_QUERY, NULL), "no query");
 
 	sUrl = "http://h/p?";
-	CHECK(das_url_parse(&parts, sUrl) && partIs(sUrl, &parts, DASURL_QUERY, ""),
+	CHECK(DasUrlParts_fromStr(&parts, sUrl) && partIs(sUrl, &parts, DASURLPART_QUERY, ""),
 	      "empty query is present, length 0");
 
 	sUrl = "http://h/x?server=dataset&dataset=Juno/WAV/Survey&start_time=1";
-	CHECK(das_url_parse(&parts, sUrl), "das2.2 style query parses");
-	CHECK(partIs(sUrl, &parts, DASURL_DATASET, "Juno/WAV/Survey"), "dataset stops at &");
+	CHECK(DasUrlParts_fromStr(&parts, sUrl), "das2.2 style query parses");
+	CHECK(partIs(sUrl, &parts, DASURLPART_DATASET, "Juno/WAV/Survey"), "dataset stops at &");
 
 	sUrl = "http://h/x?mydataset=nope&dataset=yes";
-	CHECK(das_url_parse(&parts, sUrl) && partIs(sUrl, &parts, DASURL_DATASET, "yes"),
+	CHECK(DasUrlParts_fromStr(&parts, sUrl) && partIs(sUrl, &parts, DASURLPART_DATASET, "yes"),
 	      "dataset only matches a whole parameter name");
 
 	sUrl = "http://user:p%40ss@host:81/";
-	CHECK(das_url_parse(&parts, sUrl), "userinfo parses");
-	CHECK(partIs(sUrl, &parts, DASURL_USERINFO, "user:p%40ss"), "userinfo");
-	CHECK(partIs(sUrl, &parts, DASURL_HOST, "host"), "host after userinfo");
-	CHECK(partIs(sUrl, &parts, DASURL_PORT, "81"), "port after userinfo");
+	CHECK(DasUrlParts_fromStr(&parts, sUrl), "userinfo parses");
+	CHECK(partIs(sUrl, &parts, DASURLPART_USERINFO, "user:p%40ss"), "userinfo");
+	CHECK(partIs(sUrl, &parts, DASURLPART_HOST, "host"), "host after userinfo");
+	CHECK(partIs(sUrl, &parts, DASURLPART_PORT, "81"), "port after userinfo");
 
 	sUrl = "http://[::1]:8080/das";
-	CHECK(das_url_parse(&parts, sUrl), "IPv6 literal parses");
-	CHECK(partIs(sUrl, &parts, DASURL_HOST, "[::1]"), "IPv6 host keeps its brackets");
-	CHECK(partIs(sUrl, &parts, DASURL_PORT, "8080"), "port after IPv6 literal");
+	CHECK(DasUrlParts_fromStr(&parts, sUrl), "IPv6 literal parses");
+	CHECK(partIs(sUrl, &parts, DASURLPART_HOST, "[::1]"), "IPv6 host keeps its brackets");
+	CHECK(partIs(sUrl, &parts, DASURLPART_PORT, "8080"), "port after IPv6 literal");
 
 	sUrl = "file:///tmp/x.d3b";
-	CHECK(das_url_parse(&parts, sUrl), "file URL parses");
-	CHECK(partIs(sUrl, &parts, DASURL_HOST, ""), "file URL host is empty");
-	CHECK(partIs(sUrl, &parts, DASURL_PORT, NULL), "no default port for file:");
-	CHECK(partIs(sUrl, &parts, DASURL_PATH, "/tmp/x.d3b"), "file URL path");
+	CHECK(DasUrlParts_fromStr(&parts, sUrl), "file URL parses");
+	CHECK(partIs(sUrl, &parts, DASURLPART_HOST, ""), "file URL host is empty");
+	CHECK(partIs(sUrl, &parts, DASURLPART_PORT, NULL), "no default port for file:");
+	CHECK(partIs(sUrl, &parts, DASURLPART_PATH, "/tmp/x.d3b"), "file URL path");
 
 	printf("INFO: Refusing malformed URLs\n");
 
-	CHECK(!das_url_parse(&parts, "host/x"), "no scheme refused");
-	CHECK(!das_url_parse(&parts, "1http://host/"), "scheme must start with a letter");
-	CHECK(!das_url_parse(&parts, "http://host:99999/x"), "port out of range refused");
-	CHECK(!das_url_parse(&parts, "http://host:abc/x"), "non numeric port refused");
-	CHECK(!das_url_parse(&parts, "http://host/a b"), "space refused");
-	CHECK(!das_url_parse(&parts, "http://host/a\r\nX-Evil: 1"), "CR LF refused");
-	CHECK(!das_url_parse(&parts, "http://[::1/x"), "unclosed IPv6 literal refused");
-	CHECK(!das_url_parse(&parts, NULL), "NULL refused");
+	CHECK(!DasUrlParts_fromStr(&parts, "host/x"), "no scheme refused");
+	CHECK(!DasUrlParts_fromStr(&parts, "1http://host/"), "scheme must start with a letter");
+	CHECK(!DasUrlParts_fromStr(&parts, "http://host:99999/x"), "port out of range refused");
+	CHECK(!DasUrlParts_fromStr(&parts, "http://host:abc/x"), "non numeric port refused");
+	CHECK(!DasUrlParts_fromStr(&parts, "http://host/a b"), "space refused");
+	CHECK(!DasUrlParts_fromStr(&parts, "http://host/a\r\nX-Evil: 1"), "CR LF refused");
+	CHECK(!DasUrlParts_fromStr(&parts, "http://[::1/x"), "unclosed IPv6 literal refused");
+	CHECK(!DasUrlParts_fromStr(&parts, NULL), "NULL refused");
 
 	char* sLong = (char*)malloc(70000);
 	memcpy(sLong, "http://h/", 9);
 	memset(sLong + 9, 'p', 70000 - 10);
 	sLong[69999] = '\0';
-	CHECK(!das_url_parse(&parts, sLong), "URL over 65534 bytes refused");
+	CHECK(!DasUrlParts_fromStr(&parts, sLong), "URL over 65534 bytes refused");
 	free(sLong);
 }
 
@@ -222,28 +222,28 @@ static void testHeaders(void)
 	del_DasHttpResp(pRes);
 	del_DasHttpResp(NULL);
 
-	das_http_opts opts;
-	das_http_opts_init(&opts);
-	CHECK((opts.uVersion == DAS_HTTP_OPTS_VER) && (opts.eIpVer == DASIP_ANY) &&
-	      (opts.rReadSec <= 0.0) && (opts.rConSec == DASHTTP_TO_MIN), "option defaults");
+	DasHttpOpts opts;
+	init_DasHttpOpts(&opts);
+	CHECK((opts.uStructVer == DASHTTPOPTS_VER) && (opts.ipVersion == DASIPVER_ANY) &&
+	      (opts.readSec <= 0.0) && (opts.connectSec == DASHTTP_TIMEOUT_MIN), "option defaults");
 
 	/* A zeroed struct is refused before anything is sent, not run on defaults */
-	das_http_opts zero;
+	DasHttpOpts zero;
 	memset(&zero, 0, sizeof(zero));
-	zero.sReqHdrs = "If-None-Match: \"x\"\r\n";
+	zero.extraHeaders = "If-None-Match: \"x\"\r\n";
 	pRes = new_DasHttpResp_getEx("http://localhost/", NULL, &zero);
-	CHECK((pRes != NULL) && !DasHttpResp_ok(pRes) && (DasHttpResp_code(pRes) == -1) &&
-	      (DasHttpResp_error(pRes) != NULL) && strstr(DasHttpResp_error(pRes), "das_http_opts_init"),
+	CHECK((pRes != NULL) && !DasHttpResp_isOk(pRes) && (DasHttpResp_code(pRes) == -1) &&
+	      (DasHttpResp_error(pRes) != NULL) && strstr(DasHttpResp_error(pRes), "init_DasHttpOpts"),
 	      "zeroed options refused, got '%s'",
 	      (pRes && DasHttpResp_error(pRes)) ? DasHttpResp_error(pRes) : "(null)");
 	del_DasHttpResp(pRes);
 
 	/* A program built against a later header is refused, the library can't
 	   know what its extra members mean */
-	das_http_opts later = opts;
-	later.uVersion = DAS_HTTP_OPTS_VER + 1;
+	DasHttpOpts later = opts;
+	later.uStructVer = DASHTTPOPTS_VER + 1;
 	pRes = new_DasHttpResp_getEx("http://localhost/", NULL, &later);
-	CHECK((pRes != NULL) && !DasHttpResp_ok(pRes) && (DasHttpResp_code(pRes) == -1) &&
+	CHECK((pRes != NULL) && !DasHttpResp_isOk(pRes) && (DasHttpResp_code(pRes) == -1) &&
 	      (DasHttpResp_error(pRes) != NULL) && strstr(DasHttpResp_error(pRes), "newer"),
 	      "later options version refused, got '%s'",
 	      (pRes && DasHttpResp_error(pRes)) ? DasHttpResp_error(pRes) : "(null)");
@@ -255,8 +255,8 @@ static void testHeaders(void)
 int main(int argc, char** argv)
 {
 	(void)argc;
-	das_init(argv[0], DASERR_DIS_RET, DASLOG_ERROR, NULL);
-	daslog_setlevel(DASLOG_CRIT);   /* the parse tests refuse on purpose throughout */
+	daslib_init(argv[0], DASERRDISP_RET, DASLOG_ERROR, NULL);
+	daslog_setLevel(DASLOG_CRITICAL);   /* the parse tests refuse on purpose throughout */
 
 	testParse();
 	testHeaders();

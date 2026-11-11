@@ -12,29 +12,29 @@ meaning under a new spelling compile through it unchanged.
 ## 1. Initialization, errors and logging
 
 Errors and log messages now go one way: through a single log hook.
-`das_error()` sends its message to the hook and the library keeps no copy of
+`daserrf()` sends its message to the hook and the library keeps no copy of
 it.  The error disposition decides what happens next.
 
-**`das_init()` takes a hook, not a buffer size, and returns a code**
+**`daslib_init()` takes a hook, not a buffer size, and returns a code**
 
 ```c
 /* v2.3 */
 das_init(argv[0], DASERR_DIS_EXIT, 0, DASLOG_INFO, NULL);
 
 /* das3 */
-das_init(argv[0], DASERR_DIS_EXIT, DASLOG_INFO, NULL);
+daslib_init(argv[0], DASERRDISP_EXIT, DASLOG_INFO, NULL);
 ```
 
-The last argument is a `const das_loghook*`, NULL for the default handler
+The last argument is a `const DasLogHook*`, NULL for the default handler
 that prints to standard error.  Old five argument calls no longer compile.
-`das_init()` returns `DAS_OKAY` or, when the library returns on errors,
+`daslib_init()` returns `DAS_OKAY` or, when the library returns on errors,
 `DASERR_INIT`.  It no longer calls `exit()` on its own; a failure follows the
 error disposition like any other error and is reported through the hook,
 which is installed first.
 
-`das_init()` refuses `DASERR_DIS_RET` with a log level above `DASLOG_ERROR`,
+`daslib_init()` refuses `DASERRDISP_RET` with a log level above `DASLOG_ERROR`,
 since that hides every error message.  A program that really wants it can
-call `daslog_setlevel(DASLOG_CRIT)` afterwards.
+call `daslog_setLevel(DASLOG_CRITICAL)` afterwards.
 
 **No saved error messages.**  `das_save_error()`, `das_get_error()`,
 `das_error_free()`, `das_print_error()` and `das_error_msg` are gone.  A
@@ -44,37 +44,38 @@ language binding raising an exception for example, saves it in its hook:
 ```c
 typedef struct { char sErr[DASLOG_MSG_SZ]; } capture_t;
 
-static void onLog(const das_logmsg* pMsg, void* pUser){
+static void onLog(const DasLogMsg* pMsg, void* pUser){
    capture_t* pCap = (capture_t*)pUser;
-   if(pMsg->nErr != DAS_OKAY)          /* came from das_error() */
-      snprintf(pCap->sErr, DASLOG_MSG_SZ, "%s", pMsg->sMsg);
+   if(pMsg->errCode != DAS_OKAY)          /* came from daserrf() */
+      snprintf(pCap->sErr, DASLOG_MSG_SZ, "%s", pMsg->msg);
    else
       daslog_stderr(pMsg, NULL);       /* the rest, as usual */
 }
 
 static capture_t g_cap;
-das_loghook hook = {onLog, &g_cap};
-das_init("mymodule", DASERR_DIS_RET, DASLOG_INFO, &hook);
+DasLogHook hook = {onLog, &g_cap};
+daslib_init("mymodule", DASERRDISP_RET, DASLOG_INFO, &hook);
 ```
 
 Clear `sErr` before each call into the library and it holds that call's
-error, if any.  `das_logmsg` carries the level, the error code (0 for a
+error, if any.  `DasLogMsg` carries the level, the error code (0 for a
 plain log message), the text, and the source file, function and line as
 separate members.  The text no longer has the location appended.
 
 **Log handlers take a message structure and a user pointer.**  The handler
-type is now `void (*)(const das_logmsg* pMsg, void* pUser)`, installed with
+type is now `void (*)(const DasLogMsg* pMsg, void* pUser)`, installed with
 its pointer as a pair:
 
 | v2.3 | das3 |
 |------|------|
-| `daslog_sethandler(fn)` | `daslog_sethook(&hook)`, returns the previous hook |
-| `das_log_include_time(b)` | `daslog_showtime(b)` |
-| `daslog_set_showline(level)` | `daslog_showline(b)`, ERROR and CRITICAL only |
-| `daslog(level, file, line, fmt, ...)` | `daslog(level, file, func, line, fmt, ...)` |
+| `daslog_sethandler(fn)` | `daslog_setHook(&hook)`, returns the previous hook |
+| `das_log_include_time(b)` | `daslog_showTime(b)` |
+| `daslog_set_showline(level)` | `daslog_showLine(b)`, ERROR and CRITICAL only |
+| `daslog(level, file, line, fmt, ...)` | `daslog_funcf(level, file, func, line, fmt, ...)` |
 
-The macros (`daslog_info_v()` and friends) are unchanged.  The plain ones,
-`daslog_info(M)` and so on, no longer treat M as a format string.
+The printf style macros are now `daslog_infof()` and friends, spelled
+`daslog_info_v()` in v2.3.  The plain ones, `daslog_info(M)` and so on, no
+longer treat M as a format string.
 
 A handler runs synchronously on the thread that logged, one call at a time.
 It must forward the message and return: no das2C calls other than
@@ -87,31 +88,31 @@ and may use the library.
 
 | v2.3 | das3 |
 |------|------|
-| `das_exit_on_error()` | `daserr_setdisp(DASERR_DIS_EXIT)` |
-| `das_return_on_error()` | `daserr_setdisp(DASERR_DIS_RET)` |
+| `das_exit_on_error()` | `daserr_setDisp(DASERRDISP_EXIT)` |
+| `das_return_on_error()` | `daserr_setDisp(DASERRDISP_RET)` |
 | `das_error_disposition()` | `daserr_disp()` |
-| `das_abort_on_error()`, `DASERR_DIS_ABORT` | removed, set a debugger breakpoint on `daserr_func` |
+| `das_abort_on_error()`, `DASERR_DIS_ABORT` | removed, set a debugger breakpoint on `daserr_funcf` and `daserr_func` |
 
-With `DASERR_DIS_EXIT`, the default, `das_error()` logs at `DASLOG_CRIT` and
-then calls `exit()` with the error code.  With `DASERR_DIS_RET` it logs at
+With `DASERRDISP_EXIT`, the default, `daserrf()` logs at `DASLOG_CRITICAL` and
+then calls `exit()` with the error code.  With `DASERRDISP_RET` it logs at
 `DASLOG_ERROR` and returns the code.
 
-**`DASLOG_NOTHING` is gone.**  `DASLOG_CRIT` is the top level, so a message
+**`DASLOG_NOTHING` is gone.**  `DASLOG_CRITICAL` is the top level, so a message
 that ends the program is always delivered.  To silence the library entirely,
-install a hook that drops messages.  `daslog_strlevel()` returns -1 for text
-it doesn't understand, and `daslog_setlevel()` ignores a bad level with a
+install a hook that drops messages.  `daslog_levelFromStr()` returns -1 for text
+it doesn't understand, and `daslog_setLevel()` ignores a bad level with a
 warning and returns the current one.
 
 
 ## 2. Units are input, and input can be bad
 
-`Units_fromStr()` logs text it can't parse at warning level and returns
-NULL, it no longer calls `das_error()`.  Check the result.  Passing NULL is
-an error; use `""` or `UNIT_DIMENSIONLESS` for no units.  Units strings are
+`DasUnits_fromStr()` logs text it can't parse at warning level and returns
+NULL, it no longer calls `daserrf()`.  Check the result.  Passing NULL is
+an error; use `""` or `DASUNITS_DIMENSIONLESS` for no units.  Units strings are
 limited to 127 bytes.
 
-`Units_toStr()` no longer turns NULL into dimensionless, and
-`Units_toLabel()` treats NULL as an error.  NULL `das_units` were never set,
+`DasUnits_toStr()` no longer turns NULL into dimensionless, and
+`DasUnits_toLbl()` treats NULL as an error.  NULL `DasUnits` were never set,
 or something failed upstream; decide what to print before calling either.
 
 `DasPlane_setUnits()` returns a code, and NULL or unparseable units are an

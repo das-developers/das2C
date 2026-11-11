@@ -84,18 +84,18 @@ extern "C" {
 
 /* Component systems: a position may use all six DAS_VSYS_* codes, including
    the ellipsoidal detic and graphic that a free vector refuses.  The codes and
-   their lookups -- das_vsys_toStr(), das_vsys_symbol(), das_vsys_isEllipsoidal()
+   their lookups -- dasvecsys_name(), dasvecsys_dirSym(), dasvecsys_isEllipsoidal()
    and the rest -- are in form_vec.h, included above so that position code
    needs only this header. */
 
 /* Exported so that its address can be compared.  Client code uses the
-   DAS_FORM_POS macro below and has no reason to name this directly. */
-DAS_API extern const DasForm_VTbl das_form_pos_vtbl;
+   DASFORM_POS macro below and has no reason to name this directly. */
+DAS_API extern const DasFormVTable DasFormPos_vtable;
 
 /** A position measured from the center of some body.  Two of these subtract to
  * give a vector, but they do not add.
- * @see DasForm_isKind(), DasVar_formIs().  @relates DasForm */
-#define DAS_FORM_POS (&das_form_pos_vtbl)
+ * @see DasForm_isKind(), DasVar_hasForm().  @relates DasForm */
+#define DASFORM_POS (&DasFormPos_vtable)
 
 /** Build a position formalism from resolved handles.
  *
@@ -111,7 +111,7 @@ DAS_API extern const DasForm_VTbl das_form_pos_vtbl;
  * @memberof DasForm */
 DAS_API DasForm* new_DasFormPos(
 	const char* sBody, const char* sFrame, const char* sSurface,
-	bool bFixed, ubyte uSysType, const ubyte* pDirs
+	bool bFixed, uint8_t uSysType, const uint8_t* pDirs
 );
 
 /** The origin body these positions are measured from, the body= attribute
@@ -126,23 +126,23 @@ DAS_API const char* DasFormPos_frame(const DasForm* pThis);
 DAS_API const char* DasFormPos_surface(const DasForm* pThis);
 
 /** The coordinate system, a DAS_VSYS_* code.  @memberof DasForm */
-DAS_API ubyte DasFormPos_sysType(const DasForm* pThis);
+DAS_API uint8_t DasFormPos_sysId(const DasForm* pThis);
 
 /** True if the frame is body-fixed in the SPICE sense.
  * @memberof DasForm */
-DAS_API bool DasFormPos_fixed(const DasForm* pThis);
+DAS_API bool DasFormPos_isFixed(const DasForm* pThis);
 
 /** Component order: three entries, slot i holds canonical direction pDirs[i].
  * @returns a pointer into the form, or NULL if not a position formalism.
  * @memberof DasForm */
-DAS_API const ubyte* DasFormPos_dirs(const DasForm* pThis);
+DAS_API const uint8_t* DasFormPos_dirs(const DasForm* pThis);
 
 /* For a component's display symbol -- "λ", "φ", "h" -- use DasVar_compSym(),
    which works for every kind of composite value and not just this one. */
 
-/* To read a position datum's components use das_datum_toDoubles().  It returns
+/* To read a position datum's components use DasDatum_toDoubles().  It returns
    them in storage order and leaves any slot it does not fill untouched, so set
-   those from das_vsys_default() in form_vec.h when a stream sends fewer
+   those from dasvecsys_dirDefault() in form_vec.h when a stream sends fewer
    components than its system defines. */
 
 #ifdef __cplusplus

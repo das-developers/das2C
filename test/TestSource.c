@@ -85,8 +85,8 @@ static DasSrc* loadSrc(const char* sFile, const char* sPath)
 
 static const DasSrcProp* byKey(const DasSrc* pSrc, const char* sKey)
 {
-	for(size_t u = 0; u < DasSrc_propCount(pSrc); ++u)
-		if(streq(DasSrcProp_key(DasSrc_prop(pSrc, u)), sKey)) return DasSrc_prop(pSrc, u);
+	for(size_t u = 0; u < DasSrc_numProps(pSrc); ++u)
+		if(streq(DasSrcProp_key(DasSrc_propAt(pSrc, u)), sKey)) return DasSrc_propAt(pSrc, u);
 	return NULL;
 }
 
@@ -99,9 +99,9 @@ static const DasSrcCtrl* ctrlByKey(const DasSrc* pSrc, const char* sKey)
 static size_t ctrlCount(const DasSrc* pSrc, int nSec)
 {
 	size_t n = 0;
-	for(size_t u = 0; u < DasSrc_propCount(pSrc); ++u){
-		const DasSrcProp* p = DasSrc_prop(pSrc, u);
-		if((nSec >= 0) && (DasSrcProp_section(p) != (das_src_sec_e)nSec)) continue;
+	for(size_t u = 0; u < DasSrc_numProps(pSrc); ++u){
+		const DasSrcProp* p = DasSrc_propAt(pSrc, u);
+		if((nSec >= 0) && (DasSrcProp_section(p) != (das_srcsec)nSec)) continue;
 		if(DasSrcProp_ctrl(p) != NULL) ++n;
 	}
 	return n;
@@ -119,7 +119,7 @@ static bool urlFor(
 	const DasSrc* pSrc, int nExample, const char** aKeyVal, const char** aRaw,
 	char* sUrl, size_t uLen
 ){
-	DasReq* pReq = (nExample >= 0) ? DasSrc_newReq(pSrc, nExample) : new_DasReq();
+	DasReq* pReq = (nExample >= 0) ? new_DasReq_src(pSrc, nExample) : new_DasReq();
 	if(pReq == NULL) return false;
 	for(size_t u = 0; aKeyVal && aKeyVal[u]; ++u){
 		const char* pEq = strchr(aKeyVal[u], '=');
@@ -134,9 +134,9 @@ static bool urlFor(
 		}
 	}
 	for(size_t u = 0; aRaw && aRaw[u]; u += 2) DasReq_setRaw(pReq, aRaw[u], aRaw[u+1]);
-	daslog_setlevel(DASLOG_CRIT);
-	size_t n = DasStreamSrc_url(pSrc, pReq, 0, sUrl, uLen);
-	daslog_setlevel(DASLOG_WARN);
+	daslog_setLevel(DASLOG_CRITICAL);
+	size_t n = DasSrc_reqUrl(pSrc, pReq, 0, sUrl, uLen);
+	daslog_setLevel(DASLOG_WARN);
 	del_DasReq(pReq);
 	return n > 0;
 }
@@ -160,17 +160,17 @@ static bool urlFor(
 static void test_grammar(void)
 {
 	printf("Key grammar:\n");
-	das_src_sec_e sec;
-	CHECK(_das_src_secByName("coord", &sec) && (sec == das_src_sec_coord), "coord");
-	CHECK(_das_src_secByName("Coordinates", &sec) && (sec == das_src_sec_coord), "Coordinates");
-	CHECK(_das_src_secByName("fmt", &sec) && (sec == das_src_sec_format), "fmt");
-	CHECK(_das_src_secByName("opts", &sec) && (sec == das_src_sec_option), "opts");
+	das_srcsec sec;
+	CHECK(_das_src_secByName("coord", &sec) && (sec == DASSRCSEC_COORD), "coord");
+	CHECK(_das_src_secByName("Coordinates", &sec) && (sec == DASSRCSEC_COORD), "Coordinates");
+	CHECK(_das_src_secByName("fmt", &sec) && (sec == DASSRCSEC_FORMAT), "fmt");
+	CHECK(_das_src_secByName("opts", &sec) && (sec == DASSRCSEC_OPTION), "opts");
 	CHECK(!_das_src_secByName("time", &sec), "time is not a section");
 	CHECK(!_das_src_secByName("", &sec), "empty is not a section");
 
-	CHECK(streq(das_src_sec_name(das_src_sec_coord), "coords"), "coords name");
-	CHECK(streq(das_src_sec_name(das_src_sec_format), "formats"), "formats name");
-	CHECK(streq(das_src_sec_name(das_src_sec_size), ""), "sentinel has no name");
+	CHECK(streq(dassrcsec_name(DASSRCSEC_COORD), "coords"), "coords name");
+	CHECK(streq(dassrcsec_name(DASSRCSEC_FORMAT), "formats"), "formats name");
+	CHECK(streq(dassrcsec_name(DASSRCSEC_SIZE), ""), "sentinel has no name");
 
 	CHECK(streq(_das_src_propName("Minimum"), "min"), "Minimum -> min");
 	CHECK(streq(_das_src_propName("inter"), "inter"), "inter stays");
@@ -179,7 +179,7 @@ static void test_grammar(void)
 	CHECK(_das_src_propEq("maximum", "MAX"), "maximum == MAX");
 	CHECK(!_das_src_propEq("res", "inter"), "res != inter");
 
-	char aParts[3][DAS_MAX_ID_BUFSZ];
+	char aParts[3][DASID_SZ];
 	CHECK(_das_src_splitKey("coords.time.min", aParts) == 3, "three parts");
 	CHECK(streq(aParts[1], "time") && streq(aParts[2], "min"), "parts content");
 	CHECK(_das_src_splitKey("lshell", aParts) == 1, "one part");
@@ -194,21 +194,21 @@ static void test_scalar(void)
 	printf("JSON scalars:\n");
 	const char* sDoc = "{\"st\":\"x\",\"nm\":86.4,\"in\":42,\"tr\":true,\"fa\":false,"
 	                   "\"nl\":null,\"ar\":[1],\"di\":{},\"x\":\"one\",\"ls\":[[7]]}";
-	DasJdo* pDom = das_json_parse(sDoc, strlen(sDoc));
+	DasJdo* pDom = new_DasJdo_parse(sDoc, strlen(sDoc));
 	CHECK(pDom != NULL, "parse");
 	char sBuf[32];
-	CHECK(_das_json_scalar(DasJdo_get(pDom, "x"), sBuf, 32) && streq(sBuf, "one"), "one character key");
-	CHECK(_das_json_scalar(DasJdo_get(pDom, "ls/0/0"), sBuf, 32) && streq(sBuf, "7"), "index then index");
-	CHECK(DasJdo_get(pDom, "12/x") == NULL, "index past the end");
-	CHECK(_das_json_scalar(DasJdo_get(pDom, "st"), sBuf, 32) && streq(sBuf, "x"), "string");
-	CHECK(_das_json_scalar(DasJdo_get(pDom, "nm"), sBuf, 32) && streq(sBuf, "86.4"), "number text kept");
-	CHECK(_das_json_scalar(DasJdo_get(pDom, "in"), sBuf, 32) && streq(sBuf, "42"), "integer");
-	CHECK(_das_json_scalar(DasJdo_get(pDom, "tr"), sBuf, 32) && streq(sBuf, "true"), "true");
-	CHECK(_das_json_scalar(DasJdo_get(pDom, "fa"), sBuf, 32) && streq(sBuf, "false"), "false");
-	CHECK(!_das_json_scalar(DasJdo_get(pDom, "nl"), sBuf, 32), "null is not a scalar");
-	CHECK(!_das_json_scalar(DasJdo_get(pDom, "ar"), sBuf, 32), "array is not a scalar");
+	CHECK(_das_json_scalar(DasJdo_subtree(pDom, "x"), sBuf, 32) && streq(sBuf, "one"), "one character key");
+	CHECK(_das_json_scalar(DasJdo_subtree(pDom, "ls/0/0"), sBuf, 32) && streq(sBuf, "7"), "index then index");
+	CHECK(DasJdo_subtree(pDom, "12/x") == NULL, "index past the end");
+	CHECK(_das_json_scalar(DasJdo_subtree(pDom, "st"), sBuf, 32) && streq(sBuf, "x"), "string");
+	CHECK(_das_json_scalar(DasJdo_subtree(pDom, "nm"), sBuf, 32) && streq(sBuf, "86.4"), "number text kept");
+	CHECK(_das_json_scalar(DasJdo_subtree(pDom, "in"), sBuf, 32) && streq(sBuf, "42"), "integer");
+	CHECK(_das_json_scalar(DasJdo_subtree(pDom, "tr"), sBuf, 32) && streq(sBuf, "true"), "true");
+	CHECK(_das_json_scalar(DasJdo_subtree(pDom, "fa"), sBuf, 32) && streq(sBuf, "false"), "false");
+	CHECK(!_das_json_scalar(DasJdo_subtree(pDom, "nl"), sBuf, 32), "null is not a scalar");
+	CHECK(!_das_json_scalar(DasJdo_subtree(pDom, "ar"), sBuf, 32), "array is not a scalar");
 	CHECK(!_das_json_scalar(NULL, sBuf, 32), "NULL is not a scalar");
-	CHECK(_das_json_scalar(DasJdo_get(pDom, "nm"), sBuf, 3) && streq(sBuf, "86"), "number cut to fit");
+	CHECK(_das_json_scalar(DasJdo_subtree(pDom, "nm"), sBuf, 3) && streq(sBuf, "86"), "number cut to fit");
 	free(pDom);
 }
 
@@ -216,20 +216,20 @@ static void test_helpers(void)
 {
 	printf("URL encoding and time spans:\n");
 	char sBuf[64];
-	CHECK(das_url_encode("2026-01-02T14:30", sBuf, sizeof(sBuf)) == 18, "encoded length");
+	CHECK(dasurl_encode("2026-01-02T14:30", sBuf, sizeof(sBuf)) == 18, "encoded length");
 	CHECK(streq(sBuf, "2026-01-02T14%3A30"), "colon encoded, got %s", sBuf);
-	CHECK(das_url_encode("a b&c", sBuf, sizeof(sBuf)) == 9, "space and ampersand");
+	CHECK(dasurl_encode("a b&c", sBuf, sizeof(sBuf)) == 9, "space and ampersand");
 	CHECK(streq(sBuf, "a%20b%26c"), "got %s", sBuf);
-	CHECK(das_url_encode("abc", sBuf, 2) == 3, "needed length when short");
+	CHECK(dasurl_encode("abc", sBuf, 2) == 3, "needed length when short");
 	CHECK(streq(sBuf, "a"), "cut short and terminated, got '%s'", sBuf);
-	CHECK(das_url_encode("abc", NULL, 0) == 3, "measure only");
-	CHECK(das_url_encode("", sBuf, sizeof(sBuf)) == 0 && streq(sBuf, ""), "empty");
+	CHECK(dasurl_encode("abc", NULL, 0) == 3, "measure only");
+	CHECK(dasurl_encode("", sBuf, sizeof(sBuf)) == 0 && streq(sBuf, ""), "empty");
 
-	das_time dtB, dtE;
+	DasTime dtB, dtE;
 	char sB[40], sE[40];
 #define SPAN_IS(str, b, e) do{ \
-	bool _ok = dt_parsespan(str, &dtB, &dtE); \
-	if(_ok){ dt_isoc(&dtB, 0, sB, 40); dt_isoc(&dtE, 0, sE, 40); } \
+	bool _ok = DasTime_strToSpan(str, &dtB, &dtE); \
+	if(_ok){ DasTime_toIsoC(&dtB, 0, sB, 40); DasTime_toIsoC(&dtE, 0, sE, 40); } \
 	CHECK(_ok && streq(sB, b) && streq(sE, e), "%s -> %s %s, want %s %s", str, \
 	      _ok ? sB : "(refused)", _ok ? sE : "", b, e); \
 }while(0)
@@ -243,12 +243,12 @@ static void test_helpers(void)
 	SPAN_IS("2026-01-02T14:30:15Z", "2026-01-02T14:30:15", "2026-01-02T14:30:16");
 	SPAN_IS("2026-002", "2026-01-02T00:00:00", "2026-01-03T00:00:00");
 	SPAN_IS("2026-002T06", "2026-01-02T06:00:00", "2026-01-02T07:00:00");
-	CHECK(!dt_parsespan("2026-01-02T14:30:15.5", NULL, NULL), "fractions have no span");
-	CHECK(!dt_parsespan("T14", NULL, NULL), "a time needs a date");
-	CHECK(!dt_parsespan("now", NULL, NULL), "now is not a span");
-	CHECK(!dt_parsespan("", NULL, NULL), "empty");
-	CHECK(!dt_parsespan("2026-01-02,2026-01-03", NULL, NULL), "a range is not a span");
-	CHECK(dt_parsespan("2026-01-02", NULL, NULL), "outputs are optional");
+	CHECK(!DasTime_strToSpan("2026-01-02T14:30:15.5", NULL, NULL), "fractions have no span");
+	CHECK(!DasTime_strToSpan("T14", NULL, NULL), "a time needs a date");
+	CHECK(!DasTime_strToSpan("now", NULL, NULL), "now is not a span");
+	CHECK(!DasTime_strToSpan("", NULL, NULL), "empty");
+	CHECK(!DasTime_strToSpan("2026-01-02,2026-01-03", NULL, NULL), "a range is not a span");
+	CHECK(DasTime_strToSpan("2026-01-02", NULL, NULL), "outputs are optional");
 }
 
 static void test_geomag(void)
@@ -258,51 +258,51 @@ static void test_geomag(void)
 	CHECK(pSrc != NULL, "load");
 	if(pSrc == NULL) return;
 
-	CHECK(DasSrc_kind(pSrc) == das_src_kind_stream, "stream source");
+	CHECK(DasSrc_kind(pSrc) == DASSRCKIND_STREAM, "stream source");
 	CHECK(streq(DasSrc_version(pSrc), "0.7"), "version");
 	CHECK(streq(DasSrc_url(pSrc), GEOMAG), "url is where it came from");
 	CHECK(!DasSrc_needsAuth(pSrc), "no auth");
 	CHECK(streq(DasSrc_authRealm(pSrc), ""), "no realm");
-	CHECK(DasStreamSrc_urlCount(pSrc) == 2, "two mirrors");
-	CHECK(streq(DasStreamSrc_baseUrl(pSrc, 1), "http://127.0.0.1:8765/data/geomag_alt.d2s"), "second mirror");
-	CHECK(DasStreamSrc_baseUrl(pSrc, 2) == NULL, "past the mirrors");
+	CHECK(DasSrc_numBaseUrls(pSrc) == 2, "two mirrors");
+	CHECK(streq(DasSrc_baseUrlAt(pSrc, 1), "http://127.0.0.1:8765/data/geomag_alt.d2s"), "second mirror");
+	CHECK(DasSrc_baseUrlAt(pSrc, 2) == NULL, "past the mirrors");
 
 	/* time min/max/inter, lshell enabled, then 13 format knobs */
 	CHECK(ctrlCount(pSrc, -1) == 17, "17 controls, got %zu", ctrlCount(pSrc, -1));
-	CHECK(DasSrc_propCount(pSrc) > 17, "fixed props are kept too, %zu total", DasSrc_propCount(pSrc));
+	CHECK(DasSrc_numProps(pSrc) > 17, "fixed props are kept too, %zu total", DasSrc_numProps(pSrc));
 
 	/* Groups */
-	CHECK(DasSrc_groupCount(pSrc, das_src_sec_coord) == 1, "one coordinate");
-	CHECK(DasSrc_groupCount(pSrc, das_src_sec_data) == 1, "one variable");
-	CHECK(DasSrc_groupCount(pSrc, das_src_sec_format) == 3, "three formats, got %zu",
-	      DasSrc_groupCount(pSrc, das_src_sec_format));
-	CHECK(DasSrc_groupCount(pSrc, das_src_sec_option) == 0, "no options");
-	CHECK(DasSrc_group(pSrc, das_src_sec_option, 0) == NULL, "no option group");
+	CHECK(DasSrc_numGroups(pSrc, DASSRCSEC_COORD) == 1, "one coordinate");
+	CHECK(DasSrc_numGroups(pSrc, DASSRCSEC_DATA) == 1, "one variable");
+	CHECK(DasSrc_numGroups(pSrc, DASSRCSEC_FORMAT) == 3, "three formats, got %zu",
+	      DasSrc_numGroups(pSrc, DASSRCSEC_FORMAT));
+	CHECK(DasSrc_numGroups(pSrc, DASSRCSEC_OPTION) == 0, "no options");
+	CHECK(DasSrc_groupAt(pSrc, DASSRCSEC_OPTION, 0) == NULL, "no option group");
 
-	const DasSrcGroup* pG = DasSrc_findGroup(pSrc, das_src_sec_coord, "time");
+	const DasSrcGroup* pG = DasSrc_group(pSrc, DASSRCSEC_COORD, "time");
 	CHECK(pG != NULL, "time group");
 	if(pG){
 		CHECK(streq(DasSrcGroup_label(pG), "Time"), "label");
-		CHECK(DasSrcGroup_enable(pG) == NULL, "coordinates have no gate");
-		CHECK(DasSrcGroup_propCount(pG) == 4, "min max units inter, got %zu", DasSrcGroup_propCount(pG));
-		CHECK(DasSrcGroup_ctrlCount(pG) == 3, "three of them settable");
-		const DasSrcProp* pU = DasSrcGroup_findProp(pG, "units");
+		CHECK(DasSrcGroup_enableProp(pG) == NULL, "coordinates have no gate");
+		CHECK(DasSrcGroup_numProps(pG) == 4, "min max units inter, got %zu", DasSrcGroup_numProps(pG));
+		CHECK(DasSrcGroup_numCtrls(pG) == 3, "three of them settable");
+		const DasSrcProp* pU = DasSrcGroup_prop(pG, "units");
 		CHECK(pU && (DasSrcProp_ctrl(pU) == NULL), "units is a fixed property");
 		CHECK(pU && streq(DasSrcProp_value(pU), "UTC"), "with the value UTC");
-		CHECK(DasSrcGroup_findProp(pG, "minimum") == DasSrcGroup_findProp(pG, "min"), "alias in findProp");
-		CHECK(DasSrcGroup_prop(pG, 4) == NULL, "past the end");
+		CHECK(DasSrcGroup_prop(pG, "minimum") == DasSrcGroup_prop(pG, "min"), "alias in findProp");
+		CHECK(DasSrcGroup_propAt(pG, 4) == NULL, "past the end");
 	}
 
-	pG = DasSrc_findGroup(pSrc, das_src_sec_format, "csv");
+	pG = DasSrc_group(pSrc, DASSRCSEC_FORMAT, "csv");
 	CHECK(pG != NULL, "csv group");
 	if(pG){
-		const DasSrcProp* pOn = DasSrcGroup_enable(pG);
+		const DasSrcProp* pOn = DasSrcGroup_enableProp(pG);
 		CHECK(pOn && streq(DasSrcProp_key(pOn), "formats.csv.enabled"), "the gate");
 		CHECK(streq(DasSrcGroup_xorGroup(pG), "format"), "formats are exclusive");
-		CHECK(DasSrcGroup_mimeCount(pG) == 1 && streq(DasSrcGroup_mime(pG, 0), "text/csv"), "mime");
+		CHECK(DasSrcGroup_numMimes(pG) == 1 && streq(DasSrcGroup_mimeAt(pG, 0), "text/csv"), "mime");
 	}
-	pG = DasSrc_findGroup(pSrc, das_src_sec_data, "lshell");
-	CHECK(pG && DasSrcGroup_enable(pG) && (DasSrcGroup_xorGroup(pG) == NULL), "variable gate, not exclusive");
+	pG = DasSrc_group(pSrc, DASSRCSEC_DATA, "lshell");
+	CHECK(pG && DasSrcGroup_enableProp(pG) && (DasSrcGroup_xorGroup(pG) == NULL), "variable gate, not exclusive");
 
 	/* Properties and controls */
 	const DasSrcProp* p = byKey(pSrc, "coords.time.min");
@@ -314,8 +314,8 @@ static void test_geomag(void)
 		CHECK(streq(DasSrcGroup_name(DasSrcProp_group(p)), "time"), "group");
 		CHECK(streq(DasSrcProp_name(p), "min"), "name");
 		CHECK(streq(DasSrcCtrl_param(pC), "read.time.min"), "param via dotted name");
-		CHECK(DasSrcCtrl_required(pC), "required from the protocol parameter");
-		CHECK(DasSrcProp_type(p) == das_srcprop_time, "type from the parameter");
+		CHECK(DasSrcCtrl_isRequired(pC), "required from the protocol parameter");
+		CHECK(DasSrcProp_type(p) == DASSRCPROPTYPE_TIME, "type from the parameter");
 		CHECK(streq(DasSrcProp_typeName(p), "isotime"), "type name from the parameter");
 		CHECK(streq(DasSrcProp_units(p), "UTC"), "UTC for a time");
 		CHECK(DasSrcProp_value(p) == NULL, "null value is no default");
@@ -330,7 +330,7 @@ static void test_geomag(void)
 	const DasSrcCtrl* pC = ctrlByKey(pSrc, "coords.time.inter");
 	CHECK(pC != NULL, "coords.time.inter");
 	if(pC){
-		CHECK(DasSrcProp_type(DasSrcCtrl_prop(pC)) == das_srcprop_real, "real from the parameter");
+		CHECK(DasSrcProp_type(DasSrcCtrl_prop(pC)) == DASSRCPROPTYPE_REAL, "real from the parameter");
 		CHECK(streq(DasSrcProp_units(DasSrcCtrl_prop(pC)), "s"), "units string on the property");
 		CHECK(chk(pC, "60") == DAS_OKAY, "60 is real");
 		CHECK(chk(pC, "6e1") == DAS_OKAY, "6e1 is real");
@@ -340,9 +340,9 @@ static void test_geomag(void)
 	pC = ctrlByKey(pSrc, "data.lshell.enabled");
 	CHECK(pC != NULL, "data.lshell.enabled");
 	if(pC){
-		CHECK(DasSrcProp_type(DasSrcCtrl_prop(pC)) == das_srcprop_bool, "boolean");
+		CHECK(DasSrcProp_type(DasSrcCtrl_prop(pC)) == DASSRCPROPTYPE_BOOL, "boolean");
 		CHECK(streq(DasSrcCtrl_param(pC), "read.data"), "flag set parameter");
-		CHECK(!DasSrcCtrl_required(pC), "not required");
+		CHECK(!DasSrcCtrl_isRequired(pC), "not required");
 		CHECK(chk(pC, "yes") == DAS_OKAY, "yes");
 		CHECK(chk(pC, "OFF") == DAS_OKAY, "OFF");
 		CHECK(chk(pC, "maybe") == DASERR_SRC, "maybe");
@@ -360,10 +360,10 @@ static void test_geomag(void)
 	pC = ctrlByKey(pSrc, "formats.csv.delimiter");
 	CHECK(pC != NULL, "formats.csv.delimiter");
 	if(pC){
-		CHECK(DasSrcProp_type(DasSrcCtrl_prop(pC)) == das_srcprop_enum, "delimiter is an enum");
-		CHECK(DasSrcCtrl_enumCount(pC) == 4, "four delimiters, got %zu", DasSrcCtrl_enumCount(pC));
-		CHECK(DasSrcCtrl_enum(pC, 4) == NULL, "past the end");
-		CHECK(streq(DasSrcCtrl_enum(pC, 0), "Comma"), "node spelling kept");
+		CHECK(DasSrcProp_type(DasSrcCtrl_prop(pC)) == DASSRCPROPTYPE_ENUM, "delimiter is an enum");
+		CHECK(DasSrcCtrl_numEnums(pC) == 4, "four delimiters, got %zu", DasSrcCtrl_numEnums(pC));
+		CHECK(DasSrcCtrl_enumAt(pC, 4) == NULL, "past the end");
+		CHECK(streq(DasSrcCtrl_enumAt(pC, 0), "Comma"), "node spelling kept");
 		CHECK(chk(pC, "tab") == DAS_OKAY, "enum match is case insensitive");
 		CHECK(chk(pC, "colon") == DASERR_SRC, "colon is not offered");
 	}
@@ -372,7 +372,7 @@ static void test_geomag(void)
 	CHECK(pC != NULL, "formats.csv.fracSecs");
 	if(pC){
 		const char* sLo = NULL; const char* sHi = NULL;
-		CHECK(DasSrcProp_type(DasSrcCtrl_prop(pC)) == das_srcprop_int, "integer from the parameter");
+		CHECK(DasSrcProp_type(DasSrcCtrl_prop(pC)) == DASSRCPROPTYPE_INT, "integer from the parameter");
 		CHECK(DasSrcCtrl_range(pC, &sLo, &sHi), "range from the parameter");
 		CHECK(streq(sLo, "0") && streq(sHi, "9"), "0 to 9, got %s to %s", sLo, sHi);
 		CHECK(chk(pC, "12") == DAS_OKAY, "12 passes, ranges are not enforced");
@@ -392,52 +392,52 @@ static void test_geomag(void)
 	CHECK(DasSrc_findProp(pSrc, "time.units", NULL, 0) != NULL, "fixed props are found too");
 
 	/* Examples and requisitions */
-	CHECK(DasSrc_exampleCount(pSrc) == 1, "one example");
-	CHECK(streq(DasSrc_exampleLabel(pSrc, 0), "First day of 2026"), "label");
-	CHECK(DasSrc_exampleLabel(pSrc, 1) == NULL, "past the examples");
-	daslog_setlevel(DASLOG_CRIT);
-	CHECK(DasSrc_newReq(pSrc, 9) == NULL, "no example 9");
-	daslog_setlevel(DASLOG_WARN);
+	CHECK(DasSrc_numExamples(pSrc) == 1, "one example");
+	CHECK(streq(DasSrc_exampleLblAt(pSrc, 0), "First day of 2026"), "label");
+	CHECK(DasSrc_exampleLblAt(pSrc, 1) == NULL, "past the examples");
+	daslog_setLevel(DASLOG_CRITICAL);
+	CHECK(new_DasReq_src(pSrc, 9) == NULL, "no example 9");
+	daslog_setLevel(DASLOG_WARN);
 
-	DasReq* pReq = DasSrc_newReq(pSrc, 0);
+	DasReq* pReq = new_DasReq_src(pSrc, 0);
 	CHECK(pReq != NULL, "example req");
 	if(pReq){
 		CHECK(streq(DasReq_label(pReq), "First day of 2026"), "req carries the label");
 		CHECK(streq(DasReq_srcPath(pReq), DasSrc_path(pSrc)), "stamped with the path");
-		CHECK(streq(DasReq_value(pReq, "coords.time.min"), "2026-01-01"), "example setting in key form");
-		CHECK(DasReq_count(pReq) == 3, "three settings, got %zu", DasReq_count(pReq));
+		CHECK(streq(DasReq_val(pReq, "coords.time.min"), "2026-01-01"), "example setting in key form");
+		CHECK(DasReq_numKeys(pReq) == 3, "three settings, got %zu", DasReq_numKeys(pReq));
 		size_t uBad = 9;
 		CHECK(DasSrc_check(pSrc, pReq, &uBad) == DAS_OKAY && uBad == 0, "example checks clean");
-		CHECK(DasReq_verdict(pReq, 0) == das_req_ok, "verdict ok");
+		CHECK(DasReq_verdictAt(pReq, 0) == DASREQVERDICT_OK, "verdict ok");
 		del_DasReq(pReq);
 	}
 
-	pReq = DasSrc_newReq(pSrc, DASSRC_BLANK_REQ);
+	pReq = new_DasReq_src(pSrc, DASSRC_BLANK_REQ);
 	CHECK(pReq != NULL, "blank req");
 	if(pReq){
-		CHECK(DasReq_count(pReq) == 3, "lists the three required keys, got %zu", DasReq_count(pReq));
-		CHECK(streq(DasReq_value(pReq, "coords.time.inter"), ""), "with empty values");
+		CHECK(DasReq_numKeys(pReq) == 3, "lists the three required keys, got %zu", DasReq_numKeys(pReq));
+		CHECK(streq(DasReq_val(pReq, "coords.time.inter"), ""), "with empty values");
 		size_t uBad = 0;
 		CHECK(DasSrc_check(pSrc, pReq, &uBad) == DASERR_SRC && uBad == 3, "all three bad, got %zu", uBad);
-		CHECK(strstr(DasReq_why(pReq, 0), "required") != NULL, "says required: %s", DasReq_why(pReq, 0));
+		CHECK(strstr(DasReq_whyAt(pReq, 0), "required") != NULL, "says required: %s", DasReq_whyAt(pReq, 0));
 		CHECK(DasReq_set(pReq, "time", "2026-04-01,2026-04-01T01:30") == DAS_OKAY, "range");
 		CHECK(DasSrc_check(pSrc, pReq, &uBad) == DASERR_SRC && uBad == 1, "inter still bad, got %zu", uBad);
 		size_t uDerived = 0;
-		for(size_t u = 0; u < DasReq_count(pReq); ++u) if(DasReq_derived(pReq, u)) ++uDerived;
+		for(size_t u = 0; u < DasReq_numKeys(pReq); ++u) if(DasReq_isDerivedAt(pReq, u)) ++uDerived;
 		CHECK(uDerived == 2, "min and max derived, got %zu", uDerived);
 		DasReq_set(pReq, "inter", "60");
 		CHECK(DasSrc_check(pSrc, pReq, &uBad) == DAS_OKAY, "now clean");
 		char sUrl[2048];
-		CHECK(DasStreamSrc_url(pSrc, pReq, 0, sUrl, sizeof(sUrl)) > 0, "builds");
+		CHECK(DasSrc_reqUrl(pSrc, pReq, 0, sUrl, sizeof(sUrl)) > 0, "builds");
 		CHECK(streq(sUrl, GB "?read.time.min=2026-04-01&read.time.max=2026-04-01T01%3A30&read.time.inter=60"),
 		      "got %s", sUrl);
-		size_t uNeed = DasStreamSrc_url(pSrc, pReq, 0, sUrl, 20);
+		size_t uNeed = DasSrc_reqUrl(pSrc, pReq, 0, sUrl, 20);
 		CHECK(uNeed > 20 && strlen(sUrl) == 19, "snprintf style on a short buffer, need %zu", uNeed);
-		CHECK(DasStreamSrc_url(pSrc, pReq, 1, sUrl, sizeof(sUrl)) > 0 &&
+		CHECK(DasSrc_reqUrl(pSrc, pReq, 1, sUrl, sizeof(sUrl)) > 0 &&
 		      strncmp(sUrl, "http://127.0.0.1:8765/data/geomag_alt.d2s?", 42) == 0, "second mirror used");
-		daslog_setlevel(DASLOG_CRIT);
-		CHECK(DasStreamSrc_url(pSrc, pReq, 2, sUrl, sizeof(sUrl)) == 0, "no third mirror");
-		daslog_setlevel(DASLOG_WARN);
+		daslog_setLevel(DASLOG_CRITICAL);
+		CHECK(DasSrc_reqUrl(pSrc, pReq, 2, sUrl, sizeof(sUrl)) == 0, "no third mirror");
+		daslog_setLevel(DASLOG_WARN);
 		del_DasReq(pReq);
 	}
 
@@ -479,7 +479,7 @@ static void test_geomag(void)
 	URL_FAILS(pSrc, 0, K("time=2026-01-02,2026-01-03,4,5"));       /* too many range items */
 
 	/* mime follows the format choice */
-	pReq = DasSrc_newReq(pSrc, 0);
+	pReq = new_DasReq_src(pSrc, 0);
 	CHECK(streq(DasSrc_mime(pSrc, NULL), "application/vnd.das.stream") ||
 	      strstr(DasSrc_mime(pSrc, NULL), "das") != NULL, "default is a das stream: %s", DasSrc_mime(pSrc, NULL));
 	DasReq_set(pReq, "csv", "true");
@@ -490,10 +490,10 @@ static void test_geomag(void)
 	pReq = new_DasReq();
 	DasReq_setSrc(pReq, "tag:das2.org,2012:site:/elsewhere", "", "");
 	DasReq_set(pReq, "time", "2026-01-02");
-	daslog_setlevel(DASLOG_CRIT);
+	daslog_setLevel(DASLOG_CRITICAL);
 	CHECK(DasSrc_check(pSrc, pReq, NULL) == DASERR_SRC, "stamp mismatch refused");
-	daslog_setlevel(DASLOG_WARN);
-	CHECK(DasReq_verdict(pReq, 0) == das_req_unchecked, "and nothing graded");
+	daslog_setLevel(DASLOG_WARN);
+	CHECK(DasReq_verdictAt(pReq, 0) == DASREQVERDICT_UNCHECKED, "and nothing graded");
 
 	/* The same URI from another mirror, or a local copy, is the same source */
 	DasReq_set(pReq, "inter", "60");
@@ -511,7 +511,7 @@ static void test_geomag(void)
 	CHECK(pShort && streq(DasSrc_path(pShort), DasSrc_path(pSrc)), "shorthand expanded, slash supplied: %s",
 	      pShort ? DasSrc_path(pShort) : "(null)");
 	if(pShort){
-		pReq = DasSrc_newReq(pShort, 0);
+		pReq = new_DasReq_src(pShort, 0);
 		CHECK(pReq && (DasSrc_check(pSrc, pReq, NULL) == DAS_OKAY), "its requisitions grade here");
 		del_DasReq(pReq);
 		del_DasSrc(pShort);
@@ -528,22 +528,22 @@ static void test_hsk(void)
 	if(pSrc == NULL) return;
 
 	CHECK(ctrlCount(pSrc, -1) == 90, "3 + 73 + 14 controls, got %zu", ctrlCount(pSrc, -1));
-	CHECK(ctrlCount(pSrc, das_src_sec_data) == 73, "73 variable toggles");
-	CHECK(DasSrc_groupCount(pSrc, das_src_sec_data) == 73, "73 variable groups");
+	CHECK(ctrlCount(pSrc, DASSRCSEC_DATA) == 73, "73 variable toggles");
+	CHECK(DasSrc_numGroups(pSrc, DASSRCSEC_DATA) == 73, "73 variable groups");
 	CHECK(DasSrc_needsAuth(pSrc), "restricted");
 	CHECK(streq(DasSrc_authRealm(pSrc), ""), "restricted, but no realm named");
-	CHECK(DasSrc_contactCount(pSrc) >= 1, "has a contact");
+	CHECK(DasSrc_numContacts(pSrc) >= 1, "has a contact");
 	const char* sEmail = NULL;
-	const char* sName = DasSrc_contact(pSrc, 0, &sEmail);
+	const char* sName = DasSrc_contactAt(pSrc, 0, &sEmail);
 	CHECK(sName && sName[0] && sEmail, "contact name %s", sName ? sName : "(none)");
-	CHECK(DasSrc_contact(pSrc, 99, NULL) == NULL, "past the contacts");
+	CHECK(DasSrc_contactAt(pSrc, 99, NULL) == NULL, "past the contacts");
 	CHECK(streq(DasSrc_path(pSrc), ""), "no path given, so no URI: %s", DasSrc_path(pSrc));
 
 	/* Every property has a key, every control a parameter, all titled */
 	bool bAllKeyed = true, bAllParam = true, bAllTitled = true;
 	char sBuf[64];
-	for(size_t u = 0; u < DasSrc_propCount(pSrc); ++u){
-		const DasSrcProp* p = DasSrc_prop(pSrc, u);
+	for(size_t u = 0; u < DasSrc_numProps(pSrc); ++u){
+		const DasSrcProp* p = DasSrc_propAt(pSrc, u);
 		if(DasSrcProp_key(p)[0] == '\0') bAllKeyed = false;
 		if(DasSrcProp_ctrl(p) && (DasSrcCtrl_param(DasSrcProp_ctrl(p)) == NULL)) bAllParam = false;
 		if(DasSrcProp_title(p, sBuf, sizeof(sBuf)) == NULL) bAllTitled = false;
@@ -551,8 +551,8 @@ static void test_hsk(void)
 	CHECK(bAllKeyed && bAllParam && bAllTitled, "all keyed, parametered, titled");
 
 	/* groups are index ranges into one array, so a group's props are adjacent */
-	const DasSrcGroup* pG = DasSrc_group(pSrc, das_src_sec_data, 5);
-	CHECK(pG && (DasSrcGroup_prop(pG, 0) == DasSrcProp_group(DasSrcGroup_prop(pG, 0))->pSrc->aProp + pG->uFirst),
+	const DasSrcGroup* pG = DasSrc_groupAt(pSrc, DASSRCSEC_DATA, 5);
+	CHECK(pG && (DasSrcGroup_propAt(pG, 0) == DasSrcProp_group(DasSrcGroup_propAt(pG, 0))->pSrc->aProp + pG->uFirst),
 	      "group indexing");
 
 	const DasSrcCtrl* pC = ctrlByKey(pSrc, "coords.time.min");
@@ -566,13 +566,13 @@ static void test_hsk(void)
 		CHECK(streq(DasSrcProp_units(DasSrcCtrl_prop(pC)), "UTC"), "UTC from the group units");
 	}
 	pC = ctrlByKey(pSrc, "coords.time.res");
-	CHECK(pC && !DasSrcCtrl_range(pC, NULL, NULL) && !DasSrcCtrl_required(pC), "res: no range, optional");
+	CHECK(pC && !DasSrcCtrl_range(pC, NULL, NULL) && !DasSrcCtrl_isRequired(pC), "res: no range, optional");
 	const DasSrcProp* p = byKey(pSrc, "formats.csv.headers");
-	CHECK(p && streq(DasSrcProp_value(p), "true") && (DasSrcProp_type(p) == das_srcprop_bool), "headers default true");
+	CHECK(p && streq(DasSrcProp_value(p), "true") && (DasSrcProp_type(p) == DASSRCPROPTYPE_BOOL), "headers default true");
 
 	/* format groups: das is on by default, mime from it */
-	pG = DasSrc_findGroup(pSrc, das_src_sec_format, "das");
-	CHECK(pG && DasSrcGroup_mimeCount(pG) == 3, "three das mimes");
+	pG = DasSrc_group(pSrc, DASSRCSEC_FORMAT, "das");
+	CHECK(pG && DasSrcGroup_numMimes(pG) == 3, "three das mimes");
 	CHECK(streq(DasSrc_mime(pSrc, NULL), "application/vnd.das2.das2stream"), "default mime: %s", DasSrc_mime(pSrc, NULL));
 
 	URL_IS(pSrc, 0, NONE, NONE,
@@ -584,7 +584,7 @@ static void test_hsk(void)
 	URL_IS(pSrc, 0, K("formats.csv", "das.version=das2", "time.res=10"), NONE,
 		HB "?read.time.min=2026-01-06T14%3A12&read.time.max=2026-01-06T14%3A24&bin.time.max=10&format.version=2&format.type=csv");
 
-	DasReq* pReq = DasSrc_newReq(pSrc, 1);
+	DasReq* pReq = new_DasReq_src(pSrc, 1);
 	CHECK(pReq && streq(DasSrc_mime(pSrc, pReq), "application/x-cdf"), "cdf example means a cdf: %s",
 	      pReq ? DasSrc_mime(pSrc, pReq) : "");
 	del_DasReq(pReq);
@@ -602,24 +602,24 @@ static void test_juno(void)
 	CHECK(DasSrc_needsAuth(pSrc), "restricted, old 'authentication' spelling");
 	CHECK(streq(DasSrc_authRealm(pSrc), "Juno Magnetospheric Working Group"),
 		"realm '%s'", DasSrc_authRealm(pSrc));
-	CHECK(ctrlCount(pSrc, das_src_sec_coord) == 3, "three time controls");
-	CHECK(ctrlCount(pSrc, das_src_sec_option) >= 8, "flag options found");
-	CHECK(ctrlCount(pSrc, das_src_sec_data) == 0, "nothing settable in data");
-	CHECK(DasSrc_groupCount(pSrc, das_src_sec_data) > 0, "but the variables are listed");
-	CHECK(DasSrc_groupCount(pSrc, das_src_sec_option) == 1, "one options group");
-	CHECK(DasSrc_findGroup(pSrc, das_src_sec_option, "") != NULL, "named by the empty string");
+	CHECK(ctrlCount(pSrc, DASSRCSEC_COORD) == 3, "three time controls");
+	CHECK(ctrlCount(pSrc, DASSRCSEC_OPTION) >= 8, "flag options found");
+	CHECK(ctrlCount(pSrc, DASSRCSEC_DATA) == 0, "nothing settable in data");
+	CHECK(DasSrc_numGroups(pSrc, DASSRCSEC_DATA) > 0, "but the variables are listed");
+	CHECK(DasSrc_numGroups(pSrc, DASSRCSEC_OPTION) == 1, "one options group");
+	CHECK(DasSrc_group(pSrc, DASSRCSEC_OPTION, "") != NULL, "named by the empty string");
 
 	/* the fixed frequency axis is visible before any download */
-	const DasSrcGroup* pG = DasSrc_findGroup(pSrc, das_src_sec_coord, "frequency");
+	const DasSrcGroup* pG = DasSrc_group(pSrc, DASSRCSEC_COORD, "frequency");
 	CHECK(pG != NULL, "frequency group");
 	if(pG){
-		CHECK(DasSrcGroup_ctrlCount(pG) == 0, "nothing to set");
-		const DasSrcProp* pU = DasSrcGroup_findProp(pG, "units");
+		CHECK(DasSrcGroup_numCtrls(pG) == 0, "nothing to set");
+		const DasSrcProp* pU = DasSrcGroup_prop(pG, "units");
 		CHECK(pU && (DasSrcProp_ctrl(pU) == NULL) && DasSrcProp_value(pU)[0], "units %s",
 		      pU ? DasSrcProp_value(pU) : "(none)");
 	}
 	/* time first even though the node lists frequency first */
-	CHECK(streq(DasSrcGroup_name(DasSrc_group(pSrc, das_src_sec_coord, 0)), "time"), "time first");
+	CHECK(streq(DasSrcGroup_name(DasSrc_groupAt(pSrc, DASSRCSEC_COORD, 0)), "time"), "time first");
 
 	/* Keys use the node's long spelling, matching folds it */
 	const DasSrcProp* p = byKey(pSrc, "coords.time.minimum");
@@ -628,11 +628,11 @@ static void test_juno(void)
 	if(p){
 		const DasSrcCtrl* pC = DasSrcProp_ctrl(p);
 		CHECK(pC && streq(DasSrcCtrl_param(pC), "start_time"), "param");
-		CHECK(pC && DasSrcCtrl_required(pC), "required from the set block");
+		CHECK(pC && DasSrcCtrl_isRequired(pC), "required from the set block");
 		CHECK(streq(DasSrcProp_value(p), "2018-10-02T11:00"), "default kept");
 		const char* sLo = NULL; const char* sHi = NULL;
 		CHECK(pC && DasSrcCtrl_range(pC, &sLo, &sHi) && streq(sHi, "now"), "set range to now");
-		CHECK(DasSrcProp_type(p) == das_srcprop_time, "type from the old parameter dict");
+		CHECK(DasSrcProp_type(p) == DASSRCPROPTYPE_TIME, "type from the old parameter dict");
 		CHECK(streq(DasSrcProp_units(p), "UTC"), "UTC from the old units dict");
 		char sBuf[64];
 		CHECK(streq(DasSrcProp_title(p, sBuf, sizeof(sBuf)), "Minimum Time value to output"),
@@ -646,29 +646,29 @@ static void test_juno(void)
 	CHECK(p != NULL, "options.lfrl");
 	if(p){
 		CHECK(streq(DasSrcGroup_name(DasSrcProp_group(p)), ""), "options have no group name");
-		CHECK(DasSrcProp_type(p) == das_srcprop_bool, "flag toggle is boolean");
+		CHECK(DasSrcProp_type(p) == DASSRCPROPTYPE_BOOL, "flag toggle is boolean");
 		CHECK(streq(DasSrcCtrl_param(DasSrcProp_ctrl(p)), "params"), "packed parameter");
 		CHECK(streq(DasSrcProp_value(p), "false"), "default false");
 	}
 	p = byKey(pSrc, "options.das2_text");
-	CHECK(p && (DasSrcProp_type(p) == das_srcprop_bool), "boolean from a boolean default");
+	CHECK(p && (DasSrcProp_type(p) == DASSRCPROPTYPE_BOOL), "boolean from a boolean default");
 
 	/* 2018 examples come out in interface terms */
-	CHECK(DasSrc_exampleCount(pSrc) >= 8, "examples, got %zu", DasSrc_exampleCount(pSrc));
-	CHECK(streq(DasSrc_exampleLabel(pSrc, 0), "Perijove 16"), "label from the title: %s", DasSrc_exampleLabel(pSrc, 0));
-	DasReq* pReq = DasSrc_newReq(pSrc, 0);
+	CHECK(DasSrc_numExamples(pSrc) >= 8, "examples, got %zu", DasSrc_numExamples(pSrc));
+	CHECK(streq(DasSrc_exampleLblAt(pSrc, 0), "Perijove 16"), "label from the title: %s", DasSrc_exampleLblAt(pSrc, 0));
+	DasReq* pReq = new_DasReq_src(pSrc, 0);
 	CHECK(pReq != NULL, "example 0 req");
 	if(pReq){
-		CHECK(streq(DasReq_value(pReq, "coords.time.minimum"), "2018-10-02T11:00"), "start_time mapped back");
-		CHECK(streq(DasReq_value(pReq, "coords.time.resolution"), "86.4"), "resolution mapped back");
-		CHECK(DasReq_rawCount(pReq) == 0, "nothing left raw, %zu", DasReq_rawCount(pReq));
+		CHECK(streq(DasReq_val(pReq, "coords.time.minimum"), "2018-10-02T11:00"), "start_time mapped back");
+		CHECK(streq(DasReq_val(pReq, "coords.time.resolution"), "86.4"), "resolution mapped back");
+		CHECK(DasReq_numRaw(pReq) == 0, "nothing left raw, %zu", DasReq_numRaw(pReq));
 		del_DasReq(pReq);
 	}
-	pReq = DasSrc_newReq(pSrc, 7);
+	pReq = new_DasReq_src(pSrc, 7);
 	CHECK(pReq != NULL, "example 7 req");
 	if(pReq){
-		CHECK(streq(DasReq_value(pReq, "options.b"), "true"), "params=B became the b toggle");
-		CHECK(DasReq_rawCount(pReq) == 0, "nothing left raw");
+		CHECK(streq(DasReq_val(pReq, "options.b"), "true"), "params=B became the b toggle");
+		CHECK(DasReq_numRaw(pReq) == 0, "nothing left raw");
 		del_DasReq(pReq);
 	}
 
@@ -689,33 +689,33 @@ static void test_req(void)
 	printf("Requisitions without a source:\n");
 	DasReq* pReq = new_DasReq();
 	CHECK(pReq != NULL, "new");
-	CHECK(DasReq_count(pReq) == 0 && streq(DasReq_srcPath(pReq), ""), "empty and unstamped");
-	daslog_setlevel(DASLOG_CRIT);
+	CHECK(DasReq_numKeys(pReq) == 0 && streq(DasReq_srcPath(pReq), ""), "empty and unstamped");
+	daslog_setLevel(DASLOG_CRITICAL);
 	CHECK(DasReq_set(pReq, "", "x") == DASERR_SRC, "empty key refused");
-	daslog_setlevel(DASLOG_WARN);
+	daslog_setLevel(DASLOG_WARN);
 	CHECK(DasReq_set(pReq, "Time", "2026-01-02") == DAS_OKAY, "set");
 	CHECK(DasReq_set(pReq, "time", "2026-01-03") == DAS_OKAY, "replace, case insensitive");
-	CHECK(DasReq_count(pReq) == 1 && streq(DasReq_value(pReq, "TIME"), "2026-01-03"), "one entry");
-	CHECK(DasReq_set(pReq, "res", NULL) == DAS_OKAY && streq(DasReq_value(pReq, "res"), ""), "NULL is empty");
+	CHECK(DasReq_numKeys(pReq) == 1 && streq(DasReq_val(pReq, "TIME"), "2026-01-03"), "one entry");
+	CHECK(DasReq_set(pReq, "res", NULL) == DAS_OKAY && streq(DasReq_val(pReq, "res"), ""), "NULL is empty");
 	CHECK(DasReq_find(pReq, "res") == 1 && DasReq_find(pReq, "nope") == -1, "find");
-	CHECK(DasReq_verdict(pReq, 0) == das_req_unchecked && streq(DasReq_why(pReq, 0), ""), "unchecked");
-	CHECK(DasReq_setRaw(pReq, "extra", "1") == DAS_OKAY && DasReq_rawCount(pReq) == 1, "raw");
+	CHECK(DasReq_verdictAt(pReq, 0) == DASREQVERDICT_UNCHECKED && streq(DasReq_whyAt(pReq, 0), ""), "unchecked");
+	CHECK(DasReq_setRaw(pReq, "extra", "1") == DAS_OKAY && DasReq_numRaw(pReq) == 1, "raw");
 	const char* sVal = NULL;
-	CHECK(streq(DasReq_raw(pReq, 0, &sVal), "extra") && streq(sVal, "1"), "raw read back");
-	CHECK(DasReq_remove(pReq, "res") && !DasReq_remove(pReq, "res"), "remove once");
+	CHECK(streq(DasReq_rawAt(pReq, 0, &sVal), "extra") && streq(sVal, "1"), "raw read back");
+	CHECK(DasReq_rmKey(pReq, "res") && !DasReq_rmKey(pReq, "res"), "remove once");
 	DasReq_setLabel(pReq, "a \"quoted\" label\n");
 	DasReq_setSrc(pReq, "site:/x", "http://x/y.json", "0.7");
 
 	/* round trip through text */
-	char* sText = DasReq_text(pReq);
+	char* sText = DasReq_newJsonStr(pReq);
 	CHECK(sText != NULL && strstr(sText, "\\\"quoted\\\"") != NULL, "escaped label");
 	DasReq* pBack = new_DasReq_text(sText, strlen(sText));
 	CHECK(pBack != NULL, "parses back");
 	if(pBack){
 		CHECK(streq(DasReq_label(pBack), "a \"quoted\" label\n"), "label survives");
-		CHECK(streq(DasReq_srcPath(pBack), "site:/x") && streq(DasReq_srcVersion(pBack), "0.7"), "stamp survives");
-		CHECK(streq(DasReq_value(pBack, "time"), "2026-01-03"), "setting survives");
-		CHECK(DasReq_rawCount(pBack) == 1, "raw survives");
+		CHECK(streq(DasReq_srcPath(pBack), "site:/x") && streq(DasReq_srcVer(pBack), "0.7"), "stamp survives");
+		CHECK(streq(DasReq_val(pBack, "time"), "2026-01-03"), "setting survives");
+		CHECK(DasReq_numRaw(pBack) == 1, "raw survives");
 		del_DasReq(pBack);
 	}
 	free(sText);
@@ -724,29 +724,29 @@ static void test_req(void)
 	const char* sEx = "{\"settings\":{\"coords/time/props/min\":\"2026-01-01\",\"coords/time/props/max\":\"2026-01-02\"},"
 	                  "\"label\":\"ex\"}";
 	pBack = new_DasReq_text(sEx, strlen(sEx));
-	CHECK(pBack && streq(DasReq_value(pBack, "coords.time.min"), "2026-01-01"), "slash paths fold to keys");
+	CHECK(pBack && streq(DasReq_val(pBack, "coords.time.min"), "2026-01-01"), "slash paths fold to keys");
 	del_DasReq(pBack);
 
-	daslog_setlevel(DASLOG_CRIT);
+	daslog_setLevel(DASLOG_CRITICAL);
 	CHECK(new_DasReq_text("[1,2]", 5) == NULL, "not an object");
 	CHECK(new_DasReq_file("test/das_fetch/no_such_file.json") == NULL, "missing file");
-	daslog_setlevel(DASLOG_WARN);
+	daslog_setLevel(DASLOG_WARN);
 
 	/* file round trip and a copy.  ./tmp is git ignored, so a fresh
 	   checkout, CI for one, does not have it */
-	das_mkdirsto("tmp/TestSource_req.json");
+	dasfs_mkdirsTo("tmp/TestSource_req.json");
 	CHECK(DasReq_write(pReq, "tmp/TestSource_req.json") == DAS_OKAY, "write");
 	pBack = new_DasReq_file("tmp/TestSource_req.json");
-	CHECK(pBack && streq(DasReq_value(pBack, "time"), "2026-01-03"), "read back from file");
+	CHECK(pBack && streq(DasReq_val(pBack, "time"), "2026-01-03"), "read back from file");
 	del_DasReq(pBack);
 	remove("tmp/TestSource_req.json");
 
-	DasReq* pCopy = DasReq_copy(pReq);
-	CHECK(pCopy && DasReq_count(pCopy) == 1 && DasReq_rawCount(pCopy) == 1, "copy");
+	DasReq* pCopy = new_DasReq_copy(pReq);
+	CHECK(pCopy && DasReq_numKeys(pCopy) == 1 && DasReq_numRaw(pCopy) == 1, "copy");
 	del_DasReq(pCopy);
 
 	DasReq_clear(pReq);
-	CHECK(DasReq_count(pReq) == 0 && DasReq_rawCount(pReq) == 0 && streq(DasReq_srcPath(pReq), "site:/x"),
+	CHECK(DasReq_numKeys(pReq) == 0 && DasReq_numRaw(pReq) == 0 && streq(DasReq_srcPath(pReq), "site:/x"),
 	      "clear keeps the stamp");
 	del_DasReq(pReq);
 }
@@ -770,11 +770,11 @@ static void test_node(void)
 		del_DasSrc(pSrc);
 	}
 
-	daslog_setlevel(DASLOG_CRIT);
+	daslog_setLevel(DASLOG_CRITICAL);
 	const char* sNotSrc = "{\"type\":\"Catalog\",\"catalog\":{}}";
 	CHECK(new_DasSrc_json(sNotSrc, strlen(sNotSrc), NULL, NULL) == NULL, "a catalog is not a source");
 	CHECK(new_DasSrc_json("not json", 8, NULL, NULL) == NULL, "garbage is not a source");
-	daslog_setlevel(DASLOG_WARN);
+	daslog_setLevel(DASLOG_WARN);
 
 	/* a set block with no param is a fixed property with a warning, the
 	   rest still builds */
@@ -785,16 +785,16 @@ static void test_node(void)
 		"  \"broken\":{\"value\":false,\"set\":{\"value\":true}},"
 		"  \"doc_only\":{\"value\":\"x\"}"
 		"}}}";
-	daslog_setlevel(DASLOG_ERROR);
+	daslog_setLevel(DASLOG_ERROR);
 	DasSrc* pSrc2 = new_DasSrc_json(sDoc, strlen(sDoc), NULL, NULL);
-	daslog_setlevel(DASLOG_WARN);
+	daslog_setLevel(DASLOG_WARN);
 	CHECK(pSrc2 != NULL, "builds");
 	if(pSrc2){
 		CHECK(streq(DasSrc_path(pSrc2), ""), "nameless and placeless means no URI: %s", DasSrc_path(pSrc2));
-		CHECK(DasSrc_propCount(pSrc2) == 3 && ctrlCount(pSrc2, -1) == 1, "three props, one control");
-		CHECK(streq(DasSrcProp_key(DasSrc_prop(pSrc2, 0)), "options.good"), "the good one");
-		CHECK(DasSrcProp_type(DasSrc_prop(pSrc2, 0)) == das_srcprop_bool, "boolean by default value");
-		CHECK(streq(DasSrcProp_title(DasSrc_prop(pSrc2, 0), NULL, 0), ""), "untitled option is empty");
+		CHECK(DasSrc_numProps(pSrc2) == 3 && ctrlCount(pSrc2, -1) == 1, "three props, one control");
+		CHECK(streq(DasSrcProp_key(DasSrc_propAt(pSrc2, 0)), "options.good"), "the good one");
+		CHECK(DasSrcProp_type(DasSrc_propAt(pSrc2, 0)) == DASSRCPROPTYPE_BOOL, "boolean by default value");
+		CHECK(streq(DasSrcProp_title(DasSrc_propAt(pSrc2, 0), NULL, 0), ""), "untitled option is empty");
 		CHECK(streq(DasSrc_mime(pSrc2, NULL), ""), "no mime stated");
 		URL_IS(pSrc2, -1, K("good"), NONE, "http://x/y?g=true");
 		URL_IS(pSrc2, -1, NONE, NONE, "http://x/y");
@@ -812,16 +812,16 @@ static void test_pick(void)
 	DasNode* pTwin = DasCat_seed(pCat);
 	CHECK(pTwin != NULL, "twin loads");
 	if(pTwin == NULL){ del_DasCat(pCat); return; }
-	CHECK(dassrc_loadable(pTwin, aNames, 4) == 2 && streq(aNames[0], "flex") && streq(aNames[1], "das3"),
+	CHECK(DasSrc_loadable(pTwin, aNames, 4) == 2 && streq(aNames[0], "flex") && streq(aNames[1], "das3"),
 	      "two loadable children in catalog order, the DSDF is skipped");
-	CHECK(dassrc_loadable(pTwin, NULL, 0) == 2, "counting only");
-	daslog_setlevel(DASLOG_CRIT);
+	CHECK(DasSrc_loadable(pTwin, NULL, 0) == 2, "counting only");
+	daslog_setLevel(DASLOG_CRITICAL);
 	CHECK(new_DasSrc_node(pTwin) == NULL, "a container is not a source, no child is picked");
-	daslog_setlevel(DASLOG_WARN);
+	daslog_setLevel(DASLOG_WARN);
 
 	DasNode* pSub = DasCat_subNode(pCat, pTwin, "das3");
 	CHECK(pSub != NULL, "the caller's choice loads through the tree");
-	CHECK(dassrc_loadable(pSub, NULL, 0) == 0, "a source has no loadable children");
+	CHECK(DasSrc_loadable(pSub, NULL, 0) == 0, "a source has no loadable children");
 	DasSrc* pSrc = (pSub == NULL) ? NULL : new_DasSrc_node(pSub);
 	CHECK(pSrc != NULL && streq(DasSrc_path(pSrc), "tag:das2.org,2012:site:/uiowa/twin/das3"), "source from the chosen child");
 	del_DasSrc(pSrc);
@@ -832,19 +832,19 @@ static void test_pick(void)
 	DasNode* pOld = DasCat_seed(pCat);
 	CHECK(pOld != NULL, "old loads");
 	if(pOld == NULL){ del_DasCat(pCat); return; }
-	CHECK(dassrc_loadable(pOld, aNames, 4) == 2, "a 2018 Collection lists both HttpStreamSrc children");
+	CHECK(DasSrc_loadable(pOld, aNames, 4) == 2, "a 2018 Collection lists both HttpStreamSrc children");
 
 	/* Presented in the current layout: the provides list each convention
 	   implies is there, the convention is untouched, and the DOM still
 	   serializes with the additions in place */
-	CHECK(streq(DasNode_subName(pOld, 0), "das2") && streq(DasNode_subName(pOld, 1), "hapi"), "fixture order");
-	const char* sMime = DasJdo_string(DasJdo_get(DasNode_subStub(pOld, 0), "provides/0"));
+	CHECK(streq(DasNode_subNameAt(pOld, 0), "das2") && streq(DasNode_subNameAt(pOld, 1), "hapi"), "fixture order");
+	const char* sMime = DasJdo_str(DasJdo_subtree(DasNode_subStubAt(pOld, 0), "provides/0"));
 	CHECK(sMime != NULL && streq(sMime, "application/vnd.das2.das2stream"), "das2/2.2 presents as a das2 stream");
-	sMime = DasJdo_string(DasJdo_get(DasNode_subStub(pOld, 1), "provides/0"));
+	sMime = DasJdo_str(DasJdo_subtree(DasNode_subStubAt(pOld, 1), "provides/0"));
 	CHECK(sMime != NULL && streq(sMime, "application/vnd.hapi.stream"), "hapi/2.0 presents as a hapi stream");
-	CHECK(DasJdo_get(DasNode_subStub(pOld, 1), "convention") != NULL, "the convention stays");
+	CHECK(DasJdo_subtree(DasNode_subStubAt(pOld, 1), "convention") != NULL, "the convention stays");
 	size_t uDoc = 0;
-	char* sDoc = (char*)DasJdo_writeMinified(DasNode_getJdo(pOld, NULL), &uDoc);
+	char* sDoc = (char*)DasJdo_newMiniStr(DasNode_jdo(pOld, NULL), &uDoc);
 	CHECK(sDoc != NULL && strstr(sDoc, "\"provides\":[\"application/vnd.hapi.stream\"]") != NULL, "the added list serializes");
 	free(sDoc);
 	del_DasCat(pCat);
@@ -852,7 +852,7 @@ static void test_pick(void)
 
 int main(int argc, char** argv)
 {
-	das_init(argv[0], DASERR_DIS_EXIT, DASLOG_WARN, NULL);
+	daslib_init(argv[0], DASERRDISP_EXIT, DASLOG_WARN, NULL);
 	test_grammar();
 	test_scalar();
 	test_helpers();

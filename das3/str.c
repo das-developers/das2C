@@ -38,22 +38,22 @@
 /* Locale handling */
 
 #ifdef _WIN32
-static bool g_bCLocalInit = false;  /* set by windows das_strtod_c, if needed */
+static bool g_bCLocalInit = false;  /* set by windows dasstr_toDoubleCLocale, if needed */
 
-/* das_init() resets this so the next das_strtod_c() makes the C locale anew */
+/* daslib_init() resets this so the next dasstr_toDoubleCLocale() makes the C locale anew */
 void _dasstr_resetCLocale(void){ g_bCLocalInit = false; }
 #endif
 
 /* ************************************************************************** */
 /* Data structure creation utilities */
 
-char* das_strdup(const char* sIn)
+char* dasstr_new(const char* sIn)
 {
 	if((sIn == NULL)||(sIn[0] == '\0')) return NULL;
 	size_t uLen = strlen(sIn);
 	char* sOut = (char*)calloc(uLen+1, sizeof(char));
 	if(sOut == NULL){
-		das_error(DASERR_UTIL, "Memory allocation error");
+		daserrf(DASERR_UTIL, "Memory allocation error");
 		return NULL;
 	}
 	memcpy(sOut, sIn, uLen);
@@ -74,7 +74,7 @@ void das_store_str(char** psDest, size_t* puLen, const char* sSrc){
 	strncpy(*psDest, sSrc, uNewLen);
 }
 
-char* das_vstring(const char* fmt, va_list ap){
+char* dasstr_newvf(const char* fmt, va_list ap){
 
 	/* Guess we need no more than 64 bytes. */
 	int n, size = 64;
@@ -82,7 +82,7 @@ char* das_vstring(const char* fmt, va_list ap){
 	va_list _ap;
 
 	if( (p = malloc(size)) == NULL){
-		das_error(DASERR_UTIL, "Can't alloc %d bytes", size);
+		daserrf(DASERR_UTIL, "Can't alloc %d bytes", size);
 		return NULL;
 	}
 
@@ -103,7 +103,7 @@ char* das_vstring(const char* fmt, va_list ap){
 			size *= 2;  /* twice the old size */
 
 		if((p = realloc(p, size)) == NULL){
-			das_error(DASERR_UTIL, "Can't alloc %d bytes", size);
+			daserrf(DASERR_UTIL, "Can't alloc %d bytes", size);
 			return NULL;
 		}
 	}
@@ -111,7 +111,7 @@ char* das_vstring(const char* fmt, va_list ap){
 	return p;
 }
 
-char* das_string(const char *fmt, ...){
+char* dasstr_newf(const char *fmt, ...){
 
 	/* Guess we need no more than 64 bytes. */
 	int n, size = 64;
@@ -119,7 +119,7 @@ char* das_string(const char *fmt, ...){
 	va_list ap;
 
 	if( (p = malloc(size)) == NULL){
-		das_error(DASERR_UTIL, "Can't alloc %d bytes", size);
+		daserrf(DASERR_UTIL, "Can't alloc %d bytes", size);
 		return NULL;
 	}
 
@@ -140,7 +140,7 @@ char* das_string(const char *fmt, ...){
 			size *= 2;  /* twice the old size */
 
 		if((p = realloc(p, size)) == NULL){
-			das_error(DASERR_UTIL, "Can't alloc %d bytes", size);
+			daserrf(DASERR_UTIL, "Can't alloc %d bytes", size);
 			return NULL;
 		}
 	}
@@ -149,7 +149,7 @@ char* das_string(const char *fmt, ...){
 }
 
 /* Common config-file case, remove whitespace and simple line comments */
-char* das_strip(char* sLine, char cComment)
+char* dasstr_strip(char* sLine, char cComment)
 {
 	if(sLine == NULL) return NULL;
 
@@ -241,7 +241,7 @@ static const char* _g_sReplace[5] = {
 /* ************************************************************************* */
 /* translate unsafe characters for XML string data  */
 	
-const char* das_xml_escape(const char* src, char* dest, size_t uOutLen)
+const char* dasxml_escape(const char* src, char* dest, size_t uOutLen)
 {
 	if(uOutLen < 1) return NULL;
 
@@ -283,7 +283,7 @@ const char* das_xml_escape(const char* src, char* dest, size_t uOutLen)
 
 static _locale_t c_locale;
 
-double das_strtod_c(const char *nptr, char **endptr){
+double dasstr_toDoubleCLocale(const char *nptr, char **endptr){
 
   if(!g_bCLocalInit){
     c_locale = _create_locale(LC_ALL,"C");
@@ -295,7 +295,7 @@ double das_strtod_c(const char *nptr, char **endptr){
 
 #else  /* Posix */
 
-double das_strtod_c(const char *nptr, char **endptr){
+double dasstr_toDoubleCLocale(const char *nptr, char **endptr){
   char buf[80];
   
   char* pPt = strchr(nptr, '.');
@@ -343,7 +343,7 @@ static char encoding_table[] = {'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',
                                 '4', '5', '6', '7', '8', '9', '+', '/'};
 static int mod_table[] = {0, 2, 1};
 
-char* das_b64_encode(
+char* dasb64_encode(
 	const unsigned char *data, size_t input_length, size_t *output_length
 ) {
 
@@ -398,12 +398,12 @@ static const signed char b64_dec[256] = {
    Decoded output is at most 3/4 of input_length, so
      out_cap >= 3*input_length/4
    is always long enough. */
-int das_b64_decode_buf(
+int dasb64_decodeBuf(
 	const char* data, size_t input_length, unsigned char* out, size_t out_cap,
 	size_t* output_length
 ){
 	if((input_length % 4) != 0)
-		return -1 * das_error(DASERR_UTIL,
+		return -1 * daserrf(DASERR_UTIL,
 			"base64 input length %zu is not a multiple of 4", input_length
 		);
 	if(input_length == 0){ *output_length = 0; return DAS_OKAY; }
@@ -413,7 +413,7 @@ int das_b64_decode_buf(
 	if(data[input_length - 2] == '=') --olen;
 
 	if(olen > out_cap)
-		return -1 * das_error(DASERR_UTIL,
+		return -1 * daserrf(DASERR_UTIL,
 			"base64 decode needs %zu bytes but the buffer holds %zu", olen, out_cap
 		);
 
@@ -424,7 +424,7 @@ int das_b64_decode_buf(
 		signed char c = (data[i+2]=='=') ? 0 : b64_dec[(unsigned char)data[i+2]];
 		signed char d = (data[i+3]=='=') ? 0 : b64_dec[(unsigned char)data[i+3]];
 		if((a < 0)||(b < 0)||(c < 0)||(d < 0))
-			return -1 * das_error(DASERR_UTIL, "invalid base64 character in input");
+			return -1 * daserrf(DASERR_UTIL, "invalid base64 character in input");
 
 		uint32_t triple = ((uint32_t)a << 18)|((uint32_t)b << 12)|((uint32_t)c << 6)|(uint32_t)d;
 		if(j < olen) out[j++] = (triple >> 16) & 0xFF;
@@ -435,16 +435,16 @@ int das_b64_decode_buf(
 	return DAS_OKAY;
 }
 
-/* Alloc-and-return base64 decode, symmetric with das_b64_encode.  Thin wrapper
-   over das_b64_decode_buf for one-shot / general callers; the codec uses the
+/* Alloc-and-return base64 decode, symmetric with dasb64_encode.  Thin wrapper
+   over dasb64_decodeBuf for one-shot / general callers; the codec uses the
    _buf form directly to stay malloc-free in its item loop. */
-unsigned char* das_b64_decode(
+unsigned char* dasb64_decode(
 	const char* data, size_t input_length, size_t* output_length
 ){
 	size_t cap = (input_length / 4) * 3;
 	unsigned char* out = (unsigned char*)malloc(cap > 0 ? cap : 1);
 	if(out == NULL) return NULL;
-	if(das_b64_decode_buf(data, input_length, out, cap, output_length) != DAS_OKAY){
+	if(dasb64_decodeBuf(data, input_length, out, cap, output_length) != DAS_OKAY){
 		free(out);
 		*output_length = 0;
 		return NULL;
@@ -456,7 +456,7 @@ unsigned char* das_b64_decode(
 /* ************************************************************************* */
 /* URL percent encoding */
 
-size_t das_url_encode(const char* sIn, char* sOut, size_t uOut)
+size_t dasurl_encode(const char* sIn, char* sOut, size_t uOut)
 {
 	static const char* sHex = "0123456789ABCDEF";
 	size_t uNeed = 0;
@@ -484,7 +484,7 @@ size_t das_url_encode(const char* sIn, char* sOut, size_t uOut)
 /* ************************************************************************* */
 /* Helper for trimming zeros after decimal */
 
-void das_value_trimReal(char* sVal){
+void dasstr_trimReal(char* sVal){
 		
 	if(strchr(sVal, '.') == NULL) return;
 	
@@ -527,7 +527,7 @@ void das_value_trimReal(char* sVal){
 /* ************************************************************************* */
 /* String to Value utilities */
 
-bool das_str2double(const char* str, double* pRes){
+bool dasstr_toDouble(const char* str, double* pRes){
 	double rRet;
 	char* endptr;
 
@@ -535,7 +535,7 @@ bool das_str2double(const char* str, double* pRes){
 
 	errno = 0;
 
-	rRet = das_strtod_c(str, &endptr);
+	rRet = dasstr_toDoubleCLocale(str, &endptr);
 
 	if( (errno == ERANGE) || ((errno != 0) && (rRet == 0)) )return false;
 	if(endptr == str) return false;
@@ -544,7 +544,7 @@ bool das_str2double(const char* str, double* pRes){
 	return true;
 }
 
-bool das_str2bool(const char* str, bool* pRes)
+bool dasstr_toBool(const char* str, bool* pRes)
 {
 	if((str == NULL)||(strlen(str) < 1) ) return false;
 
@@ -566,7 +566,7 @@ bool das_str2bool(const char* str, bool* pRes)
 	return false;
 }
 
-bool das_str2int(const char* str, int* pRes)
+bool dasstr_toInt(const char* str, int* pRes)
 {
 	if((str == NULL)||(pRes == NULL)){ return false; }
 
@@ -603,7 +603,7 @@ bool das_str2int(const char* str, int* pRes)
 	return true;
 }
 
-bool das_str2baseint(const char* str, int base, int* pRes)
+bool dasstr_toBaseInt(const char* str, int base, int* pRes)
 {
 	if((str == NULL)||(pRes == NULL)){ return false; }
 
@@ -627,7 +627,7 @@ bool das_str2baseint(const char* str, int base, int* pRes)
 	return true;
 }
 
-bool das_strn2baseint(const char* str, int nLen, int base, int* pRes)
+bool dasstr_toBaseIntN(const char* str, int nLen, int base, int* pRes)
 {
 	if((str == NULL)||(pRes == NULL)){ return false; }
 
@@ -666,15 +666,15 @@ bool das_strn2baseint(const char* str, int nLen, int base, int* pRes)
 	return true;
 }
 
-double* das_csv2doubles(const char* sCsv, int* pNumItems)
+double* dascsv_newDoubles(const char* sCsv, int* pNumItems)
 {
 	if(pNumItems == NULL){
-		das_error(DASERR_VALUE, "No place to put the item count");
+		daserrf(DASERR_VALUE, "No place to put the item count");
 		return NULL;
 	}
 	*pNumItems = 0;
 	if(sCsv == NULL){
-		das_error(DASERR_VALUE, "No text to parse as comma separated values");
+		daserrf(DASERR_VALUE, "No text to parse as comma separated values");
 		return NULL;
 	}
 
@@ -688,16 +688,16 @@ double* das_csv2doubles(const char* sCsv, int* pNumItems)
 	/* Never NULL on success, so NULL always means an error */
 	double* pOut = (double*)calloc((nItems > 0) ? nItems : 1, sizeof(double));
 	if(pOut == NULL){
-		das_error(DASERR_VALUE, "Couldn't allocate %d doubles", nItems);
+		daserrf(DASERR_VALUE, "Couldn't allocate %d doubles", nItems);
 		return NULL;
 	}
 
 	for(int i = 0; i < nItems; ++i){
 		char* pEnd = NULL;
-		pOut[i] = das_strtod_c(p, &pEnd);    /* '.' whatever the locale */
+		pOut[i] = dasstr_toDoubleCLocale(p, &pEnd);    /* '.' whatever the locale */
 		while(isspace((unsigned char)*pEnd)) ++pEnd;
 		if((pEnd == p)||((*pEnd != ',')&&(*pEnd != '\0'))){
-			das_error(DASERR_VALUE, "Item %d of '%s' is not a number", i, sCsv);
+			daserrf(DASERR_VALUE, "Item %d of '%s' is not a number", i, sCsv);
 			free(pOut);
 			return NULL;
 		}
@@ -722,34 +722,34 @@ static bool _csv_put(char* pBuf, size_t uSz, size_t* pOff, int i, double rVal)
 	return true;
 }
 
-char* das_doubles2csv(const double* pValues, int nValues, char* pBuf, size_t uSz)
+char* dascsv_fromDoubles(const double* pValues, int nValues, char* pBuf, size_t uSz)
 {
 	if((pBuf == NULL)||(uSz < 12)||((nValues > 0)&&(pValues == NULL))){
-		das_error(DASERR_ARRAY, "Invalid arguments, buffer too small or non-existant");
+		daserrf(DASERR_ARRAY, "Invalid arguments, buffer too small or non-existant");
 		return NULL;
 	}
 	pBuf[0] = '\0';
 	size_t uOff = 0;
 	for(int i = 0; i < nValues; ++i){
 		if(!_csv_put(pBuf, uSz, &uOff, i, pValues[i])){
-			das_error(DASERR_ARRAY, "Insufficient space provided for all %d converted doubles", nValues);
+			daserrf(DASERR_ARRAY, "Insufficient space provided for all %d converted doubles", nValues);
 			return NULL;
 		}
 	}
 	return pBuf;
 }
 
-char* das_floats2csv(const float* pValues, int nValues, char* pBuf, size_t uSz)
+char* dascsv_fromFloats(const float* pValues, int nValues, char* pBuf, size_t uSz)
 {
 	if((pBuf == NULL)||(uSz < 12)||((nValues > 0)&&(pValues == NULL))){
-		das_error(DASERR_ARRAY, "Invalid arguments, buffer too small or non-existant");
+		daserrf(DASERR_ARRAY, "Invalid arguments, buffer too small or non-existant");
 		return NULL;
 	}
 	pBuf[0] = '\0';
 	size_t uOff = 0;
 	for(int i = 0; i < nValues; ++i){
 		if(!_csv_put(pBuf, uSz, &uOff, i, (double)pValues[i])){
-			das_error(DASERR_ARRAY, "Insufficient space provided for all %d converted floats", nValues);
+			daserrf(DASERR_ARRAY, "Insufficient space provided for all %d converted floats", nValues);
 			return NULL;
 		}
 	}

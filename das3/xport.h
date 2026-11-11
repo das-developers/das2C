@@ -47,7 +47,7 @@ extern "C" {
  * @code
  *   DasXport* pSrc;
  *   if(bRemote){
- *       DasHttpResp* pRes = new_DasHttpResp_get(sUrl, "my_prog", pMgr, DASHTTP_TO_MIN);
+ *       DasHttpResp* pRes = new_DasHttpResp_get(sUrl, "my_prog", pMgr, DASHTTP_TIMEOUT_MIN);
  *       pSrc = DasHttpResp_takeBody(pRes);    // NULL if the request failed
  *       del_DasHttpResp(pRes);
  *   }
@@ -73,15 +73,15 @@ extern "C" {
  * makes it safe to pass across a DLL boundary, even when the program links
  * a different TLS library than das2C does.
  *
- * Read and write failures do not call das_error().  They return -1 and
+ * Read and write failures do not call daserrf().  They return -1 and
  * DasXport_error() says why, so the program decides whether a dropped
  * connection is fatal.  Constructors report bad arguments through
- * das_error() like every other constructor.
+ * daserrf() like every other constructor.
  *
  * DasXport is not thread safe; do not share one between threads without
  * locking.
  */
-typedef struct das_xport DasXport;
+typedef struct das_xport_t DasXport;
 
 /** Open a file as a transport
  *
@@ -218,7 +218,7 @@ DAS_API ptrdiff_t DasXport_write(DasXport* pThis, const void* pIn, size_t uLen);
 
 /** Progress callback for DasXport_copyTo()
  *
- * Follows the das_stream_proc callback convention: a non-zero return stops the copy
+ * Follows the DasIOProc callback convention: a non-zero return stops the copy
  * and becomes the return value of DasXport_copyTo().  Use a code of your
  * own rather than DASERR_IO, otherwise a deliberate stop can't be told from
  * a read or write failure.
@@ -227,7 +227,7 @@ DAS_API ptrdiff_t DasXport_write(DasXport* pThis, const void* pIn, size_t uLen);
  * @param pUser  The opaque pointer handed to DasXport_copyTo()
  * @returns DAS_OKAY to keep copying, anything else to stop
  */
-typedef das_errcode (*das_progress_f)(int64_t nBytes, void* pUser);
+typedef das_errcode (*dasfn_onProgress)(int64_t nBytes, void* pUser);
 
 /** Copy everything that remains in one transport to another
  *
@@ -254,7 +254,7 @@ typedef das_errcode (*das_progress_f)(int64_t nBytes, void* pUser);
  * @memberof DasXport
  */
 DAS_API das_errcode DasXport_copyTo(
-	DasXport* pThis, DasXport* pDest, das_progress_f onProgress, void* pUser,
+	DasXport* pThis, DasXport* pDest, dasfn_onProgress onProgress, void* pUser,
 	int64_t* pCopied
 );
 

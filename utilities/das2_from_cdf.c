@@ -273,18 +273,18 @@ typedef struct program_options {
 	bool bNoOp;
 	bool bVars;            /* -V: list the variables a user can name, then exit */
 	const char* sPattern;  /* file name or URI pattern, points into argv */
-	das_range   range;     /* the time range */
+	DasRng   range;     /* the time range */
 	const char* asVars[MAX_DATA_VARS];  /* point into argv */
 	int         nVars;
 } popts_t;
 
-/* Argument errors happen before the stream is open; DasIO_exception_v()
+/* Argument errors happen before the stream is open; DasIO_exceptionf()
    sends the stub header every das stream must start with. */
 static int _argError(const char* sMsg)
 {
-	daslog_error_v("%s", sMsg);
+	daslog_errorf("%s", sMsg);
 	DasIO* pOut = new_DasIO(PROG, new_DasXport_stdout(), "2");
-	DasIO_exception_v(pOut, DAS_EX_QUERY_ERR, "%s", sMsg);
+	DasIO_exceptionf(pOut, DASEXCEPTTYPE_QUERY_ERR, "%s", sMsg);
 	del_DasIO(pOut);
 	return PERR;
 }
@@ -317,9 +317,9 @@ int parseArgs(int argc, char** argv, popts_t* pOpts)
 	memset(pOpts, 0, sizeof(popts_t));
 	strcpy(pOpts->aLevel, "info");
 
-	/* das_init has not run: keep library parse failures from exiting before
+	/* daslib_init has not run: keep library parse failures from exiting before
 	   the client gets its exception packet */
-	daserr_setdisp(DASERR_DIS_RET);
+	daserr_setDisp(DASERRDISP_RET);
 
 	char sMsg[256] = {'\0'};
 	char* sBeg = NULL;
@@ -330,31 +330,31 @@ int parseArgs(int argc, char** argv, popts_t* pOpts)
 		++i;
 
 		if(argv[i][0] == '-'){
-			if(dascmd_isArg(argv[i], "-h", "--help", NULL)){
+			if(dasarg_isOpt(argv[i], "-h", "--help", NULL)){
 				prnHelp();
 				exit(0);
 			}
-			if(dascmd_isArg(argv[i], "-n", "--no-op", NULL)){
+			if(dasarg_isOpt(argv[i], "-n", "--no-op", NULL)){
 				pOpts->bNoOp = true;
 				continue;
 			}
-			if(dascmd_isArg(argv[i], "-V", "--vars", NULL)){
+			if(dasarg_isOpt(argv[i], "-V", "--vars", NULL)){
 				pOpts->bVars = true;
 				continue;
 			}
-			if(dascmd_getArgVal(
+			if(dasarg_getOptVal(
 				argv, argc, "-c", "--coord=", &i, pOpts->aCoordMap, DAS_FIELD_SZ(popts_t, aCoordMap)
 			))
 				continue;
-			if(dascmd_getArgVal(
+			if(dasarg_getOptVal(
 				argv, argc, "-l", "--log=", &i, pOpts->aLevel, DAS_FIELD_SZ(popts_t, aLevel)
 			))
 				continue;
-			if(dascmd_getArgVal(
+			if(dasarg_getOptVal(
 				argv, argc, "-d", "--def-vars=", &i, pOpts->aDefVars, DAS_FIELD_SZ(popts_t, aDefVars)
 			))
 				continue;
-			if(dascmd_getArgVal(
+			if(dasarg_getOptVal(
 				argv, argc, "-p", "--prop-map=", &i, pOpts->aPropMap, DAS_FIELD_SZ(popts_t, aPropMap)
 			))
 				continue;
@@ -379,8 +379,8 @@ int parseArgs(int argc, char** argv, popts_t* pOpts)
 	   range. */
 	bool bDiag = (pOpts->bVars || pOpts->bNoOp) && (strchr(pOpts->sPattern, '$') == NULL);
 	/* das2 servers always send both bounds, so a half-open range is refused */
-	bool bHaveRange = (nPos >= 3) && (das_range_fromUtc(&(pOpts->range), sBeg, sEnd) == DAS_OKAY)
-		&& das_range_hasBeg(&(pOpts->range)) && das_range_hasEnd(&(pOpts->range));
+	bool bHaveRange = (nPos >= 3) && (DasRng_fromIso(&(pOpts->range), sBeg, sEnd) == DAS_OKAY)
+		&& DasRng_hasBeg(&(pOpts->range)) && DasRng_hasEnd(&(pOpts->range));
 	if(bHaveRange)
 		return DAS_OKAY;
 	if(!bDiag){
@@ -392,7 +392,7 @@ int parseArgs(int argc, char** argv, popts_t* pOpts)
 
 	/* unbounded: dmBeg stays null; the 2nd and 3rd positionals were
 	   variables all along and came before the ones already added */
-	das_range_init(&(pOpts->range));
+	DasRng_setOpen(&(pOpts->range));
 	int nLater = pOpts->nVars;
 	const char* asLater[MAX_DATA_VARS];
 	memcpy((void*)asLater, pOpts->asVars, nLater * sizeof(const char*));  /* quiet msvc */
@@ -421,7 +421,7 @@ int parseArgs(int argc, char** argv, popts_t* pOpts)
 
 static DasIO* g_pIoOut = NULL;
 static DasStream* g_pSd = NULL;
-static das_except_e g_exType = DAS_EX_QUERY_ERR;
+static das_excepttype g_exType = DASEXCEPTTYPE_QUERY_ERR;
 
 static int  g_nUserLevel = DASLOG_INFO;
 
@@ -431,27 +431,27 @@ static int  g_nQueued  = 0;
 static int  g_nDropped = 0;
 static char g_sLastErr[DASLOG_MSG_SZ] = {'\0'};
 
-static void logHandler(const das_logmsg* pMsg, void* pUser)
+static void logHandler(const DasLogMsg* pMsg, void* pUser)
 {
 	(void)pUser;
 	
 	/* The last error is kept whatever the level, it becomes the exception */
-	if(pMsg->nLevel >= DASLOG_ERROR)
-		snprintf(g_sLastErr, DASLOG_MSG_SZ, "%s", pMsg->sMsg);
+	if(pMsg->level >= DASLOG_ERROR)
+		snprintf(g_sLastErr, DASLOG_MSG_SZ, "%s", pMsg->msg);
 	
-	if(pMsg->nLevel < g_nUserLevel) return;
+	if(pMsg->level < g_nUserLevel) return;
 	daslog_stderr(pMsg, NULL);
 	
-	if(pMsg->nLevel < DASLOG_ERROR) return;
+	if(pMsg->level < DASLOG_ERROR) return;
 	if(g_nQueued < LOG_QUEUE)
-		snprintf(g_aQueue[g_nQueued++], DASLOG_MSG_SZ, "%s", pMsg->sMsg);
+		snprintf(g_aQueue[g_nQueued++], DASLOG_MSG_SZ, "%s", pMsg->msg);
 	else
 		++g_nDropped;
 }
 
 static void _sendHeader(void)
 {
-	if(!DasIO_headerSent(g_pIoOut))
+	if(!DasIO_hasSentHeader(g_pIoOut))
 		DasIO_writeStreamDesc(g_pIoOut, g_pSd);
 }
 
@@ -462,14 +462,14 @@ static void _flushLog(void)
 	if(g_pIoOut != NULL){
 		if(g_nQueued > 0) _sendHeader();
 		for(int i = 0; i < g_nQueued; ++i){
-			if(DasIO_comment_v(g_pIoOut, "log:error", "%s", g_aQueue[i]) != DAS_OKAY){
+			if(DasIO_commentf(g_pIoOut, "log:error", "%s", g_aQueue[i]) != DAS_OKAY){
 				/* No way left to tell the client anything */
 				del_DasIO(g_pIoOut);
 				exit(PERR);
 			}
 		}
 		if(g_nDropped > 0)
-			DasIO_comment_v(g_pIoOut, "log:error", "%d more errors, see stderr",
+			DasIO_commentf(g_pIoOut, "log:error", "%d more errors, see stderr",
 			                g_nDropped);
 	}
 	g_nQueued = 0;
@@ -488,7 +488,7 @@ static void _fatal(void)
 			--g_nQueued;
 		_flushLog();
 		_sendHeader();
-		DasIO_exception_v(g_pIoOut, g_exType, "%s", sMsg);
+		DasIO_exceptionf(g_pIoOut, g_exType, "%s", sMsg);
 		DasIO_close(g_pIoOut);
 		del_DasIO(g_pIoOut);
 		g_pIoOut = NULL;
@@ -551,51 +551,51 @@ static const char* _dimName(const cdf_ds_t* pDs, const cdf_var_t* pV)
 /* The fill value of a variable as a double */
 static double _fillAsDouble(cdf_file_t* pFile, const cdf_var_t* pV)
 {
-	ubyte aBuf[16];
-	const ubyte* p = cdf_varFill(pFile, pV, aBuf);
+	uint8_t aBuf[16];
+	const uint8_t* p = cdf_varFill(pFile, pV, aBuf);
 	switch(cdf_valType(pV->nType)){
-	case vtByte:   return *((const int8_t*)p);
-	case vtUByte:  return *((const uint8_t*)p);
-	case vtShort:  return *((const int16_t*)p);
-	case vtUShort: return *((const uint16_t*)p);
-	case vtInt:    return *((const int32_t*)p);
-	case vtUInt:   return *((const uint32_t*)p);
-	case vtLong:   return (double)*((const int64_t*)p);
-	case vtFloat:  return *((const float*)p);
-	case vtDouble: return *((const double*)p);
-	default:       return DAS_FILL_VALUE;
+	case DASVT_BYTE:   return *((const int8_t*)p);
+	case DASVT_UBYTE:  return *((const uint8_t*)p);
+	case DASVT_SHORT:  return *((const int16_t*)p);
+	case DASVT_USHORT: return *((const uint16_t*)p);
+	case DASVT_INT:    return *((const int32_t*)p);
+	case DASVT_UINT:   return *((const uint32_t*)p);
+	case DASVT_LONG:   return (double)*((const int64_t*)p);
+	case DASVT_FLOAT:  return *((const float*)p);
+	case DASVT_DOUBLE: return *((const double*)p);
+	default:       return DASVAL_FILL;
 	}
 }
 
 /* One element of a raw CDF buffer as a double */
-static double _elemAsDouble(long nType, const ubyte* p)
+static double _elemAsDouble(long nType, const uint8_t* p)
 {
 	switch(cdf_valType(nType)){
-	case vtByte:   return *((const int8_t*)p);
-	case vtUByte:  return *((const uint8_t*)p);
-	case vtShort:  return *((const int16_t*)p);
-	case vtUShort: return *((const uint16_t*)p);
-	case vtInt:    return *((const int32_t*)p);
-	case vtUInt:   return *((const uint32_t*)p);
-	case vtLong:   return (double)*((const int64_t*)p);
-	case vtFloat:  return *((const float*)p);
-	case vtDouble: return *((const double*)p);
-	default:       return DAS_FILL_VALUE;
+	case DASVT_BYTE:   return *((const int8_t*)p);
+	case DASVT_UBYTE:  return *((const uint8_t*)p);
+	case DASVT_SHORT:  return *((const int16_t*)p);
+	case DASVT_USHORT: return *((const uint16_t*)p);
+	case DASVT_INT:    return *((const int32_t*)p);
+	case DASVT_UINT:   return *((const uint32_t*)p);
+	case DASVT_LONG:   return (double)*((const int64_t*)p);
+	case DASVT_FLOAT:  return *((const float*)p);
+	case DASVT_DOUBLE: return *((const double*)p);
+	default:       return DASVAL_FILL;
 	}
 }
 
 /* TT2000 to the das2 wire time, microseconds since 2000 */
 static double _tt2kToUs2k(int64_t nTt)
 {
-	das_time dt;
-	dt_from_tt2k(&dt, nTt);
-	return Units_convertFromDt(&dt, UNIT_US2000);
+	DasTime dt;
+	DasTime_fromTt2k(&dt, nTt);
+	return DasTime_toPoint(&dt, DASUNITS_US2000);
 }
 
 /* Data values go out as little endian reals of the source width */
 static DasEnc* _valueEncoding(long nType)
 {
-	size_t uSz = das_vt_size(cdf_valType(nType));
+	size_t uSz = dasvt_size(cdf_valType(nType));
 	return new_DasEnc(DAS2DT_LE_REAL, (uSz > 4) ? 8 : 4, NULL);
 }
 
@@ -637,15 +637,15 @@ static void _addPlaneProps(cdf_file_t* pFile, const cdf_var_t* pV, DasPlane* pPl
 		}
 
 		if((nType == CDF_CHAR)||(nType == CDF_UCHAR))
-			DasDesc_setStr((DasDesc*)pPlane, sKey, sVal);
+			DasDesc_setVal((DasDesc*)pPlane, sKey, sVal);
 		else if(cdf_isTimeType(nType))
-			DasDesc_set((DasDesc*)pPlane, "datetime", sKey, sVal);
+			DasDesc_setProp((DasDesc*)pPlane, "datetime", sKey, sVal);
 		/* As text, the way cdf_addVarProps() does it: atoi() truncated every
 		   CDF_INT8 (and any CDF_UINT4 past INT_MAX) to 32 bits */
-		else if(das_vt_isreal(cdf_valType(nType)))
-			DasDesc_set((DasDesc*)pPlane, "real", sKey, sVal);
+		else if(dasvt_isReal(cdf_valType(nType)))
+			DasDesc_setProp((DasDesc*)pPlane, "real", sKey, sVal);
 		else
-			DasDesc_set((DasDesc*)pPlane, "integer", sKey, sVal);
+			DasDesc_setProp((DasDesc*)pPlane, "integer", sKey, sVal);
 	}
 }
 
@@ -665,8 +665,8 @@ static int _secondIndex(cdf_file_t* pFile, const cdf_var_t* pFirst, int* pDim)
 /* Read a non record varying rank 1 table as doubles, in its own units */
 static double* _readTable(cdf_file_t* pFile, const cdf_var_t* pV)
 {
-	size_t uSz = das_vt_size(cdf_valType(pV->nType));
-	ubyte* pRaw = (ubyte*)malloc(uSz * pV->aDimSz[0]);
+	size_t uSz = dasvt_size(cdf_valType(pV->nType));
+	uint8_t* pRaw = (uint8_t*)malloc(uSz * pV->aDimSz[0]);
 	double* pOut = (double*)malloc(sizeof(double) * pV->aDimSz[0]);
 	if((pRaw == NULL)||(pOut == NULL)||(CDFgetzVarRecordData(pFile->id, pV->nVarNum, 0, pRaw) != CDF_OK)){
 		free(pRaw); free(pOut);
@@ -695,11 +695,11 @@ static int _planLayout(cdf_file_t* pFile, pkt_layout_t* pL)
 			}
 		}
 		if(pFile->nDs == 0)
-			return das_error(
+			return daserrf(
 				PERR, "Nothing to stream from %s: no data variable depends on a time base",
 				pFile->sPath
 			);
-		return das_error(
+		return daserrf(
 			PERR, "A das2 stream holds one packet type but %s has %d time dependent "
 			"datasets; name the variables of one of them:\n%s", 
 			pFile->sPath, pFile->nDs, sList
@@ -713,7 +713,7 @@ static int _planLayout(cdf_file_t* pFile, pkt_layout_t* pL)
 	pL->nTimeType = pT->nType;
 
 	if(pDs->nRank > 2)
-		return das_error(
+		return daserrf(
 			PERR, "%s depends on %d coordinates; a das2 packet holds time and at most "
 			"one more", pFirst->sName, pDs->nRank
 		);
@@ -725,10 +725,10 @@ static int _planLayout(cdf_file_t* pFile, pkt_layout_t* pL)
 		int iC = _secondIndex(pFile, pFirst, &iItemDim);
 		if(iC >= 0) pC = pFile->aVars + iC;
 		if((pC != NULL) && pC->bRecVary)
-			return das_error(PERR, "%s varies by record; das2 yTags are fixed for the stream, "
+			return daserrf(PERR, "%s varies by record; das2 yTags are fixed for the stream, "
 				"so %s cannot be sent as a <yscan>", pC->sName, pFirst->sName);
 		if((pC != NULL) && (pC->nDims != 1))
-			return das_error(PERR, "%s is a rank %ld table; only rank 1 tables become yTags",
+			return daserrf(PERR, "%s is a rank %ld table; only rank 1 tables become yTags",
 				pC->sName, pC->nDims);
 		pL->nItems = pFirst->aDimSz[iItemDim];
 		pL->iItemDim = iItemDim;
@@ -747,7 +747,7 @@ static int _planLayout(cdf_file_t* pFile, pkt_layout_t* pL)
 	else if(pL->bTimeOffset)
 		pL->mode = LAYOUT_UNROLL;
 	else
-		return das_error(PERR, "%s has components along one index and %s along another; a das2 "
+		return daserrf(PERR, "%s has components along one index and %s along another; a das2 "
 			"<yscan> holds one scalar.  Name one component, as %s.%s, to send it as a <yscan>",
 			pFirst->sName, (pC != NULL) ? pC->sName : "an unlabeled table", pFirst->sName,
 			(pFirst->nLabels > 0) ? pFirst->aLabels[0] : "0");
@@ -759,25 +759,25 @@ static int _planLayout(cdf_file_t* pFile, pkt_layout_t* pL)
 	if(pC != NULL){
 		bSeries = cdf_isSequence(pFile, pC, &rMin, &rStep);
 		pTable = bSeries ? (double*)malloc(sizeof(double) * pL->nItems) : _readTable(pFile, pC);
-		if(pTable == NULL) return das_error(PERR, "Could not read table %s", pC->sName);
+		if(pTable == NULL) return daserrf(PERR, "Could not read table %s", pC->sName);
 		if(bSeries) for(long i = 0; i < pL->nItems; ++i) pTable[i] = rMin + rStep * i;
 	}
-	das_units unitsC = (pC != NULL) ? cdf_varUnits(pC) : UNIT_DIMENSIONLESS;
+	DasUnits unitsC = (pC != NULL) ? cdf_varUnits(pC) : DASUNITS_DIMENSIONLESS;
 	if(pL->bTimeOffset){
-		if(!Units_canConvert(unitsC, UNIT_SECONDS)){
+		if(!DasUnits_canConvert(unitsC, DASUNITS_SECONDS)){
 			free(pTable);
-			return das_error(PERR, "%s is an OFFSET_OF time table but its units, %s, are not a "
-				"time interval", pC->sName, Units_toStr(unitsC));
+			return daserrf(PERR, "%s is an OFFSET_OF time table but its units, %s, are not a "
+				"time interval", pC->sName, DasUnits_toStr(unitsC));
 		}
-		for(long i = 0; i < pL->nItems; ++i) pTable[i] = Units_convertTo(pTable[i], unitsC, UNIT_SECONDS);
-		rMin  = Units_convertTo(rMin, unitsC, UNIT_SECONDS);
-		rStep = Units_convertTo(rStep, unitsC, UNIT_SECONDS);
-		unitsC = UNIT_SECONDS;
+		for(long i = 0; i < pL->nItems; ++i) pTable[i] = DasUnits_convert(pTable[i], unitsC, DASUNITS_SECONDS);
+		rMin  = DasUnits_convert(rMin, unitsC, DASUNITS_SECONDS);
+		rStep = DasUnits_convert(rStep, unitsC, DASUNITS_SECONDS);
+		unitsC = DASUNITS_SECONDS;
 	}
 
 	/* the packet: time first */
 	pL->pPkt = new_DasPkt();
-	pL->pX = new_DasPlane(DASPLANE_X, "", new_DasEnc(DAS2DT_LE_REAL, 8, NULL), UNIT_US2000);
+	pL->pX = new_DasPlane(DASPLANETYPE_X, "", new_DasEnc(DAS2DT_LE_REAL, 8, NULL), DASUNITS_US2000);
 	DasPkt_addPlane(pL->pPkt, pL->pX);
 
 	bool bDeltas = false;
@@ -793,33 +793,33 @@ static int _planLayout(cdf_file_t* pFile, pkt_layout_t* pL)
 		if((pV->sDeltaPlus[0] != '\0')||(pV->sDeltaMinus[0] != '\0')) bDeltas = true;
 
 		const char* sDim = _dimName(pDs, pV);
-		das_units units = cdf_varUnits(pV);
+		DasUnits units = cdf_varUnits(pV);
 		char sPlane[CVAR_NAME_SZ + 40];
 
 		if(pL->mode == LAYOUT_YSCAN){
 			pS->nComps = 1;
 			DasPlane* pP = NULL;
 			if(bSeries)
-				pP = new_DasPlane_yscan_seq(sDim, _valueEncoding(pV->nType), units, pL->nItems,
-					rStep, rMin, DAS_FILL_VALUE, unitsC);
+				pP = new_DasPlane_yscanSeq(sDim, _valueEncoding(pV->nType), units, pL->nItems,
+					rStep, rMin, DASVAL_FILL, unitsC);
 			else if(pTable != NULL)
 				pP = new_DasPlane_yscan(sDim, _valueEncoding(pV->nType), units, pL->nItems, NULL, pTable, unitsC);
 			else
-				pP = new_DasPlane_yscan(sDim, _valueEncoding(pV->nType), units, pL->nItems, NULL, NULL, UNIT_DIMENSIONLESS);
+				pP = new_DasPlane_yscan(sDim, _valueEncoding(pV->nType), units, pL->nItems, NULL, NULL, DASUNITS_DIMENSIONLESS);
 			if(pP == NULL){ free(pTable); return PERR; }
 			_addPlaneProps(pFile, pV, pP, 'z');
 			if(pC != NULL){
 				char sLbl[256];
 				if(cdf_varAttrStr(pFile->id, pC->nVarNum, "LABLAXIS", sLbl, sizeof(sLbl)) && (sLbl[0] != '\0'))
-					DasDesc_setStr((DasDesc*)pP, "yLabel", sLbl);
+					DasDesc_setVal((DasDesc*)pP, "yLabel", sLbl);
 			}
-			DasDesc_setDouble((DasDesc*)pP, "zFill", DAS_FILL_VALUE);
+			DasDesc_setValDouble((DasDesc*)pP, "zFill", DASVAL_FILL);
 			DasPkt_addPlane(pL->pPkt, pP);
 			pS->aPlanes[0] = pP;
 		}
 		else{
 			pS->nComps = pV->nComps;
-			if(pS->nComps > MAX_COMPS){ free(pTable); return das_error(PERR, "%s has more than %d components", pV->sName, MAX_COMPS); }
+			if(pS->nComps > MAX_COMPS){ free(pTable); return daserrf(PERR, "%s has more than %d components", pV->sName, MAX_COMPS); }
 			for(int c = 0; c < pS->nComps; ++c){
 				if(pS->nComps == 1)
 					snprintf(sPlane, sizeof(sPlane), "%s", sDim);
@@ -827,17 +827,17 @@ static int _planLayout(cdf_file_t* pFile, pkt_layout_t* pL)
 					snprintf(sPlane, sizeof(sPlane), "%s_%s", sDim, pV->aLabels[c]);
 				else
 					snprintf(sPlane, sizeof(sPlane), "%s_%d", sDim, c);
-				DasPlane* pP = new_DasPlane(DASPLANE_Y, sPlane, _valueEncoding(pV->nType), units);
+				DasPlane* pP = new_DasPlane(DASPLANETYPE_Y, sPlane, _valueEncoding(pV->nType), units);
 				if(pP == NULL){ free(pTable); return PERR; }
 				_addPlaneProps(pFile, pV, pP, 'y');
 				/* a component's label is its own, the variable's label describes the set */
 				if((pS->nComps > 1)&&(c < pV->nLabels)){
 					if(DasDesc_has((DasDesc*)pP, "yLabel"))
-						DasDesc_setStr((DasDesc*)pP, "ySummary", DasDesc_getStr((DasDesc*)pP, "yLabel"));
-					DasDesc_setStr((DasDesc*)pP, "yLabel", pV->aLabels[c]);
-					if(pV->sFrame[0] != '\0') DasDesc_setStr((DasDesc*)pP, "yFrame", pV->sFrame);
+						DasDesc_setVal((DasDesc*)pP, "ySummary", DasDesc_val((DasDesc*)pP, "yLabel"));
+					DasDesc_setVal((DasDesc*)pP, "yLabel", pV->aLabels[c]);
+					if(pV->sFrame[0] != '\0') DasDesc_setVal((DasDesc*)pP, "yFrame", pV->sFrame);
 				}
-				DasDesc_setDouble((DasDesc*)pP, "yFill", DAS_FILL_VALUE);
+				DasDesc_setValDouble((DasDesc*)pP, "yFill", DASVAL_FILL);
 				DasPkt_addPlane(pL->pPkt, pP);
 				pS->aPlanes[c] = pP;
 			}
@@ -849,7 +849,7 @@ static int _planLayout(cdf_file_t* pFile, pkt_layout_t* pL)
 
 	if(pL->mode == LAYOUT_UNROLL){
 		pL->pOffSec = pTable;
-		daslog_info_v("%s: %ld samples per record are sent as separate packets", pFirst->sName, pL->nItems);
+		daslog_infof("%s: %ld samples per record are sent as separate packets", pFirst->sName, pL->nItems);
 	}
 	else
 		free(pTable);
@@ -861,8 +861,8 @@ static int _planLayout(cdf_file_t* pFile, pkt_layout_t* pL)
 static void _addStreamHints(const pkt_layout_t* pL, DasStream* pSd)
 {
 	if((pL->mode == LAYOUT_YSCAN) && pL->bTimeOffset)
-		DasDesc_setStr((DasDesc*)pSd, "renderer", "waveform");
-	DasDesc_setStr((DasDesc*)pSd, "xLabel", "Time (UTC)");
+		DasDesc_setVal((DasDesc*)pSd, "renderer", "waveform");
+	DasDesc_setVal((DasDesc*)pSd, "xLabel", "Time (UTC)");
 }
 
 /* ************************************************************************* */
@@ -873,32 +873,32 @@ static void _addStreamHints(const pkt_layout_t* pL, DasStream* pSd)
 /* Fill in the file replaced by the das2 fill */
 static inline double _outVal(double r, double rFill)
 {
-	return (r == rFill) ? DAS_FILL_VALUE : r;
+	return (r == rFill) ? DASVAL_FILL : r;
 }
 
 /* Send the one dataset's records from an open file, in blocks, keeping
    records whose time base falls in the range */
-static int _streamFile(cdf_file_t* pFile, pkt_layout_t* pL, DasIO* pIo, const das_range* pRng, long* pnPkts)
+static int _streamFile(cdf_file_t* pFile, pkt_layout_t* pL, DasIO* pIo, const DasRng* pRng, long* pnPkts)
 {
 	int iT = cdf_varIndex(pFile, pL->sTime);
-	if(iT < 0) return das_error(PERR, "%s has no %s", pFile->sPath, pL->sTime);
+	if(iT < 0) return daserrf(PERR, "%s has no %s", pFile->sPath, pL->sTime);
 	cdf_var_t* pT = pFile->aVars + iT;
 	long nRecs = pT->nRecs;
 	if(nRecs < 1) return DAS_OKAY;
 
-	das_time dtBeg, dtEnd;
-	das_datum_toTime(&(pRng->dmBeg), &dtBeg);
-	das_datum_toTime(&(pRng->dmEnd), &dtEnd);
-	int64_t nBeg = dt_to_tt2k(&dtBeg);
-	int64_t nEnd = dt_to_tt2k(&dtEnd);
+	DasTime dtBeg, dtEnd;
+	DasDatum_toTime(&(pRng->begin), &dtBeg);
+	DasDatum_toTime(&(pRng->end), &dtEnd);
+	int64_t nBeg = DasTime_toTt2k(&dtBeg);
+	int64_t nEnd = DasTime_toTt2k(&dtEnd);
 
 	/* readers for this file, by name */
 	rec_reader_t aRd[MAX_CDF_VARS];
 	long nMaxBytesPerRec = 8;
 	for(int s = 0; s < pL->nSrcs; ++s){
 		int iV = cdf_varIndex(pFile, pL->aSrcs[s].sName);
-		if(iV < 0) return das_error(PERR, "%s has no %s", pFile->sPath, pL->aSrcs[s].sName);
-		long n = cdf_initReader(pFile, iV, aRd + s) * (long)das_vt_size(cdf_valType(pL->aSrcs[s].nType));
+		if(iV < 0) return daserrf(PERR, "%s has no %s", pFile->sPath, pL->aSrcs[s].sName);
+		long n = cdf_initReader(pFile, iV, aRd + s) * (long)dasvt_size(cdf_valType(pL->aSrcs[s].nType));
 		if(n > nMaxBytesPerRec) nMaxBytesPerRec = n;
 	}
 	long nBlock = MAX_BLOCK_BYTES / nMaxBytesPerRec;
@@ -906,7 +906,7 @@ static int _streamFile(cdf_file_t* pFile, pkt_layout_t* pL, DasIO* pIo, const da
 
 	bool* pKeep = (bool*)malloc(nBlock);
 	double* pUs = (double*)malloc(nBlock * sizeof(double));
-	ubyte** apBuf = (ubyte**)calloc(pL->nSrcs, sizeof(ubyte*));
+	uint8_t** apBuf = (uint8_t**)calloc(pL->nSrcs, sizeof(uint8_t*));
 	if((pKeep == NULL)||(pUs == NULL)||(apBuf == NULL)){ free(pKeep); free(pUs); free(apBuf); return PERR; }
 
 	int nRet = DAS_OKAY;
@@ -916,7 +916,7 @@ static int _streamFile(cdf_file_t* pFile, pkt_layout_t* pL, DasIO* pIo, const da
 		/* the time base first, to decide what is kept */
 		size_t uTSz = (pT->nType == CDF_EPOCH) ? sizeof(double) : sizeof(int64_t);
 		rec_reader_t rdT = { .iVar = iT, .nElemsPerRec = 1, .bTime = true, .nDims = 0 };
-		ubyte* pTBuf = cdf_readBlock(pFile, pT->nVarNum, &rdT, nRec0, nHere, uTSz);
+		uint8_t* pTBuf = cdf_readBlock(pFile, pT->nVarNum, &rdT, nRec0, nHere, uTSz);
 		if(pTBuf == NULL){ nRet = PERR; break; }
 		long nKept = 0;
 		for(long i = 0; i < nHere; ++i){
@@ -926,13 +926,13 @@ static int _streamFile(cdf_file_t* pFile, pkt_layout_t* pL, DasIO* pIo, const da
 			if(pKeep[i]){ pUs[i] = _tt2kToUs2k(nVal); ++nKept; }
 		}
 		if(nRec0 == 0)
-			daslog_debug_v("range %" PRId64 " to %" PRId64 " TT2000, first record %" PRId64 ", %ld of %ld kept in block 0",
+			daslog_debugf("range %" PRId64 " to %" PRId64 " TT2000, first record %" PRId64 ", %ld of %ld kept in block 0",
 				nBeg, nEnd, (int64_t)((pT->nType == CDF_EPOCH) ? CDF_TT2000_from_UTC_EPOCH(((const double*)pTBuf)[0]) : ((const int64_t*)pTBuf)[0]), nKept, nHere);
 		free(pTBuf);
 		if(nKept == 0) continue;
 
 		for(int s = 0; (s < pL->nSrcs)&&(nRet == DAS_OKAY); ++s){
-			size_t uSz = das_vt_size(cdf_valType(pL->aSrcs[s].nType));
+			size_t uSz = dasvt_size(cdf_valType(pL->aSrcs[s].nType));
 			int iV = aRd[s].iVar;
 			apBuf[s] = cdf_readBlock(pFile, pFile->aVars[iV].nVarNum, aRd + s, nRec0, nHere, uSz);
 			if(apBuf[s] == NULL) nRet = PERR;
@@ -942,21 +942,21 @@ static int _streamFile(cdf_file_t* pFile, pkt_layout_t* pL, DasIO* pIo, const da
 			if(!pKeep[i]) continue;
 
 			if(pL->mode != LAYOUT_UNROLL){
-				DasPlane_setValue(pL->pX, 0, pUs[i]);
+				DasPlane_setValAt(pL->pX, 0, pUs[i]);
 				for(int s = 0; s < pL->nSrcs; ++s){
 					var_src_t* pS = pL->aSrcs + s;
-					size_t uSz = das_vt_size(cdf_valType(pS->nType));
-					const ubyte* pRec = apBuf[s] + i * uSz * aRd[s].nElemsPerRec;
+					size_t uSz = dasvt_size(cdf_valType(pS->nType));
+					const uint8_t* pRec = apBuf[s] + i * uSz * aRd[s].nElemsPerRec;
 					if(pL->mode == LAYOUT_YSCAN){
 						/* the one scalar per item; a selected component rides at
 						   offset 0 of its (width 1) axis */
 						for(long k = 0; k < pL->nItems; ++k)
-							DasPlane_setValue(pS->aPlanes[0], k,
+							DasPlane_setValAt(pS->aPlanes[0], k,
 								_outVal(_elemAsDouble(pS->nType, pRec + k * uSz), pS->rFill));
 					}
 					else{
 						for(int c = 0; c < pS->nComps; ++c)
-							DasPlane_setValue(pS->aPlanes[c], 0,
+							DasPlane_setValAt(pS->aPlanes[c], 0,
 								_outVal(_elemAsDouble(pS->nType, pRec + c * uSz), pS->rFill));
 					}
 				}
@@ -967,16 +967,16 @@ static int _streamFile(cdf_file_t* pFile, pkt_layout_t* pL, DasIO* pIo, const da
 				/* one packet per sample; element (k, c) or (c, k) by which CDF
 				   dim carries the components */
 				for(long k = 0; (k < pL->nItems)&&(nRet == DAS_OKAY); ++k){
-					DasPlane_setValue(pL->pX, 0, pUs[i] + pL->pOffSec[k] * 1e6);
+					DasPlane_setValAt(pL->pX, 0, pUs[i] + pL->pOffSec[k] * 1e6);
 					for(int s = 0; s < pL->nSrcs; ++s){
 						var_src_t* pS = pL->aSrcs + s;
-						size_t uSz = das_vt_size(cdf_valType(pS->nType));
-						const ubyte* pRec = apBuf[s] + i * uSz * aRd[s].nElemsPerRec;
+						size_t uSz = dasvt_size(cdf_valType(pS->nType));
+						const uint8_t* pRec = apBuf[s] + i * uSz * aRd[s].nElemsPerRec;
 						bool bCompLast = (pS->iCompDim > pL->iItemDim);
 						long nInner = bCompLast ? pS->aCount[pS->iCompDim] : pL->nItems;
 						for(int c = 0; c < pS->nComps; ++c){
 							long iEl = bCompLast ? (k * nInner + c) : (c * nInner + k);
-							DasPlane_setValue(pS->aPlanes[c], 0,
+							DasPlane_setValAt(pS->aPlanes[c], 0,
 								_outVal(_elemAsDouble(pS->nType, pRec + iEl * uSz), pS->rFill));
 						}
 					}
@@ -999,7 +999,7 @@ static int _streamFile(cdf_file_t* pFile, pkt_layout_t* pL, DasIO* pIo, const da
    there were with the first one's path in sFirst */
 static int _firstFile(DasUriIter* pIter, char* sFirst, size_t uLen, bool bPrint)
 {
-	char sFile[DURI_MAX_PATH];
+	char sFile[DASURITPLT_PATH_SZ];
 	int nFiles = 0;
 	if(bPrint) printf("Files:\n");
 	while(DasUriIter_next(pIter, sFile, sizeof(sFile)) != NULL){
@@ -1018,26 +1018,26 @@ int main(int argc, char** argv)
 		return PERR;
 
 	/* The library level stays at ERROR or below, see logHandler() */
-	g_nUserLevel = daslog_strlevel(opts.aLevel);
+	g_nUserLevel = daslog_levelFromStr(opts.aLevel);
 	if(g_nUserLevel < 0) g_nUserLevel = DASLOG_INFO;
-	das_loghook hook = {logHandler, NULL};
-	das_init(argv[0], DASERR_DIS_RET,
+	DasLogHook hook = {logHandler, NULL};
+	daslib_init(argv[0], DASERRDISP_RET,
 	         (g_nUserLevel > DASLOG_ERROR) ? DASLOG_ERROR : g_nUserLevel, &hook);
 
 	das_errcode nDasStatus = DAS_OKAY;   /* for DAS_EXIT */
 
 	DasUriTplt* pTplt = new_DasUriTplt();
-	DasUriTplt_register(pTplt, das_time_uridef());
-	DAS_EXIT( DasUriTplt_pattern(pTplt, opts.sPattern) );
+	DasUriTplt_register(pTplt, DasUriSegDef_timeToks());
+	DAS_EXIT( DasUriTplt_setPattern(pTplt, opts.sPattern) );
 
 	DasUriIter iter;
-	das_dim_range drTime;
-	das_dim_range_init(&drTime, "time", &(opts.range));
+	DasDimRng drTime;
+	DasDimRng_set(&drTime, "time", &(opts.range));
 	DAS_EXIT( init_DasUriIter(&iter, pTplt, 1, &drTime) );
 
 	DAS_EXIT( cdf_parsePropMap(opts.aPropMap) );
 
-	bool bBounded = das_range_hasBeg(&(opts.range)) && das_range_hasEnd(&(opts.range));
+	bool bBounded = DasRng_hasBeg(&(opts.range)) && DasRng_hasEnd(&(opts.range));
 	cdf_select_t sel = {
 		.sCoordMap = opts.aCoordMap, .sDefVars = opts.aDefVars,
 		.asVars = opts.asVars, .nVars = opts.nVars,
@@ -1047,7 +1047,7 @@ int main(int argc, char** argv)
 	if(opts.bVars){
 		/* every time dependent variable is a candidate, so select them all */
 		cdf_select_t selAll = { .sCoordMap = opts.aCoordMap, .sDefVars = "", .asVars = NULL };
-		char sFirst[DURI_MAX_PATH] = {'\0'};
+		char sFirst[DASURITPLT_PATH_SZ] = {'\0'};
 		int nFiles = _firstFile(&iter, sFirst, sizeof(sFirst), false);
 		fini_DasUriIter(&iter);
 		del_DasUriTplt(pTplt);
@@ -1067,8 +1067,8 @@ int main(int argc, char** argv)
 		if(bBounded){
 			char sBeg[64] = {'\0'};
 			char sEnd[64] = {'\0'};
-			das_datum_toStr(&(opts.range.dmBeg), 6, sBeg, sizeof(sBeg));
-			das_datum_toStr(&(opts.range.dmEnd), 6, sEnd, sizeof(sEnd));
+			DasDatum_toStr(&(opts.range.begin), 6, sBeg, sizeof(sBeg));
+			DasDatum_toStr(&(opts.range.end), 6, sEnd, sizeof(sEnd));
 			printf("Range: time from %s to %s\n", sBeg, sEnd);
 		}
 		else
@@ -1078,7 +1078,7 @@ int main(int argc, char** argv)
 			for(int i = 0; i < opts.nVars; ++i) printf(" %s", opts.asVars[i]);
 			printf("\n");
 		}
-		char sFirst[DURI_MAX_PATH] = {'\0'};
+		char sFirst[DASURITPLT_PATH_SZ] = {'\0'};
 		int nFiles = _firstFile(&iter, sFirst, sizeof(sFirst), true);
 		fini_DasUriIter(&iter);
 		del_DasUriTplt(pTplt);
@@ -1094,8 +1094,8 @@ int main(int argc, char** argv)
 			if(_planLayout(pFile, &g_layout) == DAS_OKAY){
 				DasBuf* pBuf = new_DasBuf(65536);
 				size_t uHdr = 0;
-				const ubyte* pHdr = NULL;
-				if((DasPkt_encode(g_layout.pPkt, pBuf) == DAS_OKAY)&&
+				const uint8_t* pHdr = NULL;
+				if((DasPkt_encodeHdr(g_layout.pPkt, pBuf) == DAS_OKAY)&&
 				   ((pHdr = DasBuf_data(pBuf, &uHdr)) != NULL))
 					fwrite(pHdr, 1, uHdr, stdout);
 				del_DasBuf(pBuf);
@@ -1115,7 +1115,7 @@ int main(int argc, char** argv)
 	   match its structure or are skipped with an error. */
 	g_pIoOut = new_DasIO(PROG, new_DasXport_stdout(), NULL);
 	g_pSd = new_DasStream();
-	g_exType = DAS_EX_SERVER_ERR;
+	g_exType = DASEXCEPTTYPE_SERVER_ERR;
 
 	cdf_file_t* pFirst = (cdf_file_t*)calloc(1, sizeof(cdf_file_t));
 	cdf_file_t* pFile = (cdf_file_t*)calloc(1, sizeof(cdf_file_t));
@@ -1123,11 +1123,11 @@ int main(int argc, char** argv)
 	char sSig[MAX_CDF_VARS * 64] = {'\0'};
 	long nPkts = 0;
 	int nFiles = 0;
-	char sPath[DURI_MAX_PATH];
+	char sPath[DASURITPLT_PATH_SZ];
 	while(DasUriIter_next(&iter, sPath, sizeof(sPath)) != NULL){
 		cdf_file_t* pCur = (nFiles == 0) ? pFirst : pFile;
 		if(cdf_openAndClassify(pCur, sPath, &sel) != DAS_OKAY){
-			daslog_error_v("Skipping %s", sPath);
+			daslog_errorf("Skipping %s", sPath);
 			_flushLog();
 			continue;
 		}
@@ -1144,7 +1144,7 @@ int main(int argc, char** argv)
 		else{
 			cdf_structSig(pCur, sSig, sizeof(sSig));
 			if(strcmp(sSig, sSigFirst) != 0){
-				daslog_error_v("%s does not have the same variables as %s, skipping it",
+				daslog_errorf("%s does not have the same variables as %s, skipping it",
 					sPath, pFirst->sPath);
 				_flushLog();
 				CDFcloseCDF(pCur->id);
@@ -1162,19 +1162,19 @@ int main(int argc, char** argv)
 	del_DasUriTplt(pTplt);
 
 	if(nPkts == 0){
-		if(!DasIO_headerSent(g_pIoOut))
+		if(!DasIO_hasSentHeader(g_pIoOut))
 			DAS_EXIT( DasIO_writeStreamDesc(g_pIoOut, g_pSd) );
 		char sMsg[256] = {'\0'};
 		char sBeg[64], sEnd[64];
-		das_datum_toStr(&(opts.range.dmBeg), 3, sBeg, sizeof(sBeg));
-		das_datum_toStr(&(opts.range.dmEnd), 3, sEnd, sizeof(sEnd));
+		DasDatum_toStr(&(opts.range.begin), 3, sBeg, sizeof(sBeg));
+		DasDatum_toStr(&(opts.range.end), 3, sEnd, sizeof(sEnd));
 		snprintf(sMsg, sizeof(sMsg) - 1, "No data in range %s to %s", sBeg, sEnd);
-		DAS_EXIT( DasIO_exception_v(g_pIoOut, DAS_EX_NO_DATA, "%s", sMsg) );
+		DAS_EXIT( DasIO_exceptionf(g_pIoOut, DASEXCEPTTYPE_NO_DATA, "%s", sMsg) );
 	}
 
 	_flushLog();
 	DasIO_close(g_pIoOut);
-	daslog_info_v("%ld packets sent from %d file(s)", nPkts, nFiles);
+	daslog_infof("%ld packets sent from %d file(s)", nPkts, nFiles);
 	free(g_layout.pOffSec);
 	free(pFirst);
 	free(pFile);

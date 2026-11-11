@@ -46,7 +46,7 @@
 /* value type functions */
 
 static const das_idx_info g_idxFill = {0, 0};
-static const ubyte g_ubyteFill = 255;
+static const uint8_t g_ubyteFill = 255;
 static const int8_t  g_byteFill = -128;
 static const uint16_t g_ushortFill = 65535;
 static const int16_t g_shortFill = -32767;
@@ -54,228 +54,228 @@ static const uint32_t g_uintFill = 4294967295;
 static const int32_t g_intFill = -2147483647;
 static const int64_t g_longFill = -9223372036854775807L;
 static const uint64_t g_ulongFill = 18446744073709551615UL;
-static const float g_floatFill = DAS_FILL_VALUE;
-static const double g_doubleFill = DAS_FILL_VALUE;
-static const das_time g_timeFill = {1, 1, 1, 1, 0, 0, 0.0};
+static const float g_floatFill = DASVAL_FILL;
+static const double g_doubleFill = DASVAL_FILL;
+static const DasTime g_timeFill = {1, 1, 1, 1, 0, 0, 0.0};
 
 static const void* g_voidFill = NULL;
-static const das_cbyte_seq g_byteSeqFill = {NULL, 0};
+static const DasCByteSeq g_byteSeqFill = {NULL, 0};
 
-bool das_isfill(double value)
+bool dasval_isFill(double value)
 {
-	return fabs((DAS_FILL_VALUE - value)/DAS_FILL_VALUE) < 0.00001;
+	return fabs((DASVAL_FILL - value)/DASVAL_FILL) < 0.00001;
 }
 
-const void* das_vt_fill(das_val_type et)
+const void* dasvt_fill(das_vt et)
 {
 	switch(et){
-	case vtIndex: return &(g_idxFill);
-	case vtUByte: return &(g_ubyteFill);
-	case vtByte:  return &(g_byteFill);
-	case vtUShort: return &(g_ushortFill);
-	case vtShort: return &(g_shortFill);
-	case vtUInt:  return &(g_uintFill);
-	case vtInt: return &(g_intFill);
-	case vtULong: return &(g_ulongFill);
-	case vtLong: return &(g_longFill);
-	case vtFloat: return &(g_floatFill);
-	case vtDouble: return &(g_doubleFill);
-	case vtTime: return &(g_timeFill);
-	case vtText:   return &(g_voidFill);
-	case vtByteSeq: return &(g_byteSeqFill);
+	case DASVT_INDEX: return &(g_idxFill);
+	case DASVT_UBYTE: return &(g_ubyteFill);
+	case DASVT_BYTE:  return &(g_byteFill);
+	case DASVT_USHORT: return &(g_ushortFill);
+	case DASVT_SHORT: return &(g_shortFill);
+	case DASVT_UINT:  return &(g_uintFill);
+	case DASVT_INT: return &(g_intFill);
+	case DASVT_ULONG: return &(g_ulongFill);
+	case DASVT_LONG: return &(g_longFill);
+	case DASVT_FLOAT: return &(g_floatFill);
+	case DASVT_DOUBLE: return &(g_doubleFill);
+	case DASVT_TIME: return &(g_timeFill);
+	case DASVT_TEXT:   return &(g_voidFill);
+	case DASVT_BYTESEQ: return &(g_byteSeqFill);
 	default:	return NULL;
 	}
 }
 
-size_t das_vt_size(das_val_type et)
+size_t dasvt_size(das_vt et)
 {
 	switch(et){
-	case vtNull:  return 0;   /* holds nothing */
-	case vtIndex: return sizeof(g_idxFill);
+	case DASVT_NULL:  return 0;   /* holds nothing */
+	case DASVT_INDEX: return sizeof(g_idxFill);
 
-	case vtByte:  case vtUByte:  return 1;
-	case vtShort: case vtUShort: return 2;
-	case vtUInt:  case vtInt:    case vtFloat:  return 4;
-	case vtLong:  case vtULong:  case vtDouble: return 8;
+	case DASVT_BYTE:  case DASVT_UBYTE:  return 1;
+	case DASVT_SHORT: case DASVT_USHORT: return 2;
+	case DASVT_UINT:  case DASVT_INT:    case DASVT_FLOAT:  return 4;
+	case DASVT_LONG:  case DASVT_ULONG:  case DASVT_DOUBLE: return 8;
 	
-	case vtTime: return sizeof(g_timeFill);
-	case vtText: return sizeof(char*);
-	case vtByteSeq: return sizeof(das_cbyte_seq);
+	case DASVT_TIME: return sizeof(g_timeFill);
+	case DASVT_TEXT: return sizeof(char*);
+	case DASVT_BYTESEQ: return sizeof(DasCByteSeq);
 	default:
-		das_error(DASERR_ARRAY, "Program logic error");
+		daserrf(DASERR_ARRAY, "Program logic error");
 		return 0;
 	}
 }
 
-const char* das_vt_toStr(das_val_type et)
+const char* dasvt_name(das_vt et)
 {
 	switch(et){
-	case vtNull:    return "null";
-	case vtIndex:   return "index_info";
-	case vtUByte:   return "ubyte";
-	case vtByte:    return "byte";
-	case vtUShort:  return "ushort";
-	case vtShort:   return "short";
-	case vtUInt:    return "uint";
-	case vtInt:     return "int";
-	case vtULong:   return "ulong";
-	case vtLong:    return "long";
-	case vtFloat:   return "float";
-	case vtDouble:  return "double";
-	case vtTime:    return "das_time";
-	case vtText:    return "char*";
-	case vtByteSeq: return "ubyte*";
+	case DASVT_NULL:    return "null";
+	case DASVT_INDEX:   return "index_info";
+	case DASVT_UBYTE:   return "ubyte";
+	case DASVT_BYTE:    return "byte";
+	case DASVT_USHORT:  return "ushort";
+	case DASVT_SHORT:   return "short";
+	case DASVT_UINT:    return "uint";
+	case DASVT_INT:     return "int";
+	case DASVT_ULONG:   return "ulong";
+	case DASVT_LONG:    return "long";
+	case DASVT_FLOAT:   return "float";
+	case DASVT_DOUBLE:  return "double";
+	case DASVT_TIME:    return "das_time";
+	case DASVT_TEXT:    return "char*";
+	case DASVT_BYTESEQ: return "ubyte*";
 
 	/* something made up of a collection of one of the other types above  */
-	case vtComposite: return "composite";
+	case DASVT_COMP: return "composite";
 
 	/* App defined type case, we don't know what this is but we know
 	   it's something someone else might understand */
-	case vtUnknown: return "unknown";
+	case DASVT_UNK: return "unknown";
 
 	default: return NULL;
 	}
 }
 
-das_val_type das_vt_fromStr(const char* sStorage)
+das_vt dasvt_id(const char* sStorage)
 {
-	if(strcasecmp(sStorage, "float") == 0)  return vtFloat;
-	if(strcasecmp(sStorage, "double") == 0) return vtDouble;
-	if(strcasecmp(sStorage, "int") == 0)    return vtInt;
-	if(strcasecmp(sStorage, "short") == 0)  return vtShort;
-	if(strcasecmp(sStorage, "long") == 0)   return vtLong;
-	if(strcasecmp(sStorage, "uint") == 0)   return vtUInt;
-	if(strcasecmp(sStorage, "ushort") == 0) return vtUShort;
-	if(strcasecmp(sStorage, "ulong") == 0)  return vtULong;
-	if(strcasecmp(sStorage, "byte") == 0)   return vtByte;
-	if(strcasecmp(sStorage, "ubyte") == 0)  return vtUByte;
+	if(strcasecmp(sStorage, "float") == 0)  return DASVT_FLOAT;
+	if(strcasecmp(sStorage, "double") == 0) return DASVT_DOUBLE;
+	if(strcasecmp(sStorage, "int") == 0)    return DASVT_INT;
+	if(strcasecmp(sStorage, "short") == 0)  return DASVT_SHORT;
+	if(strcasecmp(sStorage, "long") == 0)   return DASVT_LONG;
+	if(strcasecmp(sStorage, "uint") == 0)   return DASVT_UINT;
+	if(strcasecmp(sStorage, "ushort") == 0) return DASVT_USHORT;
+	if(strcasecmp(sStorage, "ulong") == 0)  return DASVT_ULONG;
+	if(strcasecmp(sStorage, "byte") == 0)   return DASVT_BYTE;
+	if(strcasecmp(sStorage, "ubyte") == 0)  return DASVT_UBYTE;
 	/* the wire token.  This works for now because the only struct that
-	   is streamed is a das_time.  May need to revisit this in future
+	   is streamed is a DasTime.  May need to revisit this in future
 	   stream versions. */
-	if(strcasecmp(sStorage, "struct") == 0) return vtTime;
-	if(strcasecmp(sStorage, "das_time") == 0) return vtTime; /* das_vt_toStr's */
-	if(strcasecmp(sStorage, "utf8") == 0)   return vtText;
-	if(strcasecmp(sStorage, "char*") == 0)  return vtText;
-	if(strcasecmp(sStorage, "ubyte*") == 0) return vtByteSeq;
-	return vtUnknown;
+	if(strcasecmp(sStorage, "struct") == 0) return DASVT_TIME;
+	if(strcasecmp(sStorage, "das_time") == 0) return DASVT_TIME; /* dasvt_name's */
+	if(strcasecmp(sStorage, "utf8") == 0)   return DASVT_TEXT;
+	if(strcasecmp(sStorage, "char*") == 0)  return DASVT_TEXT;
+	if(strcasecmp(sStorage, "ubyte*") == 0) return DASVT_BYTESEQ;
+	return DASVT_UNK;
 }
 
 /* Useful for picking a storage type when it's not explicitly stated */
-das_val_type das_vt_store_type(
+das_vt das_vt_store_type(
 	const char* sEncType, int nItemBytes, const char* sInterp
 ){
 	/* Canonicalize the encoding to its DAS_ENC_* singleton, then dispatch by pointer --
 	   the encoding vocabulary lives in das_enc_fromStr, not duplicated here. */
 	const char* sEnc = das_enc_fromStr(sEncType);
-	if(sEnc == DAS_ENC_BYTE){
-		return vtByte;  // promote to higher type to get sign bits
+	if(sEnc == DASENC_BYTE){
+		return DASVT_BYTE;  // promote to higher type to get sign bits
 	}
-	if(sEnc == DAS_ENC_UBYTE){
-		return vtUByte;
+	if(sEnc == DASENC_UBYTE){
+		return DASVT_UBYTE;
 	}
-	if((sEnc == DAS_ENC_BEINT)||(sEnc == DAS_ENC_LEINT)){
-		if(nItemBytes == 2) return vtShort;
-		else if(nItemBytes == 4) return vtInt;
-		else if(nItemBytes == 8) return vtLong;
+	if((sEnc == DASENC_BEINT)||(sEnc == DASENC_LEINT)){
+		if(nItemBytes == 2) return DASVT_SHORT;
+		else if(nItemBytes == 4) return DASVT_INT;
+		else if(nItemBytes == 8) return DASVT_LONG;
 		else{
-			das_error(DASERR_VALUE, "Unsupported length %d for binary integers", nItemBytes);
-			return vtUnknown;
+			daserrf(DASERR_VALUE, "Unsupported length %d for binary integers", nItemBytes);
+			return DASVT_UNK;
 		}
 	}
-	if((sEnc == DAS_ENC_BEUINT)||(sEnc == DAS_ENC_LEUINT)){
-		if(nItemBytes == 2) return vtUShort;
-		else if(nItemBytes == 4) return vtUInt;
-		else if(nItemBytes == 8) return vtULong;
+	if((sEnc == DASENC_BEUINT)||(sEnc == DASENC_LEUINT)){
+		if(nItemBytes == 2) return DASVT_USHORT;
+		else if(nItemBytes == 4) return DASVT_UINT;
+		else if(nItemBytes == 8) return DASVT_ULONG;
 		else{
-			das_error(DASERR_VALUE, "Unsupported length %d for binary integers", nItemBytes);
-			return vtUnknown;
+			daserrf(DASERR_VALUE, "Unsupported length %d for binary integers", nItemBytes);
+			return DASVT_UNK;
 		}
 	}
-	if((sEnc == DAS_ENC_BEREAL)||(sEnc == DAS_ENC_LEREAL)){
-		if(nItemBytes == 4) return vtFloat;
-		else if (nItemBytes == 8) return vtDouble;
+	if((sEnc == DASENC_BEREAL)||(sEnc == DASENC_LEREAL)){
+		if(nItemBytes == 4) return DASVT_FLOAT;
+		else if (nItemBytes == 8) return DASVT_DOUBLE;
 		else{
-			das_error(DASERR_VALUE, "Unsupported length %d for binary floating point values", nItemBytes);
-			return vtUnknown;	
+			daserrf(DASERR_VALUE, "Unsupported length %d for binary floating point values", nItemBytes);
+			return DASVT_UNK;	
 		}
 	}
 
 	/* Okay it's a text type, deal with that.  Normalize the semantic through the one
 	   canonicalizer (das_sem_fromStr), then dispatch by canonical pointer -- so the
 	   liberal "int"/"integer" spelling lives in exactly one place, not here. */
-	if(sEnc == DAS_ENC_UTF8){
+	if(sEnc == DASENC_UTF8){
 		const char* sSem = das_sem_fromStr(sInterp);
-		if(sSem == DAS_SEM_BOOL)
-			return vtByte;  /* signed range allows for a fill value */
-		if(sSem == DAS_SEM_DATE)
-			return vtTime;
-		if(sSem == DAS_SEM_REAL){
+		if(sSem == DASSEM_BOOL)
+			return DASVT_BYTE;  /* signed range allows for a fill value */
+		if(sSem == DASSEM_DATE)
+			return DASVT_TIME;
+		if(sSem == DASSEM_REAL){
 			/* Can get hints from the length of the field, assume var-width items
 			 * need the biggest available encoding */
 			if((nItemBytes > 15)||(nItemBytes < 1))
-				return vtDouble;
+				return DASVT_DOUBLE;
 			else
-				return vtFloat;
+				return DASVT_FLOAT;
 		}
-		if(sSem == DAS_SEM_INT){
+		if(sSem == DASSEM_INT){
 			/* can get hints from the length of the field */
 			if((nItemBytes < 1)||(nItemBytes > 11))
-				return vtLong;  /* For var-length ints, return biggest storage for safety */
+				return DASVT_LONG;  /* For var-length ints, return biggest storage for safety */
 			if(nItemBytes > 5)
-				return vtInt;
+				return DASVT_INT;
 			if(nItemBytes > 4)
-				return vtShort;
-			return vtByte;
+				return DASVT_SHORT;
+			return DASVT_BYTE;
 		}
-		if(sSem == DAS_SEM_TEXT){
-			return vtText;
+		if(sSem == DASSEM_TEXT){
+			return DASVT_TEXT;
 		}
 		if(sSem == NULL){
-			das_error(DASERR_VALUE, "Unknown or unsupported semantic '%s'", sInterp);
-			return vtUnknown;
+			daserrf(DASERR_VALUE, "Unknown or unsupported semantic '%s'", sInterp);
+			return DASVT_UNK;
 		}
 	}
 	/* "blob" = native bytes, "base64" = the same bytes ASCII-encoded; both are
 	   length-prefixed on the wire ({N}<field>) and store the same decoded bytes.
 	   The encoding is orthogonal to the semantic: bytes bound for a string DasVar
-	   store as vtText, everything else as an opaque byte sequence.  (So
+	   store as DASVT_TEXT, everything else as an opaque byte sequence.  (So
 	   encoding="blob" with semantic="string" aka `{12}I'm a string` , is legal,
 	   though not preferred */
-	if((sEnc == DAS_ENC_BLOB)||(sEnc == DAS_ENC_BASE64)){
-		if(das_sem_fromStr(sInterp) == DAS_SEM_TEXT)
-			return vtText;
-		return vtByteSeq;
+	if((sEnc == DASENC_RAW)||(sEnc == DASENC_B64)){
+		if(das_sem_fromStr(sInterp) == DASSEM_TEXT)
+			return DASVT_TEXT;
+		return DASVT_BYTESEQ;
 	}
 
-	das_error(DASERR_VALUE, "Unknown encoding type %s", (sEncType ? sEncType : "(null)"));
-	return vtUnknown;
+	daserrf(DASERR_VALUE, "Unknown encoding type %s", (sEncType ? sEncType : "(null)"));
+	return DASVT_UNK;
 }
 
-const char* das_vt_serial_type(das_val_type et)
+const char* dasvt_serializeAs(das_vt et)
 {
-#ifdef HOST_IS_LSB_FIRST
+#ifdef DASHOST_LSB_FIRST
 	const bool LE = true;
 #else
 	const bool LE = false;
 #endif
 
 	switch(et){
-	case vtNull:    return NULL;
-	case vtUnknown: return NULL;
-	case vtIndex:   return NULL;
-	case vtUByte:   return "ubyte";
-	case vtByte:    return "byte";
-	case vtUShort:  return LE ?  "LEuint" : "BEuint";
-	case vtShort:   return LE ?  "LEint"  : "BEint";
-	case vtUInt:    return LE ?  "LEuint" : "BEuint";
-	case vtInt:     return LE ?  "LEint"  : "BEint";
-	case vtULong:   return LE ?  "LEuint" : "BEuint";
-	case vtLong:    return LE ?  "LEint"  : "BEint";
-	case vtFloat:   return LE ?  "LEreal" : "BEreal";
-	case vtDouble:  return LE ?  "LEreal" : "BEreal";
-	case vtTime:    return "utf8";  /* encodes as old ASCII(X) */
-	case vtText:    return "utf8";  /* encodes as old TIME(X)  */
-	case vtByteSeq: return "blob";  /* default framing; base64 armoring is a separate flag */
+	case DASVT_NULL:    return NULL;
+	case DASVT_UNK: return NULL;
+	case DASVT_INDEX:   return NULL;
+	case DASVT_UBYTE:   return "ubyte";
+	case DASVT_BYTE:    return "byte";
+	case DASVT_USHORT:  return LE ?  "LEuint" : "BEuint";
+	case DASVT_SHORT:   return LE ?  "LEint"  : "BEint";
+	case DASVT_UINT:    return LE ?  "LEuint" : "BEuint";
+	case DASVT_INT:     return LE ?  "LEint"  : "BEint";
+	case DASVT_ULONG:   return LE ?  "LEuint" : "BEuint";
+	case DASVT_LONG:    return LE ?  "LEint"  : "BEint";
+	case DASVT_FLOAT:   return LE ?  "LEreal" : "BEreal";
+	case DASVT_DOUBLE:  return LE ?  "LEreal" : "BEreal";
+	case DASVT_TIME:    return "utf8";  /* encodes as old ASCII(X) */
+	case DASVT_TEXT:    return "utf8";  /* encodes as old TIME(X)  */
+	case DASVT_BYTESEQ: return "blob";  /* default framing; base64 armoring is a separate flag */
 	default: return NULL;
 	}
 }
@@ -285,35 +285,35 @@ const char* das_vt_serial_type(das_val_type et)
 
 /* These ARE the schema's EncodingType pattern (das-basic-stream-v3.0.xsd):
    byte|ubyte|BEint|BEuint|BEreal|LEint|LEuint|LEreal|utf8|blob|base64. */
-const char* DAS_ENC_BYTE   = "byte";
-const char* DAS_ENC_UBYTE  = "ubyte";
-const char* DAS_ENC_BEINT  = "BEint";
-const char* DAS_ENC_BEUINT = "BEuint";
-const char* DAS_ENC_BEREAL = "BEreal";
-const char* DAS_ENC_LEINT  = "LEint";
-const char* DAS_ENC_LEUINT = "LEuint";
-const char* DAS_ENC_LEREAL = "LEreal";
-const char* DAS_ENC_UTF8   = "utf8";
-const char* DAS_ENC_BLOB   = "raw";  /* renamed from "blob" with the wire-model rework */
-const char* DAS_ENC_BASE64 = "base64";
+const char* DASENC_BYTE   = "byte";
+const char* DASENC_UBYTE  = "ubyte";
+const char* DASENC_BEINT  = "BEint";
+const char* DASENC_BEUINT = "BEuint";
+const char* DASENC_BEREAL = "BEreal";
+const char* DASENC_LEINT  = "LEint";
+const char* DASENC_LEUINT = "LEuint";
+const char* DASENC_LEREAL = "LEreal";
+const char* DASENC_UTF8   = "utf8";
+const char* DASENC_RAW   = "raw";  /* renamed from "blob" with the wire-model rework */
+const char* DASENC_B64 = "base64";
 
 /* Resolve an encoding string to its canonical DAS_ENC_* pointer, or NULL.  No liberal
    spellings here -- encoding names are exact. */
 const char* das_enc_fromStr(const char* sEncType)
 {
 	if(sEncType == NULL) return NULL;
-	if(strcmp(sEncType, DAS_ENC_BYTE)   == 0) return DAS_ENC_BYTE;
-	if(strcmp(sEncType, DAS_ENC_UBYTE)  == 0) return DAS_ENC_UBYTE;
-	if(strcmp(sEncType, DAS_ENC_BEINT)  == 0) return DAS_ENC_BEINT;
-	if(strcmp(sEncType, DAS_ENC_BEUINT) == 0) return DAS_ENC_BEUINT;
-	if(strcmp(sEncType, DAS_ENC_BEREAL) == 0) return DAS_ENC_BEREAL;
-	if(strcmp(sEncType, DAS_ENC_LEINT)  == 0) return DAS_ENC_LEINT;
-	if(strcmp(sEncType, DAS_ENC_LEUINT) == 0) return DAS_ENC_LEUINT;
-	if(strcmp(sEncType, DAS_ENC_LEREAL) == 0) return DAS_ENC_LEREAL;
-	if(strcmp(sEncType, DAS_ENC_UTF8)   == 0) return DAS_ENC_UTF8;
-	if(strcmp(sEncType, DAS_ENC_BLOB)   == 0) return DAS_ENC_BLOB;
-	if(strcmp(sEncType, "blob")         == 0) return DAS_ENC_BLOB;  /* legacy spelling */
-	if(strcmp(sEncType, DAS_ENC_BASE64) == 0) return DAS_ENC_BASE64;
+	if(strcmp(sEncType, DASENC_BYTE)   == 0) return DASENC_BYTE;
+	if(strcmp(sEncType, DASENC_UBYTE)  == 0) return DASENC_UBYTE;
+	if(strcmp(sEncType, DASENC_BEINT)  == 0) return DASENC_BEINT;
+	if(strcmp(sEncType, DASENC_BEUINT) == 0) return DASENC_BEUINT;
+	if(strcmp(sEncType, DASENC_BEREAL) == 0) return DASENC_BEREAL;
+	if(strcmp(sEncType, DASENC_LEINT)  == 0) return DASENC_LEINT;
+	if(strcmp(sEncType, DASENC_LEUINT) == 0) return DASENC_LEUINT;
+	if(strcmp(sEncType, DASENC_LEREAL) == 0) return DASENC_LEREAL;
+	if(strcmp(sEncType, DASENC_UTF8)   == 0) return DASENC_UTF8;
+	if(strcmp(sEncType, DASENC_RAW)   == 0) return DASENC_RAW;
+	if(strcmp(sEncType, "blob")         == 0) return DASENC_RAW;  /* legacy spelling */
+	if(strcmp(sEncType, DASENC_B64) == 0) return DASENC_B64;
 	return NULL;
 }
 
@@ -323,25 +323,25 @@ const char* das_enc_fromStr(const char* sEncType)
 /* These ARE the schema's Semantic pattern (das-basic-stream-v3.0.xsd):
    bool|datetime|integer|real|string|blob.  "binary" was the pre-blob spelling. */
 const char* DAS_SEM_BLOB  = "blob";
-const char* DAS_SEM_BOOL  = "bool";
-const char* DAS_SEM_DATE  = "datetime";
-const char* DAS_SEM_INT   = "integer";
-const char* DAS_SEM_REAL  = "real";
-const char* DAS_SEM_TEXT  = "string";
+const char* DASSEM_BOOL  = "bool";
+const char* DASSEM_DATE  = "datetime";
+const char* DASSEM_INT   = "integer";
+const char* DASSEM_REAL  = "real";
+const char* DASSEM_TEXT  = "string";
 
 /* A value type with no atomic semantic returns NULL */
-const char* das_sem_default(das_val_type vt, das_units units)
+const char* dassem_default(das_vt vt, DasUnits units)
 {
-	if(Units_haveCalRep(units)) return DAS_SEM_DATE;
+	if(DasUnits_isTimePoint(units)) return DASSEM_DATE;
 
 	switch(vt){
-	case vtFloat: case vtDouble:                           return DAS_SEM_REAL;
-	case vtUByte: case vtByte:  case vtUShort: case vtShort:
-	case vtUInt:  case vtInt:   case vtULong:  case vtLong: return DAS_SEM_INT;
-	case vtTime:                                           return DAS_SEM_DATE;
-	case vtText:                                           return DAS_SEM_TEXT;
-	case vtByteSeq:                                        return DAS_SEM_BLOB;
-	default:                                               return NULL;  /* vtIndex, vtPixel, vtUnknown */
+	case DASVT_FLOAT: case DASVT_DOUBLE:                           return DASSEM_REAL;
+	case DASVT_UBYTE: case DASVT_BYTE:  case DASVT_USHORT: case DASVT_SHORT:
+	case DASVT_UINT:  case DASVT_INT:   case DASVT_ULONG:  case DASVT_LONG: return DASSEM_INT;
+	case DASVT_TIME:                                           return DASSEM_DATE;
+	case DASVT_TEXT:                                           return DASSEM_TEXT;
+	case DASVT_BYTESEQ:                                        return DAS_SEM_BLOB;
+	default:                                               return NULL;  /* DASVT_INDEX, vtPixel, DASVT_UNK */
 	}
 }
 
@@ -350,35 +350,35 @@ const char* das_sem_default(das_val_type vt, das_units units)
 const char* das_sem_fromStr(const char* sSemantic)
 {
 	if(sSemantic == NULL) return NULL;
-	if((strcmp(sSemantic, DAS_SEM_INT) == 0)||(strcmp(sSemantic, "int") == 0))
-		return DAS_SEM_INT;
-	if(strcmp(sSemantic, DAS_SEM_REAL) == 0) return DAS_SEM_REAL;
-	if(strcmp(sSemantic, DAS_SEM_DATE) == 0) return DAS_SEM_DATE;
-	if(strcmp(sSemantic, DAS_SEM_BOOL) == 0) return DAS_SEM_BOOL;
-	if(strcmp(sSemantic, DAS_SEM_TEXT) == 0) return DAS_SEM_TEXT;
+	if((strcmp(sSemantic, DASSEM_INT) == 0)||(strcmp(sSemantic, "int") == 0))
+		return DASSEM_INT;
+	if(strcmp(sSemantic, DASSEM_REAL) == 0) return DASSEM_REAL;
+	if(strcmp(sSemantic, DASSEM_DATE) == 0) return DASSEM_DATE;
+	if(strcmp(sSemantic, DASSEM_BOOL) == 0) return DASSEM_BOOL;
+	if(strcmp(sSemantic, DASSEM_TEXT) == 0) return DASSEM_TEXT;
 	if(strcmp(sSemantic, DAS_SEM_BLOB) == 0) return DAS_SEM_BLOB;
 	return NULL;
 }
 
 /* Given a semantic, suggest a default value type */
-das_val_type das_vt_default(const char* sSemantic)
+das_vt dasvt_default(const char* sSemantic)
 {
-	if(strcmp(sSemantic, DAS_SEM_BOOL) == 0) return vtByte;
-	if(strcmp(sSemantic, DAS_SEM_DATE) == 0) return vtTime;
-	if(strcmp(sSemantic, DAS_SEM_INT)  == 0) return vtInt;
-	if(strcmp(sSemantic, DAS_SEM_REAL) == 0) return vtDouble;
-	if(strcmp(sSemantic, DAS_SEM_TEXT) == 0) return vtText;
-	return vtByteSeq;  /* DAS_SEM_BLOB, and the fall-through for anything else */
+	if(strcmp(sSemantic, DASSEM_BOOL) == 0) return DASVT_BYTE;
+	if(strcmp(sSemantic, DASSEM_DATE) == 0) return DASVT_TIME;
+	if(strcmp(sSemantic, DASSEM_INT)  == 0) return DASVT_INT;
+	if(strcmp(sSemantic, DASSEM_REAL) == 0) return DASVT_DOUBLE;
+	if(strcmp(sSemantic, DASSEM_TEXT) == 0) return DASVT_TEXT;
+	return DASVT_BYTESEQ;  /* DAS_SEM_BLOB, and the fall-through for anything else */
 }
 
 
 /*
-das_val_type das_vt_guess_store(const char* sInterp, const char* sValue)
+das_vt das_vt_guess_store(const char* sInterp, const char* sValue)
 {
 	int nLen = strlen(sValue);
 	if((sValue == NULL)||(sValue[0] == '\0')){
-		das_error(DASERR_VALUE, "Null value");
-		return vtUnknown;
+		daserrf(DASERR_VALUE, "Null value");
+		return DASVT_UNK;
 	}
 
 	if(strcmp(sInterp, "real") == 0){
@@ -394,137 +394,137 @@ das_val_type das_vt_guess_store(const char* sInterp, const char* sValue)
 		if((strchr(sValue, '.') != NULL)||(strchr(sValue, ',') != NULL))
 			uLen -= 1
 
-		return uLen > 6 ? vtDouble, vtFloat;
+		return uLen > 6 ? DASVT_DOUBLE, DASVT_FLOAT;
 	}
 
 	if(strcmp(sInterp, "int") == 0){
 		// Just assume signed
-		if(nLen < 2) return vtByte;
-		if(nLen < 5) return vtShort;
-		if(nLen < 9) return vtInt;
-		return vtLong;
+		if(nLen < 2) return DASVT_BYTE;
+		if(nLen < 5) return DASVT_SHORT;
+		if(nLen < 9) return DASVT_INT;
+		return DASVT_LONG;
 	}
 
 	if(strcmp(sInterp, "bool") == 0){
-		return vtByte;
+		return DASVT_BYTE;
 	}
 	if(strcmp(sInterp, "datetime") == 0){
-		return vtTime;
+		return DASVT_TIME;
 	}
 	if(strcmp(sInterp, "string") == 0){
-		return vtText;
+		return DASVT_TEXT;
 	}
-	return vtUnknown;
+	return DASVT_UNK;
 }
 */
 
 /* ************************************************************************* */
 /* Default Comparison functions */
 
-static int vt_cmp_byte(const ubyte* vpFirst, const ubyte* vpSecond){
-	const ubyte* pFirst = (const ubyte*) vpFirst;
-	const ubyte* pSecond = (const ubyte*) vpSecond;
+static int vt_cmp_byte(const uint8_t* vpFirst, const uint8_t* vpSecond){
+	const uint8_t* pFirst = (const uint8_t*) vpFirst;
+	const uint8_t* pSecond = (const uint8_t*) vpSecond;
 	if(*pFirst < *pSecond) return -1;
 	if(*pFirst > *pSecond) return 1;
 	return 0;
 }
-static int vt_cmp_ushort(const ubyte* vpFirst, const ubyte* vpSecond){
+static int vt_cmp_ushort(const uint8_t* vpFirst, const uint8_t* vpSecond){
 	const uint16_t* pFirst = (const uint16_t*) vpFirst;
 	const uint16_t* pSecond = (const uint16_t*) vpSecond;
 	if(*pFirst < *pSecond) return -1;
 	if(*pFirst > *pSecond) return 1;
 	return 0;
 }
-static int vt_cmp_short(const ubyte* vpFirst, const ubyte* vpSecond){
+static int vt_cmp_short(const uint8_t* vpFirst, const uint8_t* vpSecond){
 	const int16_t* pFirst = (const int16_t*) vpFirst;
 	const int16_t* pSecond = (const int16_t*) vpSecond;
 	if(*pFirst < *pSecond) return -1;
 	if(*pFirst > *pSecond) return 1;
 	return 0;
 }
-static int vt_cmp_int(const ubyte* vpFirst, const ubyte* vpSecond){
+static int vt_cmp_int(const uint8_t* vpFirst, const uint8_t* vpSecond){
 	const int32_t* pFirst = (const int32_t*) vpFirst;
 	const int32_t* pSecond = (const int32_t*) vpSecond;
 	if(*pFirst < *pSecond) return -1;
 	if(*pFirst > *pSecond) return 1;
 	return 0;
 }
-static int vt_cmp_long(const ubyte* vpFirst, const ubyte* vpSecond){
+static int vt_cmp_long(const uint8_t* vpFirst, const uint8_t* vpSecond){
 	const int64_t* pFirst = (const int64_t*) vpFirst;
 	const int64_t* pSecond = (const int64_t*) vpSecond;
 	if(*pFirst < *pSecond) return -1;
 	if(*pFirst > *pSecond) return 1;
 	return 0;
 }
-static int vt_cmp_float(const ubyte* vpFirst, const ubyte* vpSecond){
+static int vt_cmp_float(const uint8_t* vpFirst, const uint8_t* vpSecond){
 	const float* pFirst = (const float*) vpFirst;
 	const float* pSecond = (const float*) vpSecond;
 	if(*pFirst < *pSecond) return -1;
 	if(*pFirst > *pSecond) return 1;
 	return 0;
 }
-static int vt_cmp_double(const ubyte* vpFirst, const ubyte* vpSecond){
+static int vt_cmp_double(const uint8_t* vpFirst, const uint8_t* vpSecond){
 	const double* pFirst = (const double*) vpFirst;
 	const double* pSecond = (const double*) vpSecond;
 	if(*pFirst < *pSecond) return -1;
 	if(*pFirst > *pSecond) return 1;
 	return 0;
 }
-static int vt_cmp_time(const ubyte* vpFirst, const ubyte* vpSecond){
-	return dt_compare((const das_time*)vpFirst, (const das_time*)vpSecond);
+static int vt_cmp_time(const uint8_t* vpFirst, const uint8_t* vpSecond){
+	return DasTime_compare((const DasTime*)vpFirst, (const DasTime*)vpSecond);
 }
-static int vt_cmp_text(const ubyte* vpFirst, const ubyte* vpSecond){
+static int vt_cmp_text(const uint8_t* vpFirst, const uint8_t* vpSecond){
 	const char** pFirst = (const char**) vpFirst;
 	const char** pSecond = (const char**) vpSecond;
 	return strcmp(*pFirst, *pSecond);
 }
 
-static int vt_cmp_byteseq(const ubyte* vpA, const ubyte* vpB)
+static int vt_cmp_byteseq(const uint8_t* vpA, const uint8_t* vpB)
 {
-	const das_cbyte_seq* pA = (const das_cbyte_seq*)vpA;
-	const das_cbyte_seq* pB = (const das_cbyte_seq*)vpB;
+	const DasCByteSeq* pA = (const DasCByteSeq*)vpA;
+	const DasCByteSeq* pB = (const DasCByteSeq*)vpB;
 	
-	size_t uLen = pA->sz < pB->sz ? pA->sz : pB->sz;  /*smallest size*/
+	size_t uLen = pA->size < pB->size ? pA->size : pB->size;  /*smallest size*/
 	int nCmp = memcmp(vpA, vpB, uLen);
 	if(nCmp != 0) return nCmp;
 	
 	/* If same length then truly zero, else the longer one is "bigger" 
 	 * then the shorter one. */
 
-	return ( (pA->sz > pB->sz) ? 1 : ((pA->sz == pB->sz) ? 0 : -1) );
+	return ( (pA->size > pB->size) ? 1 : ((pA->size == pB->size) ? 0 : -1) );
 }
 
 /* Promote any plain numeric element to double; false for struct times */
-bool das_elem_asDouble(das_elem_type et, const ubyte* p, double* pOut)
+bool daset_toDouble(das_et et, const uint8_t* p, double* pOut)
 {
 	switch(et){
-	case etUByte:  *pOut = *((const uint8_t*)p);  return true;
-	case etByte:   *pOut = *((const int8_t*)p);   return true;
-	case etUShort: *pOut = *((const uint16_t*)p); return true;
-	case etShort:  *pOut = *((const int16_t*)p);  return true;
-	case etUInt:   *pOut = *((const uint32_t*)p); return true;
-	case etInt:    *pOut = *((const int32_t*)p);  return true;
-	case etULong:  *pOut = (double)*((const uint64_t*)p); return true;
-	case etLong:   *pOut = (double)*((const int64_t*)p);  return true;
-	case etFloat:  *pOut = *((const float*)p);    return true;
-	case etDouble: *pOut = *((const double*)p);   return true;
+	case DASET_UBYTE:  *pOut = *((const uint8_t*)p);  return true;
+	case DASET_BYTE:   *pOut = *((const int8_t*)p);   return true;
+	case DASET_USHORT: *pOut = *((const uint16_t*)p); return true;
+	case DASET_SHORT:  *pOut = *((const int16_t*)p);  return true;
+	case DASET_UINT:   *pOut = *((const uint32_t*)p); return true;
+	case DASET_INT:    *pOut = *((const int32_t*)p);  return true;
+	case DASET_ULONG:  *pOut = (double)*((const uint64_t*)p); return true;
+	case DASET_LONG:   *pOut = (double)*((const int64_t*)p);  return true;
+	case DASET_FLOAT:  *pOut = *((const float*)p);    return true;
+	case DASET_DOUBLE: *pOut = *((const double*)p);   return true;
 	default: return false;
 	}
 }
 
-das_valcmp_func das_vt_getcmp(das_val_type et)
+dasfn_valCmp dasvt_cmpFunc(das_vt et)
 {
 	switch(et){
-	case vtUByte: return vt_cmp_byte;
-	case vtShort: return vt_cmp_short;
-	case vtUShort: return vt_cmp_ushort;
-	case vtInt: return vt_cmp_int;
-	case vtLong: return vt_cmp_long;
-	case vtFloat: return vt_cmp_float;
-	case vtDouble: return vt_cmp_double;
-	case vtTime: return vt_cmp_time;
-	case vtText: return vt_cmp_text;
-	case vtByteSeq: return vt_cmp_byteseq;
+	case DASVT_UBYTE: return vt_cmp_byte;
+	case DASVT_SHORT: return vt_cmp_short;
+	case DASVT_USHORT: return vt_cmp_ushort;
+	case DASVT_INT: return vt_cmp_int;
+	case DASVT_LONG: return vt_cmp_long;
+	case DASVT_FLOAT: return vt_cmp_float;
+	case DASVT_DOUBLE: return vt_cmp_double;
+	case DASVT_TIME: return vt_cmp_time;
+	case DASVT_TEXT: return vt_cmp_text;
+	case DASVT_BYTESEQ: return vt_cmp_byteseq;
 	default:	return NULL;
 	}
 }
@@ -534,84 +534,84 @@ das_valcmp_func das_vt_getcmp(das_val_type et)
  * connotate units.
  */
 /* The types whose results are kept as floats, rule 3 in value.h */
-static bool _vt_isSmall(das_val_type vt)
+static bool _vt_isSmall(das_vt vt)
 {
-	return (vt == vtUByte || vt == vtByte || vt == vtUShort || vt == vtShort
-	        || vt == vtFloat);
+	return (vt == DASVT_UBYTE || vt == DASVT_BYTE || vt == DASVT_USHORT || vt == DASVT_SHORT
+	        || vt == DASVT_FLOAT);
 }
 
-static bool _vt_isNum(das_val_type vt)
+static bool _vt_isNum(das_vt vt)
 {
-	return das_vt_isint(vt) || das_vt_isreal(vt);
+	return dasvt_isInt(vt) || dasvt_isReal(vt);
 }
 
 /* Operands in written order, vtLeft op vtRight.  Until 2026-11 the header
    said (right, op, left), this file said (left, op, right) and every caller
    passed the right operand first, so the time rules ran backwards. */
-das_val_type das_vt_merge(das_val_type vtLeft, int op, das_val_type vtRight)
+das_vt dasvt_merge(das_vt vtLeft, int op, das_vt vtRight)
 {
-	/* vtUnknown is an application's type, so its answer is the app's too.
-	   vtNull is "no value type", the answer when the operands don't combine. */
-	if(vtLeft == vtUnknown || vtRight == vtUnknown) return vtUnknown;
-	if(vtLeft == vtNull || vtRight == vtNull) return vtNull;
-	if(vtLeft == vtIndex || vtRight == vtIndex) return vtNull;
-	if(vtLeft == vtByteSeq || vtRight == vtByteSeq) return vtNull;
-	if(vtLeft == vtText || vtRight == vtText) return vtNull;
+	/* DASVT_UNK is an application's type, so its answer is the app's too.
+	   DASVT_NULL is "no value type", the answer when the operands don't combine. */
+	if(vtLeft == DASVT_UNK || vtRight == DASVT_UNK) return DASVT_UNK;
+	if(vtLeft == DASVT_NULL || vtRight == DASVT_NULL) return DASVT_NULL;
+	if(vtLeft == DASVT_INDEX || vtRight == DASVT_INDEX) return DASVT_NULL;
+	if(vtLeft == DASVT_BYTESEQ || vtRight == DASVT_BYTESEQ) return DASVT_NULL;
+	if(vtLeft == DASVT_TEXT || vtRight == DASVT_TEXT) return DASVT_NULL;
 
-	if(vtLeft != vtTime && vtRight != vtTime)
-		return (_vt_isSmall(vtLeft) && _vt_isSmall(vtRight)) ? vtFloat : vtDouble;
+	if(vtLeft != DASVT_TIME && vtRight != DASVT_TIME)
+		return (_vt_isSmall(vtLeft) && _vt_isSmall(vtRight)) ? DASVT_FLOAT : DASVT_DOUBLE;
 
 	/* A time is a calendar point: points subtract to a span, a span moves a
 	   point either way, and a number can only be added to one */
-	if(vtLeft == vtTime && vtRight == vtTime)
-		return (op == D2BOP_SUB) ? vtDouble : vtNull;
+	if(vtLeft == DASVT_TIME && vtRight == DASVT_TIME)
+		return (op == DASOP_SUB) ? DASVT_DOUBLE : DASVT_NULL;
 
-	if(vtLeft == vtTime && _vt_isNum(vtRight) &&
-	   (op == D2BOP_ADD || op == D2BOP_SUB)) return vtTime;
+	if(vtLeft == DASVT_TIME && _vt_isNum(vtRight) &&
+	   (op == DASOP_ADD || op == DASOP_SUB)) return DASVT_TIME;
 
-	if(_vt_isNum(vtLeft) && vtRight == vtTime && op == D2BOP_ADD) return vtTime;
+	if(_vt_isNum(vtLeft) && vtRight == DASVT_TIME && op == DASOP_ADD) return DASVT_TIME;
 
-	return vtNull;
+	return DASVT_NULL;
 }
 
 #define HAS_INT  0x1
 #define HAS_FLT  0x2	
 #define HAS_BOTH 0x3
 
-int das_value_cmpAny(
-	const ubyte* pA, das_val_type vtA, const ubyte* pB, das_val_type vtB
+int dasval_cmpAny(
+	const uint8_t* pA, das_vt vtA, const uint8_t* pB, das_vt vtB
 ){
 	int nCmp = 0;
 	double dA = 0.0, dB = 0.0;
 			
 	/* Handle most common compare first and get out */
-	if(vtA == vtDouble && vtB == vtDouble){
+	if(vtA == DASVT_DOUBLE && vtB == DASVT_DOUBLE){
 		dA = *((const double*)pA);
 		dB = *((const double*)pB);
 		return ((dA > dB) ? 1 : ((dA == dB) ? 0 : -1));
 	}
 	
 	/* Unknowns have no way to get length, nulls have no value, they never compare */
-	if(vtA == vtUnknown || vtB == vtUnknown) return -2;
-	if(vtA == vtNull || vtB == vtNull) return -2;
+	if(vtA == DASVT_UNK || vtB == DASVT_UNK) return -2;
+	if(vtA == DASVT_NULL || vtB == DASVT_NULL) return -2;
 	
-	/* vtIndex items only make since in the context of their parent 
+	/* DASVT_INDEX items only make since in the context of their parent 
 	   structures, so no dice here either */
-	if(vtA == vtIndex || vtB == vtIndex) return -2;
+	if(vtA == DASVT_INDEX || vtB == DASVT_INDEX) return -2;
 	
 	if(vtA == vtB){
-		if(vtA == vtText){  
+		if(vtA == DASVT_TEXT){  
 			nCmp = strcmp((const char*)pA, (const char*)pB);
 		}
 		else{
-			if(vtA == vtTime){
-				nCmp = dt_compare((const das_time*)pA, (const das_time*)pB);
+			if(vtA == DASVT_TIME){
+				nCmp = DasTime_compare((const DasTime*)pA, (const DasTime*)pB);
 			}
 			else{
-				if(vtA == vtByteSeq)
+				if(vtA == DASVT_BYTESEQ)
 					nCmp = vt_cmp_byteseq(pA, pB);
 				else
-					nCmp = memcmp(pA, pB, das_vt_size(vtA));
+					nCmp = memcmp(pA, pB, dasvt_size(vtA));
 			}
 		}
 		
@@ -620,21 +620,21 @@ int das_value_cmpAny(
 	
 	/* Unequal type comparisons ... */
 	
-	/* vtTime can't compare with anything else because there are no units */
-	if(vtA == vtTime || vtB == vtTime) return -2;
+	/* DASVT_TIME can't compare with anything else because there are no units */
+	if(vtA == DASVT_TIME || vtB == DASVT_TIME) return -2;
 	
 	/* If one is a byte sequence and the other is not, compare as byteseq */
-	das_cbyte_seq bs;
-	if(vtA == vtByteSeq || vtB == vtByteSeq){
-		if(vtA == vtByteSeq){
-			bs.ptr = pB;
-			bs.sz = das_vt_size(vtB);
-			return vt_cmp_byteseq(pA, (const ubyte*) &bs);
+	DasCByteSeq bs;
+	if(vtA == DASVT_BYTESEQ || vtB == DASVT_BYTESEQ){
+		if(vtA == DASVT_BYTESEQ){
+			bs.data = pB;
+			bs.size = dasvt_size(vtB);
+			return vt_cmp_byteseq(pA, (const uint8_t*) &bs);
 		}
 		else{
-			bs.ptr = pA;
-			bs.sz = das_vt_size(vtA);
-			return vt_cmp_byteseq((const ubyte*)&bs, pB);		
+			bs.data = pA;
+			bs.size = dasvt_size(vtA);
+			return vt_cmp_byteseq((const uint8_t*)&bs, pB);		
 		}
 	}
 	
@@ -647,31 +647,31 @@ int das_value_cmpAny(
 	/* to do it manually for VC++                                       */
 
 	int64_t lA = 0, lB = 0;
-	ubyte uAHas = 0;  /* float = 0x2 */
-	ubyte uBHas = 0;  /* int =   0x1 */
+	uint8_t uAHas = 0;  /* float = 0x2 */
+	uint8_t uBHas = 0;  /* int =   0x1 */
 	switch(vtA){
-	case vtUByte:   lA = *((const uint8_t*)pA);  dA = *((const uint8_t*)pA);  uAHas = HAS_BOTH; break;
-	case vtShort:  lA = *((const int16_t*)pA);  dA = *((const int16_t*)pA);  uAHas = HAS_BOTH; break;
-	case vtUShort: lA = *((const uint16_t*)pA); dA = *((const uint16_t*)pA); uAHas = HAS_BOTH; break;
-	case vtInt:    lA = *((const int32_t*)pA);  dA = *((const int32_t*)pA);  uAHas = HAS_BOTH; break;
+	case DASVT_UBYTE:   lA = *((const uint8_t*)pA);  dA = *((const uint8_t*)pA);  uAHas = HAS_BOTH; break;
+	case DASVT_SHORT:  lA = *((const int16_t*)pA);  dA = *((const int16_t*)pA);  uAHas = HAS_BOTH; break;
+	case DASVT_USHORT: lA = *((const uint16_t*)pA); dA = *((const uint16_t*)pA); uAHas = HAS_BOTH; break;
+	case DASVT_INT:    lA = *((const int32_t*)pA);  dA = *((const int32_t*)pA);  uAHas = HAS_BOTH; break;
 	
-	case vtLong:   lA = *((const int64_t*)pA);  /* No float value */         uAHas = HAS_INT;  break;
+	case DASVT_LONG:   lA = *((const int64_t*)pA);  /* No float value */         uAHas = HAS_INT;  break;
 	
-	case vtFloat:  /* No int value */           dA = *((const float*)pA);    uAHas = HAS_FLT;  break;
-	case vtDouble: /* No int value */           dA = *((const double*)pA);   uAHas = HAS_FLT;  break;
+	case DASVT_FLOAT:  /* No int value */           dA = *((const float*)pA);    uAHas = HAS_FLT;  break;
+	case DASVT_DOUBLE: /* No int value */           dA = *((const double*)pA);   uAHas = HAS_FLT;  break;
 	default: return -2;
 	}
 	
 	switch(vtB){
-	case vtUByte:   lB = *((const uint8_t*)pB);  dB = *((const uint8_t*)pB);  uBHas = HAS_BOTH; break;
-	case vtShort:  lB = *((const int16_t*)pB);  dB = *((const int16_t*)pB);  uBHas = HAS_BOTH; break;
-	case vtUShort: lB = *((const uint16_t*)pB); dB = *((const uint16_t*)pB); uBHas = HAS_BOTH; break;
-	case vtInt:    lB = *((const int32_t*)pB);  dB = *((const int32_t*)pB);  uBHas = HAS_BOTH; break;
+	case DASVT_UBYTE:   lB = *((const uint8_t*)pB);  dB = *((const uint8_t*)pB);  uBHas = HAS_BOTH; break;
+	case DASVT_SHORT:  lB = *((const int16_t*)pB);  dB = *((const int16_t*)pB);  uBHas = HAS_BOTH; break;
+	case DASVT_USHORT: lB = *((const uint16_t*)pB); dB = *((const uint16_t*)pB); uBHas = HAS_BOTH; break;
+	case DASVT_INT:    lB = *((const int32_t*)pB);  dB = *((const int32_t*)pB);  uBHas = HAS_BOTH; break;
 	
-	case vtLong:   lB = *((const int64_t*)pB);  /* No float value */         uBHas = HAS_INT;  break;
+	case DASVT_LONG:   lB = *((const int64_t*)pB);  /* No float value */         uBHas = HAS_INT;  break;
 	
-	case vtFloat:  /* No int value */           dB = *((const float*)pB);    uBHas = HAS_FLT;  break;
-	case vtDouble: /* No int value */           dB = *((const double*)pB);   uBHas = HAS_FLT;  break;
+	case DASVT_FLOAT:  /* No int value */           dB = *((const float*)pB);    uBHas = HAS_FLT;  break;
+	case DASVT_DOUBLE: /* No int value */           dB = *((const double*)pB);   uBHas = HAS_FLT;  break;
 	default: return -2;
 	}
 	
@@ -763,31 +763,31 @@ int das_value_cmpAny(
    own type before it can be printed, and a format string built at runtime
    cannot carry that, so each type states its own literal format. */
 static void _xform_prnVal(
-	das_val_type vt, const ubyte* p, char* sBuf, size_t uLen
+	das_vt vt, const uint8_t* p, char* sBuf, size_t uLen
 ){
 	switch(vt){
-	case vtUByte : snprintf(sBuf, uLen, "%u",  *((const uint8_t*)p));  break;
-	case vtByte  : snprintf(sBuf, uLen, "%d",  *((const int8_t*)p));   break;
-	case vtUShort: snprintf(sBuf, uLen, "%u",  *((const uint16_t*)p)); break;
-	case vtShort : snprintf(sBuf, uLen, "%d",  *((const int16_t*)p));  break;
-	case vtUInt  : snprintf(sBuf, uLen, "%" PRIu32, *((const uint32_t*)p)); break;
-	case vtInt   : snprintf(sBuf, uLen, "%" PRId32, *((const int32_t*)p));  break;
-	case vtULong : snprintf(sBuf, uLen, "%" PRIu64, *((const uint64_t*)p)); break;
-	case vtLong  : snprintf(sBuf, uLen, "%" PRId64, *((const int64_t*)p));  break;
-	case vtFloat : snprintf(sBuf, uLen, "%.7g", (double)*((const float*)p)); break;
-	case vtDouble: snprintf(sBuf, uLen, "%.16g", *((const double*)p));  break;
-	default      : snprintf(sBuf, uLen, "(a %s)", das_vt_toStr(vt));    break;
+	case DASVT_UBYTE : snprintf(sBuf, uLen, "%u",  *((const uint8_t*)p));  break;
+	case DASVT_BYTE  : snprintf(sBuf, uLen, "%d",  *((const int8_t*)p));   break;
+	case DASVT_USHORT: snprintf(sBuf, uLen, "%u",  *((const uint16_t*)p)); break;
+	case DASVT_SHORT : snprintf(sBuf, uLen, "%d",  *((const int16_t*)p));  break;
+	case DASVT_UINT  : snprintf(sBuf, uLen, "%" PRIu32, *((const uint32_t*)p)); break;
+	case DASVT_INT   : snprintf(sBuf, uLen, "%" PRId32, *((const int32_t*)p));  break;
+	case DASVT_ULONG : snprintf(sBuf, uLen, "%" PRIu64, *((const uint64_t*)p)); break;
+	case DASVT_LONG  : snprintf(sBuf, uLen, "%" PRId64, *((const int64_t*)p));  break;
+	case DASVT_FLOAT : snprintf(sBuf, uLen, "%.7g", (double)*((const float*)p)); break;
+	case DASVT_DOUBLE: snprintf(sBuf, uLen, "%.16g", *((const double*)p));  break;
+	default      : snprintf(sBuf, uLen, "(a %s)", dasvt_name(vt));    break;
 	}
 }
 
-das_errcode das_value_binXform(
-   das_val_type vtIn,  const ubyte* pI, const ubyte* pFI,
-   das_val_type vtOut,       ubyte* pO, const ubyte* pFO,
+das_errcode dasval_convert(
+   das_vt vtIn,  const uint8_t* pI, const uint8_t* pFI,
+   das_vt vtOut,       uint8_t* pO, const uint8_t* pFO,
    uint32_t uFlags
 ){
 	/* Handle fill up-front */
-	size_t uInSz  = das_vt_size(vtIn);
-	size_t uOutSz = das_vt_size(vtOut);
+	size_t uInSz  = dasvt_size(vtIn);
+	size_t uOutSz = dasvt_size(vtOut);
 	if((pFI != NULL) && (memcmp(pI, pFI, uInSz) == 0)){
 		memcpy(pO, pFO, uOutSz);
 		return DAS_OKAY;
@@ -798,168 +798,168 @@ das_errcode das_value_binXform(
 	   range or resolution check -- these are the table's own GO_BIG rows with
 	   the dispatch removed.  Both are hot: float storage dominates real
 	   streams, a 16 bit A/D calibrated into 32 bit reals losing nothing. */
-	if((vtIn == vtOut) && (vtIn >= VT_MIN_SIMPLE) && (vtIn <= vtDouble)){
+	if((vtIn == vtOut) && (vtIn >= DASVT_MIN_SIMPLE) && (vtIn <= DASVT_DOUBLE)){
 		memcpy(pO, pI, uInSz);
 		return DAS_OKAY;
 	}
-	if((vtIn == vtFloat) && (vtOut == vtDouble)){
+	if((vtIn == DASVT_FLOAT) && (vtOut == DASVT_DOUBLE)){
 		*((double*)pO) = *((const float*)pI);
 		return DAS_OKAY;
 	}
 
-	bool bRng = (uFlags & DAS_VAL_NOERR_RNG) ? false : true;  /* on true, issue range errors */
-	bool bRes = (uFlags & DAS_VAL_ERR_RESLOSS);
+	bool bRng = (uFlags & DASVAL_NOERR_RNG) ? false : true;  /* on true, issue range errors */
+	bool bRes = (uFlags & DASVAL_ERR_RESLOSS);
 	double rIn, rRnd; /* Used by the trunc macros */
 
 	/* Value conversions */
 	switch(vtIn){
-	case vtUByte :
+	case DASVT_UBYTE :
 		switch(vtOut){
-		case vtUByte : GO_BIG( uint8_t, uint8_t          ); break; /* works for same */
-		case vtByte  : GO_MAX(  int8_t, uint8_t, INT8_MAX); break;
-		case vtUShort: GO_BIG(uint16_t, uint8_t          ); break;
-		case vtShort : GO_BIG( int16_t, uint8_t          ); break;
-		case vtUInt  : GO_BIG(uint32_t, uint8_t          ); break;
-		case vtInt   : GO_BIG( int32_t, uint8_t          ); break;
-		case vtULong : GO_BIG(uint64_t, uint8_t          ); break;
-		case vtLong  : GO_BIG( int64_t, uint8_t          ); break;
-		case vtFloat : GO_BIG(   float, uint8_t          ); break;
-		case vtDouble: GO_BIG(  double, uint8_t          ); break;
+		case DASVT_UBYTE : GO_BIG( uint8_t, uint8_t          ); break; /* works for same */
+		case DASVT_BYTE  : GO_MAX(  int8_t, uint8_t, INT8_MAX); break;
+		case DASVT_USHORT: GO_BIG(uint16_t, uint8_t          ); break;
+		case DASVT_SHORT : GO_BIG( int16_t, uint8_t          ); break;
+		case DASVT_UINT  : GO_BIG(uint32_t, uint8_t          ); break;
+		case DASVT_INT   : GO_BIG( int32_t, uint8_t          ); break;
+		case DASVT_ULONG : GO_BIG(uint64_t, uint8_t          ); break;
+		case DASVT_LONG  : GO_BIG( int64_t, uint8_t          ); break;
+		case DASVT_FLOAT : GO_BIG(   float, uint8_t          ); break;
+		case DASVT_DOUBLE: GO_BIG(  double, uint8_t          ); break;
 		default: goto ERR_NO_XFORM; break;
 		}
 		break;
-	case vtByte  :
+	case DASVT_BYTE  :
 		switch(vtOut){
-		case vtUByte : GO_POSI( uint8_t,  int8_t);  break;
-		case vtByte  : GO_BIG (  int8_t,  int8_t);  break; /* works for same */
-		case vtUShort: GO_POSI(uint16_t,  int8_t);  break;
-		case vtShort : GO_BIG ( int16_t,  int8_t);  break;
-		case vtUInt  : GO_POSI(uint32_t,  int8_t);  break;
-		case vtInt   : GO_BIG ( int32_t,  int8_t);  break;
-		case vtULong : GO_POSI(uint64_t,  int8_t);  break;
-		case vtLong  : GO_BIG ( int64_t,  int8_t);  break;
-		case vtFloat : GO_BIG (   float,  int8_t);  break;
-		case vtDouble: GO_BIG (  double,  int8_t);  break;
+		case DASVT_UBYTE : GO_POSI( uint8_t,  int8_t);  break;
+		case DASVT_BYTE  : GO_BIG (  int8_t,  int8_t);  break; /* works for same */
+		case DASVT_USHORT: GO_POSI(uint16_t,  int8_t);  break;
+		case DASVT_SHORT : GO_BIG ( int16_t,  int8_t);  break;
+		case DASVT_UINT  : GO_POSI(uint32_t,  int8_t);  break;
+		case DASVT_INT   : GO_BIG ( int32_t,  int8_t);  break;
+		case DASVT_ULONG : GO_POSI(uint64_t,  int8_t);  break;
+		case DASVT_LONG  : GO_BIG ( int64_t,  int8_t);  break;
+		case DASVT_FLOAT : GO_BIG (   float,  int8_t);  break;
+		case DASVT_DOUBLE: GO_BIG (  double,  int8_t);  break;
 		default: goto ERR_NO_XFORM; break;
 		}
 		break;
-	case vtUShort:
+	case DASVT_USHORT:
 		switch(vtOut){
-		case vtUByte : GO_MAX( uint8_t, uint16_t,  UINT8_MAX); break; 
-		case vtByte  : GO_MAX(  int8_t, uint16_t,   INT8_MAX); break;
-		case vtUShort: GO_BIG(uint16_t, uint16_t);            break; /* works for same */
-		case vtShort : GO_MAX( int16_t, uint16_t,  INT16_MAX); break;
-		case vtUInt  : GO_BIG(uint32_t, uint16_t            ); break;
-		case vtInt   : GO_BIG( int32_t, uint16_t            ); break;
-		case vtULong : GO_BIG(uint64_t, uint16_t            ); break;
-		case vtLong  : GO_BIG( int64_t, uint16_t            ); break;
-		case vtFloat : GO_BIG(   float, uint16_t            ); break;
-		case vtDouble: GO_BIG(  double, uint16_t            ); break;
+		case DASVT_UBYTE : GO_MAX( uint8_t, uint16_t,  UINT8_MAX); break; 
+		case DASVT_BYTE  : GO_MAX(  int8_t, uint16_t,   INT8_MAX); break;
+		case DASVT_USHORT: GO_BIG(uint16_t, uint16_t);            break; /* works for same */
+		case DASVT_SHORT : GO_MAX( int16_t, uint16_t,  INT16_MAX); break;
+		case DASVT_UINT  : GO_BIG(uint32_t, uint16_t            ); break;
+		case DASVT_INT   : GO_BIG( int32_t, uint16_t            ); break;
+		case DASVT_ULONG : GO_BIG(uint64_t, uint16_t            ); break;
+		case DASVT_LONG  : GO_BIG( int64_t, uint16_t            ); break;
+		case DASVT_FLOAT : GO_BIG(   float, uint16_t            ); break;
+		case DASVT_DOUBLE: GO_BIG(  double, uint16_t            ); break;
 		default: goto ERR_NO_XFORM; break;
 		}
 		break;
-	case vtShort :
+	case DASVT_SHORT :
 		switch(vtOut){
-		case vtUByte : GO_ZMAX( uint8_t,  int16_t, UINT8_MAX); break;
-		case vtByte  : GO_RNG(   int8_t,  int16_t,  INT8_MIN, INT8_MAX); break;
-		case vtUShort: GO_POSI(uint16_t,  int16_t);  break;
-		case vtShort : GO_BIG ( int16_t,  int16_t);  break; /* works for same */
-		case vtUInt  : GO_POSI(uint32_t,  int16_t);  break;
-		case vtInt   : GO_BIG ( int32_t,  int16_t);  break;
-		case vtULong : GO_POSI(uint64_t,  int16_t);  break; 
-		case vtLong  : GO_BIG ( int64_t,  int16_t);  break;
-		case vtFloat : GO_BIG (   float,  int16_t);  break;
-		case vtDouble: GO_BIG (  double,  int16_t);  break;
+		case DASVT_UBYTE : GO_ZMAX( uint8_t,  int16_t, UINT8_MAX); break;
+		case DASVT_BYTE  : GO_RNG(   int8_t,  int16_t,  INT8_MIN, INT8_MAX); break;
+		case DASVT_USHORT: GO_POSI(uint16_t,  int16_t);  break;
+		case DASVT_SHORT : GO_BIG ( int16_t,  int16_t);  break; /* works for same */
+		case DASVT_UINT  : GO_POSI(uint32_t,  int16_t);  break;
+		case DASVT_INT   : GO_BIG ( int32_t,  int16_t);  break;
+		case DASVT_ULONG : GO_POSI(uint64_t,  int16_t);  break; 
+		case DASVT_LONG  : GO_BIG ( int64_t,  int16_t);  break;
+		case DASVT_FLOAT : GO_BIG (   float,  int16_t);  break;
+		case DASVT_DOUBLE: GO_BIG (  double,  int16_t);  break;
 		default: goto ERR_NO_XFORM; break;
 		}
 		break;
-	case vtUInt  :
+	case DASVT_UINT  :
 		switch(vtOut){
-		case vtUByte : GO_MAX ( uint8_t, uint32_t,  UINT8_MAX); break;
-		case vtByte  : GO_MAX (  int8_t, uint32_t,   INT8_MAX); break;
-		case vtUShort: GO_MAX (uint16_t, uint32_t, UINT16_MAX); break;
-		case vtShort : GO_MAX ( int16_t, uint32_t,  INT16_MAX); break;
-		case vtUInt  : GO_BIG (uint32_t, uint32_t);             break; /* works for same */
-		case vtInt   : GO_MAX ( int32_t, uint32_t,  INT32_MAX); break;
-		case vtULong : GO_BIG (uint64_t, uint32_t);             break;
-		case vtLong  : GO_BIG ( int64_t, uint32_t);             break;
-		case vtFloat : GO_ZRES(   float, uint32_t, FLT_EXACT_INT); break;
-		case vtDouble: GO_BIG (  double, uint32_t);             break;
+		case DASVT_UBYTE : GO_MAX ( uint8_t, uint32_t,  UINT8_MAX); break;
+		case DASVT_BYTE  : GO_MAX (  int8_t, uint32_t,   INT8_MAX); break;
+		case DASVT_USHORT: GO_MAX (uint16_t, uint32_t, UINT16_MAX); break;
+		case DASVT_SHORT : GO_MAX ( int16_t, uint32_t,  INT16_MAX); break;
+		case DASVT_UINT  : GO_BIG (uint32_t, uint32_t);             break; /* works for same */
+		case DASVT_INT   : GO_MAX ( int32_t, uint32_t,  INT32_MAX); break;
+		case DASVT_ULONG : GO_BIG (uint64_t, uint32_t);             break;
+		case DASVT_LONG  : GO_BIG ( int64_t, uint32_t);             break;
+		case DASVT_FLOAT : GO_ZRES(   float, uint32_t, FLT_EXACT_INT); break;
+		case DASVT_DOUBLE: GO_BIG (  double, uint32_t);             break;
 		default: goto ERR_NO_XFORM; break;
 		}
 		break;
-	case vtInt   :
+	case DASVT_INT   :
 		switch(vtOut){
-		case vtUByte : GO_ZMAX( uint8_t,  int32_t,  UINT8_MAX);            break;
-		case vtByte  : GO_RNG(   int8_t,  int32_t,   INT8_MIN,  INT8_MAX); break;
-		case vtUShort: GO_ZMAX(uint16_t,  int32_t, UINT16_MAX);            break;
-		case vtShort : GO_RNG(  int16_t,  int32_t,  INT16_MIN, INT16_MAX); break;
-		case vtUInt  : GO_POSI(uint32_t,  int32_t);                        break;
-		case vtInt   : GO_BIG ( int32_t,  int32_t);                        break; /* works for same */
-		case vtULong : GO_POSI(uint64_t,  int32_t);                        break;
-		case vtLong  : GO_BIG ( int64_t,  int32_t);                        break;
-		case vtFloat : GO_RES (   float,  int32_t, -FLT_EXACT_INT, FLT_EXACT_INT); break;
-		case vtDouble: GO_BIG (  double,  int32_t);                        break;
+		case DASVT_UBYTE : GO_ZMAX( uint8_t,  int32_t,  UINT8_MAX);            break;
+		case DASVT_BYTE  : GO_RNG(   int8_t,  int32_t,   INT8_MIN,  INT8_MAX); break;
+		case DASVT_USHORT: GO_ZMAX(uint16_t,  int32_t, UINT16_MAX);            break;
+		case DASVT_SHORT : GO_RNG(  int16_t,  int32_t,  INT16_MIN, INT16_MAX); break;
+		case DASVT_UINT  : GO_POSI(uint32_t,  int32_t);                        break;
+		case DASVT_INT   : GO_BIG ( int32_t,  int32_t);                        break; /* works for same */
+		case DASVT_ULONG : GO_POSI(uint64_t,  int32_t);                        break;
+		case DASVT_LONG  : GO_BIG ( int64_t,  int32_t);                        break;
+		case DASVT_FLOAT : GO_RES (   float,  int32_t, -FLT_EXACT_INT, FLT_EXACT_INT); break;
+		case DASVT_DOUBLE: GO_BIG (  double,  int32_t);                        break;
 		default: goto ERR_NO_XFORM; break;
 		}
 		break;
-	case vtULong :
+	case DASVT_ULONG :
 		switch(vtOut){
-		case vtUByte : GO_MAX( uint8_t, uint64_t,  UINT8_MAX); break;
-		case vtByte  : GO_MAX(  int8_t, uint64_t,   INT8_MAX); break;
-		case vtUShort: GO_MAX(uint16_t, uint64_t, UINT16_MAX); break;
-		case vtShort : GO_MAX( int16_t, uint64_t,  INT16_MAX); break;
-		case vtUInt  : GO_MAX(uint32_t, uint64_t, UINT32_MAX); break;
-		case vtInt   : GO_MAX( int32_t, uint64_t,  INT32_MAX); break;
-		case vtULong : GO_BIG(uint64_t, uint64_t);             break; /* works for same */
-		case vtLong  : GO_MAX( int64_t, uint64_t,  INT64_MAX); break;
-		case vtFloat : GO_ZRES(  float, uint64_t, FLT_EXACT_INT); break;
-		case vtDouble: GO_ZRES( double, uint64_t, DBL_EXACT_INT); break;
+		case DASVT_UBYTE : GO_MAX( uint8_t, uint64_t,  UINT8_MAX); break;
+		case DASVT_BYTE  : GO_MAX(  int8_t, uint64_t,   INT8_MAX); break;
+		case DASVT_USHORT: GO_MAX(uint16_t, uint64_t, UINT16_MAX); break;
+		case DASVT_SHORT : GO_MAX( int16_t, uint64_t,  INT16_MAX); break;
+		case DASVT_UINT  : GO_MAX(uint32_t, uint64_t, UINT32_MAX); break;
+		case DASVT_INT   : GO_MAX( int32_t, uint64_t,  INT32_MAX); break;
+		case DASVT_ULONG : GO_BIG(uint64_t, uint64_t);             break; /* works for same */
+		case DASVT_LONG  : GO_MAX( int64_t, uint64_t,  INT64_MAX); break;
+		case DASVT_FLOAT : GO_ZRES(  float, uint64_t, FLT_EXACT_INT); break;
+		case DASVT_DOUBLE: GO_ZRES( double, uint64_t, DBL_EXACT_INT); break;
 		default: goto ERR_NO_XFORM; break;
 		}
 		break;
-	case vtLong  :
+	case DASVT_LONG  :
 		switch(vtOut){
-		case vtUByte : GO_ZMAX( uint8_t,  int64_t,  UINT8_MAX);            break;
-		case vtByte  : GO_RNG(   int8_t,  int64_t,   INT8_MIN,  INT8_MAX); break;
-		case vtUShort: GO_ZMAX(uint16_t,  int64_t, UINT16_MAX);            break;
-		case vtShort : GO_RNG(  int16_t,  int64_t,  INT16_MIN, INT16_MAX); break;
-		case vtUInt  : GO_ZMAX(uint32_t,  int64_t, UINT32_MAX);            break;
-		case vtInt   : GO_RNG(  int32_t,  int64_t,  INT32_MIN, INT32_MAX); break;
-		case vtULong : GO_POSI(uint64_t,  int64_t);                        break;
-		case vtLong  : GO_BIG ( int64_t,  int64_t);                        break; /* works for same */
-		case vtFloat : GO_RES (   float,  int64_t, -FLT_EXACT_INT, FLT_EXACT_INT); break;
-		case vtDouble: GO_RES (  double,  int64_t, -DBL_EXACT_INT, DBL_EXACT_INT); break;
+		case DASVT_UBYTE : GO_ZMAX( uint8_t,  int64_t,  UINT8_MAX);            break;
+		case DASVT_BYTE  : GO_RNG(   int8_t,  int64_t,   INT8_MIN,  INT8_MAX); break;
+		case DASVT_USHORT: GO_ZMAX(uint16_t,  int64_t, UINT16_MAX);            break;
+		case DASVT_SHORT : GO_RNG(  int16_t,  int64_t,  INT16_MIN, INT16_MAX); break;
+		case DASVT_UINT  : GO_ZMAX(uint32_t,  int64_t, UINT32_MAX);            break;
+		case DASVT_INT   : GO_RNG(  int32_t,  int64_t,  INT32_MIN, INT32_MAX); break;
+		case DASVT_ULONG : GO_POSI(uint64_t,  int64_t);                        break;
+		case DASVT_LONG  : GO_BIG ( int64_t,  int64_t);                        break; /* works for same */
+		case DASVT_FLOAT : GO_RES (   float,  int64_t, -FLT_EXACT_INT, FLT_EXACT_INT); break;
+		case DASVT_DOUBLE: GO_RES (  double,  int64_t, -DBL_EXACT_INT, DBL_EXACT_INT); break;
 		default: goto ERR_NO_XFORM; break;
 		}
 		break;
-	case vtFloat :
+	case DASVT_FLOAT :
 		switch(vtOut){
-		case vtUByte : GO_TRUNC( uint8_t, float,         0,  UINT8_MAX, 0.02); break;
-		case vtByte  : GO_TRUNC(  int8_t, float,  INT8_MIN,   INT8_MAX, 0.02); break;
-		case vtUShort: GO_TRUNC(uint16_t, float,         0, UINT16_MAX, 0.02); break;
-		case vtShort : GO_TRUNC( int16_t, float, INT16_MIN,  INT16_MAX, 0.02); break;
-		case vtUInt  : GO_TRUNC(uint32_t, float,         0, UINT32_MAX, 0.02); break;
-		case vtInt   : GO_TRUNC( int32_t, float, INT32_MIN,  INT32_MAX, 0.02); break;
-		case vtULong : GO_TRUNC(uint64_t, float,         0, DBL_MAX_UINT64, 0.02); break;
-		case vtLong  : GO_TRUNC( int64_t, float, INT64_MIN,  DBL_MAX_INT64, 0.02); break;
-		case vtFloat : GO_BIG(     float, float);  break; /* works for same */
-		case vtDouble: GO_BIG(    double, float);  break;
+		case DASVT_UBYTE : GO_TRUNC( uint8_t, float,         0,  UINT8_MAX, 0.02); break;
+		case DASVT_BYTE  : GO_TRUNC(  int8_t, float,  INT8_MIN,   INT8_MAX, 0.02); break;
+		case DASVT_USHORT: GO_TRUNC(uint16_t, float,         0, UINT16_MAX, 0.02); break;
+		case DASVT_SHORT : GO_TRUNC( int16_t, float, INT16_MIN,  INT16_MAX, 0.02); break;
+		case DASVT_UINT  : GO_TRUNC(uint32_t, float,         0, UINT32_MAX, 0.02); break;
+		case DASVT_INT   : GO_TRUNC( int32_t, float, INT32_MIN,  INT32_MAX, 0.02); break;
+		case DASVT_ULONG : GO_TRUNC(uint64_t, float,         0, DBL_MAX_UINT64, 0.02); break;
+		case DASVT_LONG  : GO_TRUNC( int64_t, float, INT64_MIN,  DBL_MAX_INT64, 0.02); break;
+		case DASVT_FLOAT : GO_BIG(     float, float);  break; /* works for same */
+		case DASVT_DOUBLE: GO_BIG(    double, float);  break;
 		default: goto ERR_NO_XFORM; break;
 		}
 		break;
-	case vtDouble:
+	case DASVT_DOUBLE:
 		switch(vtOut){
-		case vtUByte : GO_TRUNC( uint8_t, double,         0,  UINT8_MAX, 0.02); break;
-		case vtByte  : GO_TRUNC(  int8_t, double,  INT8_MIN,   INT8_MAX, 0.02); break;
-		case vtUShort: GO_TRUNC(uint16_t, double,         0, UINT16_MAX, 0.02); break;
-		case vtShort : GO_TRUNC( int16_t, double, INT16_MIN,  INT16_MAX, 0.02); break;
-		case vtUInt  : GO_TRUNC(uint32_t, double,         0, UINT32_MAX, 0.02); break;
-		case vtInt   : GO_TRUNC( int32_t, double, INT32_MIN,  INT32_MAX, 0.02); break;
-		case vtULong : GO_TRUNC(uint64_t, double,         0, DBL_MAX_UINT64, 0.02); break;
-		case vtLong  : GO_TRUNC( int64_t, double, INT64_MIN,  DBL_MAX_INT64, 0.02); break;
-		case vtFloat : GO_RNG(     float, double, (-1*FLT_MAX), FLT_MAX); break;
-		case vtDouble: GO_BIG(    double, double);                        break; /* works for same */
+		case DASVT_UBYTE : GO_TRUNC( uint8_t, double,         0,  UINT8_MAX, 0.02); break;
+		case DASVT_BYTE  : GO_TRUNC(  int8_t, double,  INT8_MIN,   INT8_MAX, 0.02); break;
+		case DASVT_USHORT: GO_TRUNC(uint16_t, double,         0, UINT16_MAX, 0.02); break;
+		case DASVT_SHORT : GO_TRUNC( int16_t, double, INT16_MIN,  INT16_MAX, 0.02); break;
+		case DASVT_UINT  : GO_TRUNC(uint32_t, double,         0, UINT32_MAX, 0.02); break;
+		case DASVT_INT   : GO_TRUNC( int32_t, double, INT32_MIN,  INT32_MAX, 0.02); break;
+		case DASVT_ULONG : GO_TRUNC(uint64_t, double,         0, DBL_MAX_UINT64, 0.02); break;
+		case DASVT_LONG  : GO_TRUNC( int64_t, double, INT64_MIN,  DBL_MAX_INT64, 0.02); break;
+		case DASVT_FLOAT : GO_RNG(     float, double, (-1*FLT_MAX), FLT_MAX); break;
+		case DASVT_DOUBLE: GO_BIG(    double, double);                        break; /* works for same */
 		default: goto ERR_NO_XFORM; break;
 		}
 		break;
@@ -973,24 +973,24 @@ das_errcode das_value_binXform(
 
 ERR_RESLOSS:
 	_xform_prnVal(vtIn, pI, sVal, sizeof(sVal));
-	return das_error(DASERR_VALUE, "Resolution loss converting %s (%s) to %s",
-		sVal, das_vt_toStr(vtIn), das_vt_toStr(vtOut)
+	return daserrf(DASERR_VALUE, "Resolution loss converting %s (%s) to %s",
+		sVal, dasvt_name(vtIn), dasvt_name(vtOut)
 	);
 
 ERR_RANGE:
 	_xform_prnVal(vtIn, pI, sVal, sizeof(sVal));
-	return das_error(DASERR_VALUE, "Range violation converting %s (%s) to %s",
-		sVal, das_vt_toStr(vtIn), das_vt_toStr(vtOut)
+	return daserrf(DASERR_VALUE, "Range violation converting %s (%s) to %s",
+		sVal, dasvt_name(vtIn), dasvt_name(vtOut)
 	);
 
 ERR_NO_XFORM:
-	return das_error(DASERR_VALUE, "No conversion from %s to %s defined",
-		das_vt_toStr(vtIn), das_vt_toStr(vtOut)
+	return daserrf(DASERR_VALUE, "No conversion from %s to %s defined",
+		dasvt_name(vtIn), dasvt_name(vtOut)
 	);
 }
 
 /* ************************************************************************** */
-/* One binary operation on one pair of values (das_value_binop)
+/* One binary operation on one pair of values (dasval_binOp)
  *
  * The shared elementwise kernel.  Promotion is to the narrowest domain that
  * holds *both* operands exactly, not always to double: TT2000 nanoseconds are
@@ -998,13 +998,13 @@ ERR_NO_XFORM:
  * domains, tried in this order:
  *
  *   int64   both operands integral and representable as an int64
- *   uint64  both integral and non-negative, but one is a vtULong too large to
+ *   uint64  both integral and non-negative, but one is a DASVT_ULONG too large to
  *           be an int64.  That is the only way an integer escapes int64, so
- *           this domain exists solely for the top half of vtULong
+ *           this domain exists solely for the top half of DASVT_ULONG
  *   double  either operand is real, or the operator has no exact integer
  *           answer (divide, power)
  *
- * The result leaves its domain through das_value_binXform(), so the caller's
+ * The result leaves its domain through dasval_convert(), so the caller's
  * declared vtOut is range checked by the same code as every other cast rather
  * than by a second opinion written here.
  *
@@ -1015,17 +1015,17 @@ ERR_NO_XFORM:
 
 /* Load into the int64 domain.  A false return is a *question* answered, not an
    error: it means "does not fit here", and the caller retries in uint64. */
-static bool _binop_asI64(das_val_type vt, const ubyte* p, int64_t* pOut)
+static bool _binop_asI64(das_vt vt, const uint8_t* p, int64_t* pOut)
 {
 	switch(vt){
-	case vtUByte : *pOut = *((const uint8_t*)p);  return true;
-	case vtByte  : *pOut = *((const int8_t*)p);   return true;
-	case vtUShort: *pOut = *((const uint16_t*)p); return true;
-	case vtShort : *pOut = *((const int16_t*)p);  return true;
-	case vtUInt  : *pOut = *((const uint32_t*)p); return true;
-	case vtInt   : *pOut = *((const int32_t*)p);  return true;
-	case vtLong  : *pOut = *((const int64_t*)p);  return true;
-	case vtULong : {
+	case DASVT_UBYTE : *pOut = *((const uint8_t*)p);  return true;
+	case DASVT_BYTE  : *pOut = *((const int8_t*)p);   return true;
+	case DASVT_USHORT: *pOut = *((const uint16_t*)p); return true;
+	case DASVT_SHORT : *pOut = *((const int16_t*)p);  return true;
+	case DASVT_UINT  : *pOut = *((const uint32_t*)p); return true;
+	case DASVT_INT   : *pOut = *((const int32_t*)p);  return true;
+	case DASVT_LONG  : *pOut = *((const int64_t*)p);  return true;
+	case DASVT_ULONG : {
 		uint64_t u = *((const uint64_t*)p);
 		if(u > (uint64_t)INT64_MAX) return false;
 		*pOut = (int64_t)u;
@@ -1037,11 +1037,11 @@ static bool _binop_asI64(das_val_type vt, const ubyte* p, int64_t* pOut)
 
 /* Load into the uint64 domain.  Same convention: false means the value has no
    place here, which for a negative operand it does not. */
-static bool _binop_asU64(das_val_type vt, const ubyte* p, uint64_t* pOut)
+static bool _binop_asU64(das_vt vt, const uint8_t* p, uint64_t* pOut)
 {
 	int64_t n;
 
-	if(vt == vtULong){ *pOut = *((const uint64_t*)p); return true; }
+	if(vt == DASVT_ULONG){ *pOut = *((const uint64_t*)p); return true; }
 
 	if(!_binop_asI64(vt, p, &n)) return false;
 	if(n < 0) return false;
@@ -1049,14 +1049,14 @@ static bool _binop_asU64(das_val_type vt, const ubyte* p, uint64_t* pOut)
 	return true;
 }
 
-static bool _binop_asDbl(das_val_type vt, const ubyte* p, double* pOut)
+static bool _binop_asDbl(das_vt vt, const uint8_t* p, double* pOut)
 {
 	int64_t n;
 
 	switch(vt){
-	case vtFloat : *pOut = *((const float*)p);            return true;
-	case vtDouble: *pOut = *((const double*)p);           return true;
-	case vtULong : *pOut = (double)*((const uint64_t*)p); return true;
+	case DASVT_FLOAT : *pOut = *((const float*)p);            return true;
+	case DASVT_DOUBLE: *pOut = *((const double*)p);           return true;
+	case DASVT_ULONG : *pOut = (double)*((const uint64_t*)p); return true;
 	default:
 		if(!_binop_asI64(vt, p, &n)) return false;
 		*pOut = (double)n;
@@ -1064,28 +1064,28 @@ static bool _binop_asDbl(das_val_type vt, const ubyte* p, double* pOut)
 	}
 }
 
-das_errcode das_value_binop(
-	int nOp, das_val_type vtL, const ubyte* pL, das_val_type vtR,
-	const ubyte* pR, das_val_type vtOut, ubyte* pOut
+das_errcode dasval_binOp(
+	int nOp, das_vt vtL, const uint8_t* pL, das_vt vtR,
+	const uint8_t* pR, das_vt vtOut, uint8_t* pOut
 ){
 	int64_t  nLeft,  nRight,  nRes;
 	uint64_t uLeft,  uRight,  uRes;
 	double   rLeft,  rRight,  rRes;
 
 	if((pL == NULL)||(pR == NULL)||(pOut == NULL))
-		return das_error(DASERR_VALUE, "Null pointer in das_value_binop");
+		return daserrf(DASERR_VALUE, "Null pointer in dasval_binOp");
 
-	/* das_op_isBinary() only tests the code *range*, so pair it with a name
+	/* dasop_isBinary() only tests the code *range*, so pair it with a name
 	   lookup.  An unnamed code in range would otherwise reach the error
 	   messages below, which print the operator. */
-	if(!das_op_isBinary(nOp) || (das_op_toStr(nOp, NULL) == NULL))
-		return das_error(DASERR_VALUE,
+	if(!dasop_isBinary(nOp) || (dasop_name(nOp, NULL) == NULL))
+		return daserrf(DASERR_VALUE,
 			"Operator code %d is not a known binary operator", nOp
 		);
 
-	if((vtL == vtTime)||(vtR == vtTime))
-		return das_error(DASERR_VALUE,
-			"das_value_binop() refuses vtTime.  Broken down calendar math mixes "
+	if((vtL == DASVT_TIME)||(vtR == DASVT_TIME))
+		return daserrf(DASERR_VALUE,
+			"dasval_binOp() refuses DASVT_TIME.  Broken down calendar math mixes "
 			"two value types and belongs to whichever formalism understands the "
 			"calendar"
 		);
@@ -1093,19 +1093,19 @@ das_errcode das_value_binop(
 	/* Exact means: both sides are integers *and* the operator has an integer
 	   answer.  Divide and power do not, for any interesting pair, so they
 	   leave for the reals here rather than truncating in the middle. */
-	bool bExact = das_vt_isint(vtL) && das_vt_isint(vtR) &&
-	              (nOp != D2BOP_DIV) && (nOp != D2BOP_POW);
+	bool bExact = dasvt_isInt(vtL) && dasvt_isInt(vtR) &&
+	              (nOp != DASOP_DIV) && (nOp != DASOP_POW);
 
 	if(bExact && _binop_asI64(vtL, pL, &nLeft) && _binop_asI64(vtR, pR, &nRight)){
 
 		switch(nOp){
-		case D2BOP_ADD:
+		case DASOP_ADD:
 			if(nRight > 0){ if(nLeft > INT64_MAX - nRight) goto ERR_OVR; }
 			else          { if(nLeft < INT64_MIN - nRight) goto ERR_OVR; }
 			nRes = nLeft + nRight;
 			break;
 
-		case D2BOP_SUB:
+		case DASOP_SUB:
 			if(nRight < 0){ if(nLeft > INT64_MAX + nRight) goto ERR_OVR; }
 			else          { if(nLeft < INT64_MIN + nRight) goto ERR_OVR; }
 			nRes = nLeft - nRight;
@@ -1113,7 +1113,7 @@ das_errcode das_value_binop(
 
 		/* The portable CERT INT32-C division forms, written so the trapping
 		   expression INT64_MIN / -1 is never evaluated on any branch. */
-		case D2BOP_MUL:
+		case DASOP_MUL:
 			if(nLeft > 0){
 				if(nRight > 0){ if(nLeft  > INT64_MAX / nRight) goto ERR_OVR; }
 				else          { if(nRight < INT64_MIN / nLeft ) goto ERR_OVR; }
@@ -1128,27 +1128,27 @@ das_errcode das_value_binop(
 		default: goto ERR_OP;
 		}
 
-		return das_value_binXform(
-			vtLong, (const ubyte*)&nRes, NULL, vtOut, pOut, NULL, 0
+		return dasval_convert(
+			DASVT_LONG, (const uint8_t*)&nRes, NULL, vtOut, pOut, NULL, 0
 		);
 	}
 
 	if(bExact && _binop_asU64(vtL, pL, &uLeft) && _binop_asU64(vtR, pR, &uRight)){
 
 		switch(nOp){
-		case D2BOP_ADD:
+		case DASOP_ADD:
 			if(uLeft > UINT64_MAX - uRight) goto ERR_OVR;
 			uRes = uLeft + uRight;
 			break;
 
 		/* A difference that runs below zero has no home: the pair only landed
 		   in this domain because one value is too big to be an int64. */
-		case D2BOP_SUB:
+		case DASOP_SUB:
 			if(uLeft < uRight) goto ERR_OVR;
 			uRes = uLeft - uRight;
 			break;
 
-		case D2BOP_MUL:
+		case DASOP_MUL:
 			if((uLeft != 0) && (uRight > UINT64_MAX / uLeft)) goto ERR_OVR;
 			uRes = uLeft * uRight;
 			break;
@@ -1156,32 +1156,32 @@ das_errcode das_value_binop(
 		default: goto ERR_OP;
 		}
 
-		return das_value_binXform(
-			vtULong, (const ubyte*)&uRes, NULL, vtOut, pOut, NULL, 0
+		return dasval_convert(
+			DASVT_ULONG, (const uint8_t*)&uRes, NULL, vtOut, pOut, NULL, 0
 		);
 	}
 
 	/* An integer pair that reached here fits neither integer domain, which
-	   takes a vtULong above 2^63 against a negative operand.  Falling into
+	   takes a DASVT_ULONG above 2^63 against a negative operand.  Falling into
 	   the reals would answer to 53 bits and say nothing about it. */
 	if(bExact)
-		return das_error(DASERR_VALUE,
+		return daserrf(DASERR_VALUE,
 			"No integer domain holds both a %s and a %s operand exactly",
-			das_vt_toStr(vtL), das_vt_toStr(vtR)
+			dasvt_name(vtL), dasvt_name(vtR)
 		);
 
 	if(!_binop_asDbl(vtL, pL, &rLeft) || !_binop_asDbl(vtR, pR, &rRight))
-		return das_error(DASERR_VALUE,
-			"das_value_binop() handles simple numeric types, not %s %s %s",
-			das_vt_toStr(vtL), das_op_toStr(nOp, NULL), das_vt_toStr(vtR)
+		return daserrf(DASERR_VALUE,
+			"dasval_binOp() handles simple numeric types, not %s %s %s",
+			dasvt_name(vtL), dasop_name(nOp, NULL), dasvt_name(vtR)
 		);
 
 	switch(nOp){
-	case D2BOP_ADD: rRes = rLeft + rRight;    break;
-	case D2BOP_SUB: rRes = rLeft - rRight;    break;
-	case D2BOP_MUL: rRes = rLeft * rRight;    break;
-	case D2BOP_DIV: rRes = rLeft / rRight;    break;
-	case D2BOP_POW: rRes = pow(rLeft, rRight); break;
+	case DASOP_ADD: rRes = rLeft + rRight;    break;
+	case DASOP_SUB: rRes = rLeft - rRight;    break;
+	case DASOP_MUL: rRes = rLeft * rRight;    break;
+	case DASOP_DIV: rRes = rLeft / rRight;    break;
+	case DASOP_POW: rRes = pow(rLeft, rRight); break;
 	default: goto ERR_OP;
 	}
 
@@ -1190,24 +1190,24 @@ das_errcode das_value_binop(
 	   inf or nan is this layer's overflow, divide by zero included. */
 	if(!isfinite(rRes) && isfinite(rLeft) && isfinite(rRight)) goto ERR_OVR;
 
-	return das_value_binXform(
-		vtDouble, (const ubyte*)&rRes, NULL, vtOut, pOut, NULL, 0
+	return dasval_convert(
+		DASVT_DOUBLE, (const uint8_t*)&rRes, NULL, vtOut, pOut, NULL, 0
 	);
 
 ERR_OVR:
-	return das_error(DASERR_VALUE,
-		"Overflow in a %s %s %s operation", das_vt_toStr(vtL),
-		das_op_toStr(nOp, NULL), das_vt_toStr(vtR)
+	return daserrf(DASERR_VALUE,
+		"Overflow in a %s %s %s operation", dasvt_name(vtL),
+		dasop_name(nOp, NULL), dasvt_name(vtR)
 	);
 
 ERR_OP:
-	return das_error(DASERR_VALUE,
-		"Binary operator %d is undefined in das_value_binop", nOp
+	return daserrf(DASERR_VALUE,
+		"Binary operator %d is undefined in dasval_binOp", nOp
 	);
 }
 
 /* ************************************************************************** */
-/* Typed multiply-accumulate (das_value_accum)
+/* Typed multiply-accumulate (dasval_accum)
  *
  * Both helpers carry the running value in the widest type of their signedness
  * and range-check against the target type's [min,max] supplied by the caller.
@@ -1287,55 +1287,55 @@ static bool _das_accum_u64(
 		*((CTYPE*)pAccum) = (CTYPE)a; \
 	}while(0)
 
-das_errcode das_value_accum(
-	das_val_type vt, ubyte* pAccum, const ubyte* pStep, ptrdiff_t nCount
+das_errcode dasval_accum(
+	das_vt vt, uint8_t* pAccum, const uint8_t* pStep, ptrdiff_t nCount
 ){
 	if((pAccum == NULL)||(pStep == NULL))
-		return das_error(DASERR_VALUE, "Null pointer in das_value_accum");
+		return daserrf(DASERR_VALUE, "Null pointer in dasval_accum");
 
 	switch(vt){
-	case vtUByte : ACCUM_U( uint8_t,  UINT8_MAX); return DAS_OKAY;
-	case vtUShort: ACCUM_U(uint16_t, UINT16_MAX); return DAS_OKAY;
-	case vtUInt  : ACCUM_U(uint32_t, UINT32_MAX); return DAS_OKAY;
-	case vtULong : ACCUM_U(uint64_t, UINT64_MAX); return DAS_OKAY;
+	case DASVT_UBYTE : ACCUM_U( uint8_t,  UINT8_MAX); return DAS_OKAY;
+	case DASVT_USHORT: ACCUM_U(uint16_t, UINT16_MAX); return DAS_OKAY;
+	case DASVT_UINT  : ACCUM_U(uint32_t, UINT32_MAX); return DAS_OKAY;
+	case DASVT_ULONG : ACCUM_U(uint64_t, UINT64_MAX); return DAS_OKAY;
 
-	case vtByte  : ACCUM_I(  int8_t,  INT8_MIN,  INT8_MAX); return DAS_OKAY;
-	case vtShort : ACCUM_I( int16_t, INT16_MIN, INT16_MAX); return DAS_OKAY;
-	case vtInt   : ACCUM_I( int32_t, INT32_MIN, INT32_MAX); return DAS_OKAY;
-	case vtLong  : ACCUM_I( int64_t, INT64_MIN, INT64_MAX); return DAS_OKAY;
+	case DASVT_BYTE  : ACCUM_I(  int8_t,  INT8_MIN,  INT8_MAX); return DAS_OKAY;
+	case DASVT_SHORT : ACCUM_I( int16_t, INT16_MIN, INT16_MAX); return DAS_OKAY;
+	case DASVT_INT   : ACCUM_I( int32_t, INT32_MIN, INT32_MAX); return DAS_OKAY;
+	case DASVT_LONG  : ACCUM_I( int64_t, INT64_MIN, INT64_MAX); return DAS_OKAY;
 
-	case vtFloat : {
+	case DASVT_FLOAT : {
 		float r = (*((float*)pStep)) * (float)nCount + (*((float*)pAccum));
 		if(!isfinite(r)) goto ERR_OVR;
 		*((float*)pAccum) = r;
 		return DAS_OKAY;
 	}
-	case vtDouble: {
+	case DASVT_DOUBLE: {
 		double r = (*((double*)pStep)) * (double)nCount + (*((double*)pAccum));
 		if(!isfinite(r)) goto ERR_OVR;
 		*((double*)pAccum) = r;
 		return DAS_OKAY;
 	}
 
-	case vtTime:
-		return das_error(DASERR_VALUE,
-			"das_value_accum() does not handle vtTime; calendar math mixes a "
-			"das_time with a seconds step, accumulate the offset in the caller"
+	case DASVT_TIME:
+		return daserrf(DASERR_VALUE,
+			"dasval_accum() does not handle DASVT_TIME; calendar math mixes a "
+			"DasTime with a seconds step, accumulate the offset in the caller"
 		);
 	default:
-		return das_error(DASERR_VALUE,
-			"das_value_accum() only supports simple numeric types, not %s",
-			das_vt_toStr(vt)
+		return daserrf(DASERR_VALUE,
+			"dasval_accum() only supports simple numeric types, not %s",
+			dasvt_name(vt)
 		);
 	}
 
 ERR_OVR:
-	return das_error(DASERR_VALUE,
-		"Overflow accumulating a %s value", das_vt_toStr(vt)
+	return daserrf(DASERR_VALUE,
+		"Overflow accumulating a %s value", dasvt_name(vt)
 	);
 ERR_NEG:
-	return das_error(DASERR_VALUE,
-		"Negative count %td is undefined for unsigned type %s", nCount, das_vt_toStr(vt)
+	return daserrf(DASERR_VALUE,
+		"Negative count %td is undefined for unsigned type %s", nCount, dasvt_name(vt)
 	);
 }
 
@@ -1345,27 +1345,27 @@ ERR_NEG:
 /* ************************************************************************** */
 /* Parse any string into a value */
 
-das_errcode das_value_fromStr(
-   const char* sStr, das_val_type vt, ubyte* pBuf, int nBufLen
+das_errcode dasval_fromStr(
+   const char* sStr, das_vt vt, uint8_t* pBuf, int nBufLen
 ){
 	if(sStr == NULL){
-		return das_error(DASERR_VALUE, "Empty string can't be converted to a value");
+		return daserrf(DASERR_VALUE, "Empty string can't be converted to a value");
 	}
 	/* See if the buffer is big enough for the binary size of this values type */
-	if(nBufLen < das_vt_size(vt)){
-		return das_error(DASERR_VALUE, 
+	if(nBufLen < dasvt_size(vt)){
+		return daserrf(DASERR_VALUE, 
 			"Output buffer is too small %d bytes to hold a value of type %s",
-			nBufLen, das_vt_toStr(vt)
+			nBufLen, dasvt_name(vt)
 		);
 	}
 
 	switch(vt){
-	case vtUnknown:
-		return das_error(DASERR_VALUE, "Cannot determine fill values for unknown types");
-	case vtNull:
-		return das_error(DASERR_VALUE, "Cannot read a string as a value of type null");
+	case DASVT_UNK:
+		return daserrf(DASERR_VALUE, "Cannot determine fill values for unknown types");
+	case DASVT_NULL:
+		return daserrf(DASERR_VALUE, "Cannot read a string as a value of type null");
 
-	case vtText:
+	case DASVT_TEXT:
 		{
 			size_t nLen = strlen(sStr);
 			if(nLen <= nBufLen){
@@ -1373,54 +1373,54 @@ das_errcode das_value_fromStr(
 				return DAS_OKAY;
 			}
 		}
-		daslog_error_v(
+		daslog_errorf(
 			"string value '%s' can't fit into %d byte buffer", sStr, nBufLen
 		);
 		return DASERR_VALUE;
 
-	case vtUByte:
-	case vtByteSeq:
+	case DASVT_UBYTE:
+	case DASVT_BYTESEQ:
 		if(sscanf(sStr, "%hhu", (uint8_t*)pBuf) == 1) return DAS_OKAY; 
 		else goto ERR_PARSE;
-	case vtByte:
+	case DASVT_BYTE:
 		if(sscanf(sStr, "%hhd", (int8_t*)pBuf) == 1) return DAS_OKAY;
 		else goto ERR_PARSE;
-	case vtUShort:
+	case DASVT_USHORT:
 		if(sscanf(sStr, "%hu", (uint16_t*)pBuf) == 1) return DAS_OKAY;
 		else goto ERR_PARSE;
-	case vtShort:
+	case DASVT_SHORT:
 		if(sscanf(sStr, "%hd", (int16_t*)pBuf) == 1) return DAS_OKAY;
 		else goto ERR_PARSE;
-	case vtUInt:
+	case DASVT_UINT:
 		if(sscanf(sStr, "%u", (uint32_t*)pBuf) == 1) return DAS_OKAY;
 		else goto ERR_PARSE;
-	case vtInt:
+	case DASVT_INT:
 		if(sscanf(sStr, "%d", (int32_t*)pBuf) == 1) return DAS_OKAY;
 		else goto ERR_PARSE;
-	case vtULong:
+	case DASVT_ULONG:
 		/* SCNu64, musl's sscanf accepts "%Lu" for an integer conversion but
 		   stores nothing! */
 		if(sscanf(sStr, "%" SCNu64, (uint64_t*)pBuf) == 1) return DAS_OKAY;
 		else goto ERR_PARSE;
-	case vtLong:
+	case DASVT_LONG:
 		if(sscanf(sStr, "%" SCNd64, (int64_t*)pBuf) == 1) return DAS_OKAY;
 		else goto ERR_PARSE;
-	case vtFloat:
+	case DASVT_FLOAT:
 		if(sscanf(sStr, "%f", (float*)pBuf) == 1) return DAS_OKAY;
 		else goto ERR_PARSE;
-	case vtDouble:
+	case DASVT_DOUBLE:
 		if(sscanf(sStr, "%lf", (double*)pBuf) == 1) return DAS_OKAY;
 		else goto ERR_PARSE;
-	case vtTime:
-		if(dt_parsetime((das_time*)pBuf, sStr) == 1) return DAS_OKAY;
+	case DASVT_TIME:
+		if(DasTime_fromStr((DasTime*)pBuf, sStr) == 1) return DAS_OKAY;
 		else goto ERR_PARSE;
 	default:
-		return das_error(DASERR_VALUE, "Unknown value type code: %d", vt);
+		return daserrf(DASERR_VALUE, "Unknown value type code: %d", vt);
 	}
 
 ERR_PARSE:
-	return das_error(
-		DASERR_VALUE, "Could not parse '%s' as a %s value", sStr, das_vt_toStr(vt)
+	return daserrf(
+		DASERR_VALUE, "Could not parse '%s' as a %s value", sStr, dasvt_name(vt)
 	);
 }
 
@@ -1430,14 +1430,14 @@ ERR_PARSE:
  * types that have far greater range then the actual data */
 
 /* Don't fail for certain semantics, but do offer extra support where detected */
-das_errcode das_value_fmt(
-	das_val_type vt, const char* sSemantic, int nFitTo, char* sBuf, size_t uBufLen
+das_errcode dasvt_fmt(
+	das_vt vt, const char* sSemantic, int nFitTo, char* sBuf, size_t uBufLen
 ){
 	bool bBlob = (strcmp(sSemantic, DAS_SEM_BLOB) == 0);
-	bool bText = (strcmp(sSemantic, DAS_SEM_TEXT) == 0);
+	bool bText = (strcmp(sSemantic, DASSEM_TEXT) == 0);
 
 	switch(vt){
-	case vtUByte:
+	case DASVT_UBYTE:
 		if(nFitTo < 1){
 			if(bBlob)      snprintf(sBuf, uBufLen, "%s", "%0hhX");
 			else if(bText) snprintf(sBuf, uBufLen, "%s", "%s");
@@ -1449,7 +1449,7 @@ das_errcode das_value_fmt(
 			else           snprintf(sBuf, uBufLen, "%% %dhhu", nFitTo);
 		}
 		break;
-	case vtByte:
+	case DASVT_BYTE:
 		if(nFitTo < 1){
 			if(bText) snprintf(sBuf, uBufLen, "%s", "%s");
 			else      snprintf(sBuf, uBufLen, "%s", "%hhd");
@@ -1461,7 +1461,7 @@ das_errcode das_value_fmt(
 		break;
 
 
-	case vtUShort:
+	case DASVT_USHORT:
 		if(nFitTo < 1){
 			if(bBlob) snprintf(sBuf, uBufLen, "%s", "%0hX");
 			else      snprintf(sBuf, uBufLen, "%s", "%hu");
@@ -1471,13 +1471,13 @@ das_errcode das_value_fmt(
 			else      snprintf(sBuf, uBufLen, "%% %dhu", nFitTo);
 		}
 		break;
-	case vtShort:
+	case DASVT_SHORT:
 		if(nFitTo < 1) snprintf(sBuf, uBufLen, "%s", "%hd");
 		else           snprintf(sBuf, uBufLen, "%% %dhd", nFitTo);
 		break;
 
 
-	case vtUInt:
+	case DASVT_UINT:
 		if(nFitTo < 1){
 			if(bBlob) snprintf(sBuf, uBufLen, "%s", "%0X");
 			else      snprintf(sBuf, uBufLen, "%s", "%u");
@@ -1487,12 +1487,12 @@ das_errcode das_value_fmt(
 			else      snprintf(sBuf, uBufLen, "%% %du", nFitTo);
 		}
 		break;
-	case vtInt:
+	case DASVT_INT:
 		if(nFitTo < 1) snprintf(sBuf, uBufLen, "%s", "%d");
 		else           snprintf(sBuf, uBufLen, "%% %dd", nFitTo);
 		break;
 
-	case vtULong:
+	case DASVT_ULONG:
 		if(nFitTo < 1){
 			if(bBlob) snprintf(sBuf, uBufLen, "%s", "%0" PRIX64); /* from inttypes.h */
 			else      snprintf(sBuf, uBufLen, "%s", "%" PRIu64);
@@ -1502,15 +1502,15 @@ das_errcode das_value_fmt(
 			else      snprintf(sBuf, uBufLen, "%% %d" PRIu64, nFitTo);
 		}
 		break;
-	case vtLong:
+	case DASVT_LONG:
 		if(nFitTo < 1) snprintf(sBuf, uBufLen, "%s", "%" PRId64);
 		else           snprintf(sBuf, uBufLen, "%% %d" PRId64, nFitTo);
 		break;
 
-	case vtFloat:
-	case vtDouble:
+	case DASVT_FLOAT:
+	case DASVT_DOUBLE:
 		if(nFitTo < 1){
-			if(vt == vtFloat) snprintf(sBuf, uBufLen, "%s", "%.4e");
+			if(vt == DASVT_FLOAT) snprintf(sBuf, uBufLen, "%s", "%.4e");
 			else              snprintf(sBuf, uBufLen, "%s", "%.8e");
 		}
 		else{
@@ -1528,7 +1528,7 @@ das_errcode das_value_fmt(
 		}
 		break;
 
-	case vtTime:
+	case DASVT_TIME:
 		if(nFitTo < 1){
 			/* No guidance, just pick milliseconds, usually pretty good in space physics */
 			snprintf(sBuf, uBufLen, "%s", "%04d-%02d-%02dT%02d:%02d:%06.3f");
@@ -1586,13 +1586,13 @@ das_errcode das_value_fmt(
 		break;
 
 	default:
-		return das_error(DASERR_VALUE, 
-			"Default format string not available for type '%s'", das_vt_toStr(vt)
+		return daserrf(DASERR_VALUE, 
+			"Default format string not available for type '%s'", dasvt_name(vt)
 		);
 	}
 
 	if((uBufLen == 0)||(strlen(sBuf) + 1 >= uBufLen))
-		return das_error(DASERR_VALUE, "%zu bytes is too small for a '%s' format "
-		                 "string", uBufLen, das_vt_toStr(vt));
+		return daserrf(DASERR_VALUE, "%zu bytes is too small for a '%s' format "
+		                 "string", uBufLen, dasvt_name(vt));
 	return DAS_OKAY;
 }

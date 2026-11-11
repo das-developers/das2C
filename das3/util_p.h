@@ -17,12 +17,12 @@
 
 /* Module start-up and shut-down hooks.  Not installed.
  *
- * das_init() and das_finish() in util.c are the only callers, so the hooks
+ * daslib_init() and daslib_finish() in util.c are the only callers, so the hooks
  * are declared next to them rather than in each module's public header.  The
  * defining .c files include this too, so the compiler checks each definition
  * against its declaration.
  *
- * None of these are thread safe, they run once from das_init() before any
+ * None of these are thread safe, they run once from daslib_init() before any
  * worker threads exist.
  */
 
@@ -95,7 +95,7 @@ uint8_t* das_memset(
 
 
 #ifdef _WIN32
-/* das_init() calls this so das_strtod_c() makes its C locale anew, str.c */
+/* daslib_init() calls this so dasstr_toDoubleCLocale() makes its C locale anew, str.c */
 void _dasstr_resetCLocale(void);
 #endif
 

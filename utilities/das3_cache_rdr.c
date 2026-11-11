@@ -16,7 +16,7 @@
  *
  * Compared to utilities/das2_cache_rdr.c, everything that read dsdf
  * cacheLevel lines, chose a bin and walked directories by hand is gone:
- * das_uri_list() replaces about four hundred lines of that.  The stream
+ * DasUriTplt_newList() replaces about four hundred lines of that.  The stream
  * merge callbacks are carried over nearly verbatim since the job is
  * unchanged: one stream out of many block files, repeated headers
  * dropped, packet IDs reconciled, records trimmed to the request range.
@@ -78,7 +78,7 @@ das_errcode onStreamHdr(DasStream* pSdIn, void* vpHDat)
 		snprintf(sRng, 159, "%s to %s UTC", pHDat->sBeg, pHDat->sEnd);
 
 		DasDesc_copyIn(pSdOut, (DasDesc*)pSdIn);
-		DasDesc_set(pSdOut, "DatumRange", "xCacheRange", sRng);
+		DasDesc_setProp(pSdOut, "DatumRange", "xCacheRange", sRng);
 
 		das_errcode nRet = DasIO_writeStreamDesc(pHDat->pOut, pHDat->pSdOut);
 		if(nRet != 0) return nRet;
@@ -104,13 +104,13 @@ das_errcode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* vpHDat)
 
 	if(DasStream_isValidId(pSdOut, nPktId)){
 		/* Drop repeated packet descriptions, re-emit true redefinitions */
-		pPdOut = DasStream_getPkt(pSdOut, nPktId);
-		if(DasPkt_equalFormat(pPdIn, pPdOut))
+		pPdOut = DasStream_pkt(pSdOut, nPktId);
+		if(DasPkt_isSameFmt(pPdIn, pPdOut))
 			return 0;
 		DasStream_freeDesc(pSdOut, nPktId);
 	}
 
-	if((pPdOut = DasStream_clonePktById(pSdOut, pSdIn, nPktId)) == NULL)
+	if((pPdOut = DasStream_clonePkt(pSdOut, pSdIn, nPktId)) == NULL)
 		return P_ERR;
 
 	return DasIO_writeDesc(pHDat->pOut, (DasDesc*)pPdOut, 0);
@@ -124,20 +124,20 @@ das_errcode onPktData(DasPkt* pPktIn, void* vpHDat)
 	   block can straddle it, but the per-packet test keeps the logic
 	   one screen long; see the RawDataHandler note in das2_cache_rdr.c
 	   for the pass-through upgrade both programs want. */
-	DasPlane* pPlane = DasPkt_getXPlane(pPktIn);
-	double rX = DasPlane_getValue(pPlane, 0);
-	if(strcmp(DasPlane_getUnits(pPlane), UNIT_US2000) != 0)
-		rX = Units_convertTo(rX, DasPlane_getUnits(pPlane), UNIT_US2000);
+	DasPlane* pPlane = DasPkt_xPlane(pPktIn);
+	double rX = DasPlane_valAt(pPlane, 0);
+	if(strcmp(DasPlane_units(pPlane), DASUNITS_US2000) != 0)
+		rX = DasUnits_convert(rX, DasPlane_units(pPlane), DASUNITS_US2000);
 	if(rX < pHDat->rBeg) return 0;
 	if(rX >= pHDat->rEnd) return 0;
 
 	das_errcode nRet = DAS_OKAY;
-	DasBuf_reinit(pHDat->pBuf);
+	DasBuf_reset(pHDat->pBuf);
 	if((nRet = DasPkt_encodeData(pPktIn, pHDat->pBuf)) != DAS_OKAY)
 		return nRet;
 
 	size_t uLen = 0;
-	const ubyte* pData = DasBuf_data(pHDat->pBuf, &uLen);
+	const uint8_t* pData = DasBuf_data(pHDat->pBuf, &uLen);
 	nRet = DasIO_writePktBytes(pHDat->pOut, DasPkt_getId(pPktIn), pData, uLen);
 	if(nRet == 0){
 		pHDat->nPktsSent += 1;
@@ -170,9 +170,9 @@ void sendNoData(handler_data_t* pHDat)
 	snprintf(sMsg, 511, "No data in the interval %s to %s in this cache set",
 	         pHDat->sBeg, pHDat->sEnd);
 
-	daserr_setdisp(DASERR_DIS_RET);
-	DasExcept* pEx = new_DasExcept(DAS_EX_NO_DATA, sMsg);
-	daserr_setdisp(DASERR_DIS_EXIT);
+	daserr_setDisp(DASERRDISP_RET);
+	DasExcept* pEx = new_DasExcept(DASEXCEPTTYPE_NO_DATA, sMsg);
+	daserr_setDisp(DASERRDISP_EXIT);
 
 	DasIO_exception(pHDat->pOut, pEx);
 	del_DasExcept(pEx);
@@ -232,7 +232,7 @@ int main(int argc, char* argv[])
 	char sEnd[64] = {'\0'};
 	bool bHaveRng = false;
 
-	das_init(argv[0], DASERR_DIS_EXIT, DASLOG_INFO, NULL);
+	daslib_init(argv[0], DASERRDISP_EXIT, DASLOG_INFO, NULL);
 
 	for(int i = 1; i < argc; i++){
 		if((strcmp(argv[i],"-h")==0)||(strcmp(argv[i],"--help")==0)){
@@ -240,42 +240,42 @@ int main(int argc, char* argv[])
 			return 0;
 		}
 		if(strcmp(argv[i], "--coord") == 0){
-			return das_error(P_ERR,
+			return daserrf(P_ERR,
 				"--coord is reserved for runtime coordinate definitions and "
 				"is not implemented in this prototype");
 		}
 		if(strcmp(argv[i], "-p") == 0){
 			if(argc <= i+1)
-				return das_error(P_ERR, "Argument missing for pad (-p)");
+				return daserrf(P_ERR, "Argument missing for pad (-p)");
 			i++;
-			if(!das_str2double(argv[i], &rPad) || (rPad < 0.0))
-				return das_error(P_ERR, "Bad pad value '%s'", argv[i]);
+			if(!dasstr_toDouble(argv[i], &rPad) || (rPad < 0.0))
+				return daserrf(P_ERR, "Bad pad value '%s'", argv[i]);
 			continue;
 		}
 		if(strncmp(argv[i], "--pad=", 6) == 0){
-			if(!das_str2double(argv[i]+6, &rPad) || (rPad < 0.0))
-				return das_error(P_ERR, "Bad pad value '%s'", argv[i]+6);
+			if(!dasstr_toDouble(argv[i]+6, &rPad) || (rPad < 0.0))
+				return daserrf(P_ERR, "Bad pad value '%s'", argv[i]+6);
 			continue;
 		}
 		if(strcmp(argv[i], "-r") == 0){
 			if(argc <= i+1)
-				return das_error(P_ERR, "Argument missing for range (-r)");
+				return daserrf(P_ERR, "Argument missing for range (-r)");
 			i++;
 			char sCoord[32] = {'\0'};
 			if(sscanf(argv[i], "%31[^,],%63[^,],%63s", sCoord, sBeg, sEnd) != 3)
-				return das_error(P_ERR,
+				return daserrf(P_ERR,
 					"Can't parse '-r %s', expected COORD,BEG,END", argv[i]);
 			if(strcmp(sCoord, "time") != 0)
-				return das_error(P_ERR,
+				return daserrf(P_ERR,
 					"Coordinate '%s' is not implemented; this prototype "
 					"handles time only (see --coord)", sCoord);
 			bHaveRng = true;
 			continue;
 		}
 		if(argv[i][0] == '-')
-			return das_error(P_ERR, "Unknown option '%s'", argv[i]);
+			return daserrf(P_ERR, "Unknown option '%s'", argv[i]);
 		if(sTplt != NULL)
-			return das_error(P_ERR, "Only one TEMPLATE may be given");
+			return daserrf(P_ERR, "Only one TEMPLATE may be given");
 		sTplt = argv[i];
 	}
 
@@ -287,39 +287,39 @@ int main(int argc, char* argv[])
 
 	size_t uLen = strlen(sTplt);
 	if((uLen > 4) && (strcmp(sTplt + uLen - 4, ".d3b") == 0))
-		return das_error(P_ERR,
+		return daserrf(P_ERR,
 			"das3 block merging is not implemented in this prototype");
 
 	/* The record trim bounds, pad applied */
-	das_time dtBeg = {0}, dtEnd = {0};
-	if(!dt_parsetime(&dtBeg, sBeg))
-		return das_error(P_ERR, "Can't parse begin time '%s'", sBeg);
-	if(!dt_parsetime(&dtEnd, sEnd))
-		return das_error(P_ERR, "Can't parse end time '%s'", sEnd);
+	DasTime dtBeg = {0}, dtEnd = {0};
+	if(!DasTime_fromStr(&dtBeg, sBeg))
+		return daserrf(P_ERR, "Can't parse begin time '%s'", sBeg);
+	if(!DasTime_fromStr(&dtEnd, sEnd))
+		return daserrf(P_ERR, "Can't parse end time '%s'", sEnd);
 
-	double rBeg = Units_convertFromDt(&dtBeg, UNIT_US2000) - rPad*1.0e+6;
-	double rEnd = Units_convertFromDt(&dtEnd, UNIT_US2000) + rPad*1.0e+6;
+	double rBeg = DasTime_toPoint(&dtBeg, DASUNITS_US2000) - rPad*1.0e+6;
+	double rEnd = DasTime_toPoint(&dtEnd, DASUNITS_US2000) + rPad*1.0e+6;
 	if(rEnd <= rBeg)
-		return das_error(P_ERR, "Begin %s is not before end %s", sBeg, sEnd);
+		return daserrf(P_ERR, "Begin %s is not before end %s", sBeg, sEnd);
 
 	/* The file selection bounds: the padded range, so a pad reaching
 	   into the neighbor block picks that block up too */
-	das_time dtSelBeg = {0}, dtSelEnd = {0};
-	Units_convertToDt(&dtSelBeg, rBeg, UNIT_US2000);
-	Units_convertToDt(&dtSelEnd, rEnd, UNIT_US2000);
+	DasTime dtSelBeg = {0}, dtSelEnd = {0};
+	DasTime_fromPoint(&dtSelBeg, rBeg, DASUNITS_US2000);
+	DasTime_fromPoint(&dtSelEnd, rEnd, DASUNITS_US2000);
 	char sSelBeg[64] = {'\0'}, sSelEnd[64] = {'\0'};
-	dt_isoc(&dtSelBeg, 0, sSelBeg, 63);
-	dt_isoc(&dtSelEnd, 0, sSelEnd, 63);
+	DasTime_toIsoC(&dtSelBeg, 0, sSelBeg, 63);
+	DasTime_toIsoC(&dtSelEnd, 0, sSelEnd, 63);
 
-	das_range rng;
-	if(das_range_fromUtc(&rng, sSelBeg, sSelEnd) != DAS_OKAY)
-		return das_error(P_ERR, "Can't form a time range from %s to %s",
+	DasRng rng;
+	if(DasRng_fromIso(&rng, sSelBeg, sSelEnd) != DAS_OKAY)
+		return daserrf(P_ERR, "Can't form a time range from %s to %s",
 		                 sSelBeg, sSelEnd);
-	das_dim_range dr;
-	das_dim_range_init(&dr, "time", &rng);
+	DasDimRng dr;
+	DasDimRng_set(&dr, "time", &rng);
 
 	size_t uFiles = 0;
-	char** ppFiles = das_uri_list(sTplt, das_time_uridef(), 1, &dr, &uFiles);
+	char** ppFiles = DasUriTplt_newList(sTplt, DasUriSegDef_timeToks(), 1, &dr, &uFiles);
 
 	/* Merge whatever matched into one output stream */
 	handler_data_t hdat = {0};
@@ -332,19 +332,19 @@ int main(int argc, char* argv[])
 
 	char sRng[160] = {'\0'};
 	snprintf(sRng, 159, "%s to %s UTC", sBeg, sEnd);
-	DasDesc_set((DasDesc*)hdat.pSdOut, "DatumRange", "xCacheRange", sRng);
+	DasDesc_setProp((DasDesc*)hdat.pSdOut, "DatumRange", "xCacheRange", sRng);
 
 	if((ppFiles == NULL) || (uFiles == 0)){
-		daslog_info_v("0 cache blocks match %s", sTplt);
+		daslog_infof("0 cache blocks match %s", sTplt);
 		sendNoData(&hdat);
 		DasIO_close(hdat.pOut);
 		return 0;
 	}
 
-	das_stream_proc proc;
-	das_stream_proc_init(&proc, &hdat);
-	proc.onStreamDesc = onStreamHdr;
-	proc.onPktDesc = onPktHdr;
+	DasIOProc proc;
+	init_DasIOProc(&proc, &hdat);
+	proc.onStream = onStreamHdr;
+	proc.onPkt = onPktHdr;
 	proc.onPktData = onPktData;
 	proc.onClose = onIgnoreExcept;
 
@@ -353,13 +353,13 @@ int main(int argc, char* argv[])
 	for(size_t u = 0; u < uFiles; u++){
 		if(pIn != NULL){ del_DasIO(pIn); pIn = NULL; }
 
-		daslog_info_v("Reading: %s", ppFiles[u]);
+		daslog_infof("Reading: %s", ppFiles[u]);
 		pIn = new_DasIO("das3_cache_rdr",
 		                new_DasXport_file(ppFiles[u], "r"), NULL);
 		if(pIn == NULL)
 			continue;
 
-		DasIO_addProcessor(pIn, &proc);
+		DasIO_addProc(pIn, &proc);
 		if((nRet = DasIO_readAll(pIn)) != 0) break;
 	}
 	if(pIn != NULL) del_DasIO(pIn);
@@ -371,7 +371,7 @@ int main(int argc, char* argv[])
 	DasIO_close(hdat.pOut);
 	if(hdat.pBuf) del_DasBuf(hdat.pBuf);
 
-	daslog_info_v("%d packets sent from %zu cache block(s)",
+	daslog_infof("%d packets sent from %zu cache block(s)",
 	              hdat.nPktsSent, uFiles);
 	return nRet;
 }

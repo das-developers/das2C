@@ -30,11 +30,11 @@
 extern "C" {
 #endif
 
-struct das_pkt {
+struct das_pkt_t {
     DasDesc base;
 	 
 	 size_t uPlanes;
-    DasPlane* planes[MAXPLANES];
+    DasPlane* planes[DASPKT_MAX_PLANES];
     
 	 /* Bumped each time a plane is altered by adding new planes.
 	  * DasIO notes this value with each header it writes and so

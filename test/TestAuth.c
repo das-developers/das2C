@@ -40,13 +40,13 @@
 void sim_plot_1d(DasDs* pDs)
 {
 	/* The one and only coordinate dimension */
-	DasDim* pDimX = DasDs_getDimByIdx(pDs, 0, DASDIM_COORD);
+	DasDim* pDimX = DasDs_dimAt(pDs, 0, DASDIMTYPE_COORD);
 	
 	/* Just take the first data dimension, whatever it is */
-	DasDim* pDimY = DasDs_getDimByIdx(pDs, 0, DASDIM_DATA);
+	DasDim* pDimY = DasDs_dimAt(pDs, 0, DASDIMTYPE_DATA);
 	
-	DasVar* pVarX = DasDim_getPointVar(pDimX);
-	DasVar* pVarY = DasDim_getPointVar(pDimY);
+	DasVar* pVarX = DasDim_pointVar(pDimX);
+	DasVar* pVarY = DasDim_pointVar(pDimY);
 	
 	/* VERY IMPORTANT POINT: The rank of a dataset is the length of it's index
 	 * array only.  This length may have NO DIRECT CORRELATION to the number of
@@ -59,20 +59,20 @@ void sim_plot_1d(DasDs* pDs)
 	 */
 	
 	DasDsIter iter;
-	das_datum pair[2];
+	DasDatum pair[2];
 	char sBufX[128] = {'\0'};
 	char sBufY[128] = {'\0'};
 	
 	for(init_DasDsIter(&iter, pDs); !iter.done; DasDsIter_next(&iter))
 	{
-		DasVar_get(pVarX, iter.index, (das_byte_seq){0}, pair);
-		DasVar_get(pVarY, iter.index, (das_byte_seq){0}, pair + 1);
+		DasVar_datumAt(pVarX, iter.addr, (DasByteSeq){0}, pair);
+		DasVar_datumAt(pVarY, iter.addr, (DasByteSeq){0}, pair + 1);
 		
-		das_datum_toStr(pair, 3, sBufX, 128);
-		das_datum_toStr(pair + 1, 3, sBufY, 128);
+		DasDatum_toStr(pair, 3, sBufX, 128);
+		DasDatum_toStr(pair + 1, 3, sBufY, 128);
 		
 		printf( "index: ");
-		for(int i = 0; i < iter.rank; ++i) printf(" %zd", iter.index[i]);
+		for(int i = 0; i < iter.rank; ++i) printf(" %zd", iter.addr[i]);
 		printf( " : %s %s\n", sBufX, sBufY);
 	}
 }
@@ -80,8 +80,8 @@ void sim_plot_1d(DasDs* pDs)
 
 void sim_plot_2d(DasDs* pDs)
 {
-	DasDim* pDimX = DasDs_getDimByIdx(pDs, 0, DASDIM_COORD);
-	DasDim* pDimY = DasDs_getDimByIdx(pDs, 1, DASDIM_COORD);
+	DasDim* pDimX = DasDs_dimAt(pDs, 0, DASDIMTYPE_COORD);
+	DasDim* pDimY = DasDs_dimAt(pDs, 1, DASDIMTYPE_COORD);
 	DasDim* pTmp = NULL;
 	
 	/* Put time or longitude on bottom if they are present */
@@ -91,13 +91,13 @@ void sim_plot_2d(DasDs* pDs)
 	}
 	
 	/* Just pick the first one */
-	DasDim* pDimZ = DasDs_getDimByIdx(pDs, 0, DASDIM_DATA);
+	DasDim* pDimZ = DasDs_dimAt(pDs, 0, DASDIMTYPE_DATA);
 	
 	/* Get center points for each dimension, skip width's std_dev or what
 	 * ever else might be present */
-	DasVar* pVarX = DasDim_getPointVar(pDimX);
-	DasVar* pVarY = DasDim_getPointVar(pDimY);
-	DasVar* pVarZ = DasDim_getPointVar(pDimZ);
+	DasVar* pVarX = DasDim_pointVar(pDimX);
+	DasVar* pVarY = DasDim_pointVar(pDimY);
+	DasVar* pVarZ = DasDim_pointVar(pDimZ);
 
 	/* VERY IMPORTANT POINT: The rank fo a dataset is the length of it's
 	 * iteration index array and has nothing to do with the number of 
@@ -106,23 +106,23 @@ void sim_plot_2d(DasDs* pDs)
 	 * in latitude, longitude, and altitude but are only rank 1. */
 	
 	DasDsIter iter;
-	das_datum set[3];
+	DasDatum set[3];
 	char sBufX[128] = {'\0'};
 	char sBufY[128] = {'\0'};
 	char sBufZ[128] = {'\0'};
 	
 	for(init_DasDsIter(&iter, pDs); !iter.done; DasDsIter_next(&iter))
 	{	
-		DasVar_get(pVarX, iter.index, (das_byte_seq){0}, set);
-		DasVar_get(pVarY, iter.index, (das_byte_seq){0}, set + 1);
-		DasVar_get(pVarZ, iter.index, (das_byte_seq){0}, set + 2);
+		DasVar_datumAt(pVarX, iter.addr, (DasByteSeq){0}, set);
+		DasVar_datumAt(pVarY, iter.addr, (DasByteSeq){0}, set + 1);
+		DasVar_datumAt(pVarZ, iter.addr, (DasByteSeq){0}, set + 2);
 
-		das_datum_toStr(set, 3, sBufX, 128);
-		das_datum_toStr(set + 1, 3, sBufY, 128);
-		das_datum_toStr(set + 2, 3, sBufZ, 128);
+		DasDatum_toStr(set, 3, sBufX, 128);
+		DasDatum_toStr(set + 1, 3, sBufY, 128);
+		DasDatum_toStr(set + 2, 3, sBufZ, 128);
 		
 		printf( "index: ");
-		for(int i = 0; i < iter.rank; ++i) printf(" %zd", iter.index[i]);
+		for(int i = 0; i < iter.rank; ++i) printf(" %zd", iter.addr[i]);
 		printf( " : %s %s %s \n", sBufX, sBufY, sBufZ);
 	}
 }
@@ -139,7 +139,7 @@ void sim_plot_3d(const DasDs* pDs){
 int main(int argc, char** argv)
 {
 	/* Exit on errors, log info messages and above */
-	das_init(argv[0], DASERR_DIS_EXIT, DASLOG_INFO, NULL);
+	daslib_init(argv[0], DASERRDISP_EXIT, DASLOG_INFO, NULL);
 	
 	const char* sUrl = "https://jupiter.physics.uiowa.edu/das/server?"
 			             "server=dataset&dataset=Juno/WAV/Survey&"
@@ -147,15 +147,15 @@ int main(int argc, char** argv)
 	
 	/* Create an credentials manager to handle authentication.  It has no store,
 	 * so nothing is cached to disk, and asks on the terminal */
-	DasCredMngr* pCred = new_DasCredMngr();
-	DasCredMngr_setPrompt(pCred, das_term_prompt, NULL);
+	DasCredMgr* pCred = new_DasCredMgr();
+	DasCredMgr_setPrompt(pCred, DasCredMgr_termPrompt, NULL);
 	
 	/* Get a connection to the remote web server handling any authentication 
 	 * prompts, redirects, and TLS setup, as required */
 	printf("INFO: Contacting remote HTTP URL %s\n\n", sUrl);
 	
-	DasHttpResp* pRes = new_DasHttpResp_get(sUrl, NULL, pCred, DASHTTP_TO_MIN);
-	if(!DasHttpResp_ok(pRes)){
+	DasHttpResp* pRes = new_DasHttpResp_get(sUrl, NULL, pCred, DASHTTP_TIMEOUT_MIN);
+	if(!DasHttpResp_isOk(pRes)){
 		printf("ERROR: Could not get body for URL, reason: %s\n", DasHttpResp_error(pRes));
 		return PROG_ERR;
 	}
@@ -165,7 +165,7 @@ int main(int argc, char** argv)
 	del_DasHttpResp(pRes);
 	
 	/* Model das2 packets as datasets and keep every record in memory */
-	DasIO_setModel(pIn, STREAM_MODEL_V3);
+	DasIO_setModel(pIn, DASIOMODEL_V3);
 	DasIO_setAccum(pIn, true);
 	
 	/* We could add stream processors if desired such as a progress
@@ -188,13 +188,13 @@ int main(int argc, char** argv)
 	char sInfo[4096] = {'\0'}; /* dataset info output is verbose, use big buf */
 	size_t uCoords = 0;
 	DasDesc* pDesc = NULL;
-	while((pDesc = DasStream_nextDesc(pStream, pDesc, DASDESC_UNK)) != NULL){
+	while((pDesc = DasStream_nextDesc(pStream, pDesc, DASDESCTYPE_UNK)) != NULL){
 		DasDs* pDs = (DasDs*)pDesc;
 		DasDs_info(pDs, sInfo, 4095);
 		fputs(sInfo, stdout);
 		printf("Data follow...\n");
 		printf("------------------------------------------\n");
-		uCoords = DasDs_numDims(pDs, DASDIM_COORD);
+		uCoords = DasDs_numDims(pDs, DASDIMTYPE_COORD);
 		switch(uCoords){
 			case 1: sim_plot_1d(pDs); break;
 			case 2: sim_plot_2d(pDs); break;

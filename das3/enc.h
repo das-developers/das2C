@@ -38,7 +38,7 @@ extern "C" {
 /* Most Significant byte last (little-endian) IEEE-754 reals */
 #define DAS2DT_LE_REAL 0x0002
 
-#ifdef HOST_IS_LSB_FIRST
+#ifdef DASHOST_LSB_FIRST
 #define DAS2DT_HOST_REAL 0x0002
 #else
 #define DAS2DT_HOST_REAL 0x0001
@@ -58,8 +58,8 @@ extern "C" {
  */
 #define DAS2DT_TIME 0x0004
 
-#define DASENC_FMT_LEN  64
-#define DASENC_TYPE_LEN 32
+#define DASENC_FMT_SZ  64
+#define DASENC_TYPE_SZ 32
 
 
 /** @addtogroup codec
@@ -75,19 +75,19 @@ extern "C" {
  * encoding and decoding values from a Das2 Stream.  
  * 
  * This class handles syntax not semantics.  The type of measurement represented
- * by a value depends on it's ::das_units  Any double value can be output as in 
+ * by a value depends on it's ::DasUnits  Any double value can be output as in 
  * any given encoding.  The functions for this class are happy to output
  * amplitudes at time strings.  It's up to other classes to see that proper
  * encodings are used. 
  * 
- * Encodings are made by new_DasEnc(), new_DasEnc_str() or DasEnc_copy()
+ * Encodings are made by new_DasEnc(), new_DasEnc_str() or new_DasEnc_copy()
  * and freed with del_DasEnc().
  *
- * @see ::das_units
+ * @see ::DasUnits
  * @see ::DasPlane
  * @class DasEnc
  */
-typedef struct das_encoding DasEnc;
+typedef struct das_enc_t DasEnc;
 
 /** The encoding category: DAS2DT_BE_REAL, DAS2DT_LE_REAL, DAS2DT_ASCII or
  * DAS2DT_TIME
@@ -127,7 +127,7 @@ DAS_API unsigned int DasEnc_width(const DasEnc* pThis);
  */
 DAS_API DasEnc* new_DasEnc(int nCat, int nWidth, const char* sFmt);
 
-/** Free an encoding made by new_DasEnc(), new_DasEnc_str() or DasEnc_copy()
+/** Free an encoding made by new_DasEnc(), new_DasEnc_str() or new_DasEnc_copy()
  *
  * @param pThis the encoding, NULL is ignored
  * @memberof DasEnc
@@ -156,7 +156,7 @@ DAS_API DasEnc* new_DasEnc_str(const char* sType);
 
 /** Copy an encoding to the heap, free the copy with del_DasEnc()
  * @memberof DasEnc */
-DAS_API DasEnc* DasEnc_copy(const DasEnc* pThis);
+DAS_API DasEnc* new_DasEnc_copy(const DasEnc* pThis);
 
 
 /** Set the output format to be used when converting internal binary
@@ -184,7 +184,7 @@ DAS_API DasEnc* DasEnc_copy(const DasEnc* pThis);
  *
  * @memberof DasEnc
  */
-DAS_API void DasEnc_setAsciiFormat(DasEnc* pThis, const char* sValFmt, 
+DAS_API void DasEnc_setAsciiFmt(DasEnc* pThis, const char* sValFmt, 
                            int nFmtWidth);
 
 
@@ -221,7 +221,7 @@ DAS_API void DasEnc_setAsciiFormat(DasEnc* pThis, const char* sValFmt,
  *        field separators.
  * @memberof DasEnc
  */
-DAS_API void DasEnc_setTimeFormat(
+DAS_API void DasEnc_setTimeFmt(
 	DasEnc* pThis, const char* sTimeFmt, int nFmtWidth
 );
 
@@ -233,7 +233,7 @@ DAS_API void DasEnc_setTimeFormat(
 #define DAS2DT_LE_REAL_8 0x0802
 
 /* 8-byte real number, in host byte order */
-#ifdef HOST_IS_LSB_FIRST
+#ifdef DASHOST_LSB_FIRST
 #define DAS2DT_DOUBLE 0x0802
 #else
 #define DAS2DT_DOUBLE 0x0801
@@ -247,7 +247,7 @@ DAS_API void DasEnc_setTimeFormat(
 
 
 /** 4-byte real number, in host byte order */
-#ifdef HOST_IS_LSB_FIRST
+#ifdef DASHOST_LSB_FIRST
 #define DAS2DT_FLOAT 0x0402
 #else
 #define DAS2DT_FLOAT 0x0401
@@ -275,7 +275,7 @@ DAS_API void DasEnc_setTimeFormat(
  * @param[in] uLen the size of sType, including room for the NUL.
  * 
  * @returns sType, or NULL if the whole name did not fit or the encoding
- *          category is unknown (the latter after a das_error() call).
+ *          category is unknown (the latter after a daserrf() call).
  *
  * @memberof DasEnc
  */
@@ -301,7 +301,7 @@ DAS_API char* DasEnc_toStr(const DasEnc* pThis, char* sType, size_t uLen);
  * @memberof DasEnc
  */
 DAS_API das_errcode DasEnc_write(DasEnc* pThis, DasBuf* pBuf, double value,
-                       das_units units);
+                       DasUnits units);
 
 
 /** Read and Decode a value from a string.
@@ -324,7 +324,7 @@ DAS_API das_errcode DasEnc_write(DasEnc* pThis, DasBuf* pBuf, double value,
  * @memberof DasEnc
  */
 DAS_API das_errcode DasEnc_read(
-	const DasEnc* pThis, DasBuf* pBuf, das_units units, double* pOut
+	const DasEnc* pThis, DasBuf* pBuf, DasUnits units, double* pOut
 );
 
 /** @} */

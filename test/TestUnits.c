@@ -37,30 +37,30 @@
 int main(int argc, char** argv) {
 
 	/* Exit on errors, log info messages and above */
-	das_init(argv[0], DASERR_DIS_EXIT, DASLOG_INFO, NULL);
+	daslib_init(argv[0], DASERRDISP_EXIT, DASLOG_INFO, NULL);
 
 	/* Test singleton nature of unit values */
-	das_units Hz1 = Units_fromStr("Hz");
+	DasUnits Hz1 = DasUnits_fromStr("Hz");
 	char sHz2[20] = {'\0'};  strcpy(sHz2, "Hz");
-	das_units Hz2 = Units_fromStr(sHz2);
-	if( (Hz1 != Hz2) || (Hz2 != UNIT_HERTZ)){
+	DasUnits Hz2 = DasUnits_fromStr(sHz2);
+	if( (Hz1 != Hz2) || (Hz2 != DASUNITS_HERTZ)){
 		printf("ERROR: Test 1 Failed, %s != %s\n", Hz1, Hz2);
 		return 15;
 	}
 	
 	/* Test US2000 forward transformations */
-	das_units units = UNIT_US2000;
+	DasUnits units = DASUNITS_US2000;
 	const char* sTime = "2000-1-1T1:00";
-	das_time dt = DAS_TIME_NULL;
-	if(!dt_parsetime(&dt, sTime)){
+	DasTime dt = DASTIME_NULL;
+	if(!DasTime_fromStr(&dt, sTime)){
 		printf("ERROR: Test 2 Failed, can't parse %s as a string\n", sTime);
 		return 15;
 	}
 
 	/* For the French ;-) test times with ','' for the radix */
 	sTime = "2000-01-01T01:00:00,000001";
-	dt_null(&dt);
-	if(!dt_parsetime(&dt, sTime)){
+	DasTime_clear(&dt);
+	if(!DasTime_fromStr(&dt, sTime)){
 		printf("ERROR: Test 3 Failed, can't parse %s as a string\n", sTime);
 		return 15;
 	}
@@ -69,28 +69,28 @@ int main(int argc, char** argv) {
 		return 15;	
 	}
 
-	double rTime = Units_convertFromDt(&dt, units);
+	double rTime = DasTime_toPoint(&dt, units);
 	if( rTime != 3600000001.0){
 		printf("ERROR: Test 5 Failed, %s (%f) != 3600000001.0 μs since 2000-01-01\n",
 				sTime, rTime);
 		return 15;
 	}
-	double ssm = Units_secondsSinceMidnight(rTime, units);
+	double ssm = DasTime_pointToSod(rTime, units);
 	if(ssm != 3600.000001 ){
 		printf("ERROR: Test 6 Failed, %f US2000 is not %f seconds since midnight\n", 
 				 rTime, ssm);
 		return 15;
 	}
-	int jd = Units_getJulianDay(rTime, units);
+	int jd = DasTime_pointToJdn(rTime, units);
 	if(jd != 2451545){
 		printf("ERROR: Test 7 Failed, %s is not jullian day %d\n", sTime, jd);
 		return 15;
 	}
 
 	/* Test US2000 backward transformations */
-	Units_convertToDt(&dt, rTime, units);
+	DasTime_fromPoint(&dt, rTime, units);
 	char sBuf[64] = {'\0'};
-	dt_isoc(&dt, 0, sBuf, 64);
+	DasTime_toIsoC(&dt, 0, sBuf, 64);
 	if( strcmp(sBuf, "2000-01-01T01:00:00") != 0){
 		printf("ERROR: Test 8 Failed, %s != %f US2000\n", sBuf, rTime);
 		return 15;
@@ -98,39 +98,39 @@ int main(int argc, char** argv) {
 
 	/* Test MJ1958 units forward transformations */
 	
-	units = UNIT_MJ1958;
+	units = DASUNITS_MJ1958;
 	sTime = "2000-001T01:00";
-	if(!dt_parsetime(&dt, sTime)){
+	if(!DasTime_fromStr(&dt, sTime)){
 		printf("ERROR: Test 9 Failed, can't parse %s as a string\n", sTime);
 		return 15;
 	}	
-	rTime = Units_convertFromDt(&dt, units);
+	rTime = DasTime_toPoint(&dt, units);
 	if( rTime != 15340.041666666666){
 		printf("ERROR: Test 10 Failed, %s != %f MJ1958\n", sTime, rTime);
 		return 15;
 	}
 
 	sTime = "1958-01-01T13:00";
-	if(!dt_parsetime(&dt, sTime)){
+	if(!DasTime_fromStr(&dt, sTime)){
 		printf("ERROR: Test 11 Failed, can't parse %s as a string\n", sTime);
 		return 15;
 	}	
-	rTime = Units_convertFromDt(&dt, units);
+	rTime = DasTime_toPoint(&dt, units);
 	if( rTime != 0.5416666666666666){
 		printf("ERROR: Test 12 Failed, %s != %f MJ1958\n", sTime, rTime);
 		return 15;
 	}
 	
 	/* Test conversion from MJ1958 to US2000 */
-	double rUs2000 = Units_convertTo(rTime, units, UNIT_US2000);
+	double rUs2000 = DasUnits_convert(rTime, units, DASUNITS_US2000);
 	if( rUs2000 != -1325329200000000.0){ 
 		printf("ERROR: Test 13 Failed, %f MJ1958 != %f US2000\n", rTime, rUs2000);
 		return 15;
 	}
 	
 	/* Test SSM and Julian Day */
-	double rSsm = Units_secondsSinceMidnight(rTime, units);
-	int nJd  = Units_getJulianDay(rTime, units);
+	double rSsm = DasTime_pointToSod(rTime, units);
+	int nJd  = DasTime_pointToJdn(rTime, units);
 
 	if( rSsm != 46800){
 		printf("ERROR: Test 14 Failed, %f MJ1958 is not %f seconds since midnight\n",
@@ -144,9 +144,9 @@ int main(int argc, char** argv) {
 	
 	/* Test MJ1958 backward transformation */
 	rTime = 0.541667;
-	das_time dt1 = {0};
-	Units_convertToDt(&dt1, rTime, units);
-	dt_isod(&dt1, 0, sBuf, 64);
+	DasTime dt1 = {0};
+	DasTime_fromPoint(&dt1, rTime, units);
+	DasTime_toIsoD(&dt1, 0, sBuf, 64);
 	if( strcmp(sBuf, "1958-001T13:00:00") != 0){
 		printf("ERROR: Test 16 Failed, %f MJ1958 is not %s UTC\n", rTime, sBuf);
 		return 15;
@@ -155,10 +155,10 @@ int main(int argc, char** argv) {
 	/* Test ns1970 conversions (used by numpy) */
 	int64_t nTime = 1451606400000000000LL; /* 2016-01-01 */
 	rTime = (double)nTime;
-	dt_null(&dt1);
-	units = Units_fromStr("ns1970");
-	Units_convertToDt(&dt1, rTime, units);
-	dt_isoc(&dt1, 3, sBuf, 64);
+	DasTime_clear(&dt1);
+	units = DasUnits_fromStr("ns1970");
+	DasTime_fromPoint(&dt1, rTime, units);
+	DasTime_toIsoC(&dt1, 3, sBuf, 64);
 	if( strcmp(sBuf, "2016-01-01T00:00:00.000") != 0){
 		printf("ERROR: Test 17 Failed, %f ns1970 is not %s UTC\n", rTime, sBuf);
 		return 15;
@@ -167,10 +167,10 @@ int main(int argc, char** argv) {
 	/* Do it again for negative years */
 	nTime = -1767225600000001000LL; /* almost 1914-01-01 */
 	rTime = (double)nTime;
-	dt_null(&dt1);
-	units = Units_fromStr("ns1970");
-	Units_convertToDt(&dt1, rTime, units);
-	dt_isoc(&dt1, 6, sBuf, 64);
+	DasTime_clear(&dt1);
+	units = DasUnits_fromStr("ns1970");
+	DasTime_fromPoint(&dt1, rTime, units);
+	DasTime_toIsoC(&dt1, 6, sBuf, 64);
 	if( strcmp(sBuf, "1913-12-31T23:59:59.999999") != 0){
 		printf("ERROR: Test 18 Failed, %f ns1970 is not %s UTC\n", rTime, sBuf);
 		return 15;
@@ -178,58 +178,58 @@ int main(int argc, char** argv) {
 
 	/* Test basic string parsing into canonical representation without
 	   unit reduction */
-	das_units a = Units_fromStr("V/m");
-	das_units b = Units_fromStr("V m^-1");
-	das_units c = Units_fromStr("V m**-2/2"); /*<-- don't use this, but it does work */
+	DasUnits a = DasUnits_fromStr("V/m");
+	DasUnits b = DasUnits_fromStr("V m^-1");
+	DasUnits c = DasUnits_fromStr("V m**-2/2"); /*<-- don't use this, but it does work */
 	
 	if( a != b ){ printf("ERROR: Test 19 Failed, '%s' != '%s' \n", a, b); return 15; }
 	if( a != c ){ printf("ERROR: Test 20 Failed, '%s' != '%s' \n", a, c); return 15; }
 	
 	
 	/* Test unit inversion */
-	das_units d = Units_fromStr("m V**-1");
-	das_units e = Units_invert(a);
+	DasUnits d = DasUnits_fromStr("m V**-1");
+	DasUnits e = DasUnits_invert(a);
 	
 	if( d != e ){ printf("ERROR: Test 21 Failed, '%s' != '%s' \n", d, e); return 15; }
 	
 	/* Test unit raise to power */
-	das_units f = Units_fromStr("V**2 m**-2");
-	das_units g = Units_power(a, 2);	
+	DasUnits f = DasUnits_fromStr("V**2 m**-2");
+	DasUnits g = DasUnits_pow(a, 2);	
 	
 	if( f != g ){ printf("ERROR: Test 22 Failed, '%s' != '%s' \n", f, g); return 15; }
 	
 	/* Test unit multiplication */
-	das_units h = UNIT_E_SPECDENS;
+	DasUnits h = DASUNITS_E_SPECDENS;
 	
-	das_units i = Units_multiply( Units_power(a, 2), Units_power(UNIT_HERTZ, -1));
+	DasUnits i = DasUnits_mul( DasUnits_pow(a, 2), DasUnits_pow(DASUNITS_HERTZ, -1));
 	
 	if( h != i ){ printf("ERROR: Test 23 Failed, '%s' != '%s' \n", h, i); return 15; }
 	
 	/* Test interval units for t2000 */
-	das_units j = Units_interval(UNIT_T2000);
-	das_units k = Units_invert( Units_fromStr("Hertz") );
+	DasUnits j = DasUnits_toInterval(DASUNITS_T2000);
+	DasUnits k = DasUnits_invert( DasUnits_fromStr("Hertz") );
 	if( j != k ){ printf("ERROR: Test 24 Failed, '%s' != '%s' \n", j, k); return 15; }
 	
 	/* Test interval units for us2000 */
-	das_units l = Units_interval(UNIT_US2000);
-	das_units m = Units_invert( Units_fromStr("MHz") );
+	DasUnits l = DasUnits_toInterval(DASUNITS_US2000);
+	DasUnits m = DasUnits_invert( DasUnits_fromStr("MHz") );
 	if( l != m ){ printf("ERROR: Test 25 Failed, '%s' != '%s' \n", l, m); return 15; }
 	
 	
 	/* Test unit conversions */
-	das_units ms = Units_fromStr("microsecond");
-	das_units delta = Units_invert( ms );
-	double rFactor = Units_convertTo(1.0, delta, UNIT_HERTZ);
+	DasUnits ms = DasUnits_fromStr("microsecond");
+	DasUnits delta = DasUnits_invert( ms );
+	double rFactor = DasUnits_convert(1.0, delta, DASUNITS_HERTZ);
 	if( rFactor != 1.0e+6){ 
 		printf("ERROR: Test 26 Failed, '%s' to '%s' factor = %.1e, expected 1.0e+06\n", 
-				 delta, UNIT_HERTZ, rFactor);
+				 delta, DASUNITS_HERTZ, rFactor);
 		return 15;
 	}
 	
-	das_units perday = Units_fromStr("kilodonut/day");
-	das_units persec = Units_fromStr("donut hertz");
+	DasUnits perday = DasUnits_fromStr("kilodonut/day");
+	DasUnits persec = DasUnits_fromStr("donut hertz");
 	
-	double rTo = Units_convertTo(86.4, perday, persec);
+	double rTo = DasUnits_convert(86.4, perday, persec);
 	if( rTo != 1.0){
 		printf("ERROR: Test 27 Failed, 86.4 %s is %.4f %s, expected 1.0\n", perday,
 				 rTo, persec);
@@ -241,11 +241,11 @@ int main(int argc, char** argv) {
 	 * to work properly.  Reduction collapses all units to basic types with no
 	 * SI prefixes and then returns a factor that can be used to adjust values
 	 * in the non-reduced units to the reduced representation */
-	das_units O = Units_fromStr("ohms");
-	das_units O_reduced = Units_reduce(O, &rFactor);
-	das_units muO = Units_fromStr("μΩ");
+	DasUnits O = DasUnits_fromStr("ohms");
+	DasUnits O_reduced = DasUnits_reduce(O, &rFactor);
+	DasUnits muO = DasUnits_fromStr("μΩ");
 	
-	das_units muO_reduced = Units_reduce(muO, &rFactor);
+	DasUnits muO_reduced = DasUnits_reduce(muO, &rFactor);
 	if(O_reduced != muO_reduced ){
 		printf("ERROR: Test 28 Failed, %s != %s\n", O_reduced, muO_reduced);
 		return 15;
@@ -257,16 +257,16 @@ int main(int argc, char** argv) {
 	}
 	
 	/* Test reduction part two, avoid false positive match on SI prefix */
-	das_units cats = Units_fromStr("cats");  /* <-- looks like centi "ats" */
-	das_units cats_reduced = Units_reduce(cats, &rFactor);
+	DasUnits cats = DasUnits_fromStr("cats");  /* <-- looks like centi "ats" */
+	DasUnits cats_reduced = DasUnits_reduce(cats, &rFactor);
 	if(cats != cats_reduced){
 		printf("ERROR: Test 30 failed, %s != %s\n", cats, cats_reduced);
 		return 15;
 	}
 	
 	/* Test unicode decomposition for the special characters μ and Ω */
-	das_units bad_microohms  = Units_fromStr("µΩ m^-1"); /* Depending on the font in your  */
-	das_units good_microohms = Units_fromStr("μΩ m^-1"); /* editor you might not the       */
+	DasUnits bad_microohms  = DasUnits_fromStr("µΩ m^-1"); /* Depending on the font in your  */
+	DasUnits good_microohms = DasUnits_fromStr("μΩ m^-1"); /* editor you might not the       */
 	                                                    /* difference, but it's there and */
 	                                                    /* das2C handles it.              */
 	if( bad_microohms != good_microohms){
@@ -278,7 +278,7 @@ int main(int argc, char** argv) {
 	/* Test order preservation for unknown units.  Assume that the user wants
 	 * units in the given order unless otherwise specified. */
 	const char* sUnits = "cm**-2 keV**-1 s**-1 sr**-1";
-	das_units flux = Units_fromStr(sUnits);
+	DasUnits flux = DasUnits_fromStr(sUnits);
 	
 	if( strcmp( sUnits, flux) != 0){
 		printf("ERROR: Test 32 Failed, unknown units are re-arranged by default. %s != %s\n",
@@ -289,7 +289,7 @@ int main(int argc, char** argv) {
 	/* New unit strings are sticky.  Test that a new variation of the new units
 	 * defined above reuses the first definition */
 	const char* sSameUnits = "hertz / kiloelectronvolt / centimeters^2 / steradian";
-	das_units flux2 = Units_fromStr(sSameUnits);
+	DasUnits flux2 = DasUnits_fromStr(sSameUnits);
 	if( flux2 != flux){
 		printf("ERROR: Test 33 Failed, repeated unknown units are not normalized to "
 				"first instance, %s != %s\n", flux2, flux);
@@ -300,9 +300,9 @@ int main(int argc, char** argv) {
 	
 	/* from Aspera reader... */
 	sUnits = "eV/(cm**-2 s**1 sr**1 eV**1)";
-	das_units energy_flux = Units_fromStr(sUnits);
-	das_units test_e_flux = Units_fromStr("m**2 s**-1 sr**-1");
-	das_units reduced_flux = Units_reduce(energy_flux, &rFactor);
+	DasUnits energy_flux = DasUnits_fromStr(sUnits);
+	DasUnits test_e_flux = DasUnits_fromStr("m**2 s**-1 sr**-1");
+	DasUnits reduced_flux = DasUnits_reduce(energy_flux, &rFactor);
 	
 	if( reduced_flux != test_e_flux){
 		printf("ERROR: Test 34 Failed, eV did not cancel: %s (expected %s)\n",
@@ -312,20 +312,20 @@ int main(int argc, char** argv) {
 	
 	/* from Cassini density reader ... */
 	sUnits = "electrons / cm ^ 3";
-	das_units num_dens1 = Units_fromStr(sUnits);
-	das_units num_dens2 = Units_fromStr("electrons cm**-3");
+	DasUnits num_dens1 = DasUnits_fromStr(sUnits);
+	DasUnits num_dens2 = DasUnits_fromStr("electrons cm**-3");
 	if( num_dens1 != num_dens2){
 		printf("ERROR: Test 35 Failed, %s != %s\n", num_dens1, num_dens2);
 		return 15;
 	}
 
 	/* Odd one inspired by Tracers/Magic, milli percent per meter*/
-	das_units milli_percent = Units_fromStr("m%");
-	das_units meter = Units_fromStr("m");
-	das_units milli_per2 = Units_multiply(milli_percent, Units_invert(meter));
+	DasUnits milli_percent = DasUnits_fromStr("m%");
+	DasUnits meter = DasUnits_fromStr("m");
+	DasUnits milli_per2 = DasUnits_mul(milli_percent, DasUnits_invert(meter));
 
 	rFactor = 0.0;
-	das_units milli_per3 = Units_reduce( Units_fromStr("milli%/m"), &rFactor);
+	DasUnits milli_per3 = DasUnits_reduce( DasUnits_fromStr("milli%/m"), &rFactor);
 
 	if(rFactor != 0.001 ){
 		printf("ERROR: Test 36 Failed, %s is not 1/1000 of %s\n", milli_per2, milli_per3);
@@ -333,9 +333,9 @@ int main(int argc, char** argv) {
 	}
 
 	/* Test canConvert when NULL args turn up */
-	Units_canConvert(UNIT_US2000, NULL);
-	Units_canConvert(NULL, UNIT_HERTZ);
-	Units_canConvert(NULL, NULL);
+	DasUnits_canConvert(DASUNITS_US2000, NULL);
+	DasUnits_canConvert(NULL, DASUNITS_HERTZ);
+	DasUnits_canConvert(NULL, NULL);
 
 	/* Test 37: parsetime tells a padded 4-digit year from a 2-digit one by digit
 	   count, so small explicit years round-trip.  "0001-01-01" used to come back
@@ -343,10 +343,10 @@ int main(int argc, char** argv) {
 	   the year kept its now() default); a 2-digit "97" must still get the +1900
 	   century fixup. */
 	{
-		das_time dt;
+		DasTime dt;
 
-		dt_null(&dt);
-		if(!dt_parsetime(&dt, "0001-01-01T00:00:00.000000")){
+		DasTime_clear(&dt);
+		if(!DasTime_fromStr(&dt, "0001-01-01T00:00:00.000000")){
 			printf("ERROR: Test 37 Failed, could not parse 0001-01-01\n");
 			return 15;
 		}
@@ -356,15 +356,15 @@ int main(int argc, char** argv) {
 			return 15;
 		}
 
-		dt_null(&dt);
-		if(!dt_parsetime(&dt, "0050-03-15") || (dt.year != 50)){
+		DasTime_clear(&dt);
+		if(!DasTime_fromStr(&dt, "0050-03-15") || (dt.year != 50)){
 			printf("ERROR: Test 37 Failed, 0050-03-15 year parsed as %04d, expected "
 			       "literal 50 (a 4-digit year must not get the century fixup)\n", dt.year);
 			return 15;
 		}
 
-		dt_null(&dt);
-		if(!dt_parsetime(&dt, "97-05-07") || (dt.year != 1997)){
+		DasTime_clear(&dt);
+		if(!DasTime_fromStr(&dt, "97-05-07") || (dt.year != 1997)){
 			printf("ERROR: Test 37 Failed, 2-digit year 97 parsed as %04d, expected "
 			       "1997 (century fixup lost)\n", dt.year);
 			return 15;
@@ -372,25 +372,25 @@ int main(int argc, char** argv) {
 	}
 
 	/* Test 38: a base unit whose exponent comes to zero drops out of the
-	   result, and when nothing is left the result is UNIT_DIMENSIONLESS.  On
+	   result, and when nothing is left the result is DASUNITS_DIMENSIONLESS.  On
 	   input a zero exponent is accepted and ignored.  Exponents may contain
 	   the digit zero. */
 	{
-		das_units V_m = Units_fromStr("V/m");
-		das_units mtr = Units_fromStr("m");
-		das_units vlt = Units_fromStr("V");
-		das_units s10 = Units_fromStr("s**10");
+		DasUnits V_m = DasUnits_fromStr("V/m");
+		DasUnits mtr = DasUnits_fromStr("m");
+		DasUnits vlt = DasUnits_fromStr("V");
+		DasUnits s10 = DasUnits_fromStr("s**10");
 
-		struct { const char* sWhat; das_units got; das_units expect; } aChk[] = {
-			{"V/m divided by V/m", Units_divide(V_m, V_m), UNIT_DIMENSIONLESS},
-			{"m times 1/m", Units_multiply(mtr, Units_invert(mtr)), UNIT_DIMENSIONLESS},
-			{"V/m times m", Units_multiply(V_m, mtr), vlt},
-			{"V/m to the power 0", Units_power(V_m, 0), UNIT_DIMENSIONLESS},
-			{"m**2 squared", Units_power(Units_fromStr("m**2"), 2), Units_fromStr("m**4")},
-			{"square root of m**2", Units_root(Units_fromStr("m**2"), 2), mtr},
-			{"parse of 'V**0 m'", Units_fromStr("V**0 m"), mtr},
-			{"parse of 'V**0'", Units_fromStr("V**0"), UNIT_DIMENSIONLESS},
-			{"s**10 over s**9", Units_divide(s10, Units_fromStr("s**9")), UNIT_SECONDS},
+		struct { const char* sWhat; DasUnits got; DasUnits expect; } aChk[] = {
+			{"V/m divided by V/m", DasUnits_div(V_m, V_m), DASUNITS_DIMENSIONLESS},
+			{"m times 1/m", DasUnits_mul(mtr, DasUnits_invert(mtr)), DASUNITS_DIMENSIONLESS},
+			{"V/m times m", DasUnits_mul(V_m, mtr), vlt},
+			{"V/m to the power 0", DasUnits_pow(V_m, 0), DASUNITS_DIMENSIONLESS},
+			{"m**2 squared", DasUnits_pow(DasUnits_fromStr("m**2"), 2), DasUnits_fromStr("m**4")},
+			{"square root of m**2", DasUnits_root(DasUnits_fromStr("m**2"), 2), mtr},
+			{"parse of 'V**0 m'", DasUnits_fromStr("V**0 m"), mtr},
+			{"parse of 'V**0'", DasUnits_fromStr("V**0"), DASUNITS_DIMENSIONLESS},
+			{"s**10 over s**9", DasUnits_div(s10, DasUnits_fromStr("s**9")), DASUNITS_SECONDS},
 		};
 		int nBad = 0;
 		for(size_t u = 0; u < sizeof(aChk)/sizeof(aChk[0]); ++u){
@@ -404,18 +404,18 @@ int main(int argc, char** argv) {
 		if(nBad > 0) return 15;
 	}
 
-	/* dt_in_range() takes the time tested first, then the range.  All three are
-	   das_time*, so a call left in the old (begin, end, test) order would
+	/* DasTime_isInRange() takes the time tested first, then the range.  All three are
+	   DasTime*, so a call left in the old (begin, end, test) order would
 	   compile; these four answers would not all survive it. */
 	{
-		das_time dtBeg, dtEnd, dtIn, dtOut;
-		dt_parsetime(&dtBeg, "2026-01-01");
-		dt_parsetime(&dtEnd, "2026-02-01");
-		dt_parsetime(&dtIn,  "2026-01-15");
-		dt_parsetime(&dtOut, "2026-03-01");
-		if(!dt_in_range(&dtIn, &dtBeg, &dtEnd) || dt_in_range(&dtOut, &dtBeg, &dtEnd)
-		   || !dt_in_range(&dtBeg, &dtBeg, &dtEnd) || dt_in_range(&dtEnd, &dtBeg, &dtEnd)){
-			printf("ERROR: dt_in_range(test, begin, end) gave a wrong answer\n");
+		DasTime dtBeg, dtEnd, dtIn, dtOut;
+		DasTime_fromStr(&dtBeg, "2026-01-01");
+		DasTime_fromStr(&dtEnd, "2026-02-01");
+		DasTime_fromStr(&dtIn,  "2026-01-15");
+		DasTime_fromStr(&dtOut, "2026-03-01");
+		if(!DasTime_isInRange(&dtIn, &dtBeg, &dtEnd) || DasTime_isInRange(&dtOut, &dtBeg, &dtEnd)
+		   || !DasTime_isInRange(&dtBeg, &dtBeg, &dtEnd) || DasTime_isInRange(&dtEnd, &dtBeg, &dtEnd)){
+			printf("ERROR: DasTime_isInRange(test, begin, end) gave a wrong answer\n");
 			return 15;
 		}
 	}

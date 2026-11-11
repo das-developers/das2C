@@ -29,7 +29,7 @@
  * @par Reading
  *
  * A program reading a stream gets comments through the onComment callback
- * of its das_stream_proc, and the exception, if any, through its onClose,
+ * of its DasIOProc, and the exception, if any, through its onClose,
  * the last call it gets either way.  The object handed over belongs to the
  * DasIO, so it and every string read from it are good only until the
  * callback returns.  Copy what you keep.
@@ -44,12 +44,12 @@
  * @endcode
  *
  * A filter that passes them along hands the same pointer to DasIO_comment()
- * or DasIO_exception() on its output; see das_close_f for the order a
+ * or DasIO_exception() on its output; see dasfn_onClose for the order a
  * filter does things in when the stream ends.
  *
  * @par Writing
  *
- * DasIO_comment_v() and DasIO_exception_v() send one from a printf style
+ * DasIO_commentf() and DasIO_exceptionf() send one from a printf style
  * format without making an object.  To build one by hand:
  *
  * @code
@@ -80,30 +80,30 @@ extern "C" {
  */
 
 /** The kinds of exception a stream can carry */
-typedef enum das_except_type {
-	DAS_EX_UNKNOWN,     /**< A type name this library does not know */
-	DAS_EX_NO_DATA,     /**< Nothing matched; not an error */
-	DAS_EX_SERVER_ERR,  /**< The program making the stream failed */
-	DAS_EX_QUERY_ERR    /**< The request could not be understood */
-} das_except_e;
+typedef enum das_excepttype_e {
+	DASEXCEPTTYPE_UNKNOWN,     /**< A type name this library does not know */
+	DASEXCEPTTYPE_NO_DATA,     /**< Nothing matched; not an error */
+	DASEXCEPTTYPE_SERVER_ERR,  /**< The program making the stream failed */
+	DASEXCEPTTYPE_QUERY_ERR    /**< The request could not be understood */
+} das_excepttype;
 
 /** The stream name for an exception type
  *
  * Two of the names changed between stream versions:
  *
- *   | das_except_e      | das2.2           | das3.0         |
+ *   | das_excepttype      | das2.2           | das3.0         |
  *   |-------------------|------------------|----------------|
- *   | DAS_EX_UNKNOWN    | Unknown          | Unknown        |
- *   | DAS_EX_NO_DATA    | NoDataInInterval | NoMatchingData |
- *   | DAS_EX_SERVER_ERR | ServerError      | ServerError    |
- *   | DAS_EX_QUERY_ERR  | IllegalArgument  | QueryError     |
+ *   | DASEXCEPTTYPE_UNKNOWN    | Unknown          | Unknown        |
+ *   | DASEXCEPTTYPE_NO_DATA    | NoDataInInterval | NoMatchingData |
+ *   | DASEXCEPTTYPE_SERVER_ERR | ServerError      | ServerError    |
+ *   | DASEXCEPTTYPE_QUERY_ERR  | IllegalArgument  | QueryError     |
  *
  * @param nType The exception type
  * @param nDasVer The stream major version, 2 or 3.  das1 streams have no
  *        exceptions.
  * @returns A static string, or NULL for an unknown type or version
  */
-DAS_API const char* das_except_toStr(das_except_e nType, int nDasVer);
+DAS_API const char* dasexcepttype_name(das_excepttype nType, int nDasVer);
 
 /** The exception type for a stream name, from either stream version
  *
@@ -111,9 +111,9 @@ DAS_API const char* das_except_toStr(das_except_e nType, int nDasVer);
  * this needs no version.  Streams may carry types outside the table, so an
  * unrecognized name is not an error.
  *
- * @returns The type, or DAS_EX_UNKNOWN for NULL or an unrecognized name
+ * @returns The type, or DASEXCEPTTYPE_UNKNOWN for NULL or an unrecognized name
  */
-DAS_API das_except_e das_except_fromStr(const char* sType);
+DAS_API das_excepttype dasexcepttype_id(const char* sType);
 
 
 /* ************************************************************************* */
@@ -126,33 +126,33 @@ DAS_API das_except_e das_except_fromStr(const char* sType);
  * Exceptions are fixed by the stream formats, a type and a message and
  * nothing else, so they are made whole and only read afterwards.
  */
-typedef struct das_except DasExcept;
+typedef struct das_except_t DasExcept;
 
 /** Make an exception to send
  *
- * @param nType One of DAS_EX_NO_DATA, DAS_EX_SERVER_ERR or DAS_EX_QUERY_ERR
+ * @param nType One of DASEXCEPTTYPE_NO_DATA, DASEXCEPTTYPE_SERVER_ERR or DASEXCEPTTYPE_QUERY_ERR
  * @param sMsg  The message, copied.  NULL is taken as "".
  * @returns A new exception, or NULL if memory ran out
  * @memberof DasExcept
  */
-DAS_API DasExcept* new_DasExcept(das_except_e nType, const char* sMsg);
+DAS_API DasExcept* new_DasExcept(das_excepttype nType, const char* sMsg);
 
 /** The exception type
  * @memberof DasExcept
  */
-DAS_API das_except_e DasExcept_type(const DasExcept* pThis);
+DAS_API das_excepttype DasExcept_type(const DasExcept* pThis);
 
 /** The das3.0 stream name of the exception type, e.g. "ServerError"
  *
  * A static string.  For the das2.2 name use DasExcept_typeStr2().
  * @memberof DasExcept
  */
-DAS_API const char* DasExcept_typeStr(const DasExcept* pThis);
+DAS_API const char* DasExcept_typeStr3(const DasExcept* pThis);
 
 /** The das2.2 stream name of the exception type, e.g. "NoDataInInterval"
  *
  * A static string, never NULL: a type outside the table reads "Unknown",
- * as DasExcept_typeStr() does.
+ * as DasExcept_typeStr3() does.
  * @memberof DasExcept
  */
 DAS_API const char* DasExcept_typeStr2(const DasExcept* pThis);
@@ -193,7 +193,7 @@ DAS_API void del_DasExcept(DasExcept* pThis);
  *
  * Currently other names are refused. A value not set reads as "".
  */
-typedef struct das_comment DasComment;
+typedef struct das_comment_t DasComment;
 
 /** Make an empty comment to send
  *

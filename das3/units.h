@@ -32,50 +32,50 @@ extern "C" {
 #endif
 
 
-DAS_API extern const char* UNIT_US2000; /** Units of microseconds since midnight, Jan 1, 2000 */
-DAS_API extern const char* UNIT_MJ1958; /** Units of days since midnight, Jan 1, 1958 */
-DAS_API extern const char* UNIT_T2000;  /** Units of seconds since midnight, Jan 1, 2000 */
-DAS_API extern const char* UNIT_T1970;  /** Units of seconds since midnight, Jan 1, 1970 */
-DAS_API extern const char* UNIT_NS1970; /** Units of nanoseconds since midnight, Jan 1, 1970 */
-DAS_API extern const char* UNIT_UTC;    /** Time strings on the Gregorian Calendar */
+DAS_API extern const char* DASUNITS_US2000; /** Units of microseconds since midnight, Jan 1, 2000 */
+DAS_API extern const char* DASUNITS_MJ1958; /** Units of days since midnight, Jan 1, 1958 */
+DAS_API extern const char* DASUNITS_T2000;  /** Units of seconds since midnight, Jan 1, 2000 */
+DAS_API extern const char* DASUNITS_T1970;  /** Units of seconds since midnight, Jan 1, 1970 */
+DAS_API extern const char* DASUNITS_NS1970; /** Units of nanoseconds since midnight, Jan 1, 1970 */
+DAS_API extern const char* DASUNITS_UTC;    /** Time strings on the Gregorian Calendar */
 
 /** nanoseconds since 2000-01-01T11:58:55.816, the only leap-second aware time
    unit in the library.  Uses the CDF_LEAPSECONDSTABLE environment variable
 	to find new leap seconds.  Not needed if library has been build since
 	last know leapsecond in the data time. */
-DAS_API extern const char* UNIT_TT2000; 
+DAS_API extern const char* DASUNITS_TT2000; 
 
 /** SPICE ephem time, constant seconds for Solar Sys Center in J2000 epoch
  * This is the same UTC epoch as TT2000, but does not move at 1 second per second
  * from the Terrestrial point of view. */
-DAS_API extern const char* UNIT_ET2000;
+DAS_API extern const char* DASUNITS_ET2000;
 
 /* Other common units */
-DAS_API extern const char* UNIT_SECONDS; /** Units of SI Seconds */
-DAS_API extern const char* UNIT_HOURS;   /** Units of 3600 seconds */
-DAS_API extern const char* UNIT_DAYS;    /** Units of 86400 seconds */
-DAS_API extern const char* UNIT_MILLISECONDS; /** Units of SI milliseconds */
-DAS_API extern const char* UNIT_MICROSECONDS; /** Units of SI microseconds */
-DAS_API extern const char* UNIT_NANOSECONDS;  /** Units of SI nanoseconds */
+DAS_API extern const char* DASUNITS_SECONDS; /** Units of SI Seconds */
+DAS_API extern const char* DASUNITS_HOURS;   /** Units of 3600 seconds */
+DAS_API extern const char* DASUNITS_DAYS;    /** Units of 86400 seconds */
+DAS_API extern const char* DASUNITS_MILLISECONDS; /** Units of SI milliseconds */
+DAS_API extern const char* DASUNITS_MICROSECONDS; /** Units of SI microseconds */
+DAS_API extern const char* DASUNITS_NANOSECONDS;  /** Units of SI nanoseconds */
 
-DAS_API extern const char* UNIT_HERTZ;   /** Units of 1/seconds */
-DAS_API extern const char* UNIT_KILO_HERTZ;  /** Units of 1/milliseconds */
-DAS_API extern const char* UNIT_MEGA_HERTZ;  /** Units of 1/microseconds */
-DAS_API extern const char* UNIT_GIGA_HERTZ;  /** Units of 1/nanoseconds */
-DAS_API extern const char* UNIT_E_SPECDENS;  /** Volts squared per meter squared per hertz */
-DAS_API extern const char* UNIT_B_SPECDENS;  /** nanoTesla squared per hertz */
-DAS_API extern const char* UNIT_NT;          /** SI nanoTesla */
+DAS_API extern const char* DASUNITS_HERTZ;   /** Units of 1/seconds */
+DAS_API extern const char* DASUNITS_KILO_HERTZ;  /** Units of 1/milliseconds */
+DAS_API extern const char* DASUNITS_MEGA_HERTZ;  /** Units of 1/microseconds */
+DAS_API extern const char* DASUNITS_GIGA_HERTZ;  /** Units of 1/nanoseconds */
+DAS_API extern const char* DASUNITS_E_SPECDENS;  /** Volts squared per meter squared per hertz */
+DAS_API extern const char* DASUNITS_B_SPECDENS;  /** nanoTesla squared per hertz */
+DAS_API extern const char* DASUNITS_NT;          /** SI nanoTesla */
 
-DAS_API extern const char* UNIT_NUMBER_DENS;  /** Number of items per centimeter cubed */
+DAS_API extern const char* DASUNITS_NUMBER_DENS;  /** Number of items per centimeter cubed */
 		
-DAS_API extern const char* UNIT_DB;  /** decibels (a ratio unit) */
+DAS_API extern const char* DASUNITS_DB;  /** decibels (a ratio unit) */
 
-DAS_API extern const char* UNIT_KM;  /** SI kilometers */
+DAS_API extern const char* DASUNITS_KM;  /** SI kilometers */
 
-DAS_API extern const char* UNIT_EV;  /** electron volts */
+DAS_API extern const char* DASUNITS_EV;  /** electron volts */
 
-DAS_API extern const char* UNIT_DEGREES;   /** degrees, 360 of them in a circle */
-DAS_API extern const char* UNIT_DIMENSIONLESS;  /** No units, a pure number such as a linear ratio */
+DAS_API extern const char* DASUNITS_DEGREES;   /** degrees, 360 of them in a circle */
+DAS_API extern const char* DASUNITS_DIMENSIONLESS;  /** No units, a pure number such as a linear ratio */
 
 /* color:  Color should be handled as as vector, we don't have
  * support for vectors at this time.   Also a datatype of 
@@ -91,7 +91,7 @@ DAS_API extern const char* UNIT_DIMENSIONLESS;  /** No units, a pure number such
 
 /** Handle SI and other units, with accommodations for Epoch systems, from units.h
  *
- * Note that although these are strings, Units_fromStr() should be be
+ * Note that although these are strings, DasUnits_fromStr() should be be
  * used to get a reference to the enumerated string since *pointer equality*
  * comparison is done in the code.  Thus UnitType objects created using the
  * functions in this module satisfy the rule:
@@ -107,38 +107,38 @@ DAS_API extern const char* UNIT_DIMENSIONLESS;  /** No units, a pure number such
  *
  * The Epoch Time unit types understood by this library are:
  * 
- *   - UNIT_US2000 - Non-Leap microseconds since midnight, January 1st 2000
- *   - UNIT_MJ1958 - Days since midnight January 1st 1958 
- *   - UNIT_T2000  - Non-Leap seconds since midnight, January 1st 2000
- *   - UNIT_T1970  - Non-Leap seconds since midnight, January 1st 1970
- *   - UNIT_UTC    - Time strings on the gregorian calendar
+ *   - DASUNITS_US2000 - Non-Leap microseconds since midnight, January 1st 2000
+ *   - DASUNITS_MJ1958 - Days since midnight January 1st 1958 
+ *   - DASUNITS_T2000  - Non-Leap seconds since midnight, January 1st 2000
+ *   - DASUNITS_T1970  - Non-Leap seconds since midnight, January 1st 1970
+ *   - DASUNITS_UTC    - Time strings on the gregorian calendar
  *   - UNIT_NS2020 - Non-Leap nanoseconds since midnight Jan 1st, 2020,
  *                   typically transmitted as signed 8-byte integers
  *
  * As it stands the library currently does not understand SI prefixes, so
  * each scaled unit has it's own entry.  This should change.
  * 
- *   - UNIT_SECONDS - Seconds, a time span.
- *   - UNIT_HOURS - hours, a time span = 3600 seconds.
+ *   - DASUNITS_SECONDS - Seconds, a time span.
+ *   - DASUNITS_HOURS - hours, a time span = 3600 seconds.
  *   - UNIT_MIRCOSECONDS - A smaller time span.
- *   - UNIT_HERTZ   - Hertz, a measure of frequency.
- *   - UNIT_KILO_HERTZ - KiloHertz, another measure of frequency.
- *   - UNIT_E_SPECDENS - Electric Spectral Density, V**2 m**-2 Hz**-1;
- *   - UNIT_B_SPECDENS - Magnetic Spectral Density, nT**2 Hz**-1;
- *   - UNIT_NT      - Magnetic Field intensity, nT
- *   - UNIT_NUMBER_DENS - Number density, the number of items in a cubic 
+ *   - DASUNITS_HERTZ   - Hertz, a measure of frequency.
+ *   - DASUNITS_KILO_HERTZ - KiloHertz, another measure of frequency.
+ *   - DASUNITS_E_SPECDENS - Electric Spectral Density, V**2 m**-2 Hz**-1;
+ *   - DASUNITS_B_SPECDENS - Magnetic Spectral Density, nT**2 Hz**-1;
+ *   - DASUNITS_NT      - Magnetic Field intensity, nT
+ *   - DASUNITS_NUMBER_DENS - Number density, the number of items in a cubic 
 		 centimeter
- *   - UNIT_DB      - Decibels, a ratio measure, typically versus 1.0.
- *   - UNIT_KM      - Kilometers, a unit of distance
- *   - UNIT_DEGREES - Degrees, a ratio measure on circles: (arch length / circumference) * 360
+ *   - DASUNITS_DB      - Decibels, a ratio measure, typically versus 1.0.
+ *   - DASUNITS_KM      - Kilometers, a unit of distance
+ *   - DASUNITS_DEGREES - Degrees, a ratio measure on circles: (arch length / circumference) * 360
  *
  * And if you don't know what else to use, try this:
  *
- *   - UNIT_DIMENSIONLESS - I.E. No units
+ *   - DASUNITS_DIMENSIONLESS - I.E. No units
  * 
  * @todo Redo units as small structures
  */
-typedef const char* das_units;
+typedef const char* DasUnits;
 
 /** @} */
 
@@ -152,15 +152,15 @@ typedef const char* das_units;
  * Units strings are input and input can be bad.  A string that doesn't
  * parse, or is longer than 127 bytes, is logged at warning level and NULL
  * is returned; check for it.  An empty or all-space string is
- * UNIT_DIMENSIONLESS.
+ * DASUNITS_DIMENSIONLESS.
  *
  * @param string The units text, never NULL; passing NULL is an error.
  *
  * @returns a pointer to the singleton string representing these units, or
  *          NULL if they could not be parsed.
- * @memberof das_units
+ * @memberof DasUnits
  */
-DAS_API das_units Units_fromStr(const char* string);
+DAS_API DasUnits DasUnits_fromStr(const char* string);
 
 
 /** Get the canonical string representation of a das_unit
@@ -168,21 +168,21 @@ DAS_API das_units Units_fromStr(const char* string);
  * Even though das_unit is a const char*, use this function in case the
  * das_unit implementation changes in the future.
  *
- * @param unit Valid units, never NULL.  A NULL das_units means something
+ * @param unit Valid units, never NULL.  A NULL DasUnits means something
  *        upstream failed, and only the caller knows what; decide what to
  *        print before calling.
  *
- * @see Units_toLabel()
- * @relates das_units
+ * @see DasUnits_toLbl()
+ * @relates DasUnits
  */
-static inline const char* Units_toStr(das_units unit){ return unit; }
+static inline const char* DasUnits_toStr(DasUnits unit){ return unit; }
 
 
-/** Get label string representation das_units
+/** Get label string representation DasUnits
  * 
  * This function inserts formatting characters into the unit string returned
- * by Units_toStr().  The resulting output is suitable for use in Das2 labels
- * For example if Units_toStr() returns:
+ * by DasUnits_toStr().  The resulting output is suitable for use in Das2 labels
+ * For example if DasUnits_toStr() returns:
  * 
  *    V**2 m**-2 Hz**-1
  * 
@@ -197,11 +197,11 @@ static inline const char* Units_toStr(das_units unit){ return unit; }
  * @param sBuf a buffer to hold the UTF-8 label string
  * @param uLen the size of sBuf, including room for the NUL
  * @return a pointer to sBuf, or NULL if uLen was too short to hold the label,
- *         or (after a das_error() call) if unit is NULL, the name contains a
+ *         or (after a daserrf() call) if unit is NULL, the name contains a
  *         trailing '_' or there was more than one '_' characters in a unit
  *         name.  sBuf is always NUL terminated when uLen > 0.
  */
-DAS_API char* Units_toLabel(das_units unit, char* sBuf, size_t uLen);
+DAS_API char* DasUnits_toLbl(DasUnits unit, char* sBuf, size_t uLen);
 
 
 /** Invert the units, most commonly used for Fourier transform results
@@ -211,7 +211,7 @@ DAS_API char* Units_toLabel(das_units unit, char* sBuf, size_t uLen);
  * <b>not</b> product the same output as calling:
  * @code
  *   
- *   Units_power(unit, -1);
+ *   DasUnits_pow(unit, -1);
  * 
  * @endcode
  * 
@@ -219,7 +219,7 @@ DAS_API char* Units_toLabel(das_units unit, char* sBuf, size_t uLen);
  * values to Hertz.
  * 
  * For all other unit types, calling this function is equivalent to calling
- * Units_power(unit, -1)
+ * DasUnits_pow(unit, -1)
  *
  * @b Warning This function is not multi-thread safe.  It alters global 
  *       library state data
@@ -228,7 +228,7 @@ DAS_API char* Units_toLabel(das_units unit, char* sBuf, size_t uLen);
  *
  * @returns the inverted unit
  */
-DAS_API das_units Units_invert(das_units unit);
+DAS_API DasUnits DasUnits_invert(DasUnits unit);
 
 
 /** Combine units via multiplication
@@ -245,21 +245,21 @@ DAS_API das_units Units_invert(das_units unit);
  * @param ut2 the second uint object
  * @return A new unit type which is the product of a and b.
  */
-DAS_API das_units Units_multiply(das_units ut1, das_units ut2);
+DAS_API DasUnits DasUnits_mul(DasUnits ut1, DasUnits ut2);
 
 /** Combine units via division
  * 
  * This is just a convenience routine that has the effect of calling:
  * 
  * @code
- *   Units_multiply( a, Units_power(b, -1) );
+ *   DasUnits_mul( a, DasUnits_pow(b, -1) );
  * @endcode
  * 
  * @param a the numerator units
  * @param b the denominator units
  * @return A new unit type which is the quotient of a divided by b
  */
-DAS_API das_units Units_divide(das_units a, das_units b);
+DAS_API DasUnits DasUnits_div(DasUnits a, DasUnits b);
 
 
 /** Raise units to a power
@@ -276,22 +276,22 @@ DAS_API das_units Units_divide(das_units a, das_units b);
  * 
  * is produced.
  */
-DAS_API das_units Units_power(das_units unit, int power);
+DAS_API DasUnits DasUnits_pow(DasUnits unit, int power);
 
 
 /** Reduce units to a root
  * 
  * Use this to reduce units to a integer root, for example:
  * 
- *  Units_root( "m**2", 2 ) --> "m"
- *  Units_root( "nT / cm**2" ) --> "nT**1/2 cm**-1"
+ *  DasUnits_root( "m**2", 2 ) --> "m"
+ *  DasUnits_root( "nT / cm**2" ) --> "nT**1/2 cm**-1"
  * 
  * @param unit The input unit
  * @param root A positive integer greater than 0
  * 
  * @returns the new unit.
  */
-DAS_API das_units Units_root(das_units unit, int root );
+DAS_API DasUnits DasUnits_root(DasUnits unit, int root );
 
 
 /** Get the unit type for intervals between data points of a given unit type.
@@ -308,7 +308,7 @@ DAS_API das_units Units_root(das_units unit, int root );
  * @returns the interval unit type.  Basic units such as meters have no
  *       standard epoch and thus they are just their own interval type.
  */
-DAS_API das_units Units_interval(das_units unit);
+DAS_API DasUnits DasUnits_toInterval(DasUnits unit);
 
 
 /** Reduce arbitrary units to the most basic know representation
@@ -331,7 +331,7 @@ DAS_API das_units Units_interval(das_units unit);
  * @returns    the new UnitType, which may just be the old unit type if the
  *             given units are already in their most basic form
  */
-DAS_API das_units Units_reduce(das_units orig, double* pFactor);
+DAS_API DasUnits DasUnits_reduce(DasUnits orig, double* pFactor);
 
 /** Determine if given units are interchangeable
  * Though not as good a solution as using UDUNITS2 works for common space
@@ -343,7 +343,7 @@ DAS_API das_units Units_reduce(das_units orig, double* pFactor);
  *   4. When reduced to base units the exponents of each unit are the same.
  * 
  */
-DAS_API bool Units_canConvert(das_units fromUnits , das_units toUnits);
+DAS_API bool DasUnits_canConvert(DasUnits fromUnits , DasUnits toUnits);
 
 
 /** Generic unit conversion utility
@@ -358,7 +358,7 @@ DAS_API bool Units_canConvert(das_units fromUnits , das_units toUnits);
  * @note: Thanks Wikipedia.  This code incorporates the algorithm on page
  *        http://en.wikipedia.org/wiki/Julian_day
  */
-DAS_API double Units_convertTo( double rVal, das_units fromUnits, das_units toUnits );
+DAS_API double DasUnits_convert( double rVal, DasUnits fromUnits, DasUnits toUnits );
 
 
 /** Determine if the units in question can be converted to date-times 
@@ -366,18 +366,18 @@ DAS_API double Units_convertTo( double rVal, das_units fromUnits, das_units toUn
  * If this function returns true, then the following functions may be
  * used on this unit type:
  *
- *  Units_convertToDt()
- *  Units_convertFromDt()
- *  Units_secondsSinceMidnight()
- *  Units_getJulianDay()
+ *  DasTime_fromPoint()
+ *  DasTime_toPoint()
+ *  DasTime_pointToSod()
+ *  DasTime_pointToJdn()
  *
- * Furthermore a call to Units_interval() returns a different unittype then
+ * Furthermore a call to DasUnits_toInterval() returns a different unittype then
  * the given units.
  * 
  * @param unit The units to check possible mapping to calendar dates.
  *
  */
-DAS_API bool Units_haveCalRep(das_units unit);
+DAS_API bool DasUnits_isTimePoint(DasUnits unit);
 
 
 /** Determine if the units of values in a binary expression are compatible
@@ -387,7 +387,7 @@ DAS_API bool Units_haveCalRep(das_units unit);
  * @param left
  * @return 
  */
-DAS_API bool Units_canMerge(das_units left, int op, das_units right);
+DAS_API bool DasUnits_canMerge(DasUnits left, int op, DasUnits right);
 
 #ifdef __cplusplus
 }

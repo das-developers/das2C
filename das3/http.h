@@ -42,75 +42,75 @@ extern "C" {
  */
 
 /* Suggested connection timeouts in seconds, for the rConSec arguments below.
- * DASHTTP_TO_MIN suits interactive programs. */
-#define DASHTTP_TO_MIN     2.0
-#define DASHTTP_TO_MULTI   3.0
-#define DASHTTP_TO_MAX    18.0
+ * DASHTTP_TIMEOUT_MIN suits interactive programs. */
+#define DASHTTP_TIMEOUT_MIN     2.0
+#define DASHTTP_TIMEOUT_MULTI   3.0
+#define DASHTTP_TIMEOUT_MAX    18.0
 
 
-/** Which IP version to connect over, see das_http_opts */
-typedef enum das_ip_ver {
-	DASIP_ANY = 0,   /**< IPv4 if the host has an IPv4 address, else IPv6 */
-	DASIP_V4  = 4,   /**< IPv4 only */
-	DASIP_V6  = 6    /**< IPv6 only */
-} das_ip_ver_e;
+/** Which IP version to connect over, see DasHttpOpts */
+typedef enum das_ipver_e {
+	DASIPVER_ANY = 0,   /**< IPv4 if the host has an IPv4 address, else IPv6 */
+	DASIPVER_V4  = 4,   /**< IPv4 only */
+	DASIPVER_V6  = 6    /**< IPv6 only */
+} das_ipver;
 
 /** Settings for one request, see new_DasHttpResp_getEx()
  *
- * Start from das_http_opts_init() and change what you need:
+ * Start from init_DasHttpOpts() and change what you need:
  *
  * @code
- *   das_http_opts opts;
- *   das_http_opts_init(&opts);
- *   opts.rReadSec = 30.0;    // give up on a server silent for 30 seconds
- *   opts.eIpVer = DASIP_V6;
+ *   DasHttpOpts opts;
+ *   init_DasHttpOpts(&opts);
+ *   opts.readSec = 30.0;    // give up on a server silent for 30 seconds
+ *   opts.ipVersion = DASIPVER_V6;
  *   DasHttpResp* pRes = new_DasHttpResp_getEx(sUrl, pMgr, &opts);
  * @endcode
  *
- * Later versions may add members.  das_http_opts_init() records the layout
+ * Later versions may add members.  init_DasHttpOpts() records the layout
  * version the program was built with, so a later library can tell which
  * members the program knows about and give the rest their defaults.  That
- * only works if the struct came from das_http_opts_init(), so always start
+ * only works if the struct came from init_DasHttpOpts(), so always start
  * there; a zeroed one, from memset() or "= {0}", is refused with an error
  * rather than quietly ignored.
  */
-typedef struct das_http_opts {
+typedef struct das_httpopts_t {
 	/** The layout this program was compiled against, set by
-	 *  das_http_opts_init(), leave it alone */
-	size_t uVersion;
+	 *  init_DasHttpOpts(), leave it alone */
+	size_t uStructVer;
 
 	/** The User-Agent to send, NULL for "libdas3" */
-	const char* sAgent;
+	const char* userAgent;
 
 	/** Seconds to wait for the connection, TLS handshake included, before
 	 *  giving up.  0.0 or less uses the operating system default, often
 	 *  minutes. */
-	float rConSec;
+	float connectSec;
 
 	/** Once connected, seconds to wait for each read before giving up on a
 	 *  server that has gone quiet.  0.0 or less waits indefinitely, which is
 	 *  the default since some das servers think a long time before the
 	 *  first byte. */
-	float rReadSec;
+	float readSec;
 
-	/** Which IP version to connect over, DASIP_ANY by default */
-	das_ip_ver_e eIpVer;
+	/** Which IP version to connect over, DASIPVER_ANY by default */
+	das_ipver ipVersion;
 
 	/** Zero or more extra request header lines, each ending in "\r\n",
 	 *  sent as given.  NULL for none.  See new_DasHttpResp_getEx(). */
-	const char* sReqHdrs;
-} das_http_opts;
+	const char* extraHeaders;
+} DasHttpOpts;
 
-/** The first das_http_opts layout, das 3.0.  Same numbering as
- * DAS_STREAM_PROC_V3_0. */
-#define DAS_HTTP_OPTS_V3_0 ((3 << 8) | 0)
+/** The first DasHttpOpts layout, das 3.0.  Same numbering as
+ * DASIOPROC_V3_0. */
+#define DASHTTPOPTS_V3_0 ((3 << 8) | 0)
 
-/** The das_http_opts layout described by this header */
-#define DAS_HTTP_OPTS_VER DAS_HTTP_OPTS_V3_0
+/** The DasHttpOpts layout described by this header */
+#define DASHTTPOPTS_VER DASHTTPOPTS_V3_0
 
 /** Fill in the request defaults for the layout given
  *
- * Use das_http_opts_init() instead, which supplies the version this program
+ * Use init_DasHttpOpts() instead, which supplies the version this program
  * was compiled against.
  *
  * @param pOpts The options structure to initialize
@@ -119,12 +119,12 @@ typedef struct das_http_opts {
  * @returns DAS_OKAY, or an error if uVersion is unknown to this library,
  *        in which case pOpts is not touched.
  */
-DAS_API das_errcode das_http_opts_init_ver(das_http_opts* pOpts, size_t uVersion);
+DAS_API das_errcode init_DasHttpOpts_ver(DasHttpOpts* pOpts, size_t uVersion);
 
-/** Fill in the request defaults, the starting point for das_http_opts
+/** Fill in the request defaults, the starting point for DasHttpOpts
  *
  * The user agent is the library default, the connect timeout is
- * DASHTTP_TO_MIN, reads wait indefinitely, any IP version is used, and no
+ * DASHTTP_TIMEOUT_MIN, reads wait indefinitely, any IP version is used, and no
  * extra headers are sent.
  *
  * This is a macro so that the version recorded is the one from the header
@@ -132,10 +132,10 @@ DAS_API das_errcode das_http_opts_init_ver(das_http_opts* pOpts, size_t uVersion
  * would record the library's own layout, and on a newer library would
  * clear past the end of an older program's smaller structure.
  *
- * @param P A pointer to the das_http_opts to initialize
+ * @param P A pointer to the DasHttpOpts to initialize
  * @returns DAS_OKAY, or an error if the library is older than the header
  */
-#define das_http_opts_init(P) das_http_opts_init_ver((P), DAS_HTTP_OPTS_VER)
+#define init_DasHttpOpts(P) init_DasHttpOpts_ver((P), DASHTTPOPTS_VER)
 
 
 /** @class DasHttpResp http.h <das3/http.h>
@@ -154,8 +154,8 @@ DAS_API das_errcode das_http_opts_init_ver(das_http_opts* pOpts, size_t uVersion
  * DasIO:
  *
  * @code
- *   DasHttpResp* pRes = new_DasHttpResp_get(sUrl, "my_prog", pMgr, DASHTTP_TO_MIN);
- *   if(!DasHttpResp_ok(pRes)){
+ *   DasHttpResp* pRes = new_DasHttpResp_get(sUrl, "my_prog", pMgr, DASHTTP_TIMEOUT_MIN);
+ *   if(!DasHttpResp_isOk(pRes)){
  *       fprintf(stderr, "%s\n", DasHttpResp_error(pRes));
  *       del_DasHttpResp(pRes);
  *       return 1;
@@ -164,14 +164,14 @@ DAS_API das_errcode das_http_opts_init_ver(das_http_opts* pOpts, size_t uVersion
  *   DasIO* pIn = new_DasIO("my_prog", DasHttpResp_takeBody(pRes), NULL);
  *   del_DasHttpResp(pRes);   // pIn owns the connection now
  *
- *   DasIO_addProcessor(pIn, &handler);
+ *   DasIO_addProc(pIn, &handler);
  *   DasIO_readAll(pIn);
  *   del_DasIO(pIn);
  * @endcode
  *
  * To save the body, or handle the raw bytes, use DasXport_copyTo() or
  * DasXport_read() on the taken body.  For something small, such as a
- * catalog file, das_http_readUrl() makes the request and reads the whole
+ * catalog file, new_DasAry_http() makes the request and reads the whole
  * body into memory in one call.
  *
  * Taking the body moves the connection out of the response, so the two are
@@ -183,7 +183,7 @@ DAS_API das_errcode das_http_opts_init_ver(das_http_opts* pOpts, size_t uVersion
  * @par When a request fails
  *
  * The constructor still returns a response; it is the record of what went
- * wrong.  DasHttpResp_ok() is false, DasHttpResp_error() gives a message
+ * wrong.  DasHttpResp_isOk() is false, DasHttpResp_error() gives a message
  * suitable for showing a user, and DasHttpResp_code() has the server's HTTP
  * status, or -1 if no server answered.  The code is how a program tells a
  * login problem from a bad request when it wants to handle them
@@ -203,7 +203,7 @@ DAS_API das_errcode das_http_opts_init_ver(das_http_opts* pOpts, size_t uVersion
  * A response is not thread safe; do not share one between threads without
  * locking.  Separate responses in separate threads are fine.
  */
-typedef struct das_http_resp DasHttpResp;
+typedef struct das_httpresp_t DasHttpResp;
 
 
 /** Request a remote resource, stopping at the start of its body
@@ -213,7 +213,7 @@ typedef struct das_http_resp DasHttpResp;
  * for what to do with the result.
  *
  * Unlike most constructors this does not return NULL when the request
- * fails.  The response is the report: check DasHttpResp_ok(), and read
+ * fails.  The response is the report: check DasHttpResp_isOk(), and read
  * DasHttpResp_error() and DasHttpResp_code() to find out why.
  *
  * If the server asks for a login, the credentials manager is consulted.  A
@@ -221,7 +221,7 @@ typedef struct das_http_resp DasHttpResp;
  * was given a way to, and the request is tried again.  This repeats until
  * the server accepts a login or the manager has nothing more to offer.  A
  * login the server refuses is marked as rejected in the manager.  See
- * DasCredMngr.
+ * DasCredMgr.
  *
  * <b>das2.2 Note:</b> The das2.2 protocol lets a server require a different
  * login for each dataset it serves (das2.2 ICD, https://zenodo.org/records/3588535).
@@ -232,7 +232,7 @@ typedef struct das_http_resp DasHttpResp;
  *
  * @param sUrl The location to connect to, sent as given.  No encoding is
  *             applied here, so reserved characters in parameter values must
- *             already be percent encoded by the caller, see das_url_encode().
+ *             already be percent encoded by the caller, see dasurl_encode().
  *
  * @param sAgent The user agent string to send to the server.  If NULL
  *        then the string "libdas/3" is sent.
@@ -251,22 +251,22 @@ typedef struct das_http_resp DasHttpResp;
  * @memberof DasHttpResp
  */
 DAS_API DasHttpResp* new_DasHttpResp_get(
-	const char* sUrl, const char* sAgent, DasCredMngr* pMgr, float rConSec
+	const char* sUrl, const char* sAgent, DasCredMgr* pMgr, float rConSec
 );
 
 /** new_DasHttpResp_get() with full control over the request
  *
  * Use this to set timeouts, the IP version, or extra request headers, see
- * das_http_opts.
+ * DasHttpOpts.
  *
  * The one use of extra headers today is cache revalidation.  A caller
  * holding a copy of a resource along with the ETag or Last-Modified header
  * it came with sends them back:
  *
  * @code
- * das_http_opts ops;
- * das_http_opts_init(&ops);   // not memset, see das_http_opts
- * ops.sReqHdrs =
+ * DasHttpOpts ops;
+ * init_DasHttpOpts(&ops);   // not memset, see DasHttpOpts
+ * ops.extraHeaders =
  *    "If-None-Match: \"5a6-607e10c29b347\"\r\n"
  *    "If-Modified-Since: Tue, 17 Oct 2023 03:23:33 GMT\r\n"
  * ;
@@ -281,17 +281,17 @@ DAS_API DasHttpResp* new_DasHttpResp_get(
  *
  * @param sUrl The location to connect to, as for new_DasHttpResp_get()
  * @param pMgr A credentials manager, or NULL for public items only
- * @param pOpts Request settings, or NULL for the das_http_opts_init()
+ * @param pOpts Request settings, or NULL for the init_DasHttpOpts()
  *        defaults
  *
  * @returns As new_DasHttpResp_get().  A server that reports the copy is
- *        current gives DasHttpResp_ok() true with DasHttpResp_code() 304
+ *        current gives DasHttpResp_isOk() true with DasHttpResp_code() 304
  *        and no body to take; the 304 reply's headers are available.
  *        Callers that sent no validator never see this.
  * @memberof DasHttpResp
  */
 DAS_API DasHttpResp* new_DasHttpResp_getEx(
-	const char* sUrl, DasCredMngr* pMgr, const das_http_opts* pOpts
+	const char* sUrl, DasCredMgr* pMgr, const DasHttpOpts* pOpts
 );
 
 /** Free a response, closing its connection if the body was never taken
@@ -309,7 +309,7 @@ DAS_API void del_DasHttpResp(DasHttpResp* pThis);
  *          the request failed, see DasHttpResp_error().
  * @memberof DasHttpResp
  */
-DAS_API bool DasHttpResp_ok(const DasHttpResp* pThis);
+DAS_API bool DasHttpResp_isOk(const DasHttpResp* pThis);
 
 /** Get the HTTP status code of the last reply
  *
@@ -355,7 +355,7 @@ DAS_API const char* DasHttpResp_filename(const DasHttpResp* pThis);
  * When a request succeeds this is where the body came from, which is often
  * not the URL the program asked for.  When it fails this is the last place
  * tried, which is useful in error messages.  To get at its parts, use
- * das_url_parse() and das_url_part().
+ * DasUrlParts_fromStr() and DasUrlParts_get().
  *
  * @returns The URL.  Owned by the response.
  * @memberof DasHttpResp
@@ -400,7 +400,7 @@ DAS_API DasXport* DasHttpResp_takeBody(DasHttpResp* pThis);
 /** Read all the bytes for a URL into a byte array
  *
  * Since network operations are presumed to fail often, all errors are
- * logged using the functions in log.h, das_error is not called unless a memory
+ * logged using the functions in log.h, daserrf is not called unless a memory
  * allocation error occurs.
  *
  * @param sUrl - The URL to read, may be http or https contain alternate port
@@ -429,7 +429,7 @@ DAS_API DasXport* DasHttpResp_takeBody(DasHttpResp* pThis);
  *               response may not be the same as sUrl.  The caller frees it
  *               with del_DasHttpResp().  Failures are logged either way.
  *
- * @return       A 1-dimensional DasAry with element type vtUByte allocated on
+ * @return       A 1-dimensional DasAry with element type DASVT_UBYTE allocated on
  *               the heap, or NULL if the download failed.
  *
  *               The ID member of the allocated array will correspond to the
@@ -437,22 +437,22 @@ DAS_API DasXport* DasHttpResp_takeBody(DasHttpResp* pThis);
  *               or if accessing the root of a server, then the host name will
  *               be used.
  */
-DAS_API DasAry* das_http_readUrl(
-	const char* sUrl, const char* sAgent, DasCredMngr* pMgr, int64_t nLimit,
+DAS_API DasAry* new_DasAry_http(
+	const char* sUrl, const char* sAgent, DasCredMgr* pMgr, int64_t nLimit,
 	float rConSec, DasHttpResp** ppRes
 );
 
-/** das_http_readUrl() with full control over the request, see das_http_opts
+/** new_DasAry_http() with full control over the request, see DasHttpOpts
  *
- * @returns The body as das_http_readUrl() does, or NULL in two cases the
+ * @returns The body as new_DasAry_http() does, or NULL in two cases the
  *        caller tells apart by DasHttpResp_code(): 304, the server says
  *        the caller's copy is current and sent no body, and
  *        DasHttpResp_error() is NULL; anything else, the request failed and
  *        DasHttpResp_error() says why.  Telling these apart needs the
  *        response, so ppRes should not be NULL when sending validators.
  */
-DAS_API DasAry* das_http_readUrl_ex(
-	const char* sUrl, DasCredMngr* pMgr, const das_http_opts* pOpts,
+DAS_API DasAry* new_DasAry_httpEx(
+	const char* sUrl, DasCredMgr* pMgr, const DasHttpOpts* pOpts,
 	int64_t nLimit, DasHttpResp** ppRes
 );
 

@@ -34,25 +34,25 @@
 static bool _das2_validBound(
 	const DasPlane* pPlane, const char* sProp, double* pBound
 ){
-	const DasProp* pProp = DasDesc_getProp((const DasDesc*)pPlane, sProp);
+	const DasProp* pProp = DasDesc_prop((const DasDesc*)pPlane, sProp);
 	if(pProp == NULL) return false;
 
 	double rVal = 0.0;
-	if(DasProp_convertReal(pProp, &rVal, 1) != 1){
-		daslog_warn_v("Ignoring %s, '%s' is not a number", sProp, DasProp_value(pProp));
+	if(DasProp_toDoubles(pProp, &rVal, 1) != 1){
+		daslog_warnf("Ignoring %s, '%s' is not a number", sProp, DasProp_value(pProp));
 		return false;
 	}
 
-	das_units have = DasProp_units(pProp);
-	das_units want = DasPlane_getUnits(pPlane);
-	if((have != NULL) && (have != UNIT_DIMENSIONLESS) && (have != want)){
-		if(!Units_canConvert(have, want)){
-			daslog_warn_v("Ignoring %s, its units '%s' do not convert to the "
+	DasUnits have = DasProp_units(pProp);
+	DasUnits want = DasPlane_units(pPlane);
+	if((have != NULL) && (have != DASUNITS_DIMENSIONLESS) && (have != want)){
+		if(!DasUnits_canConvert(have, want)){
+			daslog_warnf("Ignoring %s, its units '%s' do not convert to the "
 				"data units '%s'", sProp, have, want
 			);
 			return false;
 		}
-		rVal = Units_convertTo(rVal, have, want);
+		rVal = DasUnits_convert(rVal, have, want);
 	}
 	*pBound = rVal;
 	return true;
@@ -74,13 +74,13 @@ static bool das2_validRange(const DasPlane* pPlane, double* pMin, double* pMax)
 	*pMax =  DBL_MAX;
 
 	bool bHave = false;
-	switch(DasPlane_getType(pPlane)){
-	case DASPLANE_Y:
+	switch(DasPlane_type(pPlane)){
+	case DASPLANETYPE_Y:
 		bHave  = _das2_validBound(pPlane, "yValidMin", pMin);
 		bHave |= _das2_validBound(pPlane, "yValidMax", pMax);
 		break;
-	case DASPLANE_YSCAN:
-	case DASPLANE_Z:
+	case DASPLANETYPE_YSCAN:
+	case DASPLANETYPE_Z:
 		bHave  = _das2_validBound(pPlane, "zValidMin", pMin);
 		bHave |= _das2_validBound(pPlane, "zValidMax", pMax);
 		break;

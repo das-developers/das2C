@@ -40,7 +40,7 @@ static const char* g_sIdlBin = NULL;
 /*****************************************************************************/
 /* Set the location of the IDL binary */
 
-const char* dsdf_setIdlBin(const char* sIdlBin)
+const char* dasdsdf_setIdlBin(const char* sIdlBin)
 {
 	const char* sOldIdlBin = g_sIdlBin;
 	g_sIdlBin = sIdlBin;
@@ -119,13 +119,13 @@ static char* _stringUnquote(char * sVal)
 	char quoteChar;
 	quoteChar = sVal[0];
 	if (quoteChar != '\'' && quoteChar != '"') {
-		das_error(23, "DSDF string to be unquoted doesn't appear to be "
+		daserrf(23, "DSDF string to be unquoted doesn't appear to be "
 				"quoted: %s\n", sVal);
 		return NULL;
 	}
 
 	if( sVal[ strlen(sVal) - 1 ] != quoteChar) {
-		das_error(23, "DSDF string missing closing quote: %s\n", sVal);
+		daserrf(23, "DSDF string missing closing quote: %s\n", sVal);
 		return NULL;
 	}
 	sVal[ strlen(sVal) - 1 ] = '\0';
@@ -137,7 +137,7 @@ static char* _stringUnquote(char * sVal)
 /* ************************************************************************* */
 /* Main Parser Function */
 
-DasDesc* dsdf_parse(const char* sFileName)
+DasDesc* new_DasDesc_dsdf(const char* sFileName)
 {
 	char sLine[IDL_STR_BUF_LIMIT] = {'\0'}; 
 	
@@ -153,7 +153,7 @@ DasDesc* dsdf_parse(const char* sFileName)
 	DasDesc* pDsdf = NULL;
 
 	if( (pFile = fopen( sFileName, "r" )) == NULL){
-		das_error(23, "Error opening %s", sFileName);
+		daserrf(23, "Error opening %s", sFileName);
 		return NULL;
 	}
 	 
@@ -206,13 +206,13 @@ DasDesc* dsdf_parse(const char* sFileName)
 			if(sVal[0] == '\'' || sVal[0] == '\"' ){       
 				sVal = _stringUnquote(sVal);
 			}
-			DasDesc_set(pDsdf, "String", sKey, sVal );
+			DasDesc_setProp(pDsdf, "String", sKey, sVal );
 		}
 		else{
 			size_t uLen = strlen(sLine); 
 			for(size_t u = 0; u<uLen; u++){
 				if( ! isspace(sLine[u]) ){
-					das_error(23, "Syntax error in %s at line %zu", sFileName, uLine);
+					daserrf(23, "Syntax error in %s at line %zu", sFileName, uLine);
 					return NULL;
 				}
 			}
@@ -244,20 +244,20 @@ static double* dsdf_valToArrayIDL(const char* sArrayDef, size_t* pLen)
 
 	/* open pipe to IDL */
 	if( (pPipe = popen(sBuf, "r")) == NULL ) {
-		das_error(23, "Could not open IDL process via %s\n", sBuf);
+		daserrf(23, "Could not open IDL process via %s\n", sBuf);
 		return NULL;
 	}
 
 	/* The first line should be the number of elements in the array */
 	memset(sBuf, 0, uWrote);
 	if((fgets(sBuf, 8095, pPipe) == NULL) || (sscanf(sBuf, " %zu ", pLen) != 1)){
-		das_error(23, "Couldn't get the number of elements in %s", sBuf);
+		daserrf(23, "Couldn't get the number of elements in %s", sBuf);
 		pclose(pPipe);
 		return NULL;
 	}
 
 	if ((pVals = (double*) calloc(*pLen, sizeof (double))) == NULL) {
-		das_error(23, "Couldn't allocate an array of %zu doubles", *pLen);
+		daserrf(23, "Couldn't allocate an array of %zu doubles", *pLen);
 		return NULL;
 	}
 
@@ -266,7 +266,7 @@ static double* dsdf_valToArrayIDL(const char* sArrayDef, size_t* pLen)
 		pRead = sBuf;
 		while (isspace(*pRead) && *pRead != '\n' && *pRead != '0') pRead++;
 		if( sscanf(pRead, "%lf", pVals + uTag) != 1){
-			das_error(23, "Error next value at %s ", pRead);
+			daserrf(23, "Error next value at %s ", pRead);
 			return NULL;
 		}
 		uTag++;
@@ -274,7 +274,7 @@ static double* dsdf_valToArrayIDL(const char* sArrayDef, size_t* pLen)
 	}
 	
 	if(uTag != *pLen){
-		das_error(23, "Only read %zu of %zu yTags", uTag, *pLen);
+		daserrf(23, "Only read %zu of %zu yTags", uTag, *pLen);
 		return NULL;
 	}
 	
@@ -289,7 +289,7 @@ static double* dsdf_valToArrayIDL(const char* sArrayDef, size_t* pLen)
 /* ************************************************************************* */
 /* Parse Text String into a double array, invoke IDL if needed */
 
-double* dsdf_valToArray(const char* sArray, size_t* pLen) 
+double* dasdsdf_newDoubles(const char* sArray, size_t* pLen) 
 {
 	size_t uStrLen = strlen(sArray);
 	bool bIsArray = false; 
@@ -325,12 +325,12 @@ double* dsdf_valToArray(const char* sArray, size_t* pLen)
 	
 	/* Okay, it's up to me now */
 	if(*pLen == 0){
-		das_error(23, "Array has no members");
+		daserrf(23, "Array has no members");
 		return NULL;
 	}
 
 	if ((pVals = (double*) calloc(*pLen, sizeof (double))) == NULL) {
-		das_error(23, "Couldn't allocate an array of %zu doubles", *pLen);
+		daserrf(23, "Couldn't allocate an array of %zu doubles", *pLen);
 		return NULL;
 	}
 	
@@ -342,7 +342,7 @@ double* dsdf_valToArray(const char* sArray, size_t* pLen)
 		if(isdigit(c) || c == 'E' || c == 'e' || c == '+' || c == '-' || c == '.'){
 			if(!bInNum){
 				if( sscanf(p, "%lf", pWrite) != 1){
-					das_error(23, "Couldn't read 1st value at: %s", p);
+					daserrf(23, "Couldn't read 1st value at: %s", p);
 					return NULL;
 				}
 				pWrite++;
@@ -375,7 +375,7 @@ static int _cmpstringp(const void *p1, const void *p2)
 	return strcmp(* (char * const *) p1, * (char * const *) p2);
 }
 
-char* dsdf_valToNormParam(
+char* dasdsdf_normParam(
 	const char* sRawParam, char* sNormParam, size_t uNormLen
 ){
 	int nLen = strlen(sRawParam);
@@ -383,14 +383,14 @@ char* dsdf_valToNormParam(
 	memcpy(sBuf, sRawParam, nLen+1);
 	
 	if((uNormLen < 9)||(uNormLen < strlen(sRawParam))) {
-		das_error(23, "Output buffer sNormParam is too small");
+		daserrf(23, "Output buffer sNormParam is too small");
 		return NULL;
 	}
 	
 	memset(sNormParam, '\0', uNormLen);
 	
 	if( sNormParam == NULL || uNormLen < 1){
-		das_error(23, "Bad input arguments in dsdf_valToNormParam");
+		daserrf(23, "Bad input arguments in dasdsdf_normParam");
 		return NULL;
 	}
 	

@@ -56,30 +56,30 @@ extern "C" {
  *     packet.  All YScan values from a single data packet are correlated with
  *     the X value provide in the \<x\> plane. 
  */
-typedef enum das_plane_type {
-	DASPLANE_INV=-1, DASPLANE_X=2001, DASPLANE_Y=2003, DASPLANE_Z=2004, 
-	DASPLANE_YSCAN=2012
-} das_plane_type_e;
+typedef enum das_planetype_e {
+	DASPLANETYPE_INV=-1, DASPLANETYPE_X=2001, DASPLANETYPE_Y=2003, DASPLANETYPE_Z=2004, 
+	DASPLANETYPE_YSCAN=2012
+} das_planetype;
 
 
-typedef enum das_ytag_type {
-	DASPLANE_YTAGS_NONE=0, DASPLANE_YTAGS_LIST=1, DASPLANE_YTAGS_SEQ=2
-} das_ytag_type_e;
+typedef enum das_ytagtype_e {
+	DASYTAGTYPE_NONE=0, DASYTAGTYPE_LIST=1, DASYTAGTYPE_SEQ=2
+} das_ytagtype;
 		
 /** Get the plane type for a das2 element name
  *
  * @param sType An element name such as "x", "y", "yscan" or "z"
- * @returns the matching das_plane_type_e, or DASPLANE_INV after a das_error() call
+ * @returns the matching das_planetype, or DASPLANETYPE_INV after a daserrf() call
  *          if sType is not one
  */
-DAS_API das_plane_type_e das_plane_type_fromStr(const char* sType);
+DAS_API das_planetype dasplanetype_id(const char* sType);
 
 /** Get the das2 element name for a plane type
  *
  * @param type A plane type
  * @returns a constant string such as "x" or "yscan"
  */
-DAS_API const char* das_plane_type_toStr(das_plane_type_e type);
+DAS_API const char* dasplanetype_name(das_planetype type);
 
 /* ************************************************************************* */
 /** @class DasPlane plane.h <das3/plane.h>
@@ -132,12 +132,12 @@ DAS_API const char* das_plane_type_toStr(das_plane_type_e type);
  * @nosubgrouping
  * @ingroup streams
  */
-typedef struct das_plane DasPlane;
+typedef struct das_plane_t DasPlane;
 
 
 /** Creates a new X,Y or Z plane descriptor
  *
- * @param pt The ::das_plane_type_e, must be one of: 
+ * @param pt The ::das_planetype, must be one of: 
  *    - X - Independent Values
  *    - Y - Dependent or Independent Values
  *    - Z - Dependent Values
@@ -153,7 +153,7 @@ typedef struct das_plane DasPlane;
  * @returns A pointer to new DasPlane allocated on the heap.
  */
 DAS_API DasPlane* new_DasPlane( 
-	das_plane_type_e pt, const char* sGroup, DasEnc* pType, das_units units
+	das_planetype pt, const char* sGroup, DasEnc* pType, DasUnits units
 );
 
 /** Creates a new \<yscan\> plane descriptor
@@ -183,8 +183,8 @@ DAS_API DasPlane* new_DasPlane(
  * @memberof DasPlane
  */
 DAS_API DasPlane* new_DasPlane_yscan(
-	const char* sGroup, DasEnc* pZType, das_units zUnits, size_t uItems,
-	DasEnc* pYType, const double* pYTags, das_units yUnits
+	const char* sGroup, DasEnc* pZType, DasUnits zUnits, size_t uItems,
+	DasEnc* pYType, const double* pYTags, DasUnits yUnits
 );
 
 /** Creates a new \<yscan\> plane descriptor using a yTag sequence
@@ -204,18 +204,18 @@ DAS_API DasPlane* new_DasPlane_yscan(
  * @param uItems The number of data values in each packet of this plane's 
  *        data.  i.e. the number of yTags.
  * @param yTagInter the interval between values in the yTag sequence
- * @param yTagMin the initial value of the sequence.  Use DAS_FILL_VALUE to have 
+ * @param yTagMin the initial value of the sequence.  Use DASVAL_FILL to have 
           the starting point set automatically using yTagMax.
- * @param yTagMax the final value of the sequence.  Use DAS_FILL_VALUE to have 
+ * @param yTagMax the final value of the sequence.  Use DASVAL_FILL to have 
           the ending point set automatically using yTagMin.
  * @param yUnits The units for yTag values.
  *
  * @returns A pointer to new DasPlane allocated on the heap.
  * @memberof DasPlane
  */
-DAS_API DasPlane* new_DasPlane_yscan_seq(
-	const char* sGroup, DasEnc* pZType, das_units zUnits, size_t uItems,
-   double yTagInter, double yTagMin, double yTagMax, das_units yUnits
+DAS_API DasPlane* new_DasPlane_yscanSeq(
+	const char* sGroup, DasEnc* pZType, DasUnits zUnits, size_t uItems,
+   double yTagInter, double yTagMin, double yTagMax, DasUnits yUnits
 );
 
 
@@ -226,7 +226,7 @@ DAS_API DasPlane* new_DasPlane_yscan_seq(
  *         the plane descriptor are duplicated as well. 
  * @memberof DasPlane
  */
-DAS_API DasPlane* DasPlane_copy(const DasPlane* pThis);
+DAS_API DasPlane* new_DasPlane_copy(const DasPlane* pThis);
 
 
 /** Check to see if two plane descriptors describe the same output
@@ -250,7 +250,7 @@ DAS_API DasPlane* DasPlane_copy(const DasPlane* pThis);
  * @returns true if the two are equivalent, false otherwise.  
  * @memberof DasPlane
  */
-DAS_API bool DasPlane_equivalent(const DasPlane* pThis, const DasPlane* pOther);
+DAS_API bool DasPlane_isEquivalent(const DasPlane* pThis, const DasPlane* pOther);
 
 /** Get a plane's type
  *
@@ -258,7 +258,7 @@ DAS_API bool DasPlane_equivalent(const DasPlane* pThis, const DasPlane* pOther);
  * @return The plane type, which is one of X, Y, YScan or Z
  * @memberof DasPlane
  */
-DAS_API das_plane_type_e DasPlane_getType(const DasPlane* pThis);
+DAS_API das_planetype DasPlane_type(const DasPlane* pThis);
 
 /** Get the number of items in a plane
  * YScan planes have a variable number of items, for all other types this 
@@ -267,14 +267,14 @@ DAS_API das_plane_type_e DasPlane_getType(const DasPlane* pThis);
  * @returns the number of items in plane 
  * @memberof DasPlane
  */
-DAS_API size_t DasPlane_getNItems(const DasPlane* pThis);
+DAS_API size_t DasPlane_numItems(const DasPlane* pThis);
 
 /**  Set the number of items in a plane
  * 
  * @warning Calling this function with a different size then the current 
  * number of items in a plane will cause a re-allocation of the internal
  * data values memory buffer.  Any pointers returned previously by 
- * DasPlane_getValues() or DasPlane_getYTags() will be invalidated.
+ * DasPlane_vals() or DasPlane_yTags() will be invalidated.
  * 
  * @warning Always call DasPlane_setYTags() or DasPlane_setYTagSeq()
  * after changing the number of items in a plane!  Failure do to so has 
@@ -283,7 +283,7 @@ DAS_API size_t DasPlane_getNItems(const DasPlane* pThis);
  * @param pThis The plane, which must be of type YScan
  * @param nItems the new number of items in the plane.
  */
-DAS_API void DasPlane_setNItems(DasPlane* pThis, size_t nItems);
+DAS_API void DasPlane_setNumItems(DasPlane* pThis, size_t nItems);
 
 
 /** Get the a value from a plane
@@ -295,10 +295,10 @@ DAS_API void DasPlane_setNItems(DasPlane* pThis, size_t nItems);
  * @param pThis The Plane descriptor object
  * @param uIdx the index of the value to retrieve, this is always 0 for 
  *        X, Y, and Z planes.
- * @returns the current value or DAS_FILL_VALUE in no data have been read or set.
+ * @returns the current value or DASVAL_FILL in no data have been read or set.
  * @memberof DasPlane
  */
-DAS_API double DasPlane_getValue(const DasPlane* pThis, size_t uIdx);
+DAS_API double DasPlane_valAt(const DasPlane* pThis, size_t uIdx);
 
 
 /** Get a datum from a plane
@@ -317,8 +317,8 @@ DAS_API double DasPlane_getValue(const DasPlane* pThis, size_t uIdx);
  *        uIdx is out of range.
  * @memberof DasPlane
  */
-DAS_API const das_datum* DasPlane_getDatum(
-	const DasPlane* pThis, size_t uIdx, das_datum* pD
+DAS_API const DasDatum* DasPlane_datumAt(
+	const DasPlane* pThis, size_t uIdx, DasDatum* pD
 );
  
 
@@ -333,7 +333,7 @@ DAS_API const das_datum* DasPlane_getDatum(
  * @returns 0 if successful or a positive error number otherwise.
  * @memberof DasPlane
  */
-DAS_API das_errcode DasPlane_setValue(DasPlane* pThis, size_t uIdx, double value);
+DAS_API das_errcode DasPlane_setValAt(DasPlane* pThis, size_t uIdx, double value);
 
 /** Set a single time value in a plane 
  * 
@@ -351,7 +351,7 @@ DAS_API das_errcode DasPlane_setValue(DasPlane* pThis, size_t uIdx, double value
  * 
  * @memberof DasPlane
  */
-DAS_API das_errcode DasPlane_setTimeValue(
+DAS_API das_errcode DasPlane_setTimeAt(
 	DasPlane* pThis, const char* sTime, size_t idx
 );
 
@@ -363,7 +363,7 @@ DAS_API das_errcode DasPlane_setTimeValue(
  *         the returned encoder but do not free() the return value.
  * @memberof DasPlane
  */
-DAS_API DasEnc* DasPlane_getValEncoder(DasPlane* pThis);
+DAS_API DasEnc* DasPlane_valEnc(DasPlane* pThis);
 
 /** Set the data value encoder/decoder object for a plane
  * The previous encoder's memory is returned the heap via free().
@@ -373,7 +373,7 @@ DAS_API DasEnc* DasPlane_getValEncoder(DasPlane* pThis);
  *        of it's memory.  This value must not be null
  * @memberof DasPlane
  */
-DAS_API void DasPlane_setValEncoder(DasPlane* pThis, DasEnc* pEnc);
+DAS_API void DasPlane_setValEnc(DasPlane* pThis, DasEnc* pEnc);
 
 /** Get a pointer to the current set of values in a plane.
  * 
@@ -383,15 +383,15 @@ DAS_API void DasPlane_setValEncoder(DasPlane* pThis, DasEnc* pEnc);
  * 
  * @param[in] pThis The plane in question
  * @returns A pointer to the current plane's data, or NULL if neither
- *          DasPlane_setValue() or DasPlane_decode() have been called.
+ *          DasPlane_setValAt() or DasPlane_decode() have been called.
  * 
  * @memberof DasPlane
  */
-DAS_API const double* DasPlane_getValues(const DasPlane* pThis);
+DAS_API const double* DasPlane_vals(const DasPlane* pThis);
 
 
 /** Set all the current values for a plane
- * @see DasPlane_getNItems()
+ * @see DasPlane_numItems()
  * 
  * @param pThis The plane to receive the values
  * @param pData A pointer to an array of doubles that is the same length as 
@@ -399,7 +399,7 @@ DAS_API const double* DasPlane_getValues(const DasPlane* pThis);
  *        references are kept to the input pointer after the function completes
  * @memberof DasPlane
  */
-DAS_API void DasPlane_setValues(DasPlane* pThis, const double* pData);
+DAS_API void DasPlane_setVals(DasPlane* pThis, const double* pData);
 
 
 /** Returns the fill value identified for the plane.
@@ -407,7 +407,7 @@ DAS_API void DasPlane_setValues(DasPlane* pThis, const double* pData);
  * value is used.
  * @memberof DasPlane
  */
-DAS_API double DasPlane_getFill(const DasPlane* pThis );
+DAS_API double DasPlane_fill(const DasPlane* pThis );
 
 /** Returns non-zero if the value is the fill value identified 
  * for the data plane.
@@ -424,7 +424,7 @@ DAS_API void DasPlane_setFill( DasPlane* pThis, double value );
  * @returns the group of the plane, or "" if it is not specified.
  * @memberof DasPlane
  */
-DAS_API const char* DasPlane_getName(const DasPlane* pThis );
+DAS_API const char* DasPlane_name(const DasPlane* pThis );
 
 
 /** Set the data group of a plane
@@ -440,7 +440,7 @@ DAS_API void DasPlane_setName(DasPlane* pThis, const char* sName);
  * @returns the units of the data values in a plane
  * @memberof DasPlane
  */
-DAS_API das_units DasPlane_getUnits(const DasPlane* pThis );
+DAS_API DasUnits DasPlane_units(const DasPlane* pThis );
 
 /** Set the unit type for the plane data
  * 
@@ -448,26 +448,26 @@ DAS_API das_units DasPlane_getUnits(const DasPlane* pThis );
  * property indicates what these doubles mean
  * 
  * @param pThis The Plane to alter
- * @param units The new units setting, use UNIT_DIMENSIONLESS for none.
- *        NULL, or text Units_fromStr() can't parse, is an error and leaves
+ * @param units The new units setting, use DASUNITS_DIMENSIONLESS for none.
+ *        NULL, or text DasUnits_fromStr() can't parse, is an error and leaves
  *        the plane's units unchanged.
  * @returns DAS_OKAY, or a non-zero error code
  * @memberof DasPlane
  */
-DAS_API das_errcode DasPlane_setUnits(DasPlane* pThis, das_units units);
+DAS_API das_errcode DasPlane_setUnits(DasPlane* pThis, DasUnits units);
 
 /** Get Y axis units for a 2-D plane
  * @returns the Units of the YTags of a \<yscan\> plane.  
  * @memberof DasPlane
  */
-DAS_API das_units DasPlane_getYTagUnits( DasPlane* pThis );
+DAS_API DasUnits DasPlane_yTagUnits( DasPlane* pThis );
 
 /** Set the YTag units for a YScan plane
  * 
  * @param pThis The plane, which must be of type YScan.
  * @param units The new units
  */
-DAS_API void DasPlane_setYTagUnits(DasPlane* pThis, das_units units);
+DAS_API void DasPlane_setYTagUnits(DasPlane* pThis, DasUnits units);
 
 
 /** Get the storage method for yTag values
@@ -479,50 +479,50 @@ DAS_API void DasPlane_setYTagUnits(DasPlane* pThis, das_units units);
  * used.
  * @memberof DasPlane
  */
-DAS_API das_ytag_type_e DasPlane_getYTagType(const DasPlane* pThis);
+DAS_API das_ytagtype DasPlane_yTagType(const DasPlane* pThis);
 
 /** Get the interval between yTags, when they are a sequence
- * @returns the interval, or DAS_FILL_VALUE unless DasPlane_getYTagType() is
- *          DASPLANE_YTAGS_SEQ
+ * @returns the interval, or DASVAL_FILL unless DasPlane_yTagType() is
+ *          DASYTAGTYPE_SEQ
  * @memberof DasPlane
  */
-DAS_API double DasPlane_getYTagInterval(const DasPlane* pThis);
+DAS_API double DasPlane_yTagInter(const DasPlane* pThis);
 
 /** Get the first yTag value, when they are a sequence
- * @returns the sequence start, or DAS_FILL_VALUE unless DasPlane_getYTagType()
- *          is DASPLANE_YTAGS_SEQ
+ * @returns the sequence start, or DASVAL_FILL unless DasPlane_yTagType()
+ *          is DASYTAGTYPE_SEQ
  * @memberof DasPlane
  */
-DAS_API double DasPlane_getYTagMin(const DasPlane* pThis);
+DAS_API double DasPlane_yTagMin(const DasPlane* pThis);
 
 /** Get Y axis coordinates for a 2-D plane of data.
  * @returns an array of doubles containing the yTags for the YSCAN plane 
  *          or null if yTags are just a simple sequence.
  *
- * @see DasPlane_getOrMakeYTags() for a function that always creates a set
+ * @see DasPlane_makeYTags() for a function that always creates a set
  *      of YTags
  *
- * @see DasPlane_getYTagInterval()
+ * @see DasPlane_yTagInter()
  * @memberof DasPlane
  */
-DAS_API const double* DasPlane_getYTags(const DasPlane* pThis);
+DAS_API const double* DasPlane_yTags(const DasPlane* pThis);
 
 
 /** Get Y tags as an array regardless of the storage type
  * If a yTags array is constructed via this method it is cleaned up when
  * the plane destructor is called.
  *
- * @see DasPlane_getYTagType() getYTags() 
+ * @see DasPlane_yTagType() getYTags() 
  * @memberof DasPlane
  */
-DAS_API const double* DasPlane_getOrMakeYTags(DasPlane* pThis);
+DAS_API const double* DasPlane_makeYTags(DasPlane* pThis);
 
 
 /** Provide a new set of yTag values to a yScan plane
  * 
  * @param pThis A pointer to a YScan plane
  * @param pYTags a pointer to an array of doubles that must be at least as 
- *        long as the number of items returned by DasPlane_getNItems() for
+ *        long as the number of items returned by DasPlane_numItems() for
  *        this plane.
  */
 DAS_API void DasPlane_setYTags(DasPlane* pThis, const double* pYTags);
@@ -532,32 +532,32 @@ DAS_API void DasPlane_setYTags(DasPlane* pThis, const double* pYTags);
  * @param[in] pThis A pointer to a YScan plane
  * 
  * @param[out] pInterval a pointer to a double which will be set to the interval
- *             between samples in a sequence, or DAS_FILL_VALUE if y-tags are 
+ *             between samples in a sequence, or DASVAL_FILL if y-tags are 
  *             specified individually.
  * 
  * @param[out] pMin a pointer to a double which will be set to the minimum 
- *             value of the sequence, or DAS_FILL_VALUE if y-tags are are specified
+ *             value of the sequence, or DASVAL_FILL if y-tags are are specified
  *             as a list.  If NULL, minimum yTag value is not output.
  * 
  * @param[out] pMax a pointer to a double which will be set to the maximum
- *             value of the sequence, or DAS_FILL_VALUE if y-tags are are specified
+ *             value of the sequence, or DASVAL_FILL if y-tags are are specified
  *             as a list.  This is not an exclusive upper bound, but rather the
  *             actual value for the last yTag.  If NULL, maximum yTag value is
  *             not output
  */
-DAS_API void DasPlane_getYTagSeq(
+DAS_API void DasPlane_yTagSeq(
 	const DasPlane* pThis, double* pInterval, double* pMin, double* pMax
 );
 
 /** Set a YScan to use sequence definition for yTags
  * 
- * Note that this can change the return value from DasPlane_getYTagType() 
+ * Note that this can change the return value from DasPlane_yTagType() 
  * and trigger deallocation of internal yTag lists
  * 
  * @param pThis a pointer to a YScan
  * @param rInterval the interval between yTag values
- * @param rMin The initial yTag value or DAS_FILL_VALUE if rMax is supplied
- * @param rMax The final yTag value or DAS_FILL_VALUE if rMin is supplied
+ * @param rMin The initial yTag value or DASVAL_FILL if rMax is supplied
+ * @param rMax The final yTag value or DASVAL_FILL if rMin is supplied
  */
 DAS_API void DasPlane_setYTagSeq(
 	DasPlane* pThis, double rInterval, double rMin, double rMax

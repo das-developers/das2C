@@ -53,7 +53,7 @@
 #include "form_lin.h"
 #include "form_cplx.h"
 
-#define REFUSE(...) (das_error(DASERR_FORM, __VA_ARGS__), dbsRefuse)
+#define REFUSE(...) (daserrf(DASERR_FORM, __VA_ARGS__), dbsRefuse)
 
 #define CPLX_DEG2RAD 0.017453292519943295
 #define CPLX_RAD2DEG 57.29577951308232
@@ -65,82 +65,82 @@
    words because "mag" and "phase" are what a spectrum is labelled with, and
    the math short forms (|z|, arg z) read worse on a plot axis. */
 static const char* g_aCplxSym[2][2] = {
-	{ "re",  "im"    },   /* DAS_VSYS_RECT  */
-	{ "mag", "phase" }    /* DAS_VSYS_POLAR */
+	{ "re",  "im"    },   /* DASCPLXSYS_RECT  */
+	{ "mag", "phase" }    /* DASCPLXSYS_POLAR */
 };
 
-const char* das_cplxsys_toStr(ubyte uSys)
+const char* dascplxsys_name(uint8_t uSys)
 {
 	switch(uSys){
-	case DAS_VSYS_RECT:  return "rectangular";
-	case DAS_VSYS_POLAR: return "polar";
+	case DASCPLXSYS_RECT:  return "rectangular";
+	case DASCPLXSYS_POLAR: return "polar";
 	}
 	return NULL;
 }
 
-ubyte das_cplxsys_fromStr(const char* sSys)
+uint8_t dascplxsys_id(const char* sSys)
 {
-	if(sSys == NULL) return DAS_VSYS_UNKNOWN;
+	if(sSys == NULL) return DASVECSYS_UNKNOWN;
 
-	/* Prefix matching, the same courtesy das_vsys_fromStr() extends to "cart". */
-	if(strncasecmp(sSys, "rect",  4) == 0) return DAS_VSYS_RECT;
-	if(strncasecmp(sSys, "polar", 5) == 0) return DAS_VSYS_POLAR;
+	/* Prefix matching, the same courtesy dasvecsys_id() extends to "cart". */
+	if(strncasecmp(sSys, "rect",  4) == 0) return DASCPLXSYS_RECT;
+	if(strncasecmp(sSys, "polar", 5) == 0) return DASCPLXSYS_POLAR;
 
-	return DAS_VSYS_UNKNOWN;
+	return DASVECSYS_UNKNOWN;
 }
 
-const char* das_cplxsys_desc(ubyte uSys)
+const char* dascplxsys_info(uint8_t uSys)
 {
 	switch(uSys){
-	case DAS_VSYS_RECT:
+	case DASCPLXSYS_RECT:
 	return "A complex number as (real, imaginary).  Both components carry the "
 	       "variable's units.";
-	case DAS_VSYS_POLAR:
+	case DASCPLXSYS_POLAR:
 	return "A complex number as (magnitude, phase).  The magnitude carries the "
 	       "variable's units, the phase is in degrees.";
 	}
 	return NULL;
 }
 
-const char* das_cplxsys_symbol(ubyte uSys, int iComp)
+const char* dascplxsys_compSym(uint8_t uSys, int iComp)
 {
 	if((iComp < 0)||(iComp > 1)) return NULL;
 
 	switch(uSys){
-	case DAS_VSYS_RECT:  return g_aCplxSym[0][iComp];
-	case DAS_VSYS_POLAR: return g_aCplxSym[1][iComp];
+	case DASCPLXSYS_RECT:  return g_aCplxSym[0][iComp];
+	case DASCPLXSYS_POLAR: return g_aCplxSym[1][iComp];
 	}
 	return NULL;
 }
 
-bool das_cplx_toRect(ubyte uSys, const double* pIn, double* pOut)
+bool dascplxsys_toRect(uint8_t uSys, const double* pIn, double* pOut)
 {
 	switch(uSys){
-	case DAS_VSYS_RECT:
+	case DASCPLXSYS_RECT:
 		pOut[0] = pIn[0]; pOut[1] = pIn[1];
 		return true;
 
-	case DAS_VSYS_POLAR: {
+	case DASCPLXSYS_POLAR: {
 		double rPhase = pIn[1] * CPLX_DEG2RAD;
 		pOut[0] = pIn[0] * cos(rPhase);
 		pOut[1] = pIn[0] * sin(rPhase);
 		return true;
 	}}
 
-	return das_error_false(DASERR_FORM,
+	return daserr_falsef(DASERR_FORM,
 		"Component system %hhu is not a complex representation; the geometric "
 		"systems have no meaning in a plane with no third direction", uSys
 	);
 }
 
-bool das_cplx_fromRect(ubyte uSys, const double* pIn, double* pOut)
+bool dascplxsys_fromRect(uint8_t uSys, const double* pIn, double* pOut)
 {
 	switch(uSys){
-	case DAS_VSYS_RECT:
+	case DASCPLXSYS_RECT:
 		pOut[0] = pIn[0]; pOut[1] = pIn[1];
 		return true;
 
-	case DAS_VSYS_POLAR:
+	case DASCPLXSYS_POLAR:
 		/* hypot() rather than sqrt(x*x + y*y): it does not overflow on a
 		   magnitude that fits when the squares do not, which a spectral
 		   density in SI units reaches more often than one would like. */
@@ -153,7 +153,7 @@ bool das_cplx_fromRect(ubyte uSys, const double* pIn, double* pOut)
 		return true;
 	}
 
-	return das_error_false(DASERR_FORM,
+	return daserr_falsef(DASERR_FORM,
 		"Component system %hhu is not a complex representation", uSys
 	);
 }
@@ -164,21 +164,21 @@ bool das_cplx_fromRect(ubyte uSys, const double* pIn, double* pOut)
 typedef struct das_form_cplx {
 	DasForm base;
 
-	ubyte uSysType;   /* DAS_VSYS_RECT or DAS_VSYS_POLAR */
+	uint8_t uSysType;   /* DASCPLXSYS_RECT or DASCPLXSYS_POLAR */
 } DasFormCplx;
 
 static DasForm* _new_DasFormCplx_empty(void)
 {
 	DasFormCplx* pThis = (DasFormCplx*)calloc(1, sizeof(DasFormCplx));
-	pThis->base.pVTbl = &das_form_cplx_vtbl;
-	pThis->uSysType   = DAS_VSYS_RECT;
+	pThis->base.pVTbl = &DasFormCplx_vtable;
+	pThis->uSysType   = DASCPLXSYS_RECT;
 	return &(pThis->base);
 }
 
-DasForm* new_DasFormCplx(ubyte uSysType)
+DasForm* new_DasFormCplx(uint8_t uSysType)
 {
-	if((uSysType < DAS_VSYS_CPLX_MIN)||(uSysType > DAS_VSYS_CPLX_MAX)){
-		das_error(DASERR_FORM,
+	if((uSysType < DASCPLXSYS_MIN)||(uSysType > DASCPLXSYS_MAX)){
+		daserrf(DASERR_FORM,
 			"Component system %hhu is not one a complex number can use.  The "
 			"geometric systems describe directions in a frame; use <ops "
 			"kind=\"vector\"> or <ops kind=\"position\"> for those", uSysType
@@ -191,10 +191,10 @@ DasForm* new_DasFormCplx(ubyte uSysType)
 	return &(pThis->base);
 }
 
-ubyte DasFormCplx_sysType(const DasForm* pThis)
+uint8_t DasFormCplx_sysId(const DasForm* pThis)
 {
-	if(!DasForm_isKind(pThis, DAS_FORM_CPLX)){
-		das_error(DASERR_FORM, "Not a complex formalism");
+	if(!DasForm_isKind(pThis, DASFORM_CPLX)){
+		daserrf(DASERR_FORM, "Not a complex formalism");
 		return 0;
 	}
 	return ((const DasFormCplx*)pThis)->uSysType;
@@ -208,9 +208,9 @@ static das_errcode _DasFormCplx_setParam(
 	DasFormCplx* pThis = (DasFormCplx*)pBase;
 
 	if(strcmp(sName, "system") == 0){
-		ubyte uSys = das_cplxsys_fromStr(sVal);
-		if(uSys == DAS_VSYS_UNKNOWN)
-			return das_error(DASERR_FORM,
+		uint8_t uSys = dascplxsys_id(sVal);
+		if(uSys == DASVECSYS_UNKNOWN)
+			return daserrf(DASERR_FORM,
 				"Unknown component system '%s' for kind=\"complex\"; expected "
 				"rectangular or polar.  A complex number lives in a plane with "
 				"no third direction and no frame, so the geometric systems do "
@@ -225,20 +225,20 @@ static das_errcode _DasFormCplx_setParam(
 	   storage, not in a parameter, because every rule in this file reads
 	   component 0 as the real (or the magnitude) and nothing renegotiates it. */
 	if(strcmp(sName, "sysorder") == 0)
-		return das_error(DASERR_FORM,
+		return daserrf(DASERR_FORM,
 			"<ops kind=\"complex\"> has no sysorder=.  Component 0 is the real "
 			"part (or the magnitude) and component 1 the imaginary part (or the "
 			"phase); there is no other reading of a complex pair"
 		);
 
 	if(strcmp(sName, "frame") == 0)
-		return das_error(DASERR_FORM,
+		return daserrf(DASERR_FORM,
 			"frame= names a reference frame, which makes the values a geometric "
 			"vector rather than a number.  Use <ops kind=\"vector\">"
 		);
 
 	/* A reader that CLAIMS a kind must not skip a misspelling in it. */
-	return das_error(DASERR_FORM,
+	return daserrf(DASERR_FORM,
 		"<ops kind=\"complex\"> has no parameter '%s'", sName
 	);
 }
@@ -254,18 +254,18 @@ static das_errcode _DasFormCplx_encode(const DasForm* pBase, DasBuf* pBuf)
 
 	return DasBuf_printf(pBuf,
 		"      <ops kind=\"complex\" system=\"%s\"/>\n",
-		das_cplxsys_toStr(pThis->uSysType)
+		dascplxsys_name(pThis->uSysType)
 	);
 }
 
 static const char* _DasFormCplx_getParam(
-	const DasForm* pBase, const char* sName, ubyte* pType
+	const DasForm* pBase, const char* sName, uint8_t* pType
 ){
 	const DasFormCplx* pThis = (const DasFormCplx*)pBase;
 
 	if(strcmp(sName, "system") == 0){
 		if(pType != NULL) *pType = DASPROP_STRING | DASPROP_SINGLE;
-		return das_cplxsys_toStr(pThis->uSysType);
+		return dascplxsys_name(pThis->uSysType);
 	}
 	return NULL;
 }
@@ -283,14 +283,14 @@ static das_errcode _DasFormCplx_validate(
 	DasForm* pBase, int nIntRank, const ptrdiff_t* pIntShape
 ){
 	if(nIntRank != 1)
-		return das_error(DASERR_FORM,
+		return daserrf(DASERR_FORM,
 			"A complex number is one level of two components, but this variable "
 			"declares %d internal levels.  A composite of complex numbers is a "
 			"formalism of its own, not this one at a larger shape", nIntRank
 		);
 
 	if(pIntShape[0] != 2)
-		return das_error(DASERR_FORM,
+		return daserrf(DASERR_FORM,
 			"A complex number has exactly 2 components, not %zd", pIntShape[0]
 		);
 
@@ -303,8 +303,8 @@ static das_errcode _DasFormCplx_validate(
    well as in a log line, so it stays inside the ASCII range and carries no
    comma of its own. */
 static char* _DasFormCplx_prnRun(
-	const DasForm* pForm, const ubyte* pRun, uint32_t nElems,
-	das_val_type et, char* sBuf, size_t uLen
+	const DasForm* pForm, const uint8_t* pRun, uint32_t nElems,
+	das_vt et, char* sBuf, size_t uLen
 ){
 	const DasFormCplx* pThis = (const DasFormCplx*)pForm;
 
@@ -314,14 +314,14 @@ static char* _DasFormCplx_prnRun(
 	if(nElems != 2) return NULL;
 
 	double a[2] = {0.0, 0.0};
-	size_t uSz = das_vt_size(et);
+	size_t uSz = dasvt_size(et);
 	for(int i = 0; i < 2; ++i){
-		if(das_value_binXform(et, pRun + i*uSz, NULL, vtDouble, (ubyte*)(a + i),
+		if(dasval_convert(et, pRun + i*uSz, NULL, DASVT_DOUBLE, (uint8_t*)(a + i),
 		                      NULL, 0) != DAS_OKAY)
 			return NULL;
 	}
 
-	if(pThis->uSysType == DAS_VSYS_POLAR)
+	if(pThis->uSysType == DASCPLXSYS_POLAR)
 		snprintf(sBuf, uLen, "%.6g@%.6gdeg", a[0], a[1]);
 	else
 		snprintf(sBuf, uLen, "%.6g%+.6gi", a[0], a[1]);
@@ -330,30 +330,30 @@ static char* _DasFormCplx_prnRun(
 }
 
 static bool _DasFormCplx_pack(
-	const DasForm* pBase, const das_operand* pOp, const ubyte* pRun,
-	das_datum* pOut
+	const DasForm* pBase, const das_operand* pOp, const uint8_t* pRun,
+	DasDatum* pOut
 ){
 	if((pOp->nIntRank != 1)||(pOp->aIntShape[0] != 2))
-		return das_error_false(DASERR_FORM,
+		return daserr_falsef(DASERR_FORM,
 			"A complex number has exactly 2 components in one level"
 		);
 
-	return das_datum_box(
+	return DasDatum_wrapElems(
 		pOut, pBase, pRun, pOp->nIntRank, pOp->aIntShape, pOp->vtElem,
 		pOp->units
 	);
 }
 
-static das_val_type _DasFormCplx_datumType(const DasForm* pBase){ return vtComposite; }
+static das_vt _DasFormCplx_datumType(const DasForm* pBase){ return DASVT_COMP; }
 
 /* A complex value is always two components in one level, and there is no
    sysorder= to permute them, so there is nothing to bound against. */
 static const char* _DasFormCplx_compSym(const DasForm* pThis, int iComp)
 {
-	if(!DasForm_isKind(pThis, DAS_FORM_CPLX)||(iComp < 0)||(iComp > 1))
+	if(!DasForm_isKind(pThis, DASFORM_CPLX)||(iComp < 0)||(iComp > 1))
 		return NULL;
 
-	return das_cplxsys_symbol(((const DasFormCplx*)pThis)->uSysType, iComp);
+	return dascplxsys_compSym(((const DasFormCplx*)pThis)->uSysType, iComp);
 }
 
 static DasForm* _DasFormCplx_copy(const DasForm* pBase)
@@ -372,14 +372,14 @@ static void _DasFormCplx_release(DasForm* pBase){ free(pBase); }
 typedef struct das_binop_cplx {
 	DasBinOp base;
 
-	das_val_type vtL, vtR;
+	das_vt vtL, vtR;
 	int   nOp;
 
 	/* Which side is a plain real being promoted.  Both can never be set: a
 	   pairing with no complex operand never reaches this file. */
 	bool  bLinL, bLinR;
 
-	ubyte uSysL, uSysR, uSysOut;
+	uint8_t uSysL, uSysR, uSysOut;
 
 	/* Brings the RIGHT operand into the left's units, 1.0 when none is needed.
 	   Applied in rectangular, where scaling both components by k is the same
@@ -391,11 +391,11 @@ typedef struct das_binop_cplx {
    as the real part and leaves the imaginary at zero, which is the whole of the
    promotion rule. */
 static bool _cplx_gather(
-	const ubyte* pRun, das_val_type et, ubyte uSys, bool bLinear, double* pOut
+	const uint8_t* pRun, das_vt et, uint8_t uSys, bool bLinear, double* pOut
 ){
 	double aStored[2] = {0.0, 0.0};
 
-	if(das_value_binXform(et, pRun, NULL, vtDouble, (ubyte*)(aStored + 0),
+	if(dasval_convert(et, pRun, NULL, DASVT_DOUBLE, (uint8_t*)(aStored + 0),
 	                      NULL, 0) != DAS_OKAY)
 		return false;
 
@@ -405,15 +405,15 @@ static bool _cplx_gather(
 		return true;
 	}
 
-	if(das_value_binXform(et, pRun + das_vt_size(et), NULL, vtDouble,
-	                      (ubyte*)(aStored + 1), NULL, 0) != DAS_OKAY)
+	if(dasval_convert(et, pRun + dasvt_size(et), NULL, DASVT_DOUBLE,
+	                      (uint8_t*)(aStored + 1), NULL, 0) != DAS_OKAY)
 		return false;
 
-	return das_cplx_toRect(uSys, aStored, pOut);
+	return dascplxsys_toRect(uSys, aStored, pOut);
 }
 
 static bool _DasBinOpCplx_apply(
-	const DasBinOp* pOp, const ubyte* pLRun, const ubyte* pRRun, ubyte* pOutRun
+	const DasBinOp* pOp, const uint8_t* pLRun, const uint8_t* pRRun, uint8_t* pOutRun
 ){
 	const DasBinOpCplx* pThis = (const DasBinOpCplx*)pOp;
 
@@ -428,22 +428,22 @@ static bool _DasBinOpCplx_apply(
 	aR[1] *= pThis->rRightScale;
 
 	switch(pThis->nOp){
-	case D2BOP_ADD:
+	case DASOP_ADD:
 		aRes[0] = aL[0] + aR[0];
 		aRes[1] = aL[1] + aR[1];
 		break;
 
-	case D2BOP_SUB:
+	case DASOP_SUB:
 		aRes[0] = aL[0] - aR[0];
 		aRes[1] = aL[1] - aR[1];
 		break;
 
-	case D2BOP_MUL:
+	case DASOP_MUL:
 		aRes[0] = aL[0]*aR[0] - aL[1]*aR[1];
 		aRes[1] = aL[0]*aR[1] + aL[1]*aR[0];
 		break;
 
-	case D2BOP_DIV: {
+	case DASOP_DIV: {
 		/* Division by zero is left to IEEE, the same as every other division
 		   in this library.  An error return here would abort a whole walk over
 		   one bad item, which is a worse answer than an inf the caller can
@@ -456,16 +456,16 @@ static bool _DasBinOpCplx_apply(
 
 	default:
 		/* resolve refused everything else; reaching here is a library bug */
-		return das_error_false(DASERR_FORM,
-			"Operator '%s' has no complex rule", das_op_toStr(pThis->nOp, NULL)
+		return daserr_falsef(DASERR_FORM,
+			"Operator '%s' has no complex rule", dasop_name(pThis->nOp, NULL)
 		);
 	}
 
-	if(!das_cplx_fromRect(pThis->uSysOut, aRes, aOut)) return false;
+	if(!dascplxsys_fromRect(pThis->uSysOut, aRes, aOut)) return false;
 
-	size_t uOut = das_vt_size(pOp->vtOut);
+	size_t uOut = dasvt_size(pOp->vtOut);
 	for(int i = 0; i < 2; ++i){
-		if(das_value_binXform(vtDouble, (const ubyte*)(aOut + i), NULL,
+		if(dasval_convert(DASVT_DOUBLE, (const uint8_t*)(aOut + i), NULL,
 		                      pOp->vtOut, pOutRun + i*uOut, NULL, 0) != DAS_OKAY)
 			return false;
 	}
@@ -490,8 +490,8 @@ static const DasBinOp_VTbl g_vtblCplx = { _DasBinOpCplx_apply, _DasBinOpCplx_rel
 static das_binop_stat _cplx_resolve(
 	const das_operand* pL, int nOp, const das_operand* pR, DasBinOp** ppOut
 ){
-	bool bLinL = !DasForm_isKind(pL->pForm, DAS_FORM_CPLX);
-	bool bLinR = !DasForm_isKind(pR->pForm, DAS_FORM_CPLX);
+	bool bLinL = !DasForm_isKind(pL->pForm, DASFORM_CPLX);
+	bool bLinR = !DasForm_isKind(pR->pForm, DASFORM_CPLX);
 
 	/* A promoted real must be a single number.  A rank-1 run of two plain
 	   numbers is two numbers -- linear claims no structure at all, so reading
@@ -511,53 +511,53 @@ static das_binop_stat _cplx_resolve(
 
 	/* Every component runs through a double on the way in and out, so a
 	   storage type that is not a number has nowhere to go.  Caught here rather
-	   than trusted to das_vt_merge(), which has a rule for vtTime that makes
+	   than trusted to dasvt_merge(), which has a rule for DASVT_TIME that makes
 	   sense for a calendar and none at all for a phase. */
-	if(!das_vt_isint(pL->vtElem)&&!das_vt_isreal(pL->vtElem))
+	if(!dasvt_isInt(pL->vtElem)&&!dasvt_isReal(pL->vtElem))
 		return REFUSE("Complex arithmetic needs numeric components, the left "
-		              "operand holds %s", das_vt_toStr(pL->vtElem));
-	if(!das_vt_isint(pR->vtElem)&&!das_vt_isreal(pR->vtElem))
+		              "operand holds %s", dasvt_name(pL->vtElem));
+	if(!dasvt_isInt(pR->vtElem)&&!dasvt_isReal(pR->vtElem))
 		return REFUSE("Complex arithmetic needs numeric components, the right "
-		              "operand holds %s", das_vt_toStr(pR->vtElem));
+		              "operand holds %s", dasvt_name(pR->vtElem));
 
-	ubyte uSysL = bLinL ? DAS_VSYS_RECT : DasFormCplx_sysType(pL->pForm);
-	ubyte uSysR = bLinR ? DAS_VSYS_RECT : DasFormCplx_sysType(pR->pForm);
+	uint8_t uSysL = bLinL ? DASCPLXSYS_RECT : DasFormCplx_sysId(pL->pForm);
+	uint8_t uSysR = bLinR ? DASCPLXSYS_RECT : DasFormCplx_sysId(pR->pForm);
 
 	/* The result wears the complex operand's representation, and the LEFT
 	   one's when both are complex.  Same rule form_vec.c follows for
 	   component systems: an answer in a representation neither operand used
 	   would surprise, and the left side names the result everywhere else. */
-	ubyte uSysOut = bLinL ? uSysR : uSysL;
+	uint8_t uSysOut = bLinL ? uSysR : uSysL;
 
 	double rRightScale = 1.0;
-	das_units unitsOut = NULL;
+	DasUnits unitsOut = NULL;
 
 	switch(nOp){
-	case D2BOP_ADD:
-	case D2BOP_SUB:
+	case DASOP_ADD:
+	case DASOP_SUB:
 		if(pL->units != pR->units){
-			if(!Units_canConvert(pR->units, pL->units))
+			if(!DasUnits_canConvert(pR->units, pL->units))
 				return REFUSE("Can not %s %s and %s, the units do not convert",
-					(nOp == D2BOP_ADD) ? "add" : "subtract",
-					Units_toStr(pL->units), Units_toStr(pR->units));
-			rRightScale = Units_convertTo(1.0, pR->units, pL->units);
+					(nOp == DASOP_ADD) ? "add" : "subtract",
+					DasUnits_toStr(pL->units), DasUnits_toStr(pR->units));
+			rRightScale = DasUnits_convert(1.0, pR->units, pL->units);
 		}
 		unitsOut = pL->units;
 		break;
 
-	case D2BOP_MUL:
-		unitsOut = Units_multiply(pL->units, pR->units);
+	case DASOP_MUL:
+		unitsOut = DasUnits_mul(pL->units, pR->units);
 		break;
 
-	case D2BOP_DIV:
-		unitsOut = Units_divide(pL->units, pR->units);
+	case DASOP_DIV:
+		unitsOut = DasUnits_div(pL->units, pR->units);
 		break;
 
 	default:
 		/* Not wrong, just unbuilt.  A complex power is a real operation with a
 		   branch cut to argue about, and nobody has needed one yet. */
 		return REFUSE("Operator '%s' is not implemented for complex numbers",
-		              das_op_toStr(nOp, NULL));
+		              dasop_name(nOp, NULL));
 	}
 
 	DasBinOpCplx* pRes = (DasBinOpCplx*)calloc(1, sizeof(DasBinOpCplx));
@@ -584,21 +584,21 @@ static das_binop_stat _cplx_resolve(
 	   real factor, and complex division divides.  Any of them and the result
 	   has to be wide enough to hold what apply() computed, which is why an
 	   integer pair divided by an integer pair does not come back as one. */
-	bool bWide = (uSysL == DAS_VSYS_POLAR)||(uSysR == DAS_VSYS_POLAR)||
-	             (uSysOut == DAS_VSYS_POLAR)||
-	             (rRightScale != 1.0)||(nOp == D2BOP_DIV);
+	bool bWide = (uSysL == DASCPLXSYS_POLAR)||(uSysR == DASCPLXSYS_POLAR)||
+	             (uSysOut == DASCPLXSYS_POLAR)||
+	             (rRightScale != 1.0)||(nOp == DASOP_DIV);
 
 	pRes->base.vtOut = bWide
-		? vtDouble
-		: das_vt_merge(pL->vtElem, nOp, pR->vtElem);
+		? DASVT_DOUBLE
+		: dasvt_merge(pL->vtElem, nOp, pR->vtElem);
 
-	/* vtNull: no combination.  vtUnknown: a type this math cannot handle */
-	if((pRes->base.vtOut == vtNull)||(pRes->base.vtOut == vtUnknown)){
+	/* DASVT_NULL: no combination.  DASVT_UNK: a type this math cannot handle */
+	if((pRes->base.vtOut == DASVT_NULL)||(pRes->base.vtOut == DASVT_UNK)){
 		del_DasForm(pRes->base.pForm);
 		free(pRes);
 		return REFUSE("No result type for %s %s %s",
-			das_vt_toStr(pL->vtElem), das_op_toStr(nOp, NULL),
-			das_vt_toStr(pR->vtElem));
+			dasvt_name(pL->vtElem), dasop_name(nOp, NULL),
+			dasvt_name(pR->vtElem));
 	}
 
 	*ppOut = &(pRes->base);
@@ -613,8 +613,8 @@ static das_binop_stat _DasFormCplx_binOpLeft(
 	   this file knows of.  A vector or a position on the right is DECLINED so
 	   the better informed side gets its turn, even though neither has a rule
 	   for us today; that is the mechanism working, not a gap. */
-	if(!DasForm_isKind(pR->pForm, DAS_FORM_CPLX) &&
-	   !DasForm_isKind(pR->pForm, DAS_FORM_LIN))
+	if(!DasForm_isKind(pR->pForm, DASFORM_CPLX) &&
+	   !DasForm_isKind(pR->pForm, DASFORM_LIN))
 		return dbsDecline;
 
 	return _cplx_resolve(pL, nOp, pR, ppOut);
@@ -628,12 +628,12 @@ static das_binop_stat _DasFormCplx_binOpRight(
 	const DasForm* pBase, const das_operand* pL, int nOp,
 	const das_operand* pR, DasBinOp** ppOut
 ){
-	if(!DasForm_isKind(pL->pForm, DAS_FORM_LIN)) return dbsDecline;
+	if(!DasForm_isKind(pL->pForm, DASFORM_LIN)) return dbsDecline;
 
 	return _cplx_resolve(pL, nOp, pR, ppOut);
 }
 
-const DasForm_VTbl das_form_cplx_vtbl = {
+const DasFormVTable DasFormCplx_vtable = {
 	"complex",
 	_new_DasFormCplx_empty,
 	_DasFormCplx_setParam,

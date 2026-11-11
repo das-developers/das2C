@@ -26,7 +26,7 @@
 /* Unit tests for descriptor property storage (das3/desc.h) and for
  * splitting property values into items (das3/prop.h).
  *
- * Item splitting: DasProp_items() and DasProp_extractItems() must agree,
+ * Item splitting: DasProp_numItems() and DasProp_toStrs() must agree,
  * because callers size their output buffers by the first and fill them with
  * the second.  The das2js metadata snapshot tripped over the one place they
  * disagreed: a single-valued property whose value is the empty string
@@ -58,24 +58,24 @@
 
 /* Set one property on a scratch descriptor and hand back a pointer to it. */
 static const DasProp* _set(
-	DasDesc* pDesc, ubyte uType, const char* sVal, char cSep, int nStandard
+	DasDesc* pDesc, uint8_t uType, const char* sVal, char cSep, int nStandard
 ){
 	if(DasDesc_flexSet(pDesc, NULL, uType, "p", sVal, cSep, NULL, nStandard) != DAS_OKAY)
 		return NULL;
-	return DasDesc_getProp(pDesc, "p");
+	return DasDesc_prop(pDesc, "p");
 }
 
-/* Every live property must fit its slot by its own reckoning.  DasDesc_setProp
+/* Every live property must fit its slot by its own reckoning.  DasDesc_copyProp
    copies DasProp_size() bytes out of the source slot, so a size larger than
    the slot reads past it.  Valgrind misses this unless the slot happens to be
    last in the array's allocation, so check the invariant directly. */
 static int _check_slots(DasDesc* pDesc)
 {
-	size_t uProps = DasAry_lengthIn(&(pDesc->properties), DIM0);
+	size_t uProps = DasAry_lengthIn(&(pDesc->properties), DAS_ADDR0);
 	for(size_t u = 0; u < uProps; ++u){
 		size_t uSlot = 0;
-		const DasProp* pProp = (const DasProp*)DasAry_getBuf(
-			&(pDesc->properties), vtUByte, DIM1_AT(u), &uSlot
+		const DasProp* pProp = (const DasProp*)DasAry_dataIn(
+			&(pDesc->properties), DASVT_UBYTE, DAS_ADDR1(u), &uSlot
 		);
 		if(DasProp_isValid(pProp))
 			CHECK(DasProp_size(pProp) <= uSlot);
@@ -93,7 +93,7 @@ static int _extract(const DasProp* pProp)
 {
 	memset(g_aItems, 0, sizeof(g_aItems));
 	for(int i = 0; i < MAX_ITEMS; ++i) g_psItems[i] = g_aItems[i];
-	return DasProp_extractItems(pProp, g_psItems, MAX_ITEMS, ITEM_LEN);
+	return DasProp_toStrs(pProp, g_psItems, MAX_ITEMS, ITEM_LEN);
 }
 
 static int test_single(DasDesc* pDesc)
@@ -103,7 +103,7 @@ static int test_single(DasDesc* pDesc)
 	/* The defect case: an empty single value is one empty item, not zero */
 	pProp = _set(pDesc, DASPROP_STRING|DASPROP_SINGLE, "", '\0', DASPROP_DAS3);
 	CHECK(pProp != NULL);
-	CHECK(DasProp_items(pProp) == 1);
+	CHECK(DasProp_numItems(pProp) == 1);
 	CHECK(_extract(pProp) == 1);
 	CHECK(g_aItems[0][0] == '\0');
 
@@ -111,21 +111,21 @@ static int test_single(DasDesc* pDesc)
 	pProp = _set(pDesc, DASPROP_STRING|DASPROP_SINGLE, "  ", '\0', DASPROP_DAS3);
 	CHECK(pProp != NULL);
 	CHECK(strlen(DasProp_value(pProp)) == 0);
-	CHECK(DasProp_items(pProp) == 1);
+	CHECK(DasProp_numItems(pProp) == 1);
 	CHECK(_extract(pProp) == 1);
 
 	/* das2 keeps the value verbatim; still one item */
 	pProp = _set(pDesc, DASPROP_STRING|DASPROP_SINGLE, " ", '\0', DASPROP_DAS2);
 	CHECK(pProp != NULL);
 	CHECK(strcmp(DasProp_value(pProp), " ") == 0);
-	CHECK(DasProp_items(pProp) == 1);
+	CHECK(DasProp_numItems(pProp) == 1);
 	CHECK(_extract(pProp) == 1);
 	CHECK(strcmp(g_aItems[0], " ") == 0);
 
 	/* The ordinary case, and the item is the whole value, separators included */
 	pProp = _set(pDesc, DASPROP_STRING|DASPROP_SINGLE, "a; b", '\0', DASPROP_DAS3);
 	CHECK(pProp != NULL);
-	CHECK(DasProp_items(pProp) == 1);
+	CHECK(DasProp_numItems(pProp) == 1);
 	CHECK(_extract(pProp) == 1);
 	CHECK(strcmp(g_aItems[0], "a; b") == 0);
 
@@ -133,10 +133,10 @@ static int test_single(DasDesc* pDesc)
 	int64_t nVal = 0;
 	pProp = _set(pDesc, DASPROP_INT|DASPROP_SINGLE, "", '\0', DASPROP_DAS3);
 	CHECK(pProp != NULL);
-	CHECK(DasProp_convertInt(pProp, &nVal, 1) < 0);
+	CHECK(DasProp_toInts(pProp, &nVal, 1) < 0);
 	pProp = _set(pDesc, DASPROP_INT|DASPROP_SINGLE, "42", '\0', DASPROP_DAS3);
 	CHECK(pProp != NULL);
-	CHECK(DasProp_convertInt(pProp, &nVal, 1) == 1);
+	CHECK(DasProp_toInts(pProp, &nVal, 1) == 1);
 	CHECK(nVal == 42);
 	return 0;
 }
@@ -147,7 +147,7 @@ static int test_range(DasDesc* pDesc)
 		pDesc, DASPROP_REAL|DASPROP_RANGE, "1.5 to 2.5", '\0', DASPROP_DAS3
 	);
 	CHECK(pProp != NULL);
-	CHECK(DasProp_items(pProp) == 2);
+	CHECK(DasProp_numItems(pProp) == 2);
 	CHECK(_extract(pProp) == 2);
 	CHECK(strcmp(g_aItems[0], "1.5") == 0);
 	CHECK(strcmp(g_aItems[1], "2.5") == 0);
@@ -161,20 +161,20 @@ static int test_set(DasDesc* pDesc)
 	/* Terminator semantics: a trailing separator adds no phantom item ... */
 	pProp = _set(pDesc, DASPROP_STRING|DASPROP_SET, "Bx;By;Bz;", ';', DASPROP_DAS3);
 	CHECK(pProp != NULL);
-	CHECK(DasProp_items(pProp) == 3);
+	CHECK(DasProp_numItems(pProp) == 3);
 	CHECK(_extract(pProp) == 3);
 	CHECK(strcmp(g_aItems[2], "Bz") == 0);
 
 	/* ... an unterminated last item still counts ... */
 	pProp = _set(pDesc, DASPROP_STRING|DASPROP_SET, "Bx;By;Bz", ';', DASPROP_DAS3);
 	CHECK(pProp != NULL);
-	CHECK(DasProp_items(pProp) == 3);
+	CHECK(DasProp_numItems(pProp) == 3);
 	CHECK(_extract(pProp) == 3);
 
 	/* ... and an empty item between two separators is a real (empty) item */
 	pProp = _set(pDesc, DASPROP_STRING|DASPROP_SET, "a;;c", ';', DASPROP_DAS3);
 	CHECK(pProp != NULL);
-	CHECK(DasProp_items(pProp) == 3);
+	CHECK(DasProp_numItems(pProp) == 3);
 	CHECK(_extract(pProp) == 3);
 	CHECK(g_aItems[1][0] == '\0');
 	CHECK(strcmp(g_aItems[2], "c") == 0);
@@ -182,26 +182,26 @@ static int test_set(DasDesc* pDesc)
 	/* An empty set has no items at all, whichever separator it was given */
 	pProp = _set(pDesc, DASPROP_STRING|DASPROP_SET, "", ';', DASPROP_DAS3);
 	CHECK(pProp != NULL);
-	CHECK(DasProp_items(pProp) == 0);
+	CHECK(DasProp_numItems(pProp) == 0);
 	CHECK(_extract(pProp) == 0);
 	pProp = _set(pDesc, DASPROP_STRING|DASPROP_SET, "", '\0', DASPROP_DAS3);
 	CHECK(pProp != NULL);
-	CHECK(DasProp_items(pProp) == 0);
+	CHECK(DasProp_numItems(pProp) == 0);
 	CHECK(_extract(pProp) == 0);
 
 	/* Whitespace splitting: runs of blanks of any kind are one separator and
 	   the ends are ignored, whether the separator was given as a space ... */
 	pProp = _set(pDesc, DASPROP_INT|DASPROP_SET, "  1 2\t\t3  ", ' ', DASPROP_DAS3);
 	CHECK(pProp != NULL);
-	CHECK(DasProp_items(pProp) == 3);
+	CHECK(DasProp_numItems(pProp) == 3);
 	int64_t aVals[4] = {0};
-	CHECK(DasProp_convertInt(pProp, aVals, 4) == 3);
+	CHECK(DasProp_toInts(pProp, aVals, 4) == 3);
 	CHECK((aVals[0] == 1) && (aVals[1] == 2) && (aVals[2] == 3));
 
 	/* ... or left for the library to pick (it finds the tab first) */
 	pProp = _set(pDesc, DASPROP_STRING|DASPROP_SET, "x\ty  z", '\0', DASPROP_DAS3);
 	CHECK(pProp != NULL);
-	CHECK(DasProp_items(pProp) == 3);
+	CHECK(DasProp_numItems(pProp) == 3);
 	CHECK(_extract(pProp) == 3);
 	CHECK(strcmp(g_aItems[0], "x") == 0);
 	CHECK(strcmp(g_aItems[1], "y") == 0);
@@ -216,7 +216,7 @@ static int test_overwrite(void)
 {
 	DasDesc desc;
 	memset(&desc, 0, sizeof(desc));
-	DasDesc_init(&desc, DASDESC_UNK, NULL);
+	DasDesc_init(&desc, DASDESCTYPE_UNK, NULL);
 
 	const char* psVals[] = {
 		"", "a longer value that needs a bigger slot", "x",
@@ -224,33 +224,33 @@ static int test_overwrite(void)
 		"medium length value"
 	};
 	for(size_t u = 0; u < sizeof(psVals)/sizeof(psVals[0]); ++u){
-		CHECK(DasDesc_setStr(&desc, "p", psVals[u]) == DAS_OKAY);
-		CHECK(DasDesc_getStr(&desc, "p") != NULL);
-		CHECK(strcmp(DasDesc_getStr(&desc, "p"), psVals[u]) == 0);
+		CHECK(DasDesc_setVal(&desc, "p", psVals[u]) == DAS_OKAY);
+		CHECK(DasDesc_val(&desc, "p") != NULL);
+		CHECK(strcmp(DasDesc_val(&desc, "p"), psVals[u]) == 0);
 	}
 
 	/* A second name must not be confused with the retired slots of the first */
-	CHECK(DasDesc_setStr(&desc, "q", "other") == DAS_OKAY);
-	CHECK(strcmp(DasDesc_getStr(&desc, "p"), "medium length value") == 0);
-	CHECK(strcmp(DasDesc_getStr(&desc, "q"), "other") == 0);
+	CHECK(DasDesc_setVal(&desc, "q", "other") == DAS_OKAY);
+	CHECK(strcmp(DasDesc_val(&desc, "p"), "medium length value") == 0);
+	CHECK(strcmp(DasDesc_val(&desc, "q"), "other") == 0);
 
 	/* Removal retires the live slot, not some earlier retired one */
-	CHECK(DasDesc_remove(&desc, "p"));
-	CHECK(DasDesc_getStr(&desc, "p") == NULL);
-	CHECK(!DasDesc_remove(&desc, "p"));
-	CHECK(strcmp(DasDesc_getStr(&desc, "q"), "other") == 0);
+	CHECK(DasDesc_rmProp(&desc, "p"));
+	CHECK(DasDesc_val(&desc, "p") == NULL);
+	CHECK(!DasDesc_rmProp(&desc, "p"));
+	CHECK(strcmp(DasDesc_val(&desc, "q"), "other") == 0);
 
 	/* copyIn with a value that outgrows the slot it replaces must keep it */
 	DasDesc src;
 	memset(&src, 0, sizeof(src));
-	DasDesc_init(&src, DASDESC_UNK, NULL);
-	CHECK(DasDesc_setStr(&src, "q", "a replacement much longer than 'other'") == DAS_OKAY);
-	CHECK(DasDesc_setStr(&src, "r", "new") == DAS_OKAY);
+	DasDesc_init(&src, DASDESCTYPE_UNK, NULL);
+	CHECK(DasDesc_setVal(&src, "q", "a replacement much longer than 'other'") == DAS_OKAY);
+	CHECK(DasDesc_setVal(&src, "r", "new") == DAS_OKAY);
 	DasDesc_copyIn(&desc, &src);
-	CHECK(DasDesc_getStr(&desc, "q") != NULL);
-	CHECK(strcmp(DasDesc_getStr(&desc, "q"), "a replacement much longer than 'other'") == 0);
-	CHECK(strcmp(DasDesc_getStr(&desc, "r"), "new") == 0);
-	CHECK(DasDesc_getStr(&desc, "p") == NULL);   /* still removed */
+	CHECK(DasDesc_val(&desc, "q") != NULL);
+	CHECK(strcmp(DasDesc_val(&desc, "q"), "a replacement much longer than 'other'") == 0);
+	CHECK(strcmp(DasDesc_val(&desc, "r"), "new") == 0);
+	CHECK(DasDesc_val(&desc, "p") == NULL);   /* still removed */
 	CHECK(_check_slots(&src) == 0);    /* "r" = "new" is smaller than a DasProp */
 	CHECK(_check_slots(&desc) == 0);
 
@@ -267,7 +267,7 @@ static int test_limits(void)
 {
 	DasDesc desc;
 	memset(&desc, 0, sizeof(desc));
-	DasDesc_init(&desc, DASDESC_UNK, NULL);
+	DasDesc_init(&desc, DASDESCTYPE_UNK, NULL);
 
 	enum { NMAX = 126, VMAX = 130943 };
 	char sName[NMAX + 2];
@@ -278,29 +278,29 @@ static int test_limits(void)
 	memset(sVal, 'v', VMAX + 1);
 	sVal[VMAX + 1] = '\0';
 
-	CHECK(DasDesc_setStr(&desc, sName, "x") != DAS_OKAY);   /* name one too long */
+	CHECK(DasDesc_setVal(&desc, sName, "x") != DAS_OKAY);   /* name one too long */
 	sName[NMAX] = '\0';
-	CHECK(DasDesc_setStr(&desc, "big", sVal) != DAS_OKAY);  /* value one too long */
+	CHECK(DasDesc_setVal(&desc, "big", sVal) != DAS_OKAY);  /* value one too long */
 	sVal[VMAX] = '\0';
 
 	/* No standard allows a nameless property, not even loose das1 */
 	for(int nStd = DASPROP_DAS1; nStd <= DASPROP_DAS3; ++nStd)
 		CHECK(DasDesc_flexSet(&desc, "string", 0, "", "x", 0, NULL, nStd) != DAS_OKAY);
-	CHECK(DasDesc_getProp(&desc, "") == NULL);
+	CHECK(DasDesc_prop(&desc, "") == NULL);
 
-	CHECK(DasDesc_setStr(&desc, sName, sVal) == DAS_OKAY);
-	const DasProp* pProp = DasDesc_getProp(&desc, sName);
+	CHECK(DasDesc_setVal(&desc, sName, sVal) == DAS_OKAY);
+	const DasProp* pProp = DasDesc_prop(&desc, sName);
 	CHECK(pProp != NULL);
 	CHECK(strcmp(DasProp_name(pProp), sName) == 0);
 	CHECK(strlen(DasProp_value(pProp)) == VMAX);
-	/* das_units is a pointer: 4 bytes on wasm32, 8 on 64-bit hosts */
-	CHECK(DasProp_size(pProp) == sizeof(uint64_t) + sizeof(das_units) + NMAX + 1 + VMAX + 1);
+	/* DasUnits is a pointer: 4 bytes on wasm32, 8 on 64-bit hosts */
+	CHECK(DasProp_size(pProp) == sizeof(uint64_t) + sizeof(DasUnits) + NMAX + 1 + VMAX + 1);
 
 	/* The published limits are the ones just tested */
-	CHECK(daslimit_get("max_prop_name_bytes") != NULL);
-	CHECK(daslimit_get("max_prop_name_bytes")->nLimit == NMAX);
-	CHECK(daslimit_get("max_prop_value_bytes") != NULL);
-	CHECK(daslimit_get("max_prop_value_bytes")->nLimit == VMAX);
+	CHECK(DasLimit_lookup("max_prop_name_bytes") != NULL);
+	CHECK(DasLimit_lookup("max_prop_name_bytes")->value == NMAX);
+	CHECK(DasLimit_lookup("max_prop_value_bytes") != NULL);
+	CHECK(DasLimit_lookup("max_prop_value_bytes")->value == VMAX);
 
 	free(sVal);
 	DasDesc_freeProps(&desc);
@@ -313,22 +313,22 @@ static int test_limits(void)
 static int test_daslimit(void)
 {
 	size_t uCount = 0;
-	const das_limit* pLimit;
-	for(pLimit = daslimit_getNext(NULL); pLimit != NULL; pLimit = daslimit_getNext(pLimit)){
-		CHECK(pLimit->sName != NULL && pLimit->sName[0] != '\0');
-		CHECK(pLimit->nLimit > 0);
-		CHECK(daslimit_get(pLimit->sName) == pLimit);   /* also proves uniqueness */
+	const DasLimit* pLimit;
+	for(pLimit = DasLimit_next(NULL); pLimit != NULL; pLimit = DasLimit_next(pLimit)){
+		CHECK(pLimit->name != NULL && pLimit->name[0] != '\0');
+		CHECK(pLimit->value > 0);
+		CHECK(DasLimit_lookup(pLimit->name) == pLimit);   /* also proves uniqueness */
 		CHECK(++uCount < 1000);                           /* the walk ends */
 	}
 	CHECK(uCount >= 8);
 
-	CHECK(daslimit_get(NULL) == NULL);
-	CHECK(daslimit_get("no_such_limit") == NULL);
-	CHECK(daslimit_get("max_dataset_rank")->nLimit == VARIDX_MAX);
+	CHECK(DasLimit_lookup(NULL) == NULL);
+	CHECK(DasLimit_lookup("no_such_limit") == NULL);
+	CHECK(DasLimit_lookup("max_dataset_rank")->value == DASIDX_MAX);
 
 	/* A copy is not an entry, stepping from it must not walk off */
-	das_limit copy = *daslimit_getNext(NULL);
-	CHECK(daslimit_getNext(&copy) == NULL);
+	DasLimit copy = *DasLimit_next(NULL);
+	CHECK(DasLimit_next(&copy) == NULL);
 	return 0;
 }
 
@@ -341,36 +341,36 @@ static int test_refused(void)
 {
 	DasDesc desc;
 	memset(&desc, 0, sizeof(desc));
-	DasDesc_init(&desc, DASDESC_UNK, NULL);
+	DasDesc_init(&desc, DASDESCTYPE_UNK, NULL);
 
-	CHECK(DasDesc_setStr(&desc, "p", "short") == DAS_OKAY);
-	size_t uSlots = DasAry_lengthIn(&(desc.properties), DIM0);   /* raw slots, live or not */
+	CHECK(DasDesc_setVal(&desc, "p", "short") == DAS_OKAY);
+	size_t uSlots = DasAry_lengthIn(&(desc.properties), DAS_ADDR0);   /* raw slots, live or not */
 
 	/* Replace that would outgrow the slot: not a range, so refused */
 	CHECK(DasDesc_flexSet(&desc, "realrange", 0, "p",
 		"a value much longer than short, and not a range", 0, NULL, DASPROP_DAS2
 	) != DAS_OKAY);
-	CHECK(DasDesc_getStr(&desc, "p") != NULL);
-	CHECK(strcmp(DasDesc_getStr(&desc, "p"), "short") == 0);
-	CHECK(DasAry_lengthIn(&(desc.properties), DIM0) == uSlots);
+	CHECK(DasDesc_val(&desc, "p") != NULL);
+	CHECK(strcmp(DasDesc_val(&desc, "p"), "short") == 0);
+	CHECK(DasAry_lengthIn(&(desc.properties), DAS_ADDR0) == uSlots);
 
 	/* Replace that would fit in place, also refused */
 	CHECK(DasDesc_flexSet(&desc, "realrange", 0, "p", "x", 0, NULL, DASPROP_DAS2) != DAS_OKAY);
-	CHECK(strcmp(DasDesc_getStr(&desc, "p"), "short") == 0);
-	CHECK(DasAry_lengthIn(&(desc.properties), DIM0) == uSlots);
+	CHECK(strcmp(DasDesc_val(&desc, "p"), "short") == 0);
+	CHECK(DasAry_lengthIn(&(desc.properties), DAS_ADDR0) == uSlots);
 
 	/* New names refused for several reasons, none may take a slot */
 	CHECK(DasDesc_flexSet(&desc, "string", 0, "bad name", "x", 0, NULL, DASPROP_DAS2) != DAS_OKAY);
 	CHECK(DasDesc_flexSet(&desc, "nosuchtype", 0, "q", "x", 0, NULL, DASPROP_DAS2) != DAS_OKAY);
 	CHECK(DasDesc_flexSet(&desc, NULL, 0, "q", "x", 0, NULL, DASPROP_DAS3) != DAS_OKAY);
 	CHECK(DasDesc_flexSet(&desc, "string", 0, NULL, "x", 0, NULL, DASPROP_DAS2) != DAS_OKAY);
-	CHECK(DasAry_lengthIn(&(desc.properties), DIM0) == uSlots);
-	CHECK(DasDesc_getProp(&desc, "q") == NULL);
+	CHECK(DasAry_lengthIn(&(desc.properties), DAS_ADDR0) == uSlots);
+	CHECK(DasDesc_prop(&desc, "q") == NULL);
 
 	/* Later sets still work and still find the right slots */
-	CHECK(DasDesc_setStr(&desc, "q", "fine") == DAS_OKAY);
-	CHECK(strcmp(DasDesc_getStr(&desc, "p"), "short") == 0);
-	CHECK(strcmp(DasDesc_getStr(&desc, "q"), "fine") == 0);
+	CHECK(DasDesc_setVal(&desc, "q", "fine") == DAS_OKAY);
+	CHECK(strcmp(DasDesc_val(&desc, "p"), "short") == 0);
+	CHECK(strcmp(DasDesc_val(&desc, "q"), "fine") == 0);
 	CHECK(_check_slots(&desc) == 0);
 	DasDesc_freeProps(&desc);
 
@@ -380,12 +380,12 @@ static int test_refused(void)
 	DasDesc* pHeap = new_DasDesc();
 	DasDesc* aDesc[2] = {&desc, pHeap};
 	memset(&desc, 0, sizeof(desc));
-	DasDesc_init(&desc, DASDESC_UNK, NULL);
+	DasDesc_init(&desc, DASDESCTYPE_UNK, NULL);
 	for(int i = 0; i < 2; ++i){
 		CHECK(DasAry_append(&(aDesc[i]->properties), NULL, 32) != NULL);
 		size_t uLen = 0;
-		const ubyte* pSlot = DasAry_getBuf(
-			&(aDesc[i]->properties), vtUByte, DIM1_AT(0), &uLen
+		const uint8_t* pSlot = DasAry_dataIn(
+			&(aDesc[i]->properties), DASVT_UBYTE, DAS_ADDR1(0), &uLen
 		);
 		CHECK(uLen == 32);
 		for(size_t u = 0; u < uLen; ++u) CHECK(pSlot[u] == 0);
@@ -403,91 +403,91 @@ static int test_alias(void)
 {
 	DasDesc desc;
 	memset(&desc, 0, sizeof(desc));
-	DasDesc_init(&desc, DASDESC_UNK, NULL);
+	DasDesc_init(&desc, DASDESCTYPE_UNK, NULL);
 
 	char sBig[2000];
 	memset(sBig, 'a', sizeof(sBig) - 1);
 	sBig[sizeof(sBig) - 1] = '\0';
-	CHECK(DasDesc_setStr(&desc, "a", sBig) == DAS_OKAY);
+	CHECK(DasDesc_setVal(&desc, "a", sBig) == DAS_OKAY);
 
 	char sName[16];
 	for(int i = 0; i < 64; ++i){
 		snprintf(sName, sizeof(sName), "b%d", i);
-		CHECK(DasDesc_setStr(&desc, sName, DasDesc_getStr(&desc, "a")) == DAS_OKAY);
+		CHECK(DasDesc_setVal(&desc, sName, DasDesc_val(&desc, "a")) == DAS_OKAY);
 	}
-	CHECK(strcmp(DasDesc_getStr(&desc, "b63"), sBig) == 0);
+	CHECK(strcmp(DasDesc_val(&desc, "b63"), sBig) == 0);
 
 	/* Name from the storage, value that outgrows its slot */
-	const char* sOwnName = DasDesc_getNameByIdx(&desc, 1);   /* "b0" */
-	CHECK(DasDesc_setStr(&desc, sOwnName, sBig + 1000) == DAS_OKAY);
-	CHECK(strcmp(DasDesc_getStr(&desc, "b0"), sBig + 1000) == 0);
+	const char* sOwnName = DasDesc_propNameAt(&desc, 1);   /* "b0" */
+	CHECK(DasDesc_setVal(&desc, sOwnName, sBig + 1000) == DAS_OKAY);
+	CHECK(strcmp(DasDesc_val(&desc, "b0"), sBig + 1000) == 0);
 
 	/* A property set onto itself, and onto a descriptor that has it */
-	const DasProp* pProp = DasDesc_getProp(&desc, "a");
-	CHECK(DasDesc_setProp(&desc, pProp) == DAS_OKAY);
-	CHECK(strcmp(DasDesc_getStr(&desc, "a"), sBig) == 0);
+	const DasProp* pProp = DasDesc_prop(&desc, "a");
+	CHECK(DasDesc_copyProp(&desc, pProp) == DAS_OKAY);
+	CHECK(strcmp(DasDesc_val(&desc, "a"), sBig) == 0);
 
 	CHECK(_check_slots(&desc) == 0);
 	DasDesc_freeProps(&desc);
 	return 0;
 }
 
-/* DasDesc_length() and the by-index getters count live properties only.
+/* DasDesc_numProps() and the by-index getters count live properties only.
    Replaced and removed values stay behind as retired slots, which an index
    walk must never see, and equality must not depend on them. */
 static int test_live_index(void)
 {
 	DasDesc desc;
 	memset(&desc, 0, sizeof(desc));
-	DasDesc_init(&desc, DASDESC_UNK, NULL);
+	DasDesc_init(&desc, DASDESCTYPE_UNK, NULL);
 
-	CHECK(DasDesc_setStr(&desc, "a", "1") == DAS_OKAY);
-	CHECK(DasDesc_setStr(&desc, "b", "2") == DAS_OKAY);
-	CHECK(DasDesc_setStr(&desc, "c", "3") == DAS_OKAY);
-	CHECK(DasDesc_length(&desc) == 3);
+	CHECK(DasDesc_setVal(&desc, "a", "1") == DAS_OKAY);
+	CHECK(DasDesc_setVal(&desc, "b", "2") == DAS_OKAY);
+	CHECK(DasDesc_setVal(&desc, "c", "3") == DAS_OKAY);
+	CHECK(DasDesc_numProps(&desc) == 3);
 
 	/* Grow "a" past its slot (retires one) and remove "b" (retires another) */
-	CHECK(DasDesc_setStr(&desc, "a", "a value longer than the first slot") == DAS_OKAY);
-	CHECK(DasDesc_remove(&desc, "b"));
-	CHECK(DasDesc_length(&desc) == 2);
+	CHECK(DasDesc_setVal(&desc, "a", "a value longer than the first slot") == DAS_OKAY);
+	CHECK(DasDesc_rmProp(&desc, "b"));
+	CHECK(DasDesc_numProps(&desc) == 2);
 
 	/* Slot order is c, then the new a */
-	CHECK(strcmp(DasDesc_getNameByIdx(&desc, 0), "c") == 0);
-	CHECK(strcmp(DasDesc_getValByIdx(&desc, 0), "3") == 0);
-	CHECK(strcmp(DasDesc_getNameByIdx(&desc, 1), "a") == 0);
-	CHECK(strcmp(DasDesc_getValByIdx(&desc, 1), "a value longer than the first slot") == 0);
-	CHECK(DasDesc_getTypeByIdx(&desc, 1) != NULL);
+	CHECK(strcmp(DasDesc_propNameAt(&desc, 0), "c") == 0);
+	CHECK(strcmp(DasDesc_valAt(&desc, 0), "3") == 0);
+	CHECK(strcmp(DasDesc_propNameAt(&desc, 1), "a") == 0);
+	CHECK(strcmp(DasDesc_valAt(&desc, 1), "a value longer than the first slot") == 0);
+	CHECK(DasDesc_propTypeAt(&desc, 1) != NULL);
 	CHECK(DasDesc_getTypeByIdx3(&desc, 1) != NULL);
-	CHECK(DasDesc_getPropByIdx(&desc, 1) == DasDesc_getProp(&desc, "a"));
-	CHECK(DasDesc_getNameByIdx(&desc, 2) == NULL);
-	CHECK(DasDesc_getValByIdx(&desc, 2) == NULL);
-	CHECK(DasDesc_getTypeByIdx(&desc, 2) == NULL);
-	CHECK(DasDesc_getPropByIdx(&desc, 2) == NULL);
+	CHECK(DasDesc_propAt(&desc, 1) == DasDesc_prop(&desc, "a"));
+	CHECK(DasDesc_propNameAt(&desc, 2) == NULL);
+	CHECK(DasDesc_valAt(&desc, 2) == NULL);
+	CHECK(DasDesc_propTypeAt(&desc, 2) == NULL);
+	CHECK(DasDesc_propAt(&desc, 2) == NULL);
 
 	/* Same live properties with no history compare equal, both ways */
 	DasDesc other;
 	memset(&other, 0, sizeof(other));
-	DasDesc_init(&other, DASDESC_UNK, NULL);
-	CHECK(DasDesc_setStr(&other, "a", "a value longer than the first slot") == DAS_OKAY);
-	CHECK(DasDesc_setStr(&other, "c", "3") == DAS_OKAY);
-	CHECK(DasDesc_equals(&desc, &other));
-	CHECK(DasDesc_equals(&other, &desc));
-	CHECK(DasDesc_setStr(&other, "d", "4") == DAS_OKAY);
-	CHECK(!DasDesc_equals(&desc, &other));
+	DasDesc_init(&other, DASDESCTYPE_UNK, NULL);
+	CHECK(DasDesc_setVal(&other, "a", "a value longer than the first slot") == DAS_OKAY);
+	CHECK(DasDesc_setVal(&other, "c", "3") == DAS_OKAY);
+	CHECK(DasDesc_isEqual(&desc, &other));
+	CHECK(DasDesc_isEqual(&other, &desc));
+	CHECK(DasDesc_setVal(&other, "d", "4") == DAS_OKAY);
+	CHECK(!DasDesc_isEqual(&desc, &other));
 	DasDesc_freeProps(&other);
 
 	/* Remove everything: nothing to iterate, nothing to encode */
-	CHECK(DasDesc_remove(&desc, "a"));
-	CHECK(DasDesc_remove(&desc, "c"));
-	CHECK(DasDesc_length(&desc) == 0);
-	CHECK(DasDesc_getNameByIdx(&desc, 0) == NULL);
+	CHECK(DasDesc_rmProp(&desc, "a"));
+	CHECK(DasDesc_rmProp(&desc, "c"));
+	CHECK(DasDesc_numProps(&desc) == 0);
+	CHECK(DasDesc_propNameAt(&desc, 0) == NULL);
 
 	/* Clearing resets the count along with the slots */
 	DasDesc_clearProps(&desc);
-	CHECK(DasDesc_length(&desc) == 0);
-	CHECK(DasDesc_setStr(&desc, "z", "26") == DAS_OKAY);
-	CHECK(DasDesc_length(&desc) == 1);
-	CHECK(strcmp(DasDesc_getNameByIdx(&desc, 0), "z") == 0);
+	CHECK(DasDesc_numProps(&desc) == 0);
+	CHECK(DasDesc_setVal(&desc, "z", "26") == DAS_OKAY);
+	CHECK(DasDesc_numProps(&desc) == 1);
+	CHECK(strcmp(DasDesc_propNameAt(&desc, 0), "z") == 0);
 
 	DasDesc_freeProps(&desc);
 	return 0;
@@ -495,17 +495,17 @@ static int test_live_index(void)
 
 /* One x plane and one two-channel yscan with a y-tag list.  Both packets
    built here get the same default y-tag encoding, so the compare in
-   DasPkt_equalFormat() gets as far as the y-tag arrays. */
+   DasPkt_isSameFmt() gets as far as the y-tag arrays. */
 static DasPkt* _mk_scan_pkt(void)
 {
 	static const double aTags[2] = {1.0, 2.0};
 	DasPkt* pPkt = new_DasPkt();
 	DasPkt_addPlane(pPkt, new_DasPlane(
-		DASPLANE_X, "", new_DasEnc(DAS2DT_LE_REAL, 8, NULL), UNIT_US2000
+		DASPLANETYPE_X, "", new_DasEnc(DAS2DT_LE_REAL, 8, NULL), DASUNITS_US2000
 	));
 	DasPkt_addPlane(pPkt, new_DasPlane_yscan(
-		"amp", new_DasEnc(DAS2DT_LE_REAL, 4, NULL), UNIT_DIMENSIONLESS, 2,
-		NULL, aTags, UNIT_HERTZ
+		"amp", new_DasEnc(DAS2DT_LE_REAL, 4, NULL), DASUNITS_DIMENSIONLESS, 2,
+		NULL, aTags, DASUNITS_HERTZ
 	));
 	return pPkt;
 }
@@ -513,16 +513,16 @@ static DasPkt* _mk_scan_pkt(void)
 /* DasPlane_setYTagSeq() turns a list yscan into an interval one by freeing
    the y-tag array but keeps the y encoding.  Compared against a plain list
    plane it passes the encoding check and leaves one y-tag pointer NULL,
-   which DasPkt_equalFormat() once read through in either argument order. */
+   which DasPkt_isSameFmt() once read through in either argument order. */
 static int test_pkt_ytag_style(void)
 {
 	DasPkt* pList = _mk_scan_pkt();
 	DasPkt* pSeq  = _mk_scan_pkt();
-	CHECK(DasPkt_equalFormat(pList, pSeq));
+	CHECK(DasPkt_isSameFmt(pList, pSeq));
 
-	DasPlane_setYTagSeq(DasPkt_getPlane(pSeq, 1), 1.0, 0.0, DAS_FILL_VALUE);
-	CHECK(!DasPkt_equalFormat(pList, pSeq));
-	CHECK(!DasPkt_equalFormat(pSeq, pList));
+	DasPlane_setYTagSeq(DasPkt_planeAt(pSeq, 1), 1.0, 0.0, DASVAL_FILL);
+	CHECK(!DasPkt_isSameFmt(pList, pSeq));
+	CHECK(!DasPkt_isSameFmt(pSeq, pList));
 
 	del_DasDesc((DasDesc*)pList);
 	del_DasDesc((DasDesc*)pSeq);
@@ -543,53 +543,53 @@ static int test_stream_ids(void)
 
 	/* IDs past the das2 range are fine on a stream */
 	CHECK(DasStream_addDesc(pSd, (DasDesc*)pA, 800) == DAS_OKAY);
-	CHECK(DasStream_getDesc(pSd, 800) == (DasDesc*)pA);
-	CHECK(DasStream_getPktId(pSd, (DasDesc*)pA) == 800);
+	CHECK(DasStream_desc(pSd, 800) == (DasDesc*)pA);
+	CHECK(DasStream_pktId(pSd, (DasDesc*)pA) == 800);
 
 	/* A second dataset on the same ID becomes active, the first stays */
 	CHECK(DasStream_addDesc(pSd, (DasDesc*)pB, 800) == DAS_OKAY);
-	CHECK(DasStream_getDesc(pSd, 800) == (DasDesc*)pB);
+	CHECK(DasStream_desc(pSd, 800) == (DasDesc*)pB);
 	CHECK(DasStream_isDescActive(pSd, (DasDesc*)pB));
 	CHECK(!DasStream_isDescActive(pSd, (DasDesc*)pA));
-	CHECK(DasStream_getPktId(pSd, (DasDesc*)pA) == 800);
-	CHECK(DasStream_numDesc(pSd, DASDESC_DS) == 2);
+	CHECK(DasStream_pktId(pSd, (DasDesc*)pA) == 800);
+	CHECK(DasStream_numDesc(pSd, DASDESCTYPE_DS) == 2);
 	CHECK(DasStream_addDesc(pSd, (DasDesc*)pA, 801) != DAS_OKAY);  /* already attached */
 
 	/* das2 packets never share an ID, in either direction */
 	CHECK(DasStream_addDesc(pSd, (DasDesc*)pP, 800) != DAS_OKAY);
 	CHECK(DasStream_addDesc(pSd, (DasDesc*)pP, 7) == DAS_OKAY);
 	CHECK(DasStream_addDesc(pSd, (DasDesc*)pNever, 7) != DAS_OKAY);
-	CHECK(DasStream_getPkt(pSd, 7) == pP);
-	CHECK(DasStream_getPkt(pSd, 800) == NULL);
+	CHECK(DasStream_pkt(pSd, 7) == pP);
+	CHECK(DasStream_pkt(pSd, 800) == NULL);
 	CHECK(DasStream_isDescActive(pSd, (DasDesc*)pP));
 
 	/* Walk in attach order, with and without a type filter */
-	CHECK(DasStream_nextDesc(pSd, NULL, DASDESC_UNK) == (DasDesc*)pA);
-	CHECK(DasStream_nextDesc(pSd, (DasDesc*)pA, DASDESC_UNK) == (DasDesc*)pB);
-	CHECK(DasStream_nextDesc(pSd, (DasDesc*)pB, DASDESC_UNK) == (DasDesc*)pP);
-	CHECK(DasStream_nextDesc(pSd, (DasDesc*)pP, DASDESC_UNK) == NULL);
-	CHECK(DasStream_nextDesc(pSd, NULL, DASDESC_PKT) == (DasDesc*)pP);
-	CHECK(DasStream_nextDesc(pSd, (DasDesc*)pA, DASDESC_DS) == (DasDesc*)pB);
-	CHECK(DasStream_nextDesc(pSd, (DasDesc*)pB, DASDESC_DS) == NULL);
-	CHECK(DasStream_numDesc(pSd, DASDESC_PKT) == 1);
-	CHECK(DasStream_numDesc(pSd, DASDESC_UNK) == 3);
+	CHECK(DasStream_nextDesc(pSd, NULL, DASDESCTYPE_UNK) == (DasDesc*)pA);
+	CHECK(DasStream_nextDesc(pSd, (DasDesc*)pA, DASDESCTYPE_UNK) == (DasDesc*)pB);
+	CHECK(DasStream_nextDesc(pSd, (DasDesc*)pB, DASDESCTYPE_UNK) == (DasDesc*)pP);
+	CHECK(DasStream_nextDesc(pSd, (DasDesc*)pP, DASDESCTYPE_UNK) == NULL);
+	CHECK(DasStream_nextDesc(pSd, NULL, DASDESCTYPE_PKT) == (DasDesc*)pP);
+	CHECK(DasStream_nextDesc(pSd, (DasDesc*)pA, DASDESCTYPE_DS) == (DasDesc*)pB);
+	CHECK(DasStream_nextDesc(pSd, (DasDesc*)pB, DASDESCTYPE_DS) == NULL);
+	CHECK(DasStream_numDesc(pSd, DASDESCTYPE_PKT) == 1);
+	CHECK(DasStream_numDesc(pSd, DASDESCTYPE_UNK) == 3);
 
 	/* Freeing the active one pops back to the previous */
 	CHECK(DasStream_freeDesc(pSd, (DasDesc*)pB) == DAS_OKAY);
-	CHECK(DasStream_getDesc(pSd, 800) == (DasDesc*)pA);
+	CHECK(DasStream_desc(pSd, 800) == (DasDesc*)pA);
 	CHECK(DasStream_isDescActive(pSd, (DasDesc*)pA));
 
 	/* Unattached pointers are errors, not crashes */
 	CHECK(DasStream_freeDesc(pSd, (DasDesc*)pNever) != DAS_OKAY);
-	CHECK(DasStream_nextDesc(pSd, (DasDesc*)pNever, DASDESC_UNK) == NULL);
-	CHECK(DasStream_getPktId(pSd, (DasDesc*)pNever) == -1);
+	CHECK(DasStream_nextDesc(pSd, (DasDesc*)pNever, DASDESCTYPE_UNK) == NULL);
+	CHECK(DasStream_pktId(pSd, (DasDesc*)pNever) == -1);
 	CHECK(!DasStream_isDescActive(pSd, (DasDesc*)pNever));
 
 	/* Range: an unused legal ID is a quiet NULL, an illegal one an error */
-	CHECK(DasStream_getDesc(pSd, DAS3_MAX_PKTIDS - 1) == NULL);
-	CHECK(DasStream_getDesc(pSd, 0) == NULL);
-	CHECK(DasStream_getDesc(pSd, DAS3_MAX_PKTIDS) == NULL);
-	CHECK(DasStream_addDesc(pSd, (DasDesc*)pNever, DAS3_MAX_PKTIDS) != DAS_OKAY);
+	CHECK(DasStream_desc(pSd, DASSTREAM_V3_ENDPKTID - 1) == NULL);
+	CHECK(DasStream_desc(pSd, 0) == NULL);
+	CHECK(DasStream_desc(pSd, DASSTREAM_V3_ENDPKTID) == NULL);
+	CHECK(DasStream_addDesc(pSd, (DasDesc*)pNever, DASSTREAM_V3_ENDPKTID) != DAS_OKAY);
 	CHECK(DasStream_addDesc(pSd, (DasDesc*)pNever, 0) != DAS_OKAY);
 
 	/* Grow past the inline list, nothing moves */
@@ -598,15 +598,15 @@ static int test_stream_ids(void)
 		snprintf(sId, sizeof(sId), "grow%d", i);
 		CHECK(DasStream_addDesc(pSd, (DasDesc*)new_DasDs(sId, "grow", 1), 1000 + i) == DAS_OKAY);
 	}
-	CHECK(DasStream_numDesc(pSd, DASDESC_DS) == 41);
-	CHECK(DasStream_getPktId(pSd, DasStream_getDesc(pSd, 1039)) == 1039);
-	CHECK(DasStream_getDesc(pSd, 800) == (DasDesc*)pA);
-	CHECK(DasStream_getPkt(pSd, 7) == pP);
+	CHECK(DasStream_numDesc(pSd, DASDESCTYPE_DS) == 41);
+	CHECK(DasStream_pktId(pSd, DasStream_desc(pSd, 1039)) == 1039);
+	CHECK(DasStream_desc(pSd, 800) == (DasDesc*)pA);
+	CHECK(DasStream_pkt(pSd, 7) == pP);
 
 	/* createPkt takes the lowest das2 ID nobody uses */
-	DasPkt* pNew = DasStream_createPkt(pSd, new_DasEnc(DAS2DT_LE_REAL, 8, NULL), UNIT_US2000);
+	DasPkt* pNew = DasStream_createPkt(pSd, new_DasEnc(DAS2DT_LE_REAL, 8, NULL), DASUNITS_US2000);
 	CHECK(pNew != NULL);
-	CHECK(DasStream_getPktId(pSd, (DasDesc*)pNew) == 1);
+	CHECK(DasStream_pktId(pSd, (DasDesc*)pNew) == 1);
 
 	del_DasDesc((DasDesc*)pNever);
 	del_DasDesc((DasDesc*)pSd);
@@ -626,7 +626,7 @@ static int test_write_ids(void)
 	CHECK(DasIO_writeDesc(pOut, (DasDesc*)pSd, 5) != DAS_OKAY);
 	CHECK(DasIO_writeDesc(pOut, (DasDesc*)pSd, 0) == DAS_OKAY);
 
-	DasPkt* pPkt = DasStream_createPkt(pSd, new_DasEnc(DAS2DT_LE_REAL, 8, NULL), UNIT_US2000);
+	DasPkt* pPkt = DasStream_createPkt(pSd, new_DasEnc(DAS2DT_LE_REAL, 8, NULL), DASUNITS_US2000);
 	CHECK(pPkt != NULL);
 	CHECK(DasIO_writeDesc(pOut, (DasDesc*)pPkt, 0) != DAS_OKAY);
 	CHECK(DasIO_writeDesc(pOut, (DasDesc*)pPkt, 100) != DAS_OKAY);
@@ -643,11 +643,11 @@ static int test_write_ids(void)
 	pOut = new_DasIO("TestDesc", new_DasXport_mem(aBuf3, sizeof(aBuf3), "w"), "3");
 	pSd = new_DasStream();
 	CHECK(DasIO_writeDesc(pOut, (DasDesc*)pSd, 0) == DAS_OKAY);
-	pPkt = DasStream_createPkt(pSd, new_DasEnc(DAS2DT_LE_REAL, 8, NULL), UNIT_US2000);
+	pPkt = DasStream_createPkt(pSd, new_DasEnc(DAS2DT_LE_REAL, 8, NULL), DASUNITS_US2000);
 	CHECK(pPkt != NULL);
-	CHECK(DasIO_writeDesc(pOut, (DasDesc*)pPkt, DAS3_MAX_PKTIDS) != DAS_OKAY);
-	CHECK(DasIO_writeDesc(pOut, (DasDesc*)pPkt, DAS3_MAX_PKTIDS - 1) == DAS_OKAY);
-	CHECK(DasIO_writeData(pOut, (DasDesc*)pPkt, DAS3_MAX_PKTIDS - 1) == DAS_OKAY);
+	CHECK(DasIO_writeDesc(pOut, (DasDesc*)pPkt, DASSTREAM_V3_ENDPKTID) != DAS_OKAY);
+	CHECK(DasIO_writeDesc(pOut, (DasDesc*)pPkt, DASSTREAM_V3_ENDPKTID - 1) == DAS_OKAY);
+	CHECK(DasIO_writeData(pOut, (DasDesc*)pPkt, DASSTREAM_V3_ENDPKTID - 1) == DAS_OKAY);
 	CHECK(strstr(aBuf3, "|Hx|65279|") != NULL);
 	CHECK(strstr(aBuf3, "|Pd|65279|") != NULL);
 	del_DasIO(pOut);
@@ -672,8 +672,8 @@ static int test_write_order(void)
 	CHECK(DasIO_writeDesc(pA, (DasDesc*)pSd, 0) == DAS_OKAY);
 	CHECK(DasIO_writeDesc(pB, (DasDesc*)pSd, 0) == DAS_OKAY);
 
-	DasDesc* p1 = (DasDesc*)DasStream_createPkt(pSd, new_DasEnc(DAS2DT_LE_REAL, 8, NULL), UNIT_US2000);
-	DasDesc* p2 = (DasDesc*)DasStream_createPkt(pSd, new_DasEnc(DAS2DT_LE_REAL, 4, NULL), UNIT_US2000);
+	DasDesc* p1 = (DasDesc*)DasStream_createPkt(pSd, new_DasEnc(DAS2DT_LE_REAL, 8, NULL), DASUNITS_US2000);
+	DasDesc* p2 = (DasDesc*)DasStream_createPkt(pSd, new_DasEnc(DAS2DT_LE_REAL, 4, NULL), DASUNITS_US2000);
 	CHECK((p1 != NULL)&&(p2 != NULL));
 
 	/* No header at all, then a header on A that B never saw */
@@ -694,7 +694,7 @@ static int test_write_order(void)
 	CHECK(DasIO_writeData(pA, p1, 1) == DAS_OKAY);
 
 	/* A changed plane makes the header that was sent stale */
-	DasPlane_setFill(DasPkt_getXPlane((DasPkt*)p1), -1.0e31);
+	DasPlane_setFill(DasPkt_xPlane((DasPkt*)p1), -1.0e31);
 	CHECK(DasIO_writeData(pA, p1, 1) != DAS_OKAY);
 	CHECK(DasIO_writeDesc(pA, p1, 1) == DAS_OKAY);
 	CHECK(DasIO_writeData(pA, p1, 1) == DAS_OKAY);
@@ -732,7 +732,7 @@ static int test_xml_escape(void)
 	};
 	DasDesc desc;
 	memset(&desc, 0, sizeof(desc));
-	DasDesc_init(&desc, DASDESC_UNK, NULL);
+	DasDesc_init(&desc, DASDESCTYPE_UNK, NULL);
 
 	char sBuf[128];
 	for(size_t i = 0; i < sizeof(aCase)/sizeof(aCase[0]); ++i){
@@ -765,26 +765,26 @@ static int test_double_ary(void)
 {
 	DasDesc desc;
 	memset(&desc, 0, sizeof(desc));
-	DasDesc_init(&desc, DASDESC_UNK, NULL);
+	DasDesc_init(&desc, DASDESCTYPE_UNK, NULL);
 
 	double aIn[] = {1.0, 2.5, 4.0};
-	CHECK(DasDesc_setDoubleArray(&desc, "lst", 3, aIn) == DAS_OKAY);
+	CHECK(DasDesc_setValDoubles(&desc, "lst", 3, aIn) == DAS_OKAY);
 	int n = 0;
-	double* pOut = DasDesc_getDoubleAry(&desc, "lst", &n);
+	double* pOut = DasDesc_newValDoubles(&desc, "lst", &n);
 	CHECK((pOut != NULL) && (n == 3));
 	CHECK((pOut[0] == 1.0) && (pOut[1] == 2.5) && (pOut[2] == 4.0));
 	free(pOut);
 
 	float aFin[] = {0.25f, 8.0f};
-	CHECK(DasDesc_setFloatAry(&desc, "flst", 2, aFin) == DAS_OKAY);
-	pOut = DasDesc_getDoubleAry(&desc, "flst", &n);
+	CHECK(DasDesc_setValFloats(&desc, "flst", 2, aFin) == DAS_OKAY);
+	pOut = DasDesc_newValDoubles(&desc, "flst", &n);
 	CHECK((pOut != NULL) && (n == 2));
 	CHECK((pOut[0] == 0.25) && (pOut[1] == 8.0));
 	free(pOut);
 
-	/* A missing property is a das_error, NULL with a zero count here */
+	/* A missing property is a daserrf, NULL with a zero count here */
 	n = 7;
-	CHECK(DasDesc_getDoubleAry(&desc, "nope", &n) == NULL);
+	CHECK(DasDesc_newValDoubles(&desc, "nope", &n) == NULL);
 	CHECK(n == 0);
 
 	DasDesc_freeProps(&desc);
@@ -795,14 +795,14 @@ int main(int argc, char** argv)
 {
 	(void)argc;
 	setvbuf(stdout, NULL, _IONBF, 0);
-	das_init(argv[0], DASERR_DIS_RET, DASLOG_ERROR, NULL);
+	daslib_init(argv[0], DASERRDISP_RET, DASLOG_ERROR, NULL);
 
 	/* DasDesc_init() assumes zeroed storage, the way the library's calloc'd
 	   objects arrive; stack garbage in the property array header crashes the
 	   first set. */
 	DasDesc desc;
 	memset(&desc, 0, sizeof(desc));
-	DasDesc_init(&desc, DASDESC_UNK, NULL);
+	DasDesc_init(&desc, DASDESCTYPE_UNK, NULL);
 
 	int nRet = 0;
 	printf("INFO: ======== ERROR lines below are intentional, provoked by negative checks ========\n");

@@ -40,14 +40,14 @@ bool print_info(DasStream* pStream, int nTest)
 	char sBuf[8192] = {'\0'};
 	if(pStream == NULL) return false;
 	
-	DasStream_info(pStream, sBuf, 8192);
+	DasStream_toInfoStr(pStream, sBuf, 8192);
 	printf("%s\n", sBuf);
 	
 	DasDesc* pDesc = NULL;
-	while((pDesc = DasStream_nextDesc(pStream, pDesc, DASDESC_UNK))!=NULL){
+	while((pDesc = DasStream_nextDesc(pStream, pDesc, DASDESCTYPE_UNK))!=NULL){
 
 		/* Check that we are a DasDs */
-		if(DasDesc_type(pDesc) != DASDESC_DS){
+		if(DasDesc_type(pDesc) != DASDESCTYPE_DS){
 			printf("ERROR: Non dataset desciptor %p found in a V3 model stream!\n",
 				pDesc
 			);
@@ -71,7 +71,7 @@ bool print_info(DasStream* pStream, int nTest)
 }
 
 bool test_file(const char* sFile, int nTest){
-	DasStream* pStream = new_DasStream_path(g_sProg, sFile);
+	DasStream* pStream = new_DasStream_file(g_sProg, sFile);
 	if(pStream == NULL){
 		printf("ERROR: Test %d failed", nTest);
 		return false;
@@ -87,13 +87,13 @@ bool test_file(const char* sFile, int nTest){
    one under an ID is active, and the made up names don't repeat. */
 bool test_reused_id(const char* sFile, size_t uExpectDs, ptrdiff_t nExpectRec, int nTest)
 {
-	DasStream* pStream = new_DasStream_path(g_sProg, sFile);
+	DasStream* pStream = new_DasStream_file(g_sProg, sFile);
 	if(pStream == NULL){
 		printf("ERROR: Test %d failed, couldn't read %s\n", nTest, sFile);
 		return false;
 	}
 
-	size_t uDs = DasStream_numDesc(pStream, DASDESC_DS);
+	size_t uDs = DasStream_numDesc(pStream, DASDESCTYPE_DS);
 	if(uDs != uExpectDs){
 		printf("ERROR: Test %d failed, expected %zu datasets from %s, found %zu\n",
 			nTest, uExpectDs, sFile, uDs);
@@ -102,9 +102,9 @@ bool test_reused_id(const char* sFile, size_t uExpectDs, ptrdiff_t nExpectRec, i
 
 	ptrdiff_t nRec = 0;
 	size_t uActive = 0;
-	ptrdiff_t aShape[VARIDX_MAX];
+	ptrdiff_t aShape[DASIDX_MAX];
 	DasDesc* pDesc = NULL;
-	while((pDesc = DasStream_nextDesc(pStream, pDesc, DASDESC_DS)) != NULL){
+	while((pDesc = DasStream_nextDesc(pStream, pDesc, DASDESCTYPE_DS)) != NULL){
 		DasDs* pDs = (DasDs*)pDesc;
 		DasDs_shape(pDs, aShape);
 		if(aShape[0] < 1){
@@ -113,10 +113,10 @@ bool test_reused_id(const char* sFile, size_t uExpectDs, ptrdiff_t nExpectRec, i
 		}
 		nRec += aShape[0];
 
-		int nPktId = DasStream_getPktId(pStream, pDesc);
+		int nPktId = DasStream_pktId(pStream, pDesc);
 		if(DasStream_isDescActive(pStream, pDesc)){
 			uActive += 1;
-			if(DasStream_getDesc(pStream, nPktId) != pDesc){
+			if(DasStream_desc(pStream, nPktId) != pDesc){
 				printf("ERROR: Test %d failed, active dataset is not the one for ID %d\n", nTest, nPktId);
 				return false;
 			}
@@ -124,7 +124,7 @@ bool test_reused_id(const char* sFile, size_t uExpectDs, ptrdiff_t nExpectRec, i
 
 		/* (group, name) should be unique, and here the library made the names */
 		DasDesc* pOther = pDesc;
-		while((pOther = DasStream_nextDesc(pStream, pOther, DASDESC_DS)) != NULL){
+		while((pOther = DasStream_nextDesc(pStream, pOther, DASDESCTYPE_DS)) != NULL){
 			if((strcmp(DasDs_name(pDs), DasDs_name((DasDs*)pOther)) == 0)&&
 			   (strcmp(DasDs_group(pDs), DasDs_group((DasDs*)pOther)) == 0)){
 				printf("ERROR: Test %d failed, two datasets are named (%s, %s)\n",
@@ -154,8 +154,8 @@ bool test_plain_url(const char* sInitialUrl, int nTest)
 {
 	printf("INFO: Contacting remote HTTP URL %s\n\n", sInitialUrl);
 	
-	DasHttpResp* pRes = new_DasHttpResp_get(sInitialUrl, NULL, NULL, DASHTTP_TO_MIN);
-	if(!DasHttpResp_ok(pRes)){
+	DasHttpResp* pRes = new_DasHttpResp_get(sInitialUrl, NULL, NULL, DASHTTP_TIMEOUT_MIN);
+	if(!DasHttpResp_isOk(pRes)){
 		printf("ERROR: Could not get body for URL, reason: %s\n", DasHttpResp_error(pRes));
 		return 107;
 	}
@@ -167,7 +167,7 @@ bool test_plain_url(const char* sInitialUrl, int nTest)
 	DasIO* pIn = new_DasIO("TestAccum", DasHttpResp_takeBody(pRes), NULL);
 	del_DasHttpResp(pRes);
 	
-	DasIO_setModel(pIn, STREAM_MODEL_V3);
+	DasIO_setModel(pIn, DASIOMODEL_V3);
 	DasIO_setAccum(pIn, true);
 	
 	if(DasIO_readAll(pIn) != 0){
@@ -177,7 +177,7 @@ bool test_plain_url(const char* sInitialUrl, int nTest)
 	
 	DasStream* pStream = DasIO_takeStream(pIn);
 	del_DasIO(pIn);
-	size_t uDs = DasStream_numDesc(pStream, DASDESC_UNK);
+	size_t uDs = DasStream_numDesc(pStream, DASDESCTYPE_UNK);
 
 	printf("INFO: %zu Datasets retrieved from %s\n", uDs, sUrl);
 
@@ -191,8 +191,8 @@ bool test_secure_url(const char* sInitialUrl, int nTest)
 {
 	printf("INFO: Contacting remote HTTPS URL %s\n\n", sInitialUrl);
 	
-	DasHttpResp* pRes = new_DasHttpResp_get(sInitialUrl, NULL, NULL, DASHTTP_TO_MIN);
-	if(!DasHttpResp_ok(pRes)){
+	DasHttpResp* pRes = new_DasHttpResp_get(sInitialUrl, NULL, NULL, DASHTTP_TIMEOUT_MIN);
+	if(!DasHttpResp_isOk(pRes)){
 		printf("ERROR: Could not get body for URL, reason: %s\n", DasHttpResp_error(pRes));
 		return 13;
 	}
@@ -205,7 +205,7 @@ bool test_secure_url(const char* sInitialUrl, int nTest)
 	DasIO* pIn = new_DasIO("TestAccum", DasHttpResp_takeBody(pRes), NULL);
 	del_DasHttpResp(pRes);
 	
-	DasIO_setModel(pIn, STREAM_MODEL_V3);
+	DasIO_setModel(pIn, DASIOMODEL_V3);
 	DasIO_setAccum(pIn, true);
 	
 	if(DasIO_readAll(pIn) != 0){
@@ -215,7 +215,7 @@ bool test_secure_url(const char* sInitialUrl, int nTest)
 	
 	DasStream* pStream = DasIO_takeStream(pIn);
 	del_DasIO(pIn);
-	size_t uDs = DasStream_numDesc(pStream, DASDESC_UNK);
+	size_t uDs = DasStream_numDesc(pStream, DASDESCTYPE_UNK);
 	
 	printf("INFO: %zu Datasets retrieved from %s\n", uDs, sUrl);
 	if(! print_info(pStream, 11)) return 13;
@@ -227,18 +227,18 @@ bool test_secure_url(const char* sInitialUrl, int nTest)
 int main(int argc, char** argv)
 {
 	/* Exit on errors, log info messages and above */
-	das_init(argv[0], DASERR_DIS_EXIT, DASLOG_INFO, NULL);
+	daslib_init(argv[0], DASERRDISP_EXIT, DASLOG_INFO, NULL);
 	
 	int nTest = 1;
 	int nErr = DASERR_MAX + nTest;
 	const char* sFile = "examples/ex03_galileo_pws_lrs.d2t";
-	DasStream* pStream = new_DasStream_path(g_sProg, sFile);
+	DasStream* pStream = new_DasStream_file(g_sProg, sFile);
 	if(pStream == NULL)
-		return das_error(nErr, "Test %d failed", nTest);
+		return daserrf(nErr, "Test %d failed", nTest);
 
 	if(! print_info(pStream, 1) ) return nErr;
 
-	size_t uDs = DasStream_numDesc(pStream, DASDESC_UNK);
+	size_t uDs = DasStream_numDesc(pStream, DASDESCTYPE_UNK);
 	if((pStream == NULL)||(uDs != 1)){
 		printf("ERROR: Test 1 failed, expected 1 dataset from %s, found %zu\n",
 		       sFile, uDs);

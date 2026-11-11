@@ -30,15 +30,15 @@
 extern "C" {
 #endif
 
-struct das_dim {
+struct das_dim_t {
 	DasDesc base;        /* Attributes or properties for this variable */
-	das_dim_type_e dtype;    /* Coordinate or Data flag */
+	das_dimtype dtype;    /* Coordinate or Data flag */
 	
    /* A name for this particular variable group, cannot repeat in the dataset */
-   char sId[DAS_MAX_ID_BUFSZ]; 
+   char sId[DASID_SZ]; 
 
    /* A general dimension category such as 'B', 'E', etc */
-   char sDim[DAS_MAX_ID_BUFSZ]; 
+   char sDim[DASID_SZ]; 
 
    /* Display Info: Plot axes affinity, if any. For variables that have no
     * internal indices, only the first axis make any sense.  Multiple axis 
@@ -47,7 +47,7 @@ struct das_dim {
     * A common example of a vector is a "space" dimension defined by a 
     * 3-vector.
     */
-   char axes[DASDIM_NAXES][DASDIM_AXLEN];
+   char axes[DASDIM_NAXES][DASDIM_AXIS_SZ];
 
    /* Display info: Is this the primary coordinate for a given axes */
    bool primary;
@@ -67,7 +67,7 @@ struct das_dim {
 	 * dimensions are here.  I don't think we need this here as the dataset
 	 * provides this information.  Going to punt it for now but will use
 	 * orthogonality checks when printing coordinate information */
-	/* struct das_dim* aCoords[DASDIM_MAXDEP];
+	/* struct das_dim_t* aCoords[DASDIM_MAXDEP];
 	size_t uCoords;*/
 };
 

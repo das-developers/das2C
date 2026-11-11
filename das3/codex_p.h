@@ -28,35 +28,35 @@
 extern "C" {
 #endif
 
-struct das_codex {
+struct das_codex_t {
 
 	void* pState;   /* instance-private state, freed by del */
 
 	/* Introspection (const). */
-	das_val_type (*storage)(const struct das_codex* pThis);
-	das_errcode   (*path)(const struct das_codex* pThis, char* sBuf, size_t uLen);
-	das_errcode   (*mime)(const struct das_codex* pThis, char* sBuf, size_t uLen);
+	das_vt (*storage)(const struct das_codex_t* pThis);
+	das_errcode   (*path)(const struct das_codex_t* pThis, char* sBuf, size_t uLen);
+	das_errcode   (*mime)(const struct das_codex_t* pThis, char* sBuf, size_t uLen);
 
 	/* Write the codec's own properties (e.g. image dims, colorspace) into a
 	   dense rank-2 ubyte array in DasDesc's packed layout; *pPropsOut = count. */
 	das_errcode (*properties)(
-		const struct das_codex* pThis, DasAry* pOut, size_t* pPropsOut
+		const struct das_codex_t* pThis, DasAry* pOut, size_t* pPropsOut
 	);
 
 	/* One blob -> samples appended to pAry; *pAppended = items written. */
 	das_errcode (*decode)(
-		struct das_codex* pThis, const ubyte* pBlob, size_t uLen,
+		struct das_codex_t* pThis, const uint8_t* pBlob, size_t uLen,
 		DasAry* pAry, size_t* pAppended
 	);
 
-	/* One record (at pLoc) -> blob bytes appended to pBuf; *pAppended = bytes.
-	   Caller guarantees pLoc subsumes enough items to form one object. */
+	/* One record (at pAddr) -> blob bytes appended to pBuf; *pAppended = bytes.
+	   Caller guarantees pAddr subsumes enough items to form one object. */
 	das_errcode (*encode)(
-		struct das_codex* pThis, const DasAry* pItems, const ptrdiff_t* pLoc,
+		struct das_codex_t* pThis, const DasAry* pItems, const ptrdiff_t* pAddr,
 		DasBuf* pBuf, size_t* pAppended
 	);
 
-	void (*del)(struct das_codex* pThis);  /* free pState + the instance */
+	void (*del)(struct das_codex_t* pThis);  /* free pState + the instance */
 
 };
 

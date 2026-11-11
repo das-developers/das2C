@@ -14,7 +14,7 @@ extern "C" {
  * the TT2000 JD origin is: 2451544.9992571296296296 instead. */
 #define DAS_TT2000_JD_ORIGIN 2451545.0
 
-/* das_init() loads the leap second table.  After that the conversions below
+/* daslib_init() loads the leap second table.  After that the conversions below
    are thread safe. */
 
 /** Re-initialize the leap second table.
@@ -34,8 +34,8 @@ bool das_tt2k_reinit(const char* sProgName);
  *   preformed!  This function is legacy code from the CDF libraries.
  *   use the safer alternative:
  *     
- *     das_time dt;
- *     tt = Units_convertFromDt(UNIT_TT2000, &dt);
+ *     DasTime dt;
+ *     tt = DasTime_toPoint(&dt, DASUNITS_TT2000);
  *
  *   instead. You have been warned.
  *
@@ -53,8 +53,8 @@ long long das_utc_to_tt2K(double year, double month, double day, ...);
  *   *not* be preformed!  This function is legacy code from the CDF libraries.
  *   use the safer alternative:
  *
- *     das_time dt;
- *     Units_convertToDt(&dt, tt, UNIT_TT2000);
+ *     DasTime dt;
+ *     DasTime_fromPoint(&dt, tt, DASUNITS_TT2000);
  *
  *   instead. You have been warned.
  *
@@ -65,10 +65,10 @@ void das_tt2K_to_utc(
 	long long nanoSecSinceJ2000, double* ly, double* lm, double* ld, ...
 );
 
-/* Convert a UNIT_TT2000 double to UNIT_US2000 double
+/* Convert a DASUNITS_TT2000 double to DASUNITS_US2000 double
  * 
- * This is a direct conversion of value on the UNIT_TT2000 scale to values on
- * the UNIT_US2000 scale without a round trip through UTC broken out times.
+ * This is a direct conversion of value on the DASUNITS_TT2000 scale to values on
+ * the DASUNITS_US2000 scale without a round trip through UTC broken out times.
  *
  * Used by conversion functions in units.c. 
  *
@@ -80,10 +80,10 @@ void das_tt2K_to_utc(
  */
 double das_tt2K_to_us2K(double tt2000);
 
-/* Convert a UNIT_US2000 double to UNIT_TT2000 double
+/* Convert a DASUNITS_US2000 double to DASUNITS_TT2000 double
  * 
- * This is a direct conversion of value on the UNIT_US2000 scale to values on
- * the UNIT_TT2000 scale without a round trip through UTC broken out times.
+ * This is a direct conversion of value on the DASUNITS_US2000 scale to values on
+ * the DASUNITS_TT2000 scale without a round trip through UTC broken out times.
  *
  * Used by conversion functions in units.c.
  *

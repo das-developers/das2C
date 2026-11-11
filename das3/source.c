@@ -18,7 +18,7 @@
 /* Data sources, see source.h.
  *
  * Failures over content, a broken node or a bad user value, are logged
- * and returned, never raised through das_error(), because this code
+ * and returned, never raised through daserrf(), because this code
  * meets bad catalogs and typos every day and the default error
  * disposition would exit the program over either.  Clients that catch
  * log messages see everything; clients that do not still get verdicts.
@@ -47,7 +47,7 @@
 
 /* Section names as the current catalogs spell them.  Keys are built from
  * these; input accepts the singular forms too, see _das_src_secByName(). */
-static const char* g_sSecName[das_src_sec_size] = {"coords", "data", "formats", "options"};
+static const char* g_sSecName[DASSRCSEC_SIZE] = {"coords", "data", "formats", "options"};
 
 /* Scalars copied out of the document are short in practice, the longest
  * seen is a few dozen bytes; anything past this is cut rather than
@@ -55,7 +55,7 @@ static const char* g_sSecName[das_src_sec_size] = {"coords", "data", "formats", 
 #define SCALAR_SZ 1024
 
 /* ************************************************************************* */
-/* Small string and JSON helpers.  DasJdo_get() takes slash paths, so the
+/* Small string and JSON helpers.  DasJdo_subtree() takes slash paths, so the
  * dots in parameter names such as "read.time.min" are not special to it. */
 
 static bool _dassrc_strieq(const char* a, const char* b)
@@ -77,34 +77,34 @@ static void _dassrc_strcpyz(char* sDest, const char* sSrc, size_t uDest)
 
 static const DasJdo* _dassrc_jget(const DasJdo* p, const char* sPath)
 {
-	return ((p == NULL)||(sPath == NULL)) ? NULL : DasJdo_get(p, sPath);
+	return ((p == NULL)||(sPath == NULL)) ? NULL : DasJdo_subtree(p, sPath);
 }
 
 static const char* _dassrc_jstr(const DasJdo* p, const char* sPath)
 {
 	const DasJdo* pSub = _dassrc_jget(p, sPath);
-	return ((pSub != NULL)&&(pSub->type == das_json_type_str)) ? DasJdo_string(pSub) : NULL;
+	return ((pSub != NULL)&&(pSub->type == DASJSONTYPE_STR)) ? DasJdo_str(pSub) : NULL;
 }
 
-static bool _dassrc_jisdict(const DasJdo* p){ return (p != NULL)&&(p->type == das_json_type_dict); }
-static bool _dassrc_jisary(const DasJdo* p){  return (p != NULL)&&(p->type == das_json_type_ary); }
-static bool _dassrc_jtrue(const DasJdo* p){   return (p != NULL)&&(p->type == das_json_type_true); }
+static bool _dassrc_jisdict(const DasJdo* p){ return (p != NULL)&&(p->type == DASJSONTYPE_DICT); }
+static bool _dassrc_jisary(const DasJdo* p){  return (p != NULL)&&(p->type == DASJSONTYPE_ARY); }
+static bool _dassrc_jtrue(const DasJdo* p){   return (p != NULL)&&(p->type == DASJSONTYPE_TRUE); }
 static bool _dassrc_jisbool(const DasJdo* p){
-	return (p != NULL)&&((p->type == das_json_type_true)||(p->type == das_json_type_false));
+	return (p != NULL)&&((p->type == DASJSONTYPE_TRUE)||(p->type == DASJSONTYPE_FALSE));
 }
 static size_t _dassrc_jlen(const DasJdo* p)
 {
-	if(_dassrc_jisdict(p)) return ((const das_json_dict*)p->value)->length;
-	if(_dassrc_jisary(p))  return ((const das_json_ary*)p->value)->length;
+	if(_dassrc_jisdict(p)) return ((const DasJsonDict*)p->value)->length;
+	if(_dassrc_jisary(p))  return ((const DasJsonAry*)p->value)->length;
 	return 0;
 }
 
-/* das_strdup() returns NULL for "", which here would turn an empty default
+/* dasstr_new() returns NULL for "", which here would turn an empty default
    into no default.  Empty strings are copied as empty strings. */
 static char* _dassrc_strdupz(const char* s)
 {
 	if((s == NULL)||(s[0] == '\0')) return (char*)calloc(1, 1);
-	return das_strdup(s);
+	return dasstr_new(s);
 }
 
 /* Every string a source keeps, keys, default values, enum items and range
@@ -148,22 +148,22 @@ static size_t _dassrc_catf(char* sBuf, size_t uLen, size_t u, const char* sFmt, 
 /* ************************************************************************* */
 /* Key grammar */
 
-const char* das_src_sec_name(das_src_sec_e sec)
+const char* dassrcsec_name(das_srcsec sec)
 {
-	return ((sec >= 0)&&(sec < das_src_sec_size)) ? g_sSecName[sec] : "";
+	return ((sec >= 0)&&(sec < DASSRCSEC_SIZE)) ? g_sSecName[sec] : "";
 }
 
-bool _das_src_secByName(const char* s, das_src_sec_e* pSec)
+bool _das_src_secByName(const char* s, das_srcsec* pSec)
 {
 	if(_dassrc_strieq(s,"coord")||_dassrc_strieq(s,"coords")||_dassrc_strieq(s,"coordinate")||_dassrc_strieq(s,"coordinates")){
-		*pSec = das_src_sec_coord; return true;
+		*pSec = DASSRCSEC_COORD; return true;
 	}
-	if(_dassrc_strieq(s,"data")){ *pSec = das_src_sec_data; return true; }
+	if(_dassrc_strieq(s,"data")){ *pSec = DASSRCSEC_DATA; return true; }
 	if(_dassrc_strieq(s,"format")||_dassrc_strieq(s,"formats")||_dassrc_strieq(s,"fmt")){
-		*pSec = das_src_sec_format; return true;
+		*pSec = DASSRCSEC_FORMAT; return true;
 	}
 	if(_dassrc_strieq(s,"option")||_dassrc_strieq(s,"options")||_dassrc_strieq(s,"opt")||_dassrc_strieq(s,"opts")){
-		*pSec = das_src_sec_option; return true;
+		*pSec = DASSRCSEC_OPTION; return true;
 	}
 	return false;
 }
@@ -184,7 +184,7 @@ bool _das_src_propEq(const char* a, const char* b)
 	return _dassrc_strieq(_das_src_propName(a), _das_src_propName(b));
 }
 
-int _das_src_splitKey(const char* sKey, char aParts[3][DAS_MAX_ID_BUFSZ])
+int _das_src_splitKey(const char* sKey, char aParts[3][DASID_SZ])
 {
 	if(sKey == NULL) return 0;
 	int n = 0;
@@ -192,7 +192,7 @@ int _das_src_splitKey(const char* sKey, char aParts[3][DAS_MAX_ID_BUFSZ])
 	while(true){
 		const char* pEnd = strchr(pBeg, '.');
 		size_t uLen = pEnd ? (size_t)(pEnd - pBeg) : strlen(pBeg);
-		if((uLen == 0)||(uLen >= DAS_MAX_ID_BUFSZ)||(n == 3)) return 0;
+		if((uLen == 0)||(uLen >= DASID_SZ)||(n == 3)) return 0;
 		memcpy(aParts[n], pBeg, uLen);
 		aParts[n][uLen] = '\0';
 		++n;
@@ -207,19 +207,19 @@ int _das_src_splitKey(const char* sKey, char aParts[3][DAS_MAX_ID_BUFSZ])
 
 /* Fold a type word from a node to the enum.  NULL and unknown words are
  * text, the caller decides whether that is final. */
-static bool _dassrc_typeByName(const char* s, das_srcprop_type_e* pType)
+static bool _dassrc_typeByName(const char* s, das_srcproptype* pType)
 {
 	if(s == NULL) return false;
-	if(_dassrc_strieq(s,"boolean")||_dassrc_strieq(s,"bool")){ *pType = das_srcprop_bool; return true; }
-	if(_dassrc_strieq(s,"integer")||_dassrc_strieq(s,"int")){ *pType = das_srcprop_int; return true; }
+	if(_dassrc_strieq(s,"boolean")||_dassrc_strieq(s,"bool")){ *pType = DASSRCPROPTYPE_BOOL; return true; }
+	if(_dassrc_strieq(s,"integer")||_dassrc_strieq(s,"int")){ *pType = DASSRCPROPTYPE_INT; return true; }
 	if(_dassrc_strieq(s,"real")||_dassrc_strieq(s,"double")||_dassrc_strieq(s,"float")){
-		*pType = das_srcprop_real; return true;
+		*pType = DASSRCPROPTYPE_REAL; return true;
 	}
 	if(_dassrc_strieq(s,"isotime")||_dassrc_strieq(s,"time")||_dassrc_strieq(s,"datetime")){
-		*pType = das_srcprop_time; return true;
+		*pType = DASSRCPROPTYPE_TIME; return true;
 	}
-	if(_dassrc_strieq(s,"enum")){ *pType = das_srcprop_enum; return true; }
-	if(_dassrc_strieq(s,"string")||_dassrc_strieq(s,"text")){ *pType = das_srcprop_text; return true; }
+	if(_dassrc_strieq(s,"enum")){ *pType = DASSRCPROPTYPE_ENUM; return true; }
+	if(_dassrc_strieq(s,"string")||_dassrc_strieq(s,"text")){ *pType = DASSRCPROPTYPE_TEXT; return true; }
 	return false;
 }
 
@@ -236,20 +236,20 @@ static void _DasSrcProp_resolveType(DasSrcProp* p)
 	const DasSrcCtrl* pC = p->pCtrl;
 	const DasJdo* pVal = _dassrc_jget(p->pJdo, "value");
 
-	if(pC && (pC->uEnum > 0)){ p->type = das_srcprop_enum; return; }
+	if(pC && (pC->uEnum > 0)){ p->type = DASSRCPROPTYPE_ENUM; return; }
 	if(_dassrc_typeByName(p->sTypeName, &(p->type))){
-		if(p->type != das_srcprop_enum) return;
+		if(p->type != DASSRCPROPTYPE_ENUM) return;
 	}
 	if(_dassrc_jisbool(pVal) || (pC && (_dassrc_jstr(pC->pSet, "flag") != NULL))){
-		p->type = das_srcprop_bool; return;
+		p->type = DASSRCPROPTYPE_BOOL; return;
 	}
 	const char* sParamType = pC ? _dassrc_jstr(pC->pParam, "type") : NULL;
-	if(_dassrc_typeByName(sParamType, &(p->type)) && (p->type != das_srcprop_enum)){
+	if(_dassrc_typeByName(sParamType, &(p->type)) && (p->type != DASSRCPROPTYPE_ENUM)){
 		if(p->sTypeName[0] == '\0') p->sTypeName = sParamType;
 		return;
 	}
-	if((pVal != NULL)&&(pVal->type == das_json_type_num)){ p->type = das_srcprop_real; return; }
-	p->type = das_srcprop_text;
+	if((pVal != NULL)&&(pVal->type == DASJSONTYPE_NUM)){ p->type = DASSRCPROPTYPE_REAL; return; }
+	p->type = DASSRCPROPTYPE_TEXT;
 }
 
 /* Enum entries are usually dicts carrying value plus per item pval or flag
@@ -264,7 +264,7 @@ static bool _DasSrcCtrl_fillEnum(DasSrcCtrl* p)
 	p->aEnum = (char**)calloc(uMax, sizeof(char*));
 	if(p->aEnum == NULL) return false;
 
-	for(const das_json_ary_el* pEl = DasJdo_aryFirst(pEnum); pEl; pEl = pEl->next){
+	for(const DasJsonAryEl* pEl = DasJdo_aryFirst(pEnum); pEl; pEl = pEl->next){
 		const DasJdo* pVal = _dassrc_jisdict(pEl->value) ? _dassrc_jget(pEl->value, "value") : pEl->value;
 		char* s = _dassrc_scalarDup(pVal);
 		if(s == NULL) continue;
@@ -279,12 +279,12 @@ static void _DasSrcCtrl_fillRange(DasSrcCtrl* p)
 	const DasSrcProp* pProp = p->pProp;
 	const DasJdo* pRange = _dassrc_jget(p->pSet, "range");
 	if(!_dassrc_jisary(pRange)) pRange = _dassrc_jget(p->pParam, "range");
-	if(!_dassrc_jisary(pRange) && (pProp->sec == das_src_sec_coord) &&
+	if(!_dassrc_jisary(pRange) && (pProp->sec == DASSRCSEC_COORD) &&
 	   (_das_src_propEq(pProp->sName, "min") || _das_src_propEq(pProp->sName, "max")))
 		pRange = _dassrc_jget(pProp->pGroup->pJdo, "validRange");
 	if(!_dassrc_jisary(pRange)) return;
 
-	const das_json_ary_el* pEl = DasJdo_aryFirst(pRange);
+	const DasJsonAryEl* pEl = DasJdo_aryFirst(pRange);
 	if(pEl == NULL) return;
 	p->sLo = _dassrc_scalarDup(pEl->value);
 	if(pEl->next) p->sHi = _dassrc_scalarDup(pEl->next->value);
@@ -364,7 +364,7 @@ static void _dassrc_walkProp(_walk_t* pW, DasSrcGroup* pG, const char* sName, co
 	if(_dassrc_jisdict(pSet)){
 		const char* sParam = _dassrc_jstr(pSet, "param");
 		if(sParam == NULL){
-			daslog_warn_v("Property %s has a set block that names no parameter, "
+			daslog_warnf("Property %s has a set block that names no parameter, "
 			              "treating it as fixed", p->sKey);
 		}
 		else{
@@ -393,7 +393,7 @@ static void _dassrc_walkProp(_walk_t* pW, DasSrcGroup* pG, const char* sName, co
 	pG->uCount += 1;
 }
 
-static void _dassrc_walkGroup(_walk_t* pW, das_src_sec_e sec, const char* sName, const DasJdo* pJdo)
+static void _dassrc_walkGroup(_walk_t* pW, das_srcsec sec, const char* sName, const DasJdo* pJdo)
 {
 	if(!_dassrc_jisdict(pJdo)) return;
 	DasSrcGroup* pG = NULL;
@@ -411,9 +411,9 @@ static void _dassrc_walkGroup(_walk_t* pW, das_src_sec_e sec, const char* sName,
 		if(_dassrc_jisary(pMime) && (_dassrc_jlen(pMime) > 0)){
 			pG->aMime = (const char**)calloc(_dassrc_jlen(pMime), sizeof(char*));
 			if(pG->aMime == NULL){ pW->bFail = true; return; }
-			for(const das_json_ary_el* pEl = DasJdo_aryFirst(pMime); pEl; pEl = pEl->next){
-				if(DasJdo_string(pEl->value) == NULL) continue;
-				pG->aMime[pG->uMime] = DasJdo_string(pEl->value);
+			for(const DasJsonAryEl* pEl = DasJdo_aryFirst(pMime); pEl; pEl = pEl->next){
+				if(DasJdo_str(pEl->value) == NULL) continue;
+				pG->aMime[pG->uMime] = DasJdo_str(pEl->value);
 				pG->uMime += 1;
 			}
 		}
@@ -422,7 +422,7 @@ static void _dassrc_walkGroup(_walk_t* pW, das_src_sec_e sec, const char* sName,
 	pW->uGroup += 1;
 
 	const DasJdo* pProps = _dassrc_groupProps(pJdo);
-	for(const das_json_dict_el* pEl = DasJdo_dictFirst(pProps); pEl; pEl = pEl->next){
+	for(const DasJsonDictEl* pEl = DasJdo_dictFirst(pProps); pEl; pEl = pEl->next){
 		if(!_dassrc_isPropDict(pEl->value)) continue;
 		_dassrc_walkProp(pW, pG, pEl->name->string, pEl->value);
 	}
@@ -431,16 +431,16 @@ static void _dassrc_walkGroup(_walk_t* pW, das_src_sec_e sec, const char* sName,
 /* Groups of a section in presentation order: "time" first for coordinates,
  * otherwise as the node lists them.  Forms want time on top and nodes do
  * not always put it there. */
-static void _dassrc_walkSection(_walk_t* pW, das_src_sec_e sec, const DasJdo* pSec)
+static void _dassrc_walkSection(_walk_t* pW, das_srcsec sec, const DasJdo* pSec)
 {
 	if(!_dassrc_jisdict(pSec)) return;
 	if(pW->pSrc != NULL) pW->pSrc->aSecFirst[sec] = pW->uGroup;
-	if(sec == das_src_sec_coord){
-		for(const das_json_dict_el* pEl = DasJdo_dictFirst(pSec); pEl; pEl = pEl->next)
+	if(sec == DASSRCSEC_COORD){
+		for(const DasJsonDictEl* pEl = DasJdo_dictFirst(pSec); pEl; pEl = pEl->next)
 			if(_dassrc_strieq(pEl->name->string, "time")) _dassrc_walkGroup(pW, sec, pEl->name->string, pEl->value);
 	}
-	for(const das_json_dict_el* pEl = DasJdo_dictFirst(pSec); pEl; pEl = pEl->next){
-		if((sec == das_src_sec_coord) && _dassrc_strieq(pEl->name->string, "time")) continue;
+	for(const DasJsonDictEl* pEl = DasJdo_dictFirst(pSec); pEl; pEl = pEl->next){
+		if((sec == DASSRCSEC_COORD) && _dassrc_strieq(pEl->name->string, "time")) continue;
 		_dassrc_walkGroup(pW, sec, pEl->name->string, pEl->value);
 	}
 }
@@ -449,15 +449,15 @@ static void _dassrc_walkIface(_walk_t* pW, const DasJdo* pIface)
 {
 	const DasJdo* pCoords = _dassrc_jget(pIface, "coords");
 	if(pCoords == NULL) pCoords = _dassrc_jget(pIface, "coordinates");
-	_dassrc_walkSection(pW, das_src_sec_coord, pCoords);
-	_dassrc_walkSection(pW, das_src_sec_data, _dassrc_jget(pIface, "data"));
-	_dassrc_walkSection(pW, das_src_sec_format, _dassrc_jget(pIface, "formats"));
+	_dassrc_walkSection(pW, DASSRCSEC_COORD, pCoords);
+	_dassrc_walkSection(pW, DASSRCSEC_DATA, _dassrc_jget(pIface, "data"));
+	_dassrc_walkSection(pW, DASSRCSEC_FORMAT, _dassrc_jget(pIface, "formats"));
 
 	/* Options are one group with no enclosing section */
 	const DasJdo* pOpts = _dassrc_jget(pIface, "options");
 	if(_dassrc_jisdict(pOpts)){
-		if(pW->pSrc != NULL) pW->pSrc->aSecFirst[das_src_sec_option] = pW->uGroup;
-		_dassrc_walkGroup(pW, das_src_sec_option, "", pOpts);
+		if(pW->pSrc != NULL) pW->pSrc->aSecFirst[DASSRCSEC_OPTION] = pW->uGroup;
+		_dassrc_walkGroup(pW, DASSRCSEC_OPTION, "", pOpts);
 	}
 }
 
@@ -476,11 +476,11 @@ static bool _dassrc_exPathToKey(const char* sPath, char* sKey, size_t uLen)
 	while(*pBeg){
 		const char* pEnd = strchr(pBeg, '/');
 		size_t n = pEnd ? (size_t)(pEnd - pBeg) : strlen(pBeg);
-		char sTok[DAS_MAX_ID_BUFSZ];
+		char sTok[DASID_SZ];
 		if((n == 0)||(n >= sizeof(sTok))) return false;
 		memcpy(sTok, pBeg, n); sTok[n] = '\0';
 		const char* sOut = sTok;
-		das_src_sec_e sec;
+		das_srcsec sec;
 		if(strcmp(sTok, "props") == 0) sOut = NULL;
 		else if((nTok == 0) && _das_src_secByName(sTok, &sec)) sOut = g_sSecName[sec];
 		if(sOut != NULL){
@@ -498,7 +498,7 @@ static bool _dassrc_exPathToKey(const char* sPath, char* sKey, size_t uLen)
  * flags entry for it, or the flag name itself */
 static const char* _DasSrcCtrl_flagVal(const DasSrcCtrl* pC, const char* sFlag, char* sBuf, size_t uLen)
 {
-	char sPath[DAS_MAX_ID_BUFSZ + 8];
+	char sPath[DASID_SZ + 8];
 	snprintf(sPath, sizeof(sPath), "flags/%s", sFlag);
 	const DasJdo* pF = _dassrc_jget(pC->pParam, sPath);
 	if(!_das_json_scalar(_dassrc_jget(pF, "value"), sBuf, uLen)) _dassrc_strcpyz(sBuf, sFlag, uLen);
@@ -512,7 +512,7 @@ static const char* _DasSrcCtrl_flagVal(const DasSrcCtrl* pC, const char* sFlag, 
 static bool _DasSrc_exampleFromParams(DasSrc* pThis, DasReq* pReq, const DasJdo* pParams)
 {
 	char sVal[SCALAR_SZ], sFlagVal[SCALAR_SZ], sPVal[SCALAR_SZ];
-	for(const das_json_dict_el* pP = DasJdo_dictFirst(pParams); pP; pP = pP->next){
+	for(const DasJsonDictEl* pP = DasJdo_dictFirst(pParams); pP; pP = pP->next){
 		const char* sName = pP->name->string;
 		if(!_das_json_scalar(pP->value, sVal, sizeof(sVal))) continue;
 
@@ -570,7 +570,7 @@ static bool _DasSrc_exampleFromParams(DasSrc* pThis, DasReq* pReq, const DasJdo*
 			const DasJdo* pEnum = _dassrc_jget(pC->pSet, "enum");
 			if(_dassrc_jisary(pEnum)){
 				/* which choice sends this protocol value? */
-				for(const das_json_ary_el* pEl = DasJdo_aryFirst(pEnum); !bHandled && pEl; pEl = pEl->next){
+				for(const DasJsonAryEl* pEl = DasJdo_aryFirst(pEnum); !bHandled && pEl; pEl = pEl->next){
 					const DasJdo* pItem = _dassrc_jisdict(pEl->value) ? _dassrc_jget(pEl->value, "value") : pEl->value;
 					char sItem[SCALAR_SZ];
 					if(!_das_json_scalar(pItem, sItem, sizeof(sItem))) continue;
@@ -620,7 +620,7 @@ static bool _DasSrc_loadExamples(DasSrc* pThis)
 
 	char sKey[256], sVal[SCALAR_SZ];
 	if(bLegacyEx){
-		for(const das_json_dict_el* pEl = DasJdo_dictFirst(pEx); pEl; pEl = pEl->next){
+		for(const DasJsonDictEl* pEl = DasJdo_dictFirst(pEx); pEl; pEl = pEl->next){
 			DasReq* pReq = new_DasReq();
 			if(pReq == NULL) return false;
 			pThis->aExample[pThis->uExample] = pReq;
@@ -629,14 +629,14 @@ static bool _DasSrc_loadExamples(DasSrc* pThis)
 			if(sLabel == NULL) sLabel = _dassrc_jstr(pEl->value, "name");
 			if(sLabel == NULL) sLabel = pEl->name->string;
 			DasReq_setLabel(pReq, sLabel);
-			DasSrc_stamp(pThis, pReq);
+			DasSrc_stampReq(pThis, pReq);
 			const DasJdo* pParams = _dassrc_jget(pEl->value, "http_params");
 			if(_dassrc_jisdict(pParams) && !_DasSrc_exampleFromParams(pThis, pReq, pParams)) return false;
 		}
 		return true;
 	}
 
-	for(const das_json_ary_el* pEl = DasJdo_aryFirst(pEx); pEl; pEl = pEl->next){
+	for(const DasJsonAryEl* pEl = DasJdo_aryFirst(pEx); pEl; pEl = pEl->next){
 		DasReq* pReq = new_DasReq();
 		if(pReq == NULL) return false;
 		pThis->aExample[pThis->uExample] = pReq;
@@ -645,11 +645,11 @@ static bool _DasSrc_loadExamples(DasSrc* pThis)
 		if(sLabel == NULL) sLabel = _dassrc_jstr(pEl->value, "title");
 		if(sLabel == NULL) sLabel = _dassrc_jstr(pEl->value, "name");
 		DasReq_setLabel(pReq, sLabel);
-		DasSrc_stamp(pThis, pReq);
+		DasSrc_stampReq(pThis, pReq);
 		const DasJdo* pSettings = _dassrc_jget(pEl->value, "settings");
-		for(const das_json_dict_el* pP = DasJdo_dictFirst(pSettings); pP; pP = pP->next){
+		for(const DasJsonDictEl* pP = DasJdo_dictFirst(pSettings); pP; pP = pP->next){
 			if(!_dassrc_exPathToKey(pP->name->string, sKey, sizeof(sKey))){
-				daslog_warn_v("Ignoring example setting '%s' in %s, the path makes no sense",
+				daslog_warnf("Ignoring example setting '%s' in %s, the path makes no sense",
 				              pP->name->string, pThis->sUrl);
 				continue;
 			}
@@ -686,15 +686,15 @@ void del_DasSrc(DasSrc* pThis)
 DasSrc* new_DasSrc_json(const char* sDoc, size_t uLen, const char* sPathUri, const char* sUrl)
 {
 	const char* sWhere = sUrl ? sUrl : (sPathUri ? sPathUri : "(memory)");
-	DasJdo* pDoc = das_json_parse(sDoc, uLen);
+	DasJdo* pDoc = new_DasJdo_parse(sDoc, uLen);
 	if(!_dassrc_jisdict(pDoc)){
-		daslog_error_v("Source document %s is not a JSON object", sWhere);
+		daslog_errorf("Source document %s is not a JSON object", sWhere);
 		free(pDoc);
 		return NULL;
 	}
 	const char* sType = _dassrc_jstr(pDoc, "type");
 	if(!_dassrc_strieq(sType, "HttpStreamSrc")){
-		daslog_error_v("Node %s is of type %s, only HttpStreamSrc nodes describe data sources "
+		daslog_errorf("Node %s is of type %s, only HttpStreamSrc nodes describe data sources "
 		               "this library can query", sWhere, sType ? sType : "(none)");
 		free(pDoc);
 		return NULL;
@@ -703,7 +703,7 @@ DasSrc* new_DasSrc_json(const char* sDoc, size_t uLen, const char* sPathUri, con
 	DasStreamSrc* pStream = (DasStreamSrc*)calloc(1, sizeof(DasStreamSrc));
 	if(pStream == NULL){ free(pDoc); return NULL; }
 	DasSrc* pThis = &(pStream->base);
-	pThis->kind = das_src_kind_stream;
+	pThis->kind = DASSRCKIND_STREAM;
 	pThis->pDoc = pDoc;
 
 	/* A source given no URI has none, and a requisition it makes carries
@@ -750,13 +750,13 @@ DasSrc* new_DasSrc_json(const char* sDoc, size_t uLen, const char* sPathUri, con
 	pThis->uProp = w.uProp;
 	pThis->uCtrl = w.uCtrl;
 	if(w.bFail || (uGroups != w.uGroup) || (uProps != w.uProp) || (uCtrls != w.uCtrl)){
-		daslog_error_v("Couldn't build the interface of source %s", sWhere);
+		daslog_errorf("Couldn't build the interface of source %s", sWhere);
 		del_DasSrc(pThis);
 		return NULL;
 	}
 
 	if(!_DasSrc_loadExamples(pThis)){
-		daslog_error_v("Couldn't read the examples of source %s", sWhere);
+		daslog_errorf("Couldn't read the examples of source %s", sWhere);
 		del_DasSrc(pThis);
 		return NULL;
 	}
@@ -770,24 +770,24 @@ DasSrc* new_DasSrc_node(const DasNode* pNode)
 		/* Name the children so a caller can pick one; picking is not done
 		   here because the library has no basis for the choice. */
 		const char* aNames[8];
-		size_t uKids = dassrc_loadable(pNode, aNames, 8);
+		size_t uKids = DasSrc_loadable(pNode, aNames, 8);
 		char sMsg[512];
 		size_t n = snprintf(sMsg, sizeof(sMsg), "Node %s is not a data source", DasNode_srcUrl(pNode));
 		if(uKids > 0) n = _dassrc_catf(sMsg, sizeof(sMsg), n, ", its loadable children are:");
 		for(size_t u = 0; (u < uKids) && (u < 8); ++u) n = _dassrc_catf(sMsg, sizeof(sMsg), n, " %s", aNames[u]);
-		daslog_error_v("%s", sMsg);
+		daslog_errorf("%s", sMsg);
 		return NULL;
 	}
-	const DasJdo* pDom = DasNode_getJdo(pNode, NULL);
+	const DasJdo* pDom = DasNode_jdo(pNode, NULL);
 	if(pDom == NULL) return NULL;
 
 	/* A serialized copy keeps the source independent of the tree.  Nodes
 	   are a few KB, so this is cheaper than sharing with a reference count
 	   would be to get right. */
 	size_t uLen = 0;
-	char* sText = (char*)DasJdo_writeMinified(pDom, &uLen);
+	char* sText = (char*)DasJdo_newMiniStr(pDom, &uLen);
 	if(sText == NULL){
-		daslog_error_v("Couldn't copy the document of node %s", DasNode_srcUrl(pNode));
+		daslog_errorf("Couldn't copy the document of node %s", DasNode_srcUrl(pNode));
 		return NULL;
 	}
 	DasSrc* pThis = new_DasSrc_json(sText, uLen, DasNode_pathUri(pNode), DasNode_srcUrl(pNode));
@@ -798,7 +798,7 @@ DasSrc* new_DasSrc_node(const DasNode* pNode)
 /* ************************************************************************* */
 /* Identity */
 
-das_src_kind_e DasSrc_kind(const DasSrc* pThis){ return pThis->kind; }
+das_srckind DasSrc_kind(const DasSrc* pThis){ return pThis->kind; }
 const char* DasSrc_path(const DasSrc* pThis){ return pThis->sPath; }
 const char* DasSrc_url(const DasSrc* pThis){ return pThis->sUrl; }
 
@@ -844,11 +844,11 @@ static const DasJdo* _DasSrc_contacts(const DasSrc* pThis)
 	return _dassrc_jisary(p) ? p : NULL;
 }
 
-size_t DasSrc_contactCount(const DasSrc* pThis){ return _dassrc_jlen(_DasSrc_contacts(pThis)); }
+size_t DasSrc_numContacts(const DasSrc* pThis){ return _dassrc_jlen(_DasSrc_contacts(pThis)); }
 
-const char* DasSrc_contact(const DasSrc* pThis, size_t uIdx, const char** psEmail)
+const char* DasSrc_contactAt(const DasSrc* pThis, size_t uIdx, const char** psEmail)
 {
-	const das_json_ary_el* pEl = DasJdo_aryFirst(_DasSrc_contacts(pThis));
+	const DasJsonAryEl* pEl = DasJdo_aryFirst(_DasSrc_contacts(pThis));
 	for(size_t u = 0; (u < uIdx) && pEl; ++u) pEl = pEl->next;
 	if(pEl == NULL) return NULL;
 	const char* sName = _dassrc_jstr(pEl->value, "name");
@@ -860,34 +860,34 @@ const char* DasSrc_contact(const DasSrc* pThis, size_t uIdx, const char** psEmai
 const DasJdo* DasSrc_jdo(const DasSrc* pThis, const char* sFragment)
 {
 	if((sFragment == NULL)||(sFragment[0] == '\0')) return pThis->pDoc;
-	return DasJdo_get(pThis->pDoc, sFragment);
+	return DasJdo_subtree(pThis->pDoc, sFragment);
 }
 
 /* ************************************************************************* */
 /* Groups */
 
-size_t DasSrc_groupCount(const DasSrc* pThis, das_src_sec_e sec)
+size_t DasSrc_numGroups(const DasSrc* pThis, das_srcsec sec)
 {
-	return ((sec >= 0)&&(sec < das_src_sec_size)) ? pThis->aSecCount[sec] : 0;
+	return ((sec >= 0)&&(sec < DASSRCSEC_SIZE)) ? pThis->aSecCount[sec] : 0;
 }
 
-const DasSrcGroup* DasSrc_group(const DasSrc* pThis, das_src_sec_e sec, size_t uIdx)
+const DasSrcGroup* DasSrc_groupAt(const DasSrc* pThis, das_srcsec sec, size_t uIdx)
 {
-	if(uIdx >= DasSrc_groupCount(pThis, sec)) return NULL;
+	if(uIdx >= DasSrc_numGroups(pThis, sec)) return NULL;
 	return pThis->aGroup + pThis->aSecFirst[sec] + uIdx;
 }
 
-const DasSrcGroup* DasSrc_findGroup(const DasSrc* pThis, das_src_sec_e sec, const char* sName)
+const DasSrcGroup* DasSrc_group(const DasSrc* pThis, das_srcsec sec, const char* sName)
 {
 	if(sName == NULL) sName = "";
-	for(size_t u = 0; u < DasSrc_groupCount(pThis, sec); ++u){
-		const DasSrcGroup* pG = DasSrc_group(pThis, sec, u);
+	for(size_t u = 0; u < DasSrc_numGroups(pThis, sec); ++u){
+		const DasSrcGroup* pG = DasSrc_groupAt(pThis, sec, u);
 		if(_dassrc_strieq(pG->sName, sName)) return pG;
 	}
 	return NULL;
 }
 
-das_src_sec_e DasSrcGroup_section(const DasSrcGroup* pThis){ return pThis->sec; }
+das_srcsec DasSrcGroup_section(const DasSrcGroup* pThis){ return pThis->sec; }
 const char* DasSrcGroup_name(const DasSrcGroup* pThis){ return pThis->sName; }
 
 const char* DasSrcGroup_label(const DasSrcGroup* pThis)
@@ -903,58 +903,58 @@ const char* DasSrcGroup_title(const DasSrcGroup* pThis)
 	return s ? s : "";
 }
 
-const DasSrcProp* DasSrcGroup_prop(const DasSrcGroup* pThis, size_t uIdx)
+const DasSrcProp* DasSrcGroup_propAt(const DasSrcGroup* pThis, size_t uIdx)
 {
 	return (uIdx < pThis->uCount) ? pThis->pSrc->aProp + pThis->uFirst + uIdx : NULL;
 }
 
-const DasSrcProp* DasSrcGroup_enable(const DasSrcGroup* pThis)
+const DasSrcProp* DasSrcGroup_enableProp(const DasSrcGroup* pThis)
 {
-	return (pThis->nEnable < 0) ? NULL : DasSrcGroup_prop(pThis, (size_t)pThis->nEnable);
+	return (pThis->nEnable < 0) ? NULL : DasSrcGroup_propAt(pThis, (size_t)pThis->nEnable);
 }
 
 const char* DasSrcGroup_xorGroup(const DasSrcGroup* pThis){ return pThis->sXor; }
-size_t DasSrcGroup_mimeCount(const DasSrcGroup* pThis){ return pThis->uMime; }
+size_t DasSrcGroup_numMimes(const DasSrcGroup* pThis){ return pThis->uMime; }
 
-const char* DasSrcGroup_mime(const DasSrcGroup* pThis, size_t uIdx)
+const char* DasSrcGroup_mimeAt(const DasSrcGroup* pThis, size_t uIdx)
 {
 	return (uIdx < pThis->uMime) ? pThis->aMime[uIdx] : NULL;
 }
 
-size_t DasSrcGroup_propCount(const DasSrcGroup* pThis){ return pThis->uCount; }
+size_t DasSrcGroup_numProps(const DasSrcGroup* pThis){ return pThis->uCount; }
 
-const DasSrcProp* DasSrcGroup_findProp(const DasSrcGroup* pThis, const char* sName)
+const DasSrcProp* DasSrcGroup_prop(const DasSrcGroup* pThis, const char* sName)
 {
 	for(size_t u = 0; u < pThis->uCount; ++u){
-		const DasSrcProp* p = DasSrcGroup_prop(pThis, u);
+		const DasSrcProp* p = DasSrcGroup_propAt(pThis, u);
 		if(_das_src_propEq(p->sName, sName)) return p;
 	}
 	return NULL;
 }
 
-size_t DasSrcGroup_ctrlCount(const DasSrcGroup* pThis)
+size_t DasSrcGroup_numCtrls(const DasSrcGroup* pThis)
 {
 	size_t n = 0;
 	for(size_t u = 0; u < pThis->uCount; ++u)
-		if(DasSrcGroup_prop(pThis, u)->pCtrl != NULL) ++n;
+		if(DasSrcGroup_propAt(pThis, u)->pCtrl != NULL) ++n;
 	return n;
 }
 
 /* ************************************************************************* */
 /* Properties */
 
-size_t DasSrc_propCount(const DasSrc* pThis){ return pThis->uProp; }
+size_t DasSrc_numProps(const DasSrc* pThis){ return pThis->uProp; }
 
-const DasSrcProp* DasSrc_prop(const DasSrc* pThis, size_t uIdx)
+const DasSrcProp* DasSrc_propAt(const DasSrc* pThis, size_t uIdx)
 {
 	return (uIdx < pThis->uProp) ? pThis->aProp + uIdx : NULL;
 }
 
-das_src_sec_e DasSrcProp_section(const DasSrcProp* pThis){ return pThis->sec; }
+das_srcsec DasSrcProp_section(const DasSrcProp* pThis){ return pThis->sec; }
 const DasSrcGroup* DasSrcProp_group(const DasSrcProp* pThis){ return pThis->pGroup; }
 const char* DasSrcProp_name(const DasSrcProp* pThis){ return pThis->sName; }
 const char* DasSrcProp_key(const DasSrcProp* pThis){ return pThis->sKey; }
-das_srcprop_type_e DasSrcProp_type(const DasSrcProp* pThis){ return pThis->type; }
+das_srcproptype DasSrcProp_type(const DasSrcProp* pThis){ return pThis->type; }
 const char* DasSrcProp_typeName(const DasSrcProp* pThis){ return pThis->sTypeName; }
 const char* DasSrcProp_value(const DasSrcProp* pThis){ return pThis->sValue; }
 const DasSrcCtrl* DasSrcProp_ctrl(const DasSrcProp* pThis){ return pThis->pCtrl; }
@@ -966,14 +966,14 @@ const char* DasSrcProp_units(const DasSrcProp* pThis)
 {
 	const DasJdo* pU = _dassrc_jget(pThis->pJdo, "units");
 	if(pU != NULL){
-		if(pU->type == das_json_type_str) return DasJdo_string(pU);
+		if(pU->type == DASJSONTYPE_STR) return DasJdo_str(pU);
 		if(_dassrc_jstr(pU, "value")) return _dassrc_jstr(pU, "value");
 	}
-	if(pThis->sec == das_src_sec_coord){
+	if(pThis->sec == DASSRCSEC_COORD){
 		const char* s = _dassrc_jstr(_dassrc_groupProps(pThis->pGroup->pJdo), "units/value");
 		if(s != NULL) return s;
 	}
-	if(pThis->type == das_srcprop_time) return "UTC";
+	if(pThis->type == DASSRCPROPTYPE_TIME) return "UTC";
 	return "";
 }
 
@@ -984,12 +984,12 @@ const char* DasSrcProp_title(const DasSrcProp* pThis, char* sBuf, size_t uLen)
 	if(s == NULL) s = _dassrc_jstr(pThis->pJdo, "label");
 	if(s == NULL) s = _dassrc_jstr(pThis->pJdo, "name");
 	if(s != NULL) return s;
-	if(pThis->sec == das_src_sec_option) return "";
+	if(pThis->sec == DASSRCSEC_OPTION) return "";
 
 	const char* sGroup = DasSrcGroup_label(pThis->pGroup);
 	const char* sProp = _das_src_propName(pThis->sName);
 	if(strcmp(sProp, "enabled") == 0){
-		if(pThis->sec == das_src_sec_format){
+		if(pThis->sec == DASSRCSEC_FORMAT){
 			snprintf(sBuf, uLen, "Output as %s", sGroup);
 		}
 		else{
@@ -1000,7 +1000,7 @@ const char* DasSrcProp_title(const DasSrcProp* pThis, char* sBuf, size_t uLen)
 		}
 		return sBuf;
 	}
-	if(pThis->sec == das_src_sec_coord){
+	if(pThis->sec == DASSRCSEC_COORD){
 		const char* sFmt = NULL;
 		if(strcmp(sProp, "min") == 0)        sFmt = "Minimum %s value to output";
 		else if(strcmp(sProp, "max") == 0)   sFmt = "Maximum %s value to output";
@@ -1020,11 +1020,11 @@ const char* DasSrcProp_title(const DasSrcProp* pThis, char* sBuf, size_t uLen)
 /* Controls */
 
 const DasSrcProp* DasSrcCtrl_prop(const DasSrcCtrl* pThis){ return pThis->pProp; }
-bool DasSrcCtrl_required(const DasSrcCtrl* pThis){ return pThis->bRequired; }
+bool DasSrcCtrl_isRequired(const DasSrcCtrl* pThis){ return pThis->bRequired; }
 const char* DasSrcCtrl_param(const DasSrcCtrl* pThis){ return pThis->sParam; }
-size_t DasSrcCtrl_enumCount(const DasSrcCtrl* pThis){ return pThis->uEnum; }
+size_t DasSrcCtrl_numEnums(const DasSrcCtrl* pThis){ return pThis->uEnum; }
 
-const char* DasSrcCtrl_enum(const DasSrcCtrl* pThis, size_t uIdx)
+const char* DasSrcCtrl_enumAt(const DasSrcCtrl* pThis, size_t uIdx)
 {
 	return (uIdx < pThis->uEnum) ? pThis->aEnum[uIdx] : NULL;
 }
@@ -1047,13 +1047,13 @@ das_errcode DasSrcCtrl_check(const DasSrcCtrl* pThis, const char* sVal, char* sW
 	char* pEnd = NULL;
 
 	switch(pThis->pProp->type){
-	case das_srcprop_bool:{
+	case DASSRCPROPTYPE_BOOL:{
 		bool b;
 		if(_dassrc_parseBool(sVal, &b)) return DAS_OKAY;
 		snprintf(sWhy, uWhy, "'%s' is not a boolean value for %s, use true or false", sVal, sKey);
 		return DASERR_SRC;
 	}
-	case das_srcprop_enum:{
+	case DASSRCPROPTYPE_ENUM:{
 		for(size_t u = 0; u < pThis->uEnum; ++u)
 			if(_dassrc_strieq(pThis->aEnum[u], sVal)) return DAS_OKAY;
 		size_t u = snprintf(sWhy, uWhy, "'%s' is not an allowed value for %s, choose one of:", sVal, sKey);
@@ -1061,21 +1061,21 @@ das_errcode DasSrcCtrl_check(const DasSrcCtrl* pThis, const char* sVal, char* sW
 			u = _dassrc_catf(sWhy, uWhy, u, "%s %s", v ? "," : "", pThis->aEnum[v]);
 		return DASERR_SRC;
 	}
-	case das_srcprop_int:
+	case DASSRCPROPTYPE_INT:
 		strtol(sVal, &pEnd, 10);
 		if((pEnd != sVal) && (*pEnd == '\0')) return DAS_OKAY;
 		snprintf(sWhy, uWhy, "'%s' is not an integer value for %s", sVal, sKey);
 		return DASERR_SRC;
-	case das_srcprop_real:
+	case DASSRCPROPTYPE_REAL:
 		strtod(sVal, &pEnd);
 		if((pEnd != sVal) && (*pEnd == '\0')) return DAS_OKAY;
 		snprintf(sWhy, uWhy, "'%s' is not a real value for %s", sVal, sKey);
 		return DASERR_SRC;
-	case das_srcprop_time:{
+	case DASSRCPROPTYPE_TIME:{
 		/* "now" is how nodes spell an open ended range and servers take
 		   it in requests too */
-		das_time dt;
-		if(_dassrc_strieq(sVal, "now") || dt_parsetime(&dt, sVal)) return DAS_OKAY;
+		DasTime dt;
+		if(_dassrc_strieq(sVal, "now") || DasTime_fromStr(&dt, sVal)) return DAS_OKAY;
 		snprintf(sWhy, uWhy, "'%s' is not a time value for %s, use ISO 8601 such as "
 		         "2026-01-15T12:00", sVal, sKey);
 		return DASERR_SRC;
@@ -1090,12 +1090,12 @@ das_errcode DasSrcCtrl_check(const DasSrcCtrl* pThis, const char* sVal, char* sW
 
 int _DasSrc_match(const DasSrc* pThis, const char* sKey, const DasSrcProp** aOut, int nMax)
 {
-	char aParts[3][DAS_MAX_ID_BUFSZ];
+	char aParts[3][DASID_SZ];
 	int nParts = _das_src_splitKey(sKey, aParts);
 	if(nParts == 0) return 0;
 
 	int n = 0;
-	das_src_sec_e sec;
+	das_srcsec sec;
 	const DasSrcProp* p = NULL;
 
 #define _ADD_MATCH if(n < nMax) aOut[n] = p; ++n;
@@ -1117,8 +1117,8 @@ int _DasSrc_match(const DasSrc* pThis, const char* sKey, const DasSrcProp** aOut
 			for(size_t u = 0; u < pThis->uProp; ++u){
 				p = pThis->aProp + u;
 				if(p->sec != sec) continue;
-				if((sec == das_src_sec_option) && _das_src_propEq(p->sName, aParts[1])){ _ADD_MATCH }
-				else if((sec != das_src_sec_option) && _dassrc_strieq(p->pGroup->sName, aParts[1]) &&
+				if((sec == DASSRCSEC_OPTION) && _das_src_propEq(p->sName, aParts[1])){ _ADD_MATCH }
+				else if((sec != DASSRCSEC_OPTION) && _dassrc_strieq(p->pGroup->sName, aParts[1]) &&
 				        _das_src_propEq(p->sName, "enabled")){ _ADD_MATCH }
 			}
 			if(n > 0) return n;
@@ -1133,8 +1133,8 @@ int _DasSrc_match(const DasSrc* pThis, const char* sKey, const DasSrcProp** aOut
 	/* One part: an option, or a variable/format toggle */
 	for(size_t u = 0; u < pThis->uProp; ++u){
 		p = pThis->aProp + u;
-		if((p->sec == das_src_sec_option) && _das_src_propEq(p->sName, aParts[0])){ _ADD_MATCH }
-		else if((p->sec != das_src_sec_option) && _dassrc_strieq(p->pGroup->sName, aParts[0]) &&
+		if((p->sec == DASSRCSEC_OPTION) && _das_src_propEq(p->sName, aParts[0])){ _ADD_MATCH }
+		else if((p->sec != DASSRCSEC_OPTION) && _dassrc_strieq(p->pGroup->sName, aParts[0]) &&
 		        _das_src_propEq(p->sName, "enabled")){ _ADD_MATCH }
 	}
 	if(n > 0) return n;
@@ -1144,7 +1144,7 @@ int _DasSrc_match(const DasSrc* pThis, const char* sKey, const DasSrcProp** aOut
 	   the ambiguity message then lists the full keys. */
 	for(size_t u = 0; u < pThis->uProp; ++u){
 		p = pThis->aProp + u;
-		if((p->sec != das_src_sec_option) && _das_src_propEq(p->sName, aParts[0])){ _ADD_MATCH }
+		if((p->sec != DASSRCSEC_OPTION) && _das_src_propEq(p->sName, aParts[0])){ _ADD_MATCH }
 	}
 #undef _ADD_MATCH
 	return n;
@@ -1152,15 +1152,15 @@ int _DasSrc_match(const DasSrc* pThis, const char* sKey, const DasSrcProp** aOut
 
 const DasSrcGroup* _DasSrc_coordGroup(const DasSrc* pThis, const char* sKey)
 {
-	char aParts[3][DAS_MAX_ID_BUFSZ];
+	char aParts[3][DASID_SZ];
 	int nParts = _das_src_splitKey(sKey, aParts);
 	const char* sGroup = NULL;
-	das_src_sec_e sec;
+	das_srcsec sec;
 	if(nParts == 1) sGroup = aParts[0];
-	else if((nParts == 2) && _das_src_secByName(aParts[0], &sec) && (sec == das_src_sec_coord))
+	else if((nParts == 2) && _das_src_secByName(aParts[0], &sec) && (sec == DASSRCSEC_COORD))
 		sGroup = aParts[1];
 	else return NULL;
-	return DasSrc_findGroup(pThis, das_src_sec_coord, sGroup);
+	return DasSrc_group(pThis, DASSRCSEC_COORD, sGroup);
 }
 
 #define MAX_MATCH 8
@@ -1188,31 +1188,31 @@ const DasSrcProp* DasSrc_findProp(const DasSrc* pThis, const char* sKey, char* s
 /* ************************************************************************* */
 /* Requisitions */
 
-size_t DasSrc_exampleCount(const DasSrc* pThis){ return pThis->uExample; }
+size_t DasSrc_numExamples(const DasSrc* pThis){ return pThis->uExample; }
 
-const char* DasSrc_exampleLabel(const DasSrc* pThis, size_t uIdx)
+const char* DasSrc_exampleLblAt(const DasSrc* pThis, size_t uIdx)
 {
 	return (uIdx < pThis->uExample) ? DasReq_label(pThis->aExample[uIdx]) : NULL;
 }
 
-void DasSrc_stamp(const DasSrc* pThis, DasReq* pReq)
+void DasSrc_stampReq(const DasSrc* pThis, DasReq* pReq)
 {
 	DasReq_setSrc(pReq, pThis->sPath, pThis->sUrl, DasSrc_version(pThis));
 }
 
-DasReq* DasSrc_newReq(const DasSrc* pThis, int nExample)
+DasReq* new_DasReq_src(const DasSrc* pThis, int nExample)
 {
 	if(nExample >= 0){
 		if((size_t)nExample >= pThis->uExample){
-			daslog_error_v("Source %s has %zu example(s), there is no example %d",
+			daslog_errorf("Source %s has %zu example(s), there is no example %d",
 			               pThis->sUrl, pThis->uExample, nExample);
 			return NULL;
 		}
-		return DasReq_copy(pThis->aExample[nExample]);
+		return new_DasReq_copy(pThis->aExample[nExample]);
 	}
 	DasReq* pReq = new_DasReq();
 	if(pReq == NULL) return NULL;
-	DasSrc_stamp(pThis, pReq);
+	DasSrc_stampReq(pThis, pReq);
 	for(size_t u = 0; u < pThis->uProp; ++u){
 		const DasSrcProp* p = pThis->aProp + u;
 		if((p->pCtrl == NULL)||!p->pCtrl->bRequired||(p->sValue != NULL)) continue;
@@ -1237,7 +1237,7 @@ static bool _dassrc_rangeItem(
 	const DasSrc* pThis, DasReq* pReq, const DasSrcGroup* pG, const char* sProp,
 	const char* sVal, bool* aPresent, bool* aCovered, char* sWhy, size_t uWhy
 ){
-	const DasSrcProp* p = DasSrcGroup_findProp(pG, sProp);
+	const DasSrcProp* p = DasSrcGroup_prop(pG, sProp);
 	if((p == NULL)||(p->pCtrl == NULL)){
 		snprintf(sWhy, uWhy, "Coordinate %s has no settable '%s' property", pG->sName, sProp);
 		return false;
@@ -1247,7 +1247,7 @@ static bool _dassrc_rangeItem(
 	if(n < 0){ snprintf(sWhy, uWhy, "Out of memory"); return false; }
 	size_t uProp = (size_t)(p - pThis->aProp);
 	pReq->aEntry[n].nProp = (int)uProp;
-	_DasReq_setVerdict(pReq, (size_t)n, das_req_ok, NULL);
+	_DasReq_setVerdict(pReq, (size_t)n, DASREQVERDICT_OK, NULL);
 	aPresent[uProp] = true;
 	aCovered[uProp] = true;
 	return true;
@@ -1260,26 +1260,26 @@ static bool _dassrc_rangeEntry(
 ){
 	if(strchr(sVal, ',') == NULL){
 		/* a single time denotes its span */
-		const DasSrcProp* pMin = DasSrcGroup_findProp(pG, "min");
-		if((pMin == NULL)||(pMin->type != das_srcprop_time)){
+		const DasSrcProp* pMin = DasSrcGroup_prop(pG, "min");
+		if((pMin == NULL)||(pMin->type != DASSRCPROPTYPE_TIME)){
 			snprintf(sWhy, uWhy, "Give coordinate %s a range as MIN,MAX", pG->sName);
 			return false;
 		}
-		das_time dtBeg, dtEnd;
-		if(!dt_parsespan(sVal, &dtBeg, &dtEnd)){
+		DasTime dtBeg, dtEnd;
+		if(!DasTime_strToSpan(sVal, &dtBeg, &dtEnd)){
 			snprintf(sWhy, uWhy, "'%s' is neither a MIN,MAX range nor a time span such "
 			         "as 2026-01-02 or 2026-01-02T14", sVal);
 			return false;
 		}
 		char sBeg[40], sEnd[40];
-		dt_isoc(&dtBeg, 0, sBeg, sizeof(sBeg));
-		dt_isoc(&dtEnd, 0, sEnd, sizeof(sEnd));
+		DasTime_toIsoC(&dtBeg, 0, sBeg, sizeof(sBeg));
+		DasTime_toIsoC(&dtEnd, 0, sEnd, sizeof(sEnd));
 		return _dassrc_rangeItem(pThis, pReq, pG, "min", sBeg, aPresent, aCovered, sWhy, uWhy) &&
 		       _dassrc_rangeItem(pThis, pReq, pG, "max", sEnd, aPresent, aCovered, sWhy, uWhy);
 	}
 
 	const char* aProps[3] = {"min", "max", NULL};
-	aProps[2] = DasSrcGroup_findProp(pG, "res") ? "res" : "inter";
+	aProps[2] = DasSrcGroup_prop(pG, "res") ? "res" : "inter";
 
 	char sCopy[SCALAR_SZ];
 	_dassrc_strcpyz(sCopy, sVal, sizeof(sCopy));
@@ -1304,7 +1304,7 @@ das_errcode DasSrc_check(const DasSrc* pThis, DasReq* pReq, size_t* puBad)
 {
 	if(puBad) *puBad = 0;
 	if(!_DasSrc_stampMatches(pThis, pReq)){
-		daslog_error_v("Requisition is for source %s%s, not %s%s",
+		daslog_errorf("Requisition is for source %s%s, not %s%s",
 		               DasReq_srcPath(pReq), DasReq_srcPath(pReq)[0] ? "" : DasReq_srcUrl(pReq),
 		               pThis->sPath, pThis->sPath[0] ? "" : pThis->sUrl);
 		return DASERR_SRC;
@@ -1329,9 +1329,9 @@ das_errcode DasSrc_check(const DasSrc* pThis, DasReq* pReq, size_t* puBad)
 		const DasSrcGroup* pG = _DasSrc_coordGroup(pThis, sKey);
 		if(pG != NULL){
 			if(_dassrc_rangeEntry(pThis, pReq, pG, sVal, aPresent, aCovered, sWhy, sizeof(sWhy)))
-				_DasReq_setVerdict(pReq, u, das_req_ok, NULL);
+				_DasReq_setVerdict(pReq, u, DASREQVERDICT_OK, NULL);
 			else{
-				_DasReq_setVerdict(pReq, u, das_req_bad, sWhy);
+				_DasReq_setVerdict(pReq, u, DASREQVERDICT_BAD, sWhy);
 				++uBad;
 			}
 			continue;
@@ -1341,34 +1341,34 @@ das_errcode DasSrc_check(const DasSrc* pThis, DasReq* pReq, size_t* puBad)
 		int n = _DasSrc_match(pThis, sKey, aMatch, MAX_MATCH);
 		if(n == 0){
 			snprintf(sWhy, sizeof(sWhy), "No property named '%s' in this source", sKey);
-			_DasReq_setVerdict(pReq, u, das_req_bad, sWhy); ++uBad; continue;
+			_DasReq_setVerdict(pReq, u, DASREQVERDICT_BAD, sWhy); ++uBad; continue;
 		}
 		if(n > 1){
 			_dassrc_ambiguous(sKey, aMatch, n, sWhy, sizeof(sWhy));
-			_DasReq_setVerdict(pReq, u, das_req_bad, sWhy); ++uBad; continue;
+			_DasReq_setVerdict(pReq, u, DASREQVERDICT_BAD, sWhy); ++uBad; continue;
 		}
 		const DasSrcProp* p = aMatch[0];
 		size_t uP = (size_t)(p - pThis->aProp);
 		pReq->aEntry[u].nProp = (int)uP;
 		if(p->pCtrl == NULL){
 			snprintf(sWhy, sizeof(sWhy), "%s is a fixed property of this source and cannot be set", p->sKey);
-			_DasReq_setVerdict(pReq, u, das_req_bad, sWhy); ++uBad; continue;
+			_DasReq_setVerdict(pReq, u, DASREQVERDICT_BAD, sWhy); ++uBad; continue;
 		}
 		aPresent[uP] = true;
 		if(sVal[0] == '\0'){
 			if(p->pCtrl->bRequired && (p->sValue == NULL)){
 				snprintf(sWhy, sizeof(sWhy), "%s is required, give it a value", p->sKey);
-				_DasReq_setVerdict(pReq, u, das_req_bad, sWhy); ++uBad;
+				_DasReq_setVerdict(pReq, u, DASREQVERDICT_BAD, sWhy); ++uBad;
 			}
 			else
-				_DasReq_setVerdict(pReq, u, das_req_ok, NULL);
+				_DasReq_setVerdict(pReq, u, DASREQVERDICT_OK, NULL);
 			continue;
 		}
 		if(DasSrcCtrl_check(p->pCtrl, sVal, sWhy, sizeof(sWhy)) != DAS_OKAY){
-			_DasReq_setVerdict(pReq, u, das_req_bad, sWhy); ++uBad; continue;
+			_DasReq_setVerdict(pReq, u, DASREQVERDICT_BAD, sWhy); ++uBad; continue;
 		}
 		aCovered[uP] = true;
-		_DasReq_setVerdict(pReq, u, das_req_ok, NULL);
+		_DasReq_setVerdict(pReq, u, DASREQVERDICT_OK, NULL);
 	}
 
 	/* An empty entry for a required control is fine after all when a range
@@ -1376,9 +1376,9 @@ das_errcode DasSrc_check(const DasSrc* pThis, DasReq* pReq, size_t* puBad)
 	   coords.time.min, the user typed time=A,B, both name one property */
 	for(size_t u = 0; u < uClient; ++u){
 		struct das_req_entry* pE = pReq->aEntry + u;
-		if((pE->verdict != das_req_bad)||(pE->nProp < 0)||(pE->sVal[0] != '\0')) continue;
+		if((pE->verdict != DASREQVERDICT_BAD)||(pE->nProp < 0)||(pE->sVal[0] != '\0')) continue;
 		if(!aCovered[pE->nProp]) continue;
-		_DasReq_setVerdict(pReq, u, das_req_ok, NULL);
+		_DasReq_setVerdict(pReq, u, DASREQVERDICT_OK, NULL);
 		--uBad;
 	}
 
@@ -1390,7 +1390,7 @@ das_errcode DasSrc_check(const DasSrc* pThis, DasReq* pReq, size_t* puBad)
 		if(n < 0) break;
 		pReq->aEntry[n].nProp = (int)u;
 		snprintf(sWhy, sizeof(sWhy), "%s is required, set it with %s=VALUE", p->sKey, p->sKey);
-		_DasReq_setVerdict(pReq, (size_t)n, das_req_bad, sWhy);
+		_DasReq_setVerdict(pReq, (size_t)n, DASREQVERDICT_BAD, sWhy);
 		++uBad;
 	}
 	free(aPresent);
@@ -1402,9 +1402,9 @@ das_errcode DasSrc_check(const DasSrc* pThis, DasReq* pReq, size_t* puBad)
 static const DasSrcGroup* _DasSrc_chosenFormat(const DasSrc* pThis, const DasReq* pReq)
 {
 	const DasSrcGroup* pDef = NULL;
-	for(size_t g = 0; g < DasSrc_groupCount(pThis, das_src_sec_format); ++g){
-		const DasSrcGroup* pG = DasSrc_group(pThis, das_src_sec_format, g);
-		const DasSrcProp* pOn = DasSrcGroup_enable(pG);
+	for(size_t g = 0; g < DasSrc_numGroups(pThis, DASSRCSEC_FORMAT); ++g){
+		const DasSrcGroup* pG = DasSrc_groupAt(pThis, DASSRCSEC_FORMAT, g);
+		const DasSrcProp* pOn = DasSrcGroup_enableProp(pG);
 		if(pOn == NULL) continue;
 		bool b = false;
 		if((pDef == NULL) && _dassrc_parseBool(pOn->sValue, &b) && b) pDef = pG;
@@ -1436,22 +1436,22 @@ const char* DasSrc_mime(const DasSrc* pThis, const DasReq* pReq)
 
 static const DasStreamSrc* _DasSrc_stream(const DasSrc* pThis)
 {
-	return (pThis->kind == das_src_kind_stream) ? (const DasStreamSrc*)pThis : NULL;
+	return (pThis->kind == DASSRCKIND_STREAM) ? (const DasStreamSrc*)pThis : NULL;
 }
 
-size_t DasStreamSrc_urlCount(const DasSrc* pThis)
+size_t DasSrc_numBaseUrls(const DasSrc* pThis)
 {
 	const DasStreamSrc* pS = _DasSrc_stream(pThis);
 	return pS ? _dassrc_jlen(pS->pBaseUrls) : 0;
 }
 
-const char* DasStreamSrc_baseUrl(const DasSrc* pThis, size_t uIdx)
+const char* DasSrc_baseUrlAt(const DasSrc* pThis, size_t uIdx)
 {
 	const DasStreamSrc* pS = _DasSrc_stream(pThis);
 	if(pS == NULL) return NULL;
-	const das_json_ary_el* pEl = DasJdo_aryFirst(pS->pBaseUrls);
+	const DasJsonAryEl* pEl = DasJdo_aryFirst(pS->pBaseUrls);
 	for(size_t u = 0; (u < uIdx) && pEl; ++u) pEl = pEl->next;
-	return pEl ? DasJdo_string(pEl->value) : NULL;
+	return pEl ? DasJdo_str(pEl->value) : NULL;
 }
 
 /* The output parameter list.  Names are borrowed from the document or the
@@ -1493,7 +1493,7 @@ static bool _dassrc_outAddFlag(_out_t* pO, const char* sName, const char* sFlagV
 {
 	_param_t* p = _dassrc_outFind(pO, sName);
 	if((p == NULL)||(p->sVal[0] == '\0')) return _dassrc_outSet(pO, sName, sFlagVal);
-	char* sNew = das_string("%s%s%s", p->sVal, sSep, sFlagVal);
+	char* sNew = dasstr_newf("%s%s%s", p->sVal, sSep, sFlagVal);
 	if(sNew == NULL) return false;
 	free(p->sVal);
 	p->sVal = sNew;
@@ -1522,7 +1522,7 @@ static void _dassrc_outClear(_out_t* pO)
 static bool _DasSrcCtrl_translate(const DasSrcCtrl* pC, const char* sVal, _out_t* pO, char* sWhy, size_t uWhy)
 {
 	const DasSrcProp* p = pC->pProp;
-	char sFlag[DAS_MAX_ID_BUFSZ] = {'\0'};
+	char sFlag[DASID_SZ] = {'\0'};
 	char sPVal[SCALAR_SZ] = {'\0'};
 	_dassrc_strcpyz(sFlag, _dassrc_jstr(pC->pSet, "flag"), sizeof(sFlag));
 	bool bHavePVal = _das_json_scalar(_dassrc_jget(pC->pSet, "pval"), sPVal, sizeof(sPVal));
@@ -1530,7 +1530,7 @@ static bool _DasSrcCtrl_translate(const DasSrcCtrl* pC, const char* sVal, _out_t
 	const DasJdo* pEnum = _dassrc_jget(pC->pSet, "enum");
 	if(_dassrc_jisary(pEnum)){
 		char sItem[SCALAR_SZ];
-		for(const das_json_ary_el* pEl = DasJdo_aryFirst(pEnum); pEl; pEl = pEl->next){
+		for(const DasJsonAryEl* pEl = DasJdo_aryFirst(pEnum); pEl; pEl = pEl->next){
 			const DasJdo* pItem = _dassrc_jisdict(pEl->value) ? _dassrc_jget(pEl->value, "value") : pEl->value;
 			if(!_das_json_scalar(pItem, sItem, sizeof(sItem))) continue;
 			if(!_dassrc_strieq(sItem, sVal)) continue;
@@ -1540,7 +1540,7 @@ static bool _DasSrcCtrl_translate(const DasSrcCtrl* pC, const char* sVal, _out_t
 			break;
 		}
 	}
-	else if(p->type == das_srcprop_bool){
+	else if(p->type == DASSRCPROPTYPE_BOOL){
 		bool bUser = false;
 		_dassrc_parseBool(sVal, &bUser);
 		const DasJdo* pTrig = _dassrc_jget(pC->pSet, "value");
@@ -1552,7 +1552,7 @@ static bool _DasSrcCtrl_translate(const DasSrcCtrl* pC, const char* sVal, _out_t
 	}
 
 	if(sFlag[0] != '\0'){
-		char sPath[DAS_MAX_ID_BUFSZ + 8];
+		char sPath[DASID_SZ + 8];
 		snprintf(sPath, sizeof(sPath), "flags/%s", sFlag);
 		const DasJdo* pF = _dassrc_jget(pC->pParam, sPath);
 		if(pF == NULL){
@@ -1581,7 +1581,7 @@ static const char* _dassrc_reqValueFor(const DasReq* pReq, size_t uProp)
 	const char* sVal = NULL;
 	for(size_t u = 0; u < pReq->uEntry; ++u){
 		const struct das_req_entry* pE = pReq->aEntry + u;
-		if((pE->nProp != (int)uProp)||(pE->verdict != das_req_ok)||(pE->sVal[0] == '\0')) continue;
+		if((pE->nProp != (int)uProp)||(pE->verdict != DASREQVERDICT_OK)||(pE->sVal[0] == '\0')) continue;
 		sVal = pE->sVal;
 	}
 	return sVal;
@@ -1590,26 +1590,26 @@ static const char* _dassrc_reqValueFor(const DasReq* pReq, size_t uProp)
 static bool _DasSrcProp_sameAsDefault(const DasSrcProp* p, const char* sVal)
 {
 	if(p->sValue == NULL) return false;
-	if(p->type == das_srcprop_bool){
+	if(p->type == DASSRCPROPTYPE_BOOL){
 		bool bA = false, bB = false;
 		return _dassrc_parseBool(sVal, &bA) && _dassrc_parseBool(p->sValue, &bB) && (bA == bB);
 	}
 	return _dassrc_strieq(sVal, p->sValue);
 }
 
-size_t DasStreamSrc_url(const DasSrc* pThis, DasReq* pReq, size_t uBase, char* sBuf, size_t uLen)
+size_t DasSrc_reqUrl(const DasSrc* pThis, DasReq* pReq, size_t uBase, char* sBuf, size_t uLen)
 {
 	if(uLen > 0) sBuf[0] = '\0';
 	const DasStreamSrc* pS = _DasSrc_stream(pThis);
 	if((pS == NULL)||(pS->pProto == NULL)||(pS->pBaseUrls == NULL)){
-		daslog_error_v("Source %s has no protocol section with base URLs, it cannot be queried",
+		daslog_errorf("Source %s has no protocol section with base URLs, it cannot be queried",
 		               pThis->sUrl);
 		return 0;
 	}
-	const char* sBase = DasStreamSrc_baseUrl(pThis, uBase);
+	const char* sBase = DasSrc_baseUrlAt(pThis, uBase);
 	if(sBase == NULL){
-		daslog_error_v("Source %s has %zu base URL(s), there is no number %zu",
-		               pThis->sUrl, DasStreamSrc_urlCount(pThis), uBase);
+		daslog_errorf("Source %s has %zu base URL(s), there is no number %zu",
+		               pThis->sUrl, DasSrc_numBaseUrls(pThis), uBase);
 		return 0;
 	}
 
@@ -1619,7 +1619,7 @@ size_t DasStreamSrc_url(const DasSrc* pThis, DasReq* pReq, size_t uBase, char* s
 	size_t uBad = 0;
 	if(DasSrc_check(pThis, pReq, &uBad) != DAS_OKAY){
 		for(size_t u = 0; u < pReq->uEntry; ++u)
-			if(pReq->aEntry[u].verdict == das_req_bad) daslog_error_v("%s", pReq->aEntry[u].sWhy);
+			if(pReq->aEntry[u].verdict == DASREQVERDICT_BAD) daslog_errorf("%s", pReq->aEntry[u].sWhy);
 		return 0;
 	}
 
@@ -1646,7 +1646,7 @@ size_t DasStreamSrc_url(const DasSrc* pThis, DasReq* pReq, size_t uBase, char* s
 		if(!bDefault && !pC->bRequired && _DasSrcProp_sameAsDefault(p, sVal)) continue;
 
 		if(!_DasSrcCtrl_translate(pC, sVal, &out, sWhy, sizeof(sWhy))){
-			daslog_error_v("%s", sWhy);
+			daslog_errorf("%s", sWhy);
 			_dassrc_outClear(&out);
 			return 0;
 		}
@@ -1657,7 +1657,7 @@ size_t DasStreamSrc_url(const DasSrc* pThis, DasReq* pReq, size_t uBase, char* s
 	}
 
 	/* Protocol parameters the node marks required, whatever supplies them */
-	for(const das_json_dict_el* pEl = DasJdo_dictFirst(pS->pParams); pEl; pEl = pEl->next){
+	for(const DasJsonDictEl* pEl = DasJdo_dictFirst(pS->pParams); pEl; pEl = pEl->next){
 		if(!_dassrc_jtrue(_dassrc_jget(pEl->value, "required"))) continue;
 		const char* sName = pEl->name->string;
 		if(_dassrc_outFind(&out, sName) != NULL) continue;
@@ -1672,7 +1672,7 @@ size_t DasStreamSrc_url(const DasSrc* pThis, DasReq* pReq, size_t uBase, char* s
 			}
 		}
 		if(nKeys == 0) _dassrc_catf(sWhy, sizeof(sWhy), n, " a raw parameter, no interface key sets it");
-		daslog_error_v("%s", sWhy);
+		daslog_errorf("%s", sWhy);
 		_dassrc_outClear(&out);
 		return 0;
 	}
@@ -1681,10 +1681,10 @@ size_t DasStreamSrc_url(const DasSrc* pThis, DasReq* pReq, size_t uBase, char* s
 	size_t uNeed = strlen(sBase);
 	const char* sJoin = strchr(sBase, '?') ? "&" : "?";
 	for(size_t i = 0; i < out.u; ++i){
-		size_t uEnc = das_url_encode(out.a[i].sVal, NULL, 0) + 1;
+		size_t uEnc = dasurl_encode(out.a[i].sVal, NULL, 0) + 1;
 		char* sEnc = (char*)malloc(uEnc);
 		if(sEnc == NULL){ _dassrc_outClear(&out); return 0; }
-		das_url_encode(out.a[i].sVal, sEnc, uEnc);
+		dasurl_encode(out.a[i].sVal, sEnc, uEnc);
 		u = _dassrc_catf(sBuf, uLen, u, "%s%s=%s", sJoin, out.a[i].sName, sEnc);
 		uNeed += strlen(sJoin) + strlen(out.a[i].sName) + 1 + strlen(sEnc);
 		free(sEnc);
@@ -1698,14 +1698,14 @@ size_t DasStreamSrc_url(const DasSrc* pThis, DasReq* pReq, size_t uBase, char* s
 /* ************************************************************************* */
 /* The sources under a container */
 
-size_t dassrc_loadable(const DasNode* pNode, const char** aNames, size_t uMax)
+size_t DasSrc_loadable(const DasNode* pNode, const char** aNames, size_t uMax)
 {
 	if((pNode == NULL) || !DasNode_isCatalog(pNode)) return 0;
-	size_t uKids = DasNode_subCount(pNode);
+	size_t uKids = DasNode_numSubs(pNode);
 	size_t uFound = 0;
 	for(size_t u = 0; u < uKids; ++u){
-		if(DasNode_subType(pNode, u) != DASNODE_STREAM_SRC) continue;
-		if(uFound < uMax) aNames[uFound] = DasNode_subName(pNode, u);
+		if(DasNode_subTypeAt(pNode, u) != DASNODETYPE_STREAM_SRC) continue;
+		if(uFound < uMax) aNames[uFound] = DasNode_subNameAt(pNode, u);
 		++uFound;
 	}
 	return uFound;

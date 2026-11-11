@@ -151,7 +151,7 @@ void prnHelp()
 
 typedef struct mf_plane {
 	char sElement[MF_ELEM_SZ];      /* das2 element: x, y, z or yscan */
-	char sName[DAS_MAX_ID_BUFSZ];   /* the plane's name attribute */
+	char sName[DASID_SZ];   /* the plane's name attribute */
 	int  iPlane;                    /* resolved index in the packet, per packet */
 } MfPlane;
 
@@ -164,8 +164,8 @@ typedef struct mf_var {
 } MfVar;
 
 typedef struct mf_dim {
-	char sPhysDim[DAS_MAX_ID_BUFSZ];
-	char sName[DAS_MAX_ID_BUFSZ];   /* empty means use physDim */
+	char sPhysDim[DASID_SZ];
+	char sName[DASID_SZ];   /* empty means use physDim */
 	dastoml_datum_t props;
 	int nVars;
 	MfVar aVars[MF_MAX_VARS];
@@ -175,8 +175,8 @@ typedef struct mf_ds {
 	int  lineno;
 	bool bHasId;
 	int  nPktId;
-	char sName[DAS_MAX_ID_BUFSZ];   /* exact output name, empty means derive */
-	char sGroup[DAS_MAX_ID_BUFSZ];  /* output group, empty: see _buildFromSection */
+	char sName[DASID_SZ];   /* exact output name, empty means derive */
+	char sGroup[DASID_SZ];  /* output group, empty: see _buildFromSection */
 	int  nNamedPkt;                 /* first packet ID a named section hit, 0 for none */
 	dastoml_datum_t props;
 	int nDims;
@@ -211,7 +211,7 @@ static char* _readFile(const char* sPath, size_t* pLen)
 {
 	FILE* pFile = fopen(sPath, "rb");
 	if(pFile == NULL){
-		das_error(PERR, "Couldn't open metafile %s", sPath);
+		daserrf(PERR, "Couldn't open metafile %s", sPath);
 		return NULL;
 	}
 	size_t uSz = 0, uRead = 0;
@@ -219,7 +219,7 @@ static char* _readFile(const char* sPath, size_t* pLen)
 	for(;;){
 		uSz += 4096;
 		char* p = (char*)realloc(sBuf, uSz + 1);
-		if(p == NULL){ free(sBuf); fclose(pFile); das_error(PERR, "Out of memory"); return NULL; }
+		if(p == NULL){ free(sBuf); fclose(pFile); daserrf(PERR, "Out of memory"); return NULL; }
 		sBuf = p;
 		size_t n = fread(sBuf + uRead, 1, uSz - uRead, pFile);
 		uRead += n;
@@ -237,7 +237,7 @@ static char* _substitute(const Context* pCtx, const char* sIn, size_t uIn, size_
 {
 	size_t uCap = uIn + 256, uLen = 0;
 	char* sOut = (char*)malloc(uCap);
-	if(sOut == NULL){ das_error(PERR, "Out of memory"); return NULL; }
+	if(sOut == NULL){ daserrf(PERR, "Out of memory"); return NULL; }
 
 	const char* p = sIn;
 	const char* pEnd = sIn + uIn;
@@ -252,7 +252,7 @@ static char* _substitute(const Context* pCtx, const char* sIn, size_t uIn, size_
 			const char* pClose = strchr(pVar + 2, '}');
 			if(pClose == NULL){
 				free(sOut);
-				das_error(PERR, "Metafile: unterminated ${ substitution");
+				daserrf(PERR, "Metafile: unterminated ${ substitution");
 				return NULL;
 			}
 			size_t uName = pClose - (pVar + 2);
@@ -265,7 +265,7 @@ static char* _substitute(const Context* pCtx, const char* sIn, size_t uIn, size_
 			}
 			if(pVal == NULL){
 				free(sOut);
-				das_error(PERR, "Metafile: no -D value given for ${%.*s}", (int)uName, pVar + 2);
+				daserrf(PERR, "Metafile: no -D value given for ${%.*s}", (int)uName, pVar + 2);
 				return NULL;
 			}
 			uVal = strlen(pVal);
@@ -276,7 +276,7 @@ static char* _substitute(const Context* pCtx, const char* sIn, size_t uIn, size_
 		if(uLen + uCopy + uVal + 1 > uCap){
 			uCap = (uLen + uCopy + uVal + 1) * 2;
 			char* pNew = (char*)realloc(sOut, uCap);
-			if(pNew == NULL){ free(sOut); das_error(PERR, "Out of memory"); return NULL; }
+			if(pNew == NULL){ free(sOut); daserrf(PERR, "Out of memory"); return NULL; }
 			sOut = pNew;
 		}
 		memcpy(sOut + uLen, p, uCopy);  uLen += uCopy;
@@ -295,8 +295,8 @@ static char* _substitute(const Context* pCtx, const char* sIn, size_t uIn, size_
 static das_errcode _mfErr(dastoml_datum_t d, const char* sMsg, const char* sArg)
 {
 	if(sArg != NULL)
-		return das_error(PERR, "Metafile line %d: %s '%s'", d.lineno, sMsg, sArg);
-	return das_error(PERR, "Metafile line %d: %s", d.lineno, sMsg);
+		return daserrf(PERR, "Metafile line %d: %s '%s'", d.lineno, sMsg, sArg);
+	return daserrf(PERR, "Metafile line %d: %s", d.lineno, sMsg);
 }
 
 static das_errcode _mfCheckKeys(dastoml_datum_t tab, const char* sSection, const char** psAllowed)
@@ -363,7 +363,7 @@ static das_errcode _mfVar(MfVar* pVar, dastoml_datum_t tab)
 		if((nRet = _mfCheckKeys(ent, "a match entry", psPlaneKeys)) != DAS_OKAY) return nRet;
 		MfPlane* pPl = pVar->aComps + i;
 		if((nRet = _mfGetStr(ent, "element", true, pPl->sElement, MF_ELEM_SZ)) != DAS_OKAY) return nRet;
-		if((nRet = _mfGetStr(ent, "name", true, pPl->sName, DAS_MAX_ID_BUFSZ)) != DAS_OKAY) return nRet;
+		if((nRet = _mfGetStr(ent, "name", true, pPl->sName, DASID_SZ)) != DAS_OKAY) return nRet;
 		if(strcmp(pPl->sElement, "y") != 0)
 			return _mfErr(ent, "only <y> planes can be grouped in this version, not element", pPl->sElement);
 		pPl->iPlane = -1;
@@ -371,7 +371,7 @@ static das_errcode _mfVar(MfVar* pVar, dastoml_datum_t tab)
 	pVar->nComps = match.u.arr.size;
 
 	if((nRet = _mfGetStr(tab, "role", false, pVar->sRole, DASDIM_ROLE_SZ)) != DAS_OKAY) return nRet;
-	if(pVar->sRole[0] == '\0') strcpy(pVar->sRole, DASVAR_CENTER);
+	if(pVar->sRole[0] == '\0') strcpy(pVar->sRole, DASDIM_ROLE_CENTER);
 
 	if((nRet = _mfGetTab(tab, "props", &(pVar->props))) != DAS_OKAY) return nRet;
 	if((nRet = _mfGetTab(tab, "ops", &(pVar->ops))) != DAS_OKAY) return nRet;
@@ -390,8 +390,8 @@ static das_errcode _mfDim(MfDim* pDim, dastoml_datum_t tab)
 	static const char* psKeys[] = {"physDim", "name", "props", "var", NULL};
 	das_errcode nRet;
 	if((nRet = _mfCheckKeys(tab, "[[dataset.dim]]", psKeys)) != DAS_OKAY) return nRet;
-	if((nRet = _mfGetStr(tab, "physDim", true, pDim->sPhysDim, DAS_MAX_ID_BUFSZ)) != DAS_OKAY) return nRet;
-	if((nRet = _mfGetStr(tab, "name", false, pDim->sName, DAS_MAX_ID_BUFSZ)) != DAS_OKAY) return nRet;
+	if((nRet = _mfGetStr(tab, "physDim", true, pDim->sPhysDim, DASID_SZ)) != DAS_OKAY) return nRet;
+	if((nRet = _mfGetStr(tab, "name", false, pDim->sName, DASID_SZ)) != DAS_OKAY) return nRet;
 	if((nRet = _mfGetTab(tab, "props", &(pDim->props))) != DAS_OKAY) return nRet;
 
 	dastoml_datum_t vars = dastoml_get(tab, "var");
@@ -427,8 +427,8 @@ static das_errcode _mfDataset(MfDs* pDs, dastoml_datum_t tab)
 		pDs->bHasId = true;
 		pDs->nPktId = (int)id.u.int64;
 	}
-	if((nRet = _mfGetStr(tab, "name", false, pDs->sName, DAS_MAX_ID_BUFSZ)) != DAS_OKAY) return nRet;
-	if((nRet = _mfGetStr(tab, "group", false, pDs->sGroup, DAS_MAX_ID_BUFSZ)) != DAS_OKAY) return nRet;
+	if((nRet = _mfGetStr(tab, "name", false, pDs->sName, DASID_SZ)) != DAS_OKAY) return nRet;
+	if((nRet = _mfGetStr(tab, "group", false, pDs->sGroup, DASID_SZ)) != DAS_OKAY) return nRet;
 	if((nRet = _mfGetTab(tab, "props", &(pDs->props))) != DAS_OKAY) return nRet;
 
 	dastoml_datum_t dims = dastoml_get(tab, "dim");
@@ -456,13 +456,13 @@ static das_errcode _mfLoad(Context* pCtx)
 	if(sText == NULL) return PERR;
 
 	Metafile* pMf = (Metafile*)calloc(1, sizeof(Metafile));
-	if(pMf == NULL){ free(sText); return das_error(PERR, "Out of memory"); }
+	if(pMf == NULL){ free(sText); return daserrf(PERR, "Out of memory"); }
 	pCtx->pMf = pMf;
 
 	pMf->toml = dastoml_parse_named(sText, (int)uText, pCtx->sMetaFile);
 	free(sText);
 	if(!pMf->toml.ok)
-		return das_error(PERR, "Metafile %s: %s", pCtx->sMetaFile, pMf->toml.errmsg);
+		return daserrf(PERR, "Metafile %s: %s", pCtx->sMetaFile, pMf->toml.errmsg);
 
 	dastoml_datum_t root = pMf->toml.toptab;
 	static const char* psKeys[] = {"props", "dataset", NULL};
@@ -507,7 +507,7 @@ static das_errcode _tomlTimeStr(dastoml_datum_t d, char* sBuf, size_t uLen)
 }
 
 /* One scalar as text, with the item type it implies */
-static das_errcode _tomlScalar(dastoml_datum_t d, char* sBuf, size_t uLen, ubyte* pType)
+static das_errcode _tomlScalar(dastoml_datum_t d, char* sBuf, size_t uLen, uint8_t* pType)
 {
 	switch(d.type){
 	case DASTOML_STRING:  *pType = DASPROP_STRING; snprintf(sBuf, uLen, "%s", d.u.s); return DAS_OKAY;
@@ -525,13 +525,13 @@ static das_errcode _tomlScalar(dastoml_datum_t d, char* sBuf, size_t uLen, ubyte
 #define PROP_VAL_SZ 4096
 
 static das_errcode _propFromArray(
-	DasDesc* pDesc, const char* sName, dastoml_datum_t arr, das_units units
+	DasDesc* pDesc, const char* sName, dastoml_datum_t arr, DasUnits units
 ){
 	if(arr.u.arr.size < 1) return _mfErr(arr, "empty array for property", sName);
 	char* sVal = (char*)calloc(PROP_VAL_SZ, 1);
-	if(sVal == NULL) return das_error(PERR, "Out of memory");
+	if(sVal == NULL) return daserrf(PERR, "Out of memory");
 	char sItem[256];
-	ubyte uType = 0, uFirst = 0;
+	uint8_t uType = 0, uFirst = 0;
 	size_t uLen = 0;
 	das_errcode nRet = DAS_OKAY;
 	for(int i = 0; i < arr.u.arr.size; ++i){
@@ -559,13 +559,13 @@ static das_errcode _propFromTable(DasDesc* pDesc, const char* sName, dastoml_dat
 	das_errcode nRet;
 	if((nRet = _mfCheckKeys(tab, "a property table", psKeys)) != DAS_OKAY) return nRet;
 
-	das_units units = NULL;
+	DasUnits units = NULL;
 	dastoml_datum_t u = dastoml_get(tab, "units");
 	if(u.type != DASTOML_UNKNOWN){
 		if(u.type != DASTOML_STRING) return _mfErr(u, "units must be a string for property", sName);
 		/* The metafile is the operator's own config, bad units there are worth
 		   stopping for rather than quietly dropping */
-		if( (units = Units_fromStr(u.u.s)) == NULL)
+		if( (units = DasUnits_fromStr(u.u.s)) == NULL)
 			return _mfErr(u, "unusable units for property", sName);
 	}
 
@@ -576,14 +576,14 @@ static das_errcode _propFromTable(DasDesc* pDesc, const char* sName, dastoml_dat
 		if((lo.type != DASTOML_UNKNOWN)||(hi.type != DASTOML_UNKNOWN))
 			return _mfErr(tab, "give value, or min and max, not both for property", sName);
 		if(v.type == DASTOML_ARRAY) return _propFromArray(pDesc, sName, v, units);
-		char sVal[256]; ubyte uType;
+		char sVal[256]; uint8_t uType;
 		if((nRet = _tomlScalar(v, sVal, 256, &uType)) != DAS_OKAY) return nRet;
 		return DasDesc_flexSet(pDesc, NULL, uType|DASPROP_SINGLE, sName, sVal, 0, units, DASPROP_DAS3);
 	}
 	if((lo.type == DASTOML_UNKNOWN)||(hi.type == DASTOML_UNKNOWN))
 		return _mfErr(tab, "a property table needs value, or both min and max, for", sName);
 	char sLo[256], sHi[256], sVal[520];
-	ubyte uLo, uHi;
+	uint8_t uLo, uHi;
 	if((nRet = _tomlScalar(lo, sLo, 256, &uLo)) != DAS_OKAY) return nRet;
 	if((nRet = _tomlScalar(hi, sHi, 256, &uHi)) != DAS_OKAY) return nRet;
 	if((uLo != uHi)||(uLo == DASPROP_STRING)||(uLo == DASPROP_BOOL))
@@ -603,7 +603,7 @@ static das_errcode _applyProps(DasDesc* pDesc, dastoml_datum_t tab)
 		case DASTOML_ARRAY: nRet = _propFromArray(pDesc, sName, v, NULL); break;
 		case DASTOML_TABLE: nRet = _propFromTable(pDesc, sName, v); break;
 		default: {
-			char sVal[256]; ubyte uType;
+			char sVal[256]; uint8_t uType;
 			if((nRet = _tomlScalar(v, sVal, 256, &uType)) != DAS_OKAY) break;
 			nRet = DasDesc_flexSet(pDesc, NULL, uType|DASPROP_SINGLE, sName, sVal, 0, NULL, DASPROP_DAS3);
 		}
@@ -621,7 +621,7 @@ static das_errcode _applyProps(DasDesc* pDesc, dastoml_datum_t tab)
 /* The ID an input packet arrived under; it is attached to the input stream */
 static int _pktId(DasPkt* pPd)
 {
-	return DasStream_getPktId((DasStream*)DasDesc_parent((DasDesc*)pPd), (DasDesc*)pPd);
+	return DasStream_pktId((DasStream*)DasDesc_parent((DasDesc*)pPd), (DasDesc*)pPd);
 }
 
 static das_errcode _resolveVar(MfVar* pVar, DasPkt* pPd, bool bLoud, bool* pFound)
@@ -629,11 +629,11 @@ static das_errcode _resolveVar(MfVar* pVar, DasPkt* pPd, bool bLoud, bool* pFoun
 	*pFound = true;
 	for(int i = 0; i < pVar->nComps; ++i){
 		MfPlane* pPl = pVar->aComps + i;
-		int iPlane = DasPkt_getPlaneIdxByName(pPd, pPl->sName, DASPLANE_Y);
+		int iPlane = DasPkt_planeIdxByName(pPd, pPl->sName, DASPLANETYPE_Y);
 		if(iPlane < 0){
 			*pFound = false;
 			if(bLoud)
-				return das_error(PERR, "Packet %02d has no <%s> plane named '%s'",
+				return daserrf(PERR, "Packet %02d has no <%s> plane named '%s'",
 					_pktId(pPd), pPl->sElement, pPl->sName);
 			return DAS_OKAY;
 		}
@@ -662,7 +662,7 @@ static das_errcode _selectSection(Metafile* pMf, DasPkt* pPd, MfDs** ppSec)
 		if(!bAll) continue;
 
 		if(*ppSec != NULL)
-			return das_error(PERR,
+			return daserrf(PERR,
 				"Metafile sections at lines %d and %d both apply to packet %02d",
 				(*ppSec)->lineno, pSec->lineno, nPktId
 			);
@@ -682,7 +682,7 @@ static das_errcode _selectSection(Metafile* pMf, DasPkt* pPd, MfDs** ppSec)
 /* The up-converter's array id for a plane: the name with dots replaced */
 static void _planeAryId(const DasPlane* pPlane, char* sBuf, size_t uLen)
 {
-	strncpy(sBuf, DasPlane_getName(pPlane), uLen - 1);
+	strncpy(sBuf, DasPlane_name(pPlane), uLen - 1);
 	sBuf[uLen - 1] = '\0';
 	for(char* p = sBuf; *p; ++p) if(*p == '.') *p = '_';
 }
@@ -690,28 +690,28 @@ static void _planeAryId(const DasPlane* pPlane, char* sBuf, size_t uLen)
 /* The input dimension whose variable reads a given array, with its var count */
 static DasDim* _dimForAry(DasDs* pDs, const DasAry* pAry)
 {
-	for(int iType = DASDIM_COORD; iType <= DASDIM_DATA; ++iType){
+	for(int iType = DASDIMTYPE_COORD; iType <= DASDIMTYPE_DATA; ++iType){
 		size_t uDims = DasDs_numDims(pDs, iType);
 		for(size_t uD = 0; uD < uDims; ++uD){
-			DasDim* pDim = DasDs_getDimByIdx(pDs, uD, iType);
+			DasDim* pDim = DasDs_dimAt(pDs, uD, iType);
 			for(size_t uV = 0; uV < DasDim_numVars(pDim); ++uV)
-				if(DasVar_getAry(DasDim_getVarByIdx(pDim, uV)) == pAry) return pDim;
+				if(DasVar_ary(DasDim_varAt(pDim, uV)) == pAry) return pDim;
 		}
 	}
 	return NULL;
 }
 
-/* Copy a dimension and its variables the way DasDs_copy() does, sharing arrays */
+/* Copy a dimension and its variables the way new_DasDs_copy() does, sharing arrays */
 static das_errcode _copyDim(DasDs* pDsOut, DasDim* pDimIn)
 {
-	DasDim* pDimOut = DasDs_makeDim(pDsOut, DasDim_type(pDimIn), DasDim_dim(pDimIn), DasDim_name(pDimIn));
+	DasDim* pDimOut = DasDs_makeDim(pDsOut, DasDim_type(pDimIn), DasDim_physDim(pDimIn), DasDim_name(pDimIn));
 	if(pDimOut == NULL) return PERR;
 	DasDesc_copyIn((DasDesc*)pDimOut, (DasDesc*)pDimIn);
-	DasDim_setAxes(pDimOut, pDimIn);
+	DasDim_setAxesFrom(pDimOut, pDimIn);
 	for(size_t uV = 0; uV < DasDim_numVars(pDimIn); ++uV){
-		DasVar* pVar = DasVar_copy(DasDim_getVarByIdx(pDimIn, uV));
+		DasVar* pVar = new_DasVar_copy(DasDim_varAt(pDimIn, uV));
 		if(pVar == NULL) return PERR;
-		if(!DasDim_addVar(pDimOut, DasDim_getRoleByIdx(pDimIn, uV), pVar)){
+		if(!DasDim_addVar(pDimOut, DasDim_roleAt(pDimIn, uV), pVar)){
 			dec_DasVar(pVar);
 			return PERR;
 		}
@@ -732,31 +732,31 @@ typedef struct comp_src {
    units and fill, so the composite's packet entry describes the same bytes. */
 static das_errcode _checkGroup(DasDs* pDsIn, DasPkt* pPd, MfVar* pVar, CompSrc* pSrc)
 {
-	char sId[DAS_MAX_ID_BUFSZ];
+	char sId[DASID_SZ];
 	for(int i = 0; i < pVar->nComps; ++i){
 		const char* sPlane = pVar->aComps[i].sName;
 		if(i > 0 && (pVar->aComps[i].iPlane != pVar->aComps[0].iPlane + i))
-			return das_error(PERR,
+			return daserrf(PERR,
 				"Packet %02d: planes '%s' and '%s' are not adjacent, grouping them "
 				"would re-encode the data", _pktId(pPd), pVar->aComps[0].sName, sPlane
 			);
-		_planeAryId(DasPkt_getPlane(pPd, pVar->aComps[i].iPlane), sId, DAS_MAX_ID_BUFSZ);
-		pSrc[i].pAry = DasDs_getAryById(pDsIn, sId);
+		_planeAryId(DasPkt_planeAt(pPd, pVar->aComps[i].iPlane), sId, DASID_SZ);
+		pSrc[i].pAry = DasDs_ary(pDsIn, sId);
 		if(pSrc[i].pAry == NULL)
-			return das_error(PERR, "Logic error, no array for plane '%s'", sPlane);
+			return daserrf(PERR, "Logic error, no array for plane '%s'", sPlane);
 		int nItems = 0;
-		pSrc[i].pCodec = DasDs_getCodecFor(pDsIn, sId, &nItems);
+		pSrc[i].pCodec = DasDs_codecFor(pDsIn, sId, &nItems);
 		if(pSrc[i].pCodec == NULL) return PERR;
 		pSrc[i].iCodec = -1;
 		for(size_t c = 0; c < DasDs_numCodecs(pDsIn); ++c)
-			if(DasDs_getCodec(pDsIn, c) == pSrc[i].pCodec){ pSrc[i].iCodec = (int)c; break; }
+			if(DasDs_codecAt(pDsIn, c) == pSrc[i].pCodec){ pSrc[i].iCodec = (int)c; break; }
 		if(pSrc[i].iCodec < 0)
-			return das_error(PERR, "Logic error, codec for plane '%s' is not in its dataset", sPlane);
+			return daserrf(PERR, "Logic error, codec for plane '%s' is not in its dataset", sPlane);
 		if(nItems != 1)
-			return das_error(PERR, "Plane '%s' carries %d items per packet, expected 1", sPlane, nItems);
+			return daserrf(PERR, "Plane '%s' carries %d items per packet, expected 1", sPlane, nItems);
 		pSrc[i].pDim = _dimForAry(pDsIn, pSrc[i].pAry);
 		if((pSrc[i].pDim == NULL)||(DasDim_numVars(pSrc[i].pDim) != 1))
-			return das_error(PERR,
+			return daserrf(PERR,
 				"Plane '%s' shares a dimension with other planes (a das2 'source' group), "
 				"grouping it is not supported", sPlane
 			);
@@ -766,21 +766,21 @@ static das_errcode _checkGroup(DasDs* pDsIn, DasPkt* pPd, MfVar* pVar, CompSrc* 
 		const CompSrc* pI = pSrc + i;
 		if((DasCodec_encoding(p0->pCodec) != DasCodec_encoding(pI->pCodec))||
 		   (DasCodec_itemBytes(p0->pCodec) != DasCodec_itemBytes(pI->pCodec)))
-			return das_error(PERR,
+			return daserrf(PERR,
 				"Planes '%s' and '%s' differ in encoding, grouping them would re-encode the data",
 				pVar->aComps[0].sName, sPlane
 			);
-		if(DasAry_valType(p0->pAry) != DasAry_valType(pI->pAry))
-			return das_error(PERR, "Planes '%s' and '%s' differ in value type", pVar->aComps[0].sName, sPlane);
+		if(DasAry_vt(p0->pAry) != DasAry_vt(pI->pAry))
+			return daserrf(PERR, "Planes '%s' and '%s' differ in value type", pVar->aComps[0].sName, sPlane);
 		if(DasAry_units(p0->pAry) != DasAry_units(pI->pAry))
-			return das_error(PERR,
+			return daserrf(PERR,
 				"Planes '%s' and '%s' differ in units (%s vs %s), a composite has one set",
-				pVar->aComps[0].sName, sPlane, Units_toStr(DasAry_units(p0->pAry)),
-				Units_toStr(DasAry_units(pI->pAry))
+				pVar->aComps[0].sName, sPlane, DasUnits_toStr(DasAry_units(p0->pAry)),
+				DasUnits_toStr(DasAry_units(pI->pAry))
 			);
-		size_t uValSz = das_vt_size(DasAry_valType(p0->pAry));
-		if(memcmp(DasAry_getFill(p0->pAry), DasAry_getFill(pI->pAry), uValSz) != 0)
-			return das_error(PERR,
+		size_t uValSz = dasvt_size(DasAry_vt(p0->pAry));
+		if(memcmp(DasAry_fill(p0->pAry), DasAry_fill(pI->pAry), uValSz) != 0)
+			return daserrf(PERR,
 				"Planes '%s' and '%s' differ in fill value, a composite has one",
 				pVar->aComps[0].sName, sPlane
 			);
@@ -796,20 +796,20 @@ static das_errcode _addComposite(
 	const DasAry* pAry0 = pSrc[0].pAry;
 	int nComps = pVar->nComps;
 
-	char sId[DAS_MAX_ID_BUFSZ];
-	snprintf(sId, DAS_MAX_ID_BUFSZ - 1, "%s_%s", DasDim_name(pDimOut), pVar->sRole);
+	char sId[DASID_SZ];
+	snprintf(sId, DASID_SZ - 1, "%s_%s", DasDim_name(pDimOut), pVar->sRole);
 
 	size_t aShape[2] = {0, (size_t)nComps};
 	DasAry* pAry = new_DasAry(
-		sId, DasAry_valType(pAry0), 0, DasAry_getFill(pAry0), 2, aShape, DasAry_units(pAry0)
+		sId, DasAry_vt(pAry0), 0, DasAry_fill(pAry0), 2, aShape, DasAry_units(pAry0)
 	);
 	if(pAry == NULL) return PERR;
 	if(DasDs_addAry(pDsOut, pAry) != DAS_OKAY){ dec_DasAry(pAry); return PERR; }
 	dec_DasAry(pAry);   /* the dataset holds the surviving reference */
 
-	if(DasDs_addFixedCodec(
+	if(DasDs_makeFixedCodec(
 		pDsOut, sId, DasCodec_semantic(pSrc[0].pCodec), DasCodec_encoding(pSrc[0].pCodec),
-		DasCodec_itemBytes(pSrc[0].pCodec), nComps, DASENC_READ
+		DasCodec_itemBytes(pSrc[0].pCodec), nComps, DASCODEC_READ
 	) == NULL)
 		return PERR;
 
@@ -824,8 +824,8 @@ static das_errcode _addComposite(
 	}
 	psAttr[2 * ops.u.tab.size] = NULL;
 
-	int8_t aMap[VARIDX_MAX] = {0, VARIDX_UNUSED, VARIDX_UNUSED, VARIDX_UNUSED,
-	                           VARIDX_UNUSED, VARIDX_UNUSED, VARIDX_UNUSED, VARIDX_UNUSED};
+	int8_t aMap[DASIDX_MAX] = {0, DASIDX_UNUSED, DASIDX_UNUSED, DASIDX_UNUSED,
+	                           DASIDX_UNUSED, DASIDX_UNUSED, DASIDX_UNUSED, DASIDX_UNUSED};
 	DasForm* pForm = new_DasForm_pairs(psAttr);
 	if(pForm == NULL) return PERR;
 	ptrdiff_t aIntShape[1] = {nComps};
@@ -840,7 +840,7 @@ static das_errcode _addComposite(
 	char sLabels[PROP_VAL_SZ] = {'\0'};
 	size_t uLen = 0;
 	for(int i = 0; (i < nComps) && bLabels; ++i){
-		const char* sLbl = DasDesc_getStr((DasDesc*)pSrc[i].pDim, "label");
+		const char* sLbl = DasDesc_val((DasDesc*)pSrc[i].pDim, "label");
 		if((sLbl == NULL)||(uLen + strlen(sLbl) + 2 > PROP_VAL_SZ)){ bLabels = false; break; }
 		if(i > 0) sLabels[uLen++] = ';';
 		strcpy(sLabels + uLen, sLbl);
@@ -854,7 +854,7 @@ static das_errcode _addComposite(
 
 	if(!DasDim_addVar(pDimOut, pVar->sRole, pVarOut)){
 		dec_DasVar(pVarOut);
-		return das_error(PERR, "Couldn't add role '%s' to dimension %s", pVar->sRole, DasDim_name(pDimOut));
+		return daserrf(PERR, "Couldn't add role '%s' to dimension %s", pVar->sRole, DasDim_name(pDimOut));
 	}
 	return DAS_OKAY;
 }
@@ -868,7 +868,7 @@ static das_errcode _buildFromSection(
 	/* Which input codec slots each group claims, and what it needs from them */
 	CompSrc aSrc[MF_MAX_DIMS][MF_MAX_VARS][MF_MAX_COMPS];
 	int* aClaim = (int*)malloc(nCodecs * sizeof(int));   /* -1 or dim*MF_MAX_VARS+var */
-	if(aClaim == NULL) return das_error(PERR, "Out of memory");
+	if(aClaim == NULL) return daserrf(PERR, "Out of memory");
 	for(int i = 0; i < nCodecs; ++i) aClaim[i] = -1;
 
 	for(int d = 0; d < pSec->nDims; ++d){
@@ -879,7 +879,7 @@ static das_errcode _buildFromSection(
 				int iCodec = aSrc[d][v][c].iCodec;
 				if(aClaim[iCodec] != -1){
 					free(aClaim);
-					return das_error(PERR, "Plane '%s' is claimed by two groups", pVar->aComps[c].sName);
+					return daserrf(PERR, "Plane '%s' is claimed by two groups", pVar->aComps[c].sName);
 				}
 				aClaim[iCodec] = d * MF_MAX_VARS + v;
 			}
@@ -900,23 +900,23 @@ static das_errcode _buildFromSection(
 	DasDs* pDsOut = new_DasDs(sId, sGroup, DasDs_rank(pDsIn));
 	if(pDsOut == NULL){ free(aClaim); return PERR; }
 	DasDesc_copyIn((DasDesc*)pDsOut, (const DasDesc*)pDsIn);
-	DasDs_setPlot(pDsOut, DasDs_getPlot(pDsIn));
+	DasDs_setPlot(pDsOut, DasDs_plot(pDsIn));
 
 	DasDim* aDimOut[MF_MAX_DIMS] = {NULL};  /* created on first use, in packet order */
 	/* Input dims already carried over.  Only coord and data dims can own an
 	   array (see _dimForAry), so their sum bounds the list. */
-	size_t uMaxCopied = DasDs_numDims(pDsIn, DASDIM_COORD) + DasDs_numDims(pDsIn, DASDIM_DATA);
+	size_t uMaxCopied = DasDs_numDims(pDsIn, DASDIMTYPE_COORD) + DasDs_numDims(pDsIn, DASDIMTYPE_DATA);
 	DasDim** aCopied = (DasDim**)calloc(uMaxCopied + 1, sizeof(DasDim*));
 	if(aCopied == NULL){
 		free(aClaim);
 		del_DasDesc((DasDesc*)pDsOut);
-		return das_error(PERR, "Out of memory");
+		return daserrf(PERR, "Out of memory");
 	}
 	int nCopied = 0;
 
 	for(int i = 0; (i < nCodecs) && (nRet == DAS_OKAY); ++i){
-		DasCodec* pCodec = DasDs_getCodec(pDsIn, i);
-		DasAry* pAry = DasCodec_getAry(pCodec);
+		DasCodec* pCodec = DasDs_codecAt(pDsIn, i);
+		DasAry* pAry = DasCodec_ary(pCodec);
 
 		if(aClaim[i] >= 0){
 			int d = aClaim[i] / MF_MAX_VARS, v = aClaim[i] % MF_MAX_VARS;
@@ -925,7 +925,7 @@ static das_errcode _buildFromSection(
 
 			if(aDimOut[d] == NULL){
 				MfDim* pMfDim = pSec->aDims + d;
-				aDimOut[d] = DasDs_makeDim(pDsOut, DASDIM_DATA, pMfDim->sPhysDim,
+				aDimOut[d] = DasDs_makeDim(pDsOut, DASDIMTYPE_DATA, pMfDim->sPhysDim,
 					pMfDim->sName[0] ? pMfDim->sName : pMfDim->sPhysDim);
 				if(aDimOut[d] == NULL){ nRet = PERR; break; }
 				if((nRet = _applyProps((DasDesc*)aDimOut[d], pMfDim->props)) != DAS_OKAY) break;
@@ -936,11 +936,11 @@ static das_errcode _buildFromSection(
 
 		/* Pass through: share the array, re-use the codec, copy the dim once */
 		if(DasDs_addAry(pDsOut, pAry) != DAS_OKAY){ nRet = PERR; break; }
-		if(DasDs_addCodecFrom(pDsOut, DasAry_id(pAry), pCodec, DasDs_pktItems(pDsIn, i),
+		if(DasDs_cloneCodec(pDsOut, DasAry_id(pAry), pCodec, DasDs_codecItemsAt(pDsIn, i),
 			DasCodec_isReader(pCodec)) == NULL){ nRet = PERR; break; }
 
 		DasDim* pDimIn = _dimForAry(pDsIn, pAry);
-		if(pDimIn == NULL){ nRet = das_error(PERR, "Logic error, orphan array %s", DasAry_id(pAry)); break; }
+		if(pDimIn == NULL){ nRet = daserrf(PERR, "Logic error, orphan array %s", DasAry_id(pAry)); break; }
 		bool bDone = false;
 		for(int k = 0; k < nCopied; ++k) if(aCopied[k] == pDimIn){ bDone = true; break; }
 		if(bDone) continue;
@@ -962,7 +962,7 @@ static das_errcode _buildFromSection(
 das_errcode onStream(DasStream* pSdIn, void* pUser)
 {
 	Context* pCtx = (Context*)pUser;
-	pCtx->pSdOut = DasStream_copy(pSdIn);
+	pCtx->pSdOut = new_DasStream_copy(pSdIn);
 	if(pCtx->pSdOut == NULL) return PERR;
 	if(pCtx->pMf != NULL){
 		das_errcode nRet = _applyProps((DasDesc*)pCtx->pSdOut, pCtx->pMf->props);
@@ -987,7 +987,7 @@ das_errcode onPktDesc(DasStream* pSdIn, DasPkt* pPd, int nPktId, void* pUser)
 		if(pSec->nNamedPkt == 0)
 			pSec->nNamedPkt = nPktId;
 		else if(pSec->nNamedPkt != nPktId)
-			return das_error(PERR,
+			return daserrf(PERR,
 				"Metafile section at line %d names its dataset '%s' but applies to "
 				"packets %02d and %02d.  Narrow it with match = { packetId = N }, or "
 				"use group = \"%s\" so names are derived per packet.",
@@ -998,12 +998,12 @@ das_errcode onPktDesc(DasStream* pSdIn, DasPkt* pPd, int nPktId, void* pUser)
 	/* A group given in the metafile replaces the upconverter's guess; the
 	   names derived from it are then <group>_<pktid> as usual. */
 	const char* sGroup = ((pSec != NULL) && (pSec->sGroup[0] != '\0')) ? pSec->sGroup : NULL;
-	DasDs* pDs = new_DasDs_packet(pSdIn, pPd, nPktId, sGroup, true);
+	DasDs* pDs = new_DasDs_fromPkt(pSdIn, pPd, nPktId, sGroup, true);
 	if(pDs == NULL) return PERR;
 
 	DasDs* pDsOut = pDs;
 	if(pSec != NULL){
-		daslog_info_v("Packet %02d: applying metafile section at line %d", nPktId, pSec->lineno);
+		daslog_infof("Packet %02d: applying metafile section at line %d", nPktId, pSec->lineno);
 		nRet = _buildFromSection(pPd, pDs, pSec, &pDsOut);
 		del_DasDesc((DasDesc*)pDs);   /* arrays the output still uses survive on their own refs */
 		if(nRet != DAS_OKAY) return nRet;
@@ -1019,7 +1019,7 @@ das_errcode onPktDesc(DasStream* pSdIn, DasPkt* pPd, int nPktId, void* pUser)
 das_errcode onPktRedef(DasStream* pSdIn, DasPkt* pPdIn, int nPktId, void* pUser)
 {
 	Context* pCtx = (Context*)pUser;
-	DasDesc* pOld = DasStream_getDesc(pCtx->pSdOut, nPktId);
+	DasDesc* pOld = DasStream_desc(pCtx->pSdOut, nPktId);
 	if(pOld == NULL) return DAS_OKAY;
 	return DasStream_freeDesc(pCtx->pSdOut, pOld);
 }
@@ -1031,8 +1031,8 @@ das_errcode onRawData(DasDesc* pDesc, const DasBuf* pBuf, int nPktId, void* pUse
 	/* The das2 model keeps DasPkt objects, see main */
 	Context* pCtx = (Context*)pUser;
 	size_t uLen = 0;
-	const ubyte* pData = DasBuf_data(pBuf, &uLen);
-	if(pData == NULL) return das_error(PERR, "Empty payload for packet %02d", nPktId);
+	const uint8_t* pData = DasBuf_data(pBuf, &uLen);
+	if(pData == NULL) return daserrf(PERR, "Empty payload for packet %02d", nPktId);
 	return DasIO_writePktBytes(pCtx->pOut, nPktId, pData, uLen);
 }
 
@@ -1050,7 +1050,7 @@ das_errcode onClose(DasStream* pSdIn, const DasExcept* pExcept, void* pUser)
 		return DAS_OKAY;
 	}
 	DasIO_exception(pOut, pExcept);
-	return (DasExcept_type(pExcept) == DAS_EX_NO_DATA) ? DAS_OKAY : PERR;
+	return (DasExcept_type(pExcept) == DASEXCEPTTYPE_NO_DATA) ? DAS_OKAY : PERR;
 }
 
 /* ************************************************************************* */
@@ -1058,33 +1058,33 @@ das_errcode onClose(DasStream* pSdIn, const DasExcept* pExcept, void* pUser)
 int main(int argc, char** argv)
 {
 	/* Exit on errors, log info messages and above */
-	das_init(argv[0], DASERR_DIS_EXIT, DASLOG_INFO, NULL);
+	daslib_init(argv[0], DASERRDISP_EXIT, DASLOG_INFO, NULL);
 
 	Context ctx;
 	memset(&ctx, 0, sizeof(Context));
 	strcpy(ctx.aLevel, "info");
 
 	for(int i = 1; i < argc; ++i){
-		if(dascmd_isArg(argv[i], "-h", "--help", NULL)){ prnHelp(); return 0; }
-		if(dascmd_getArgVal(argv, argc, "-l", "--log=", &i, ctx.aLevel, DAS_FIELD_SZ(Context, aLevel)))
+		if(dasarg_isOpt(argv[i], "-h", "--help", NULL)){ prnHelp(); return 0; }
+		if(dasarg_getOptVal(argv, argc, "-l", "--log=", &i, ctx.aLevel, DAS_FIELD_SZ(Context, aLevel)))
 			continue;
-		if(dascmd_getArgVal(argv, argc, "-m", "--meta-file=", &i, ctx.sMetaFile, DAS_FIELD_SZ(Context, sMetaFile)))
+		if(dasarg_getOptVal(argv, argc, "-m", "--meta-file=", &i, ctx.sMetaFile, DAS_FIELD_SZ(Context, sMetaFile)))
 			continue;
 		char sDef[256] = {'\0'};
-		if(dascmd_getArgVal(argv, argc, "-D", "--define=", &i, sDef, 256)){
+		if(dasarg_getOptVal(argv, argc, "-D", "--define=", &i, sDef, 256)){
 			char* pEq = strchr(sDef, '=');
 			if((pEq == NULL)||(pEq == sDef))
-				return das_error(PERR, "-D expects NAME=VALUE, not '%s'", sDef);
-			if(ctx.nDefs >= MF_MAX_DEFS) return das_error(PERR, "Too many -D options");
+				return daserrf(PERR, "-D expects NAME=VALUE, not '%s'", sDef);
+			if(ctx.nDefs >= MF_MAX_DEFS) return daserrf(PERR, "Too many -D options");
 			*pEq = '\0';
 			ctx.aDefName[ctx.nDefs] = strdup(sDef);
 			ctx.aDefVal[ctx.nDefs]  = strdup(pEq + 1);
 			++ctx.nDefs;
 			continue;
 		}
-		return das_error(PERR, "Unknown command line argument '%s', use -h for help", argv[i]);
+		return daserrf(PERR, "Unknown command line argument '%s', use -h for help", argv[i]);
 	}
-	daslog_setlevel(daslog_strlevel(ctx.aLevel));
+	daslog_setLevel(daslog_levelFromStr(ctx.aLevel));
 
 	if(ctx.sMetaFile[0] != '\0'){
 		if(_mfLoad(&ctx) != DAS_OKAY) return PERR;
@@ -1095,17 +1095,17 @@ int main(int argc, char** argv)
 
 	/* The das2 model keeps DasPkt objects, which is what the metafile's
 	   match vocabulary names.  Each packet is up-converted by hand instead. */
-	DasIO_setModel(pIn, STREAM_MODEL_V2);
+	DasIO_setModel(pIn, DASIOMODEL_V2);
 
-	das_stream_proc handler;
-	das_stream_proc_init(&handler, &ctx);
-	handler.onStreamDesc = onStream;
-	handler.onPktDesc    = onPktDesc;
+	DasIOProc handler;
+	init_DasIOProc(&handler, &ctx);
+	handler.onStream = onStream;
+	handler.onPkt    = onPktDesc;
 	handler.onPktRedef   = onPktRedef;
 	handler.onRawData    = onRawData;   /* no data handler: nothing is decoded */
 	handler.onComment    = onComment;
 	handler.onClose      = onClose;
-	DasIO_addProcessor(pIn, &handler);
+	DasIO_addProc(pIn, &handler);
 
 	int nRet = DasIO_readAll(pIn);
 

@@ -71,7 +71,7 @@ extern "C" {
  * DasBuf is not thread safe; do not share one between threads without
  * locking.
  */
-typedef struct das_buffer DasBuf;
+typedef struct das_buf_t DasBuf;
 
 /** @} */
 
@@ -148,13 +148,13 @@ DAS_API DasBuf* new_DasBuf_wrap(void* pData, size_t uLen, const char* sMode);
  *
  * @memberof DasBuf
  */
-DAS_API void DasBuf_reinit(DasBuf* pThis);
+DAS_API void DasBuf_reset(DasBuf* pThis);
 
 /** Zero the entire buffer and reset it
  *
- * Like DasBuf_reinit(), but clears all DasBuf_capacity() bytes rather than
+ * Like DasBuf_reset(), but clears all DasBuf_capacity() bytes rather than
  * only those written.  Use it on a "w" wrap of memory with prior contents;
- * for a buffer filled only through DasBuf writes, DasBuf_reinit() is
+ * for a buffer filled only through DasBuf writes, DasBuf_reset() is
  * equivalent and cheaper.
  *
  * @returns DAS_OKAY, or DASERR_BUF for a read-only buffer, whose memory
@@ -200,7 +200,7 @@ DAS_API size_t DasBuf_capacity(const DasBuf* pThis);
  *   size_t uStart = DasBuf_written(pBuf);   // survives growth, a pointer doesn't
  *   DasBuf_printf(pBuf, "%.3f", rVal);
  *   size_t uLen;
- *   const ubyte* pAll = DasBuf_data(pBuf, &uLen);
+ *   const uint8_t* pAll = DasBuf_data(pBuf, &uLen);
  *   const char* sVal = (const char*)pAll + uStart;  // assumes nothing consumed yet
  * @endcode
  *
@@ -279,7 +279,7 @@ DAS_API das_errcode DasBuf_write(DasBuf* pThis, const void* pData, size_t uLen);
  *
  * @code
  *   size_t uSpace;
- *   ubyte* pSpace = DasBuf_prepare(pBuf, 4096, &uSpace);
+ *   uint8_t* pSpace = DasBuf_prepare(pBuf, 4096, &uSpace);
  *   if(pSpace != NULL){
  *       size_t uGot = fill(pSpace, uSpace);   // may fill less than uSpace
  *       DasBuf_commit(pBuf, uGot);
@@ -303,12 +303,12 @@ DAS_API das_errcode DasBuf_write(DasBuf* pThis, const void* pData, size_t uLen);
  * 
  * @returns Pointer to the first free byte, or NULL if the buffer is
  *        read-only, or can't provide uWant bytes (or any, when uWant is 0).
- *        Only the read-only case calls das_error(). A buffer without room
- *        returns NULL, but does not call das_error.
+ *        Only the read-only case calls daserrf(). A buffer without room
+ *        returns NULL, but does not call daserrf.
  *
  * @memberof DasBuf
  */
-DAS_API ubyte* DasBuf_prepare(DasBuf* pThis, size_t uWant, size_t* pSpace);
+DAS_API uint8_t* DasBuf_prepare(DasBuf* pThis, size_t uWant, size_t* pSpace);
 
 /** Add bytes written through DasBuf_prepare() to the buffer contents
  *
@@ -378,7 +378,7 @@ DAS_API size_t DasBuf_read(DasBuf* pThis, char* pOut, size_t uOut);
  *
  * @code
  *   size_t uLen;
- *   const ubyte* pData = DasBuf_data(pBuf, &uLen);
+ *   const uint8_t* pData = DasBuf_data(pBuf, &uLen);
  *   if(pData != NULL){
  *       size_t uUsed = parse(pData, uLen);   // may use less than uLen
  *       DasBuf_consume(pBuf, uUsed);
@@ -397,7 +397,7 @@ DAS_API size_t DasBuf_read(DasBuf* pThis, char* pOut, size_t uOut);
  *
  * @memberof DasBuf
  */
-DAS_API const ubyte* DasBuf_data(const DasBuf* pThis, size_t* pLen);
+DAS_API const uint8_t* DasBuf_data(const DasBuf* pThis, size_t* pLen);
 
 /** Advance the read point past bytes obtained from DasBuf_data()
  *

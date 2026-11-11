@@ -57,9 +57,9 @@
 bool _DasVar_operand(const DasVar* pThis, das_operand* pOut)
 {
 	if(pThis->pForm == NULL){
-		das_error(DASERR_VAR,
+		daserrf(DASERR_VAR,
 			"A %s has no formalism and can not take part in arithmetic",
-			DasVar_serialType(pThis)
+			DasVar_serializeAs(pThis)
 		);
 		return false;
 	}
@@ -69,7 +69,7 @@ bool _DasVar_operand(const DasVar* pThis, das_operand* pOut)
 	   this function's cost for a field nothing reads. */
 	pOut->pForm  = pThis->pForm;
 	pOut->units  = pThis->units;
-	pOut->vtElem = (das_val_type)DasVar_elemType(pThis); /* read live, never cached */
+	pOut->vtElem = (das_vt)DasVar_et(pThis); /* read live, never cached */
 
 	pOut->nIntRank = DasVar_intrShape(pThis, pOut->aIntShape);
 	return (pOut->nIntRank >= 0);
@@ -89,8 +89,8 @@ static const DasVar_VTbl g_vtblVarBin;   /* defined at the bottom */
 static das_binop_stat _binset_resolve(
 	const das_operand* pL, int nOp, const das_operand* pR, DasBinOp** ppOut
 ){
-	const DasForm_VTbl* pLVTbl = pL->pForm->pVTbl;
-	const DasForm_VTbl* pRVTbl = pR->pForm->pVTbl;
+	const DasFormVTable* pLVTbl = pL->pForm->pVTbl;
+	const DasFormVTable* pRVTbl = pR->pForm->pVTbl;
 
 	das_binop_stat stat = dbsDecline;
 
@@ -111,13 +111,13 @@ static das_binop_stat _binset_resolve(
 DasVar* new_DasVarBin(DasVar* pLeft, char cOp, DasVar* pRight)
 {
 	if((pLeft == NULL)||(pRight == NULL)){
-		das_error(DASERR_VAR, "Null operand for a binary operation");
+		daserrf(DASERR_VAR, "Null operand for a binary operation");
 		return NULL;
 	}
 
-	int nOp = das_op_binary((const char[2]){cOp, '\0'});
-	if((nOp == D2OP_INVALID)||!das_op_isBinary(nOp)){
-		das_error(DASERR_VAR, "Unknown binary operator '%c'", cOp);
+	int nOp = dasop_binary((const char[2]){cOp, '\0'});
+	if((nOp == DASOP_INVALID)||!dasop_isBinary(nOp)){
+		daserrf(DASERR_VAR, "Unknown binary operator '%c'", cOp);
 		return NULL;
 	}
 
@@ -128,11 +128,11 @@ DasVar* new_DasVarBin(DasVar* pLeft, char cOp, DasVar* pRight)
 	/* The external shapes have to agree before any math is worth resolving.
 	   This is STRUCTURAL, so it is the walker's job; the frames and units are
 	   semantic and belong to the form. */
-	ptrdiff_t aLShape[VARIDX_MAX], aRShape[VARIDX_MAX];
+	ptrdiff_t aLShape[DASIDX_MAX], aRShape[DASIDX_MAX];
 	int nLRank = DasVar_shape(pLeft,  aLShape);
 	int nRRank = DasVar_shape(pRight, aRShape);
 	if(nLRank != nRRank){
-		das_error(DASERR_VAR,
+		daserrf(DASERR_VAR,
 			"Can not combine a rank %d variable with a rank %d one", nLRank, nRRank
 		);
 		return NULL;
@@ -146,7 +146,7 @@ DasVar* new_DasVarBin(DasVar* pLeft, char cOp, DasVar* pRight)
 
 	if(stat == dbsDecline){
 		/* Nobody claimed it.  A refusal already spoke for itself. */
-		das_error(DASERR_VAR,
+		daserrf(DASERR_VAR,
 			"No rule for %s %c %s: neither operand defines the pairing",
 			DasForm_kind(pLeft->pForm), cOp, DasForm_kind(pRight->pForm)
 		);
@@ -160,7 +160,7 @@ DasVar* new_DasVarBin(DasVar* pLeft, char cOp, DasVar* pRight)
 		return NULL;
 	}
 
-	DasDesc_init(&(pThis->base.base), DASDESC_VAR, _del_DasVar);
+	DasDesc_init(&(pThis->base.base), DASDESCTYPE_VAR, _del_DasVar);
 	pThis->base.pVTbl    = &g_vtblVarBin;
 	pThis->base.nRef  = 1;
 	pThis->base.pGen  = NULL;   /* a DasVarBin has no leaf value source; its
@@ -170,7 +170,7 @@ DasVar* new_DasVarBin(DasVar* pLeft, char cOp, DasVar* pRight)
 	   nothing downstream asks what math produced them. */
 	pThis->base.units = pRecipe->units;
 	/* owned, see _new_DasVar_gen */
-	pThis->base.pForm = DasForm_copy(pRecipe->pForm);
+	pThis->base.pForm = new_DasForm_copy(pRecipe->pForm);
 
 	pThis->pRecipe = pRecipe;   /* resolve left us the reference */
 	pThis->op      = nOp;
@@ -192,7 +192,7 @@ bool DasVar_isBin(const DasVar* pThis)
 static const DasVarBin* _DasVarBin_cast(const DasVar* pThis, const char* sFunc)
 {
 	if(!DasVar_isBin(pThis)){
-		das_error(DASERR_VAR, "%s: variable is not a binary operation", sFunc);
+		daserrf(DASERR_VAR, "%s: variable is not a binary operation", sFunc);
 		return NULL;
 	}
 	return (const DasVarBin*)pThis;
@@ -201,7 +201,7 @@ static const DasVarBin* _DasVarBin_cast(const DasVar* pThis, const char* sFunc)
 int DasVarBin_op(const DasVar* pThis)
 {
 	const DasVarBin* pBin = _DasVarBin_cast(pThis, "DasVarBin_op");
-	return (pBin != NULL) ? pBin->op : D2OP_INVALID;
+	return (pBin != NULL) ? pBin->op : DASOP_INVALID;
 }
 
 DasVar* DasVarBin_left(const DasVar* pThis)
@@ -226,8 +226,8 @@ DasVar* DasVarBin_right(const DasVar* pThis)
    caller supplied -- result first, then each operand, and an operand that is
    itself an operation carves its own share out of what is left.  That
    recursion is why _DasVar_runScratch() adds the operands' needs to its own. */
-const ubyte* _DasVarBin_runAt(
-	const DasVar* pBase, const ptrdiff_t* pLoc, ubyte* pScratch, size_t uScratch,
+const uint8_t* _DasVarBin_runAt(
+	const DasVar* pBase, const ptrdiff_t* pAddr, uint8_t* pScratch, size_t uScratch,
 	size_t* pBytes, size_t* pNeed
 ){
 	const DasVarBin* pThis = (const DasVarBin*)pBase;
@@ -236,7 +236,7 @@ const ubyte* _DasVarBin_runAt(
 
 	size_t uRes = _DasVar_itemBytes(pBase);
 	if(uRes == 0){
-		das_error(DASERR_VAR, "A ragged operation result has no fixed item width");
+		daserrf(DASERR_VAR, "A ragged operation result has no fixed item width");
 		return NULL;
 	}
 
@@ -244,13 +244,13 @@ const ubyte* _DasVarBin_runAt(
 	if((pScratch == NULL)||(uScratch < uWant)){ *pNeed = uWant; return NULL; }
 
 	/* result at the front, operand scratch behind it */
-	ubyte* pTail  = pScratch + uRes;
+	uint8_t* pTail  = pScratch + uRes;
 	size_t uTail  = uScratch - uRes;
 
 	size_t uLBytes = 0, uRBytes = 0, uSub = 0;
 
-	const ubyte* pL = _DasVar_runAt(
-		pThis->pLeft, pLoc, pTail, uTail, &uLBytes, &uSub
+	const uint8_t* pL = _DasVar_runAt(
+		pThis->pLeft, pAddr, pTail, uTail, &uLBytes, &uSub
 	);
 	if(pL == NULL){ *pNeed = (uSub > 0) ? uSub + uRes : 0; return NULL; }
 
@@ -258,8 +258,8 @@ const ubyte* _DasVarBin_runAt(
 	   operand was lent its own memory and used none. */
 	size_t uUsedL = (pL == pTail) ? _DasVar_runScratch(pThis->pLeft) : 0;
 
-	const ubyte* pR = _DasVar_runAt(
-		pThis->pRight, pLoc, pTail + uUsedL, uTail - uUsedL, &uRBytes, &uSub
+	const uint8_t* pR = _DasVar_runAt(
+		pThis->pRight, pAddr, pTail + uUsedL, uTail - uUsedL, &uRBytes, &uSub
 	);
 	if(pR == NULL){ *pNeed = (uSub > 0) ? uSub + uRes + uUsedL : 0; return NULL; }
 
@@ -270,7 +270,7 @@ const ubyte* _DasVarBin_runAt(
 }
 
 static int DasVarBin_get(
-	const DasVar* pBase, const ptrdiff_t* pLoc, das_byte_seq work, das_datum* pOut
+	const DasVar* pBase, const ptrdiff_t* pAddr, DasByteSeq work, DasDatum* pOut
 ){
 	const DasVarBin* pThis = (const DasVarBin*)pBase;
 	const DasBinOp* pOp = pThis->pRecipe;
@@ -278,17 +278,17 @@ static int DasVarBin_get(
 	/* A scalar result fits the datum's own bytes, so a caller reading plain
 	   numbers out of an operation never has to bring scratch.  Only the
 	   operand runs need room, and for a scalar operation those are scalars. */
-	ubyte aInline[DATUM_BUF_SZ * 4];
-	ubyte* pScratch = work.ptr;
-	size_t uScratch = work.sz;
+	uint8_t aInline[DASDATUM_BUF_SZ * 4];
+	uint8_t* pScratch = work.data;
+	size_t uScratch = work.size;
 	if(pOp->nIntRank == 0){
 		size_t uWant = _DasVar_runScratch(pBase);
 		if(uWant <= sizeof(aInline)){ pScratch = aInline; uScratch = sizeof(aInline); }
 	}
 
 	size_t uBytes = 0, uNeed = 0;
-	const ubyte* pRun = _DasVarBin_runAt(
-		pBase, pLoc, pScratch, uScratch, &uBytes, &uNeed
+	const uint8_t* pRun = _DasVarBin_runAt(
+		pBase, pAddr, pScratch, uScratch, &uBytes, &uNeed
 	);
 	if(pRun == NULL)
 		return (uNeed > 0) ? (int)uNeed : -1 * DASERR_VAR;
@@ -306,10 +306,10 @@ static int DasVarBin_get(
 
 		/* A decline means the recipe is inconsistent with its own form, such
 		   as a binOpLeft that attached a vector form but declared a 3;3 item.
-		   The pack has already reported the specifics through das_error, so
+		   The pack has already reported the specifics through daserrf, so
 		   log rather than overwrite that message. */
 		if(!pOp->pForm->pVTbl->pack(pOp->pForm, &op, pRun, pOut)){
-			daslog_error_v(
+			daslog_errorf(
 				"The %s formalism declined to pack a computed composite datum",
 				DasForm_kind(pOp->pForm)
 			);
@@ -319,15 +319,15 @@ static int DasVarBin_get(
 	}
 
 	if(pOp->nIntRank > 0){
-		das_error(DASERR_VAR,
-			"A %s value has no single datum form; read it with DasVar_subset",
+		daserrf(DASERR_VAR,
+			"A %s value has no single datum form; read it with new_DasAry_subset",
 			DasForm_kind(pOp->pForm)
 		);
 		return -1 * DASERR_VAR;
 	}
 
-	/* das_datum_init COPIES, so a scalar result outlives the scratch above */
-	das_datum_init(pOut, pRun, pOp->vtOut, das_vt_size(pOp->vtOut), pOp->units);
+	/* DasDatum_set COPIES, so a scalar result outlives the scratch above */
+	DasDatum_set(pOut, pRun, pOp->vtOut, dasvt_size(pOp->vtOut), pOp->units);
 	return 0;
 }
 
@@ -337,14 +337,14 @@ static int DasVarBin_shape(const DasVar* pBase, ptrdiff_t* pShape)
 {
 	const DasVarBin* pThis = (const DasVarBin*)pBase;
 
-	ptrdiff_t aRight[VARIDX_MAX];
+	ptrdiff_t aRight[DASIDX_MAX];
 	int nRank = DasVar_shape(pThis->pLeft, pShape);
 	DasVar_shape(pThis->pRight, aRight);
 
 	/* MIN merge, the live-read semantic DasDs_lengthIn already relies on:
 	   mid-stream the two operands fill different sized blocks and the extent
 	   usable across both is the smaller.  A mismatch is a normal state. */
-	das_varindex_merge(nRank, pShape, aRight);
+	dasshape_merge(nRank, pShape, aRight);
 	return nRank;
 }
 
@@ -358,25 +358,25 @@ static int DasVarBin_intrShape(const DasVar* pBase, ptrdiff_t* pShape)
 }
 
 static ptrdiff_t DasVarBin_lengthIn(
-	const DasVar* pBase, int nIdx, ptrdiff_t* pLoc
+	const DasVar* pBase, int nIdx, ptrdiff_t* pAddr
 ){
 	const DasVarBin* pThis = (const DasVarBin*)pBase;
 
-	return das_varlength_merge(
-		DasVar_lengthIn(pThis->pLeft,  nIdx, pLoc),
-		DasVar_lengthIn(pThis->pRight, nIdx, pLoc)
+	return dasshape_mergeLen(
+		DasVar_lengthIn(pThis->pLeft,  nIdx, pAddr),
+		DasVar_lengthIn(pThis->pRight, nIdx, pAddr)
 	);
 }
 
-/* The recipe settles the result type in das_val_type terms, but the slot
-   speaks das_elem_type.  The two enums agree on 0..11 by declared intent
+/* The recipe settles the result type in das_vt terms, but the slot
+   speaks das_et.  The two enums agree on 0..11 by declared intent
    (see gen_p.h), and a composite result has no ELEMENT type of its own --
-   its cells do -- so anything above the simple range is etNull here. */
-static das_elem_type DasVarBin_elemType(const DasVar* pBase)
+   its cells do -- so anything above the simple range is DASET_NULL here. */
+static das_et DasVarBin_elemType(const DasVar* pBase)
 {
-	das_val_type vt = ((const DasVarBin*)pBase)->pRecipe->vtOut;
-	if((vt < VT_MIN_SIMPLE)||(vt > VT_MAX_SIMPLE)) return etNull;
-	return (das_elem_type)vt;
+	das_vt vt = ((const DasVarBin*)pBase)->pRecipe->vtOut;
+	if((vt < DASVT_MIN_SIMPLE)||(vt > DASVT_MAX_SIMPLE)) return DASET_NULL;
+	return (das_et)vt;
 }
 
 static bool DasVarBin_isNumeric(const DasVar* pBase){ return true; }
@@ -400,7 +400,7 @@ static char* DasVarBin_prnGen(const DasVar* pBase, char* sBuf, size_t uLen)
 	pThis->pRight->pVTbl->prnGen(pThis->pRight, sRight, sizeof(sRight));
 
 	snprintf(sBuf, uLen, "(%s %s %s)",
-		sLeft, das_op_toStr(pThis->op, NULL), sRight);
+		sLeft, dasop_name(pThis->op, NULL), sRight);
 	return sBuf;
 }
 
@@ -421,7 +421,7 @@ static DasVar* DasVarBin_copy(const DasVar* pBase)
 	   context entry moved underneath, and two copies of one variable must not
 	   disagree about what math they are. */
 	DasBinOp_incRef(pCopy->pRecipe);
-	pCopy->base.pForm = DasForm_copy(pCopy->base.pForm);
+	pCopy->base.pForm = new_DasForm_copy(pCopy->base.pForm);
 	inc_DasVar(pCopy->pLeft);
 	inc_DasVar(pCopy->pRight);
 
@@ -455,7 +455,7 @@ static int DasVarBin_decRef(DasVar* pBase)
    implements it. */
 static int _DasVarBin_subsetInto(
 	const DasVar* pBase, int nRank, const ptrdiff_t* pMin,
-	const ptrdiff_t* pMax, ubyte* pBuf, size_t uBufLen
+	const ptrdiff_t* pMax, uint8_t* pBuf, size_t uBufLen
 ){
 	const DasVarBin* pThis = (const DasVarBin*)pBase;
 	const DasBinOp*  pOp   = pThis->pRecipe;
@@ -463,24 +463,24 @@ static int _DasVarBin_subsetInto(
 	size_t uItemElems = 1;
 	for(int i = 0; i < pOp->nIntRank; ++i){
 		if(pOp->aIntShape[i] < 1){
-			das_error(DASERR_NOTIMP,
+			daserrf(DASERR_NOTIMP,
 				"Ragged item runs have no fixed width to subset"
 			);
 			return -1;
 		}
 		uItemElems *= (size_t)pOp->aIntShape[i];
 	}
-	size_t uItemSz = uItemElems * das_vt_size(pOp->vtOut);
+	size_t uItemSz = uItemElems * dasvt_size(pOp->vtOut);
 
 	/* One scratch allocation for the whole walk rather than a stack frame per
 	   item.  Small operations never reach the heap at all. */
-	ubyte  aStack[256];
-	ubyte* pHeap    = NULL;
-	ubyte* pScratch = aStack;
+	uint8_t  aStack[256];
+	uint8_t* pHeap    = NULL;
+	uint8_t* pScratch = aStack;
 	size_t uScratch = _DasVar_runScratch(pBase);
 	if(uScratch > sizeof(aStack)){
-		if((pHeap = (ubyte*)malloc(uScratch)) == NULL){
-			das_error(DASERR_VAR, "Could not allocate %zu bytes of operation "
+		if((pHeap = (uint8_t*)malloc(uScratch)) == NULL){
+			daserrf(DASERR_VAR, "Could not allocate %zu bytes of operation "
 				"scratch", uScratch);
 			return -1;
 		}
@@ -491,21 +491,21 @@ static int _DasVarBin_subsetInto(
 	}
 
 	/* Row major, last external index fastest, matching DasGen_subsetInto. */
-	ptrdiff_t aLoc[VARIDX_MAX];
-	memcpy(aLoc, pMin, sizeof(ptrdiff_t) * (size_t)nRank);
+	ptrdiff_t aAddr[DASIDX_MAX];
+	memcpy(aAddr, pMin, sizeof(ptrdiff_t) * (size_t)nRank);
 
 	int    nItems = 0;
 	size_t uUsed  = 0;
 
 	while(true){
 		if(uUsed + uItemSz > uBufLen){
-			das_error(DASERR_VAR, "Subset buffer too small at item %d", nItems);
+			daserrf(DASERR_VAR, "Subset buffer too small at item %d", nItems);
 			free(pHeap);
 			return -1;
 		}
 		size_t uBytes = 0, uNeed = 0;
-		const ubyte* pRun = _DasVarBin_runAt(
-			pBase, aLoc, pScratch, uScratch, &uBytes, &uNeed
+		const uint8_t* pRun = _DasVarBin_runAt(
+			pBase, aAddr, pScratch, uScratch, &uBytes, &uNeed
 		);
 		if(pRun == NULL){ free(pHeap); return -1; }
 
@@ -516,8 +516,8 @@ static int _DasVarBin_subsetInto(
 		/* odometer */
 		int d = nRank - 1;
 		while(d >= 0){
-			if(++aLoc[d] < pMax[d]) break;
-			aLoc[d] = pMin[d];
+			if(++aAddr[d] < pMax[d]) break;
+			aAddr[d] = pMin[d];
 			--d;
 		}
 		if(d < 0) break;

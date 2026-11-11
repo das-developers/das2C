@@ -52,10 +52,10 @@ static das_errcode onStream(StreamDesc* pSd, void* pUser)
 static void test_basic(void)
 {
 	byte aBytes[4] = {1, 2, 3, 4};
-	const ubyte* pU = aBytes;  /* byte and ubyte must stay the same type */
+	const uint8_t* pU = aBytes;  /* byte and ubyte must stay the same type */
 	if(pU[3] != 4) FAIL("byte array");
 
-	if(DASIDX_MAX != ARYIDX_MAX) FAIL("DASIDX_MAX");
+	if(DASIDX_MAX != DASIDX_MAX) FAIL("DASIDX_MAX");
 	if((DASIDX_RAGGED != -1)||(DASIDX_FUNC != -2)||(DASIDX_UNUSED != -3))
 		FAIL("index flag values changed");
 	if(DEGEN != DASIDX_UNUSED) FAIL("DEGEN");
@@ -81,8 +81,8 @@ static void test_basic(void)
 	ytag_spec_t ys = ytags_series;
 	desc_type_t dt = DATASET;
 	enum dim_type dm = DASDIM_COORD;
-	if((pt != DASPLANE_YSCAN)||(pt2 != DASPLANE_X)||(ys != DASPLANE_YTAGS_SEQ)||
-	   (dt != DASDESC_DS)||(dm != DASDIM_COORD))
+	if((pt != DASPLANETYPE_YSCAN)||(pt2 != DASPLANETYPE_X)||(ys != DASYTAGTYPE_SEQ)||
+	   (dt != DASDESCTYPE_DS)||(dm != DASDIM_COORD))
 		FAIL("old enum names");
 	if(EPOCH != 2436205) FAIL("EPOCH");
 	if(jday(1958, 1, 1) != EPOCH) FAIL("jday");
@@ -99,7 +99,7 @@ static void test_basic(void)
 static void test_values(void)
 {
 	das_datum dm;
-	das_byteseq bs = {(const ubyte*)"abc", 3};
+	das_byteseq bs = {(const uint8_t*)"abc", 3};
 	if(!das_datum_byteSeq(&dm, bs, UNIT_DIMENSIONLESS)) FAIL("das_datum_byteSeq");
 
 	das_datum_fromDbl(&dm, 2.5, UNIT_DIMENSIONLESS);
@@ -194,7 +194,7 @@ static void test_time(void)
 	if((y != 2016.0)||(mo != 12.0)||(d != 31.0)||(h != 23.0)||(mi != 59.0)||(s != 60.0)
 	   ||(ms != 123.0)||(us != 456.0)||(ns != 789.0))
 		FAIL("das_utc_to_tt2K / das_tt2K_to_utc leap second round trip");
-	if(das_utc_to_tt2K(1600.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0) != DAS_TT2000_ILLEGAL)
+	if(das_utc_to_tt2K(1600.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0) != DASTIME_TT2K_ILLEGAL)
 		FAIL("das_utc_to_tt2K out of range");
 	if(das_tt2K_to_us2K(das_us2K_to_tt2K(1.0e12)) != 1.0e12)
 		FAIL("das_us2K_to_tt2K / das_tt2K_to_us2K");
@@ -218,8 +218,8 @@ static void test_vars(void)
 	if(DasVarAry_getArray(pVar) != pAry) FAIL("DasVarAry_getArray");
 	if(ref_DasVar(pVar) < 1) FAIL("ref_DasVar");
 
-	ptrdiff_t aLoc[DASIDX_MAX] = {2, 7};   /* j is degenerate, any value works */
-	if(!DasVar_getDatum(pVar, aLoc, &dm)) FAIL("DasVar_getDatum");
+	ptrdiff_t aAddr[DASIDX_MAX] = {2, 7};   /* j is degenerate, any value works */
+	if(!DasVar_getDatum(pVar, aAddr, &dm)) FAIL("DasVar_getDatum");
 	else if(das_datum_toDbl(&dm) != 3.0) FAIL("DasVar_getDatum value");
 
 	struct das_variable* pOld = pVar; (void)pOld;
@@ -229,7 +229,7 @@ static void test_vars(void)
 	   D2V_DATUM is poisoned and DasVar_type() answers D2V_SEQUENCE for both */
 	double rOne = 1.0;
 	ptrdiff_t aShape[1] = {4};
-	DasVar* pConst = new_DasVarConst(etDouble, (const ubyte*)&rOne, 1, aShape, UNIT_DIMENSIONLESS, pForm);
+	DasVar* pConst = new_DasVarConst(DASET_DOUBLE, (const uint8_t*)&rOne, 1, aShape, UNIT_DIMENSIONLESS, pForm);
 	if(pConst == NULL) FAIL("new_DasVarConst");
 	else{
 		if(DasVar_type(pConst) != D2V_SEQUENCE) FAIL("DasVar_type of a constant");
@@ -269,7 +269,7 @@ static void test_streams(void)
 	PktDesc* pPd = StreamDesc_createPktDesc(pSd, NULL, UNIT_DIMENSIONLESS);
 	if(pPd == NULL){ FAIL("StreamDesc_createPktDesc"); del_StreamDesc(pSd); return; }
 	if(StreamDesc_getNPktDesc(pSd) != 1) FAIL("StreamDesc_getNPktDesc");
-	int nId = DasStream_getPktId(pSd, (DasDesc*)pPd);
+	int nId = DasStream_pktId(pSd, (DasDesc*)pPd);
 	if(StreamDesc_freePktDesc(pSd, nId) != DAS_OKAY) FAIL("StreamDesc_freePktDesc");
 	if(StreamDesc_getNPktDesc(pSd) != 0) FAIL("StreamDesc_freePktDesc left the packet");
 	del_StreamDesc(pSd);
@@ -319,15 +319,15 @@ static void test_writers(const char* sDir)
    an alias for the opaque DasExcept, made with new_DasExcept(). */
 static void test_except(void)
 {
-	struct {const char* sType; das_except_e nType;} aCase[] = {
-		{DAS2_EXCEPT_NO_DATA_IN_INTERVAL, DAS_EX_NO_DATA},
-		{DAS2_EXCEPT_ILLEGAL_ARGUMENT,    DAS_EX_QUERY_ERR},
-		{DAS2_EXCEPT_SERVER_ERROR,        DAS_EX_SERVER_ERR},
-		{EXCEPTION_UNTYPED,               DAS_EX_UNKNOWN},
-		{"SomethingCustom",               DAS_EX_UNKNOWN}
+	struct {const char* sType; das_excepttype nType;} aCase[] = {
+		{DAS2_EXCEPT_NO_DATA_IN_INTERVAL, DASEXCEPTTYPE_NO_DATA},
+		{DAS2_EXCEPT_ILLEGAL_ARGUMENT,    DASEXCEPTTYPE_QUERY_ERR},
+		{DAS2_EXCEPT_SERVER_ERROR,        DASEXCEPTTYPE_SERVER_ERR},
+		{EXCEPTION_UNTYPED,               DASEXCEPTTYPE_UNKNOWN},
+		{"SomethingCustom",               DASEXCEPTTYPE_UNKNOWN}
 	};
 	for(size_t u = 0; u < sizeof(aCase)/sizeof(aCase[0]); ++u){
-		OobExcept* pEx = new_DasExcept(das_except_fromStr(aCase[u].sType), "message");
+		OobExcept* pEx = new_DasExcept(dasexcepttype_id(aCase[u].sType), "message");
 		if(DasExcept_type(pEx) != aCase[u].nType)
 			FAIL("das_except_fromStr type '%s'", aCase[u].sType);
 		del_DasExcept(pEx);
@@ -337,17 +337,17 @@ static void test_except(void)
 /* The refusals tested here are deliberate, so their das_error() messages
    are dropped; everything else prints as usual.  The return codes are what
    the checks look at. */
-static void _dropErrors(const das_logmsg* pMsg, void* pUser)
+static void _dropErrors(const DasLogMsg* pMsg, void* pUser)
 {
 	(void)pUser;
-	if(pMsg->nErr == DAS_OKAY) daslog_stderr(pMsg, NULL);
+	if(pMsg->errCode == DAS_OKAY) daslog_stderr(pMsg, NULL);
 }
 
 /* ************************************************************************* */
 
 int main(int argc, char** argv)
 {
-	das_loghook hook = {_dropErrors, NULL};
+	DasLogHook hook = {_dropErrors, NULL};
 	das_init(argv[0], DASERR_DIS_RET, DASLOG_INFO, &hook);
 
 	/* scratch directory for the files the tests write, make test passes $(BD) */

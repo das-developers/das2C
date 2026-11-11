@@ -80,7 +80,7 @@ bool das_dft_init(const char* sProgName){
 	FILE* pWis = NULL;
 	int nLoadWis = 0;
 	
-	if(das_isfile(DEF_WISDOM)){
+	if(dasfs_isFile(DEF_WISDOM)){
 		if( (pWis = fopen(DEF_WISDOM, "rb")) != NULL) {
 			
 			bHaveWisdomFile = true;
@@ -88,12 +88,12 @@ bool das_dft_init(const char* sProgName){
 			fclose(pWis);
 			
 			if(nLoadWis != 1){
-				daslog_debug_v("(%s) fftw3 is suspicious of the wisdom file "
+				daslog_debugf("(%s) fftw3 is suspicious of the wisdom file "
 				              DEF_WISDOM " and refused to use it.", sProgName);
 			}
 		}
 		else{
-			daslog_warn_v("(%s) Couldn't read fftw wisdom file: " DEF_WISDOM,
+			daslog_warnf("(%s) Couldn't read fftw wisdom file: " DEF_WISDOM,
 			              sProgName);
 		}
 	}
@@ -101,7 +101,7 @@ bool das_dft_init(const char* sProgName){
 	if(!bHaveWisdomFile){
 		/* Default das2 log level is info, so this works before the call to 
 		 * lower it */
-		daslog_debug_v(
+		daslog_debugf(
 			"(%s) FFTW wisdom file not found. Hint: you can speed up das2C DFT"
 			" functions by running fftw-wisdom and saving the the results in "
 			DEF_WISDOM, sProgName
@@ -122,7 +122,7 @@ bool das_dft_init(const char* sProgName){
 /* ************************************************************************* */
 /* Real DFT plans we are using are a super-set of the one in the header      */
 
-struct das_dft_plan{
+struct das_dftplan_t{
 	/* Intentionally held as a void pointer so that application code
 	 * doesn't need to have access to the fftw3.h file */
 	void* vpPlan;
@@ -215,7 +215,7 @@ bool del_DasDftPlan(DasDftPlan* pThis)
 /* ************************************************************************* */
 /* Construction/Destruction DFT object */
 
-struct das_dft {
+struct das_dft_t {
 
 	/* The plan, the only variable changed in the plan is the usage count */
 	DasDftPlan* pPlan;
@@ -255,7 +255,7 @@ DasDft* new_DasDft(DasDftPlan* pPlan, const char* sWindow)
 	pthread_mutex_unlock(&(pPlan->mtxCount));
 	
 	if((pPlan->uLen == 0) ||((pPlan->uLen) % 2 != 0)){
-		das_error(DASERR_DFT, "Can't handle odd length DFTs or DFTs "
+		daserrf(DASERR_DFT, "Can't handle odd length DFTs or DFTs "
 		           "less than 2 points long.");
 		pthread_mutex_lock(&(pPlan->mtxCount));
 		pPlan->nCount--;
@@ -265,7 +265,7 @@ DasDft* new_DasDft(DasDftPlan* pPlan, const char* sWindow)
 	
 	/* Window can be NULL, or "HANN" */
 	if(sWindow != NULL && (strncasecmp(sWindow, "HANN", 4) != 0)){
-		das_error(DASERR_DFT, "Unknown window function: '%s'", sWindow);
+		daserrf(DASERR_DFT, "Unknown window function: '%s'", sWindow);
 		pthread_mutex_lock(&(pPlan->mtxCount));
 		pPlan->nCount--;
 		pthread_mutex_unlock(&(pPlan->mtxCount));
@@ -351,7 +351,7 @@ das_errcode DasDft_calculate(
 		pthread_mutex_lock(&g_mtxExecCount);
 		g_nExecCount -= 1;
 		pthread_mutex_unlock(&g_mtxExecCount);
-		return das_error(DASERR_DFT, 
+		return daserrf(DASERR_DFT, 
 			"Some one changed the plan while it was in use! "
 			"Plan/DFT length mismatch, attempting to calculate a %zu length DFT "
 			"with a %zu length plan", pThis->uLen, pThis->pPlan->uLen
@@ -413,17 +413,17 @@ static const double* _DasDft_getComp(DasDft* pThis, size_t* pLen, size_t uCmp)
 	return pThis->pCmpOut[uCmp];
 }
 
-const double* DasDft_getReal(DasDft* pThis, size_t* pLen)
+const double* DasDft_real(DasDft* pThis, size_t* pLen)
 {
 	return _DasDft_getComp(pThis, pLen, 0);
 }
 
-const double* DasDft_getImg(DasDft* pThis, size_t* pLen)
+const double* DasDft_imag(DasDft* pThis, size_t* pLen)
 {
 	return _DasDft_getComp(pThis, pLen, 1);
 }
 
-const double* DasDft_getMagnitude(DasDft* pThis, size_t* pLen)
+const double* DasDft_amplitude(DasDft* pThis, size_t* pLen)
 {
 	if(!pThis->bNewMag){
 		*pLen = pThis->uMagLen;
@@ -457,7 +457,7 @@ const double* DasDft_getMagnitude(DasDft* pThis, size_t* pLen)
 		}
 	}
 	else{
-		das_error(DASERR_NOTIMP, "Magnitude calculation for complex input not "
+		daserrf(DASERR_NOTIMP, "Magnitude calculation for complex input not "
 				     "yet implemented");
 		return NULL;
 	}
@@ -472,7 +472,7 @@ const double* DasDft_getMagnitude(DasDft* pThis, size_t* pLen)
 /* ************************************************************************* */
 /* Construction/Re-Initialization/Destruction PSD object */
 
-struct das_psd {
+struct das_psd_t {
 
 	/* The plan, the only variable changed in the plan is the usage count */
 	DasDftPlan* pPlan;
@@ -488,7 +488,7 @@ struct das_psd {
 	/* Center data about average first */
 	bool bCenter;
 
-	/* Holder for up conversion arrays, helps DasPsd_calculate_f */
+	/* Holder for up conversion arrays, helps DasPsd_calcFloat */
 	size_t uUpConvLen;
 	double* pUpConvReal;
 	double* pUpConvImg;
@@ -515,7 +515,7 @@ DasPsd* new_DasPsd(DasDftPlan* pPlan, bool bCenter, const char* sWindow)
 	pthread_mutex_unlock(&(pPlan->mtxCount));
 
 	if((pPlan->uLen == 0) ||((pPlan->uLen) % 2 != 0)){
-		das_error(DASERR_DFT, "Can't handle odd length DFTs or DFTs "
+		daserrf(DASERR_DFT, "Can't handle odd length DFTs or DFTs "
 		           "less than 2 points long.");
 		pthread_mutex_lock(&(pPlan->mtxCount));
 		pPlan->nCount--;
@@ -593,7 +593,7 @@ void del_DasPsd(DasPsd* pThis)
 }
 
 
-das_errcode DasPsd_calculate_f(
+das_errcode DasPsd_calcFloat(
 	DasPsd* pThis, const float* pfReal, const float* pfImg
 ){
 	
@@ -627,7 +627,7 @@ das_errcode DasPsd_calculate(
 		pthread_mutex_lock(&g_mtxExecCount);
 		g_nExecCount -= 1;
 		pthread_mutex_unlock(&g_mtxExecCount);
-		return das_error(DASERR_DFT, 
+		return daserrf(DASERR_DFT, 
 			"Some one changed the plan while it was in use! "
 			"Plan/DFT length mismatch, attempting to calculate a %zu length DFT "
 			"with a %zu length plan", pThis->uLen, pThis->pPlan->uLen
@@ -726,7 +726,7 @@ double DasPsd_powerRatio(const DasPsd* pThis, double* pInput, double* pOutput)
 }
 
 
-const double* DasPsd_get(const DasPsd* pThis, size_t* pLen)
+const double* DasPsd_power(const DasPsd* pThis, size_t* pLen)
 {
 	*pLen = pThis->uMagLen;
 	return pThis->pMag;

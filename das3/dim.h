@@ -28,7 +28,7 @@ extern "C" {
 #define DASDIM_MAXDEP 16   // Arbitrary decision, can be changed
 #define DASDIM_MAXVAR 16   // Another arbitrary changeable decision
 #define DASDIM_NAXES 4     // can change later
-#define DASDIM_AXLEN 4     // Instead of single character so we can handle utf-8
+#define DASDIM_AXIS_SZ 4     // Instead of single character so we can handle utf-8
 
 	
 /* OFFSET and REFERENCE variable roles were a tough call.  In the end you only
@@ -59,7 +59,7 @@ extern "C" {
  * a lot in our work, for example frequency values for down-mixed data, radar
  * return altitudes and waveform captures.
  * 
- * DASVAR_CENTER should still be provided for client codes that don't understand
+ * DASDIM_ROLE_CENTER should still be provided for client codes that don't understand
  * the offset and reference semantic.  And since this can be done with one 
  * operation set without exploding the network data volume 
  * it doesn't seem like that much of a burden.
@@ -74,34 +74,34 @@ extern "C" {
  * -cwp
  */
 	
-DAS_API extern const char* DASVAR_CENTER;
-DAS_API extern const char* DASVAR_MIN;
-DAS_API extern const char* DASVAR_MAX;
-DAS_API extern const char* DASVAR_WIDTH;
-DAS_API extern const char* DASVAR_MEAN;   /* all these can substitute for the center    */
-DAS_API extern const char* DASVAR_MEDIAN; /* if the center is missing but they are      */
-DAS_API extern const char* DASVAR_MODE;   /* distinct so it's good to include them here */
-DAS_API extern const char* DASVAR_REF; 
-DAS_API extern const char* DASVAR_OFFSET; 
-DAS_API extern const char* DASVAR_MAX_ERR;
-DAS_API extern const char* DASVAR_MIN_ERR;
-DAS_API extern const char* DASVAR_STD_DEV;
+DAS_API extern const char* DASDIM_ROLE_CENTER;
+DAS_API extern const char* DASDIM_ROLE_MIN;
+DAS_API extern const char* DASDIM_ROLE_MAX;
+DAS_API extern const char* DASDIM_ROLE_WIDTH;
+DAS_API extern const char* DASDIM_ROLE_MEAN;   /* all these can substitute for the center    */
+DAS_API extern const char* DASDIM_ROLE_MEDIAN; /* if the center is missing but they are      */
+DAS_API extern const char* DASDIM_ROLE_MODE;   /* distinct so it's good to include them here */
+DAS_API extern const char* DASDIM_ROLE_REF; 
+DAS_API extern const char* DASDIM_ROLE_OFFSET; 
+DAS_API extern const char* DASDIM_ROLE_MAX_ERR;
+DAS_API extern const char* DASDIM_ROLE_MIN_ERR;
+DAS_API extern const char* DASDIM_ROLE_STD_DEV;
 /* A binner that averages already-averaged data has to know how many 
    measurements are in each bin or sparse bin weigh as much as full ones. */
-DAS_API extern const char* DASVAR_COUNT;
-DAS_API extern const char* DASVAR_WEIGHT;
+DAS_API extern const char* DASDIM_ROLE_COUNT;
+DAS_API extern const char* DASDIM_ROLE_WEIGHT;
 
-DAS_API extern const char* DASVAR_NORM;
+DAS_API extern const char* DASDIM_ROLE_NORM;
 
 /* Withheld until the math exists.  point_spread has no formalism to
    interpret it, so naming it would promise handling das2C does not have:
-   extern const char* DASVAR_SPREAD;
+   extern const char* DASDIM_ROLE_SPREAD;
  */
 
 
 #define DASDIM_ROLE_SZ 32
 
-typedef enum das_dim_type { DASDIM_UNK = 0, DASDIM_COORD, DASDIM_DATA } das_dim_type_e;
+typedef enum das_dimtype_e { DASDIMTYPE_UNK = 0, DASDIMTYPE_COORD, DASDIMTYPE_DATA } das_dimtype;
 
 /** @addtogroup datamodel
  * @{
@@ -130,7 +130,7 @@ typedef enum das_dim_type { DASDIM_UNK = 0, DASDIM_COORD, DASDIM_DATA } das_dim_
  * 
  * @extends DasDesc
  */
-typedef struct das_dim DasDim;
+typedef struct das_dim_t DasDim;
 
 /** @} */
 
@@ -147,13 +147,13 @@ typedef struct das_dim DasDim;
  *        If NULL, defaults to sDim.  This matters because sometimes we may
  *        have multiple things that take data in the same coordinates.
  * 
- * @param dtype One of DASDIM_COORD, DASDIM_DATA
+ * @param dtype One of DASDIMTYPE_COORD, DASDIMTYPE_DATA
  * 
  * @param nRank
  * @memberof DasDim
  * @return 
  */
-DAS_API DasDim* new_DasDim(const char* sDim, const char* sName, das_dim_type_e dtype, int nRank);
+DAS_API DasDim* new_DasDim(const char* sDim, const char* sName, das_dimtype dtype, int nRank);
 
 
 /** Get the dimension's category
@@ -166,12 +166,12 @@ DAS_API DasDim* new_DasDim(const char* sDim, const char* sName, das_dim_type_e d
  * 
  * @memberof DasDim
  */
-DAS_API const char* DasDim_dim(const DasDim* pThis);
+DAS_API const char* DasDim_physDim(const DasDim* pThis);
 
 /** Get the dimension's name
  *
  * This is the unique name of a coord or data element in das3 headers.  Where
- * DasDim_dim() gives the physical category, the name tells apart the
+ * DasDim_physDim() gives the physical category, the name tells apart the
  * dimensions of a dataset that share one, 'search_coil' and 'static_mag' for
  * example.  Lowercase is recommend in the manner of a database key.
  *
@@ -188,7 +188,7 @@ DAS_API const char* DasDim_name(const DasDim* pThis);
  * 
  * @memberof DasDim
  */
-DAS_API das_dim_type_e DasDim_type(const DasDim* pThis);
+DAS_API das_dimtype DasDim_type(const DasDim* pThis);
 
 /** Get this dimensions's usage as coordinates or data as a string
  * 
@@ -198,7 +198,7 @@ DAS_API const char* DasDim_typeName(const DasDim* pThis);
 
 /** Get the number of plot axes this dimension is associated with
  *
- * Axes are filled from index 0, so loop to this count with DasDim_getAxis().
+ * Axes are filled from index 0, so loop to this count with DasDim_axisSymAt().
  *
  * @returns The number of axes set, 0 if the dimension has no axis affinity
  * @memberof DasDim
@@ -218,7 +218,7 @@ DAS_API int DasDim_numAxes(const DasDim* pThis);
  * 
  * @memberof DasDim
  */
-DAS_API das_errcode DasDim_setAxis(DasDim* pThis, int iAxis, const char* sAxis);
+DAS_API das_errcode DasDim_setAxisSym(DasDim* pThis, int iAxis, const char* sAxis);
 
 /** Get the axis affinity, if any.
  * 
@@ -226,13 +226,13 @@ DAS_API das_errcode DasDim_setAxis(DasDim* pThis, int iAxis, const char* sAxis);
  *          between 0 and DASDIM_NAXES - 1
  * @memberof DasDim
  */
-DAS_API const char* DasDim_getAxis(const DasDim* pThis, int iAxis);
+DAS_API const char* DasDim_axisSymAt(const DasDim* pThis, int iAxis);
 
 /** Set my AXES to match some other dimension,
  * Useful for stream filters
  * @memberof DasDim
  */
-DAS_API void DasDim_setAxes(DasDim* pThis, const DasDim* pOther);
+DAS_API void DasDim_setAxesFrom(DasDim* pThis, const DasDim* pOther);
 
 /** Set primary coordinate status
  * 
@@ -327,7 +327,7 @@ DAS_API bool DasDim_isKnownRole(const char* sPurpose);
  *
  * @memberof DasDim
  */
-DAS_API const char* das_role_fromStr(const char* sRole);
+DAS_API const char* DasDim_roleFromStr(const char* sRole);
 
 /** Add a variable to a dimension
  *
@@ -335,10 +335,10 @@ DAS_API const char* das_role_fromStr(const char* sRole);
  * @param pVar the variable to add
  * @param sRole The type of information this variable supplies for the 
  *             dimension.  Any string may be used, standard values are
- *             provided in the defines: DASVAR_CENTER, DASVAR_MIN, DASVAR_MAX,
- *             DASVAR_WIDTH, DASVAR_REF, DASVAR_OFFSET, DASVAR_MEAN, DASVAR_MEDIAN,
- *             DASVAR_MODE, DASVAR_MAX_ERR, DASVAR_MIN_ERR, DASVAR_STD_DEV,
- *             DASVAR_COUNT, DASVAR_WEIGHT and DASVAR_NORM.  Any non-empty
+ *             provided in the defines: DASDIM_ROLE_CENTER, DASDIM_ROLE_MIN, DASDIM_ROLE_MAX,
+ *             DASDIM_ROLE_WIDTH, DASDIM_ROLE_REF, DASDIM_ROLE_OFFSET, DASDIM_ROLE_MEAN, DASDIM_ROLE_MEDIAN,
+ *             DASDIM_ROLE_MODE, DASDIM_ROLE_MAX_ERR, DASDIM_ROLE_MIN_ERR, DASDIM_ROLE_STD_DEV,
+ *             DASDIM_ROLE_COUNT, DASDIM_ROLE_WEIGHT and DASDIM_ROLE_NORM.  Any non-empty
  *             string under DASDIM_ROLE_SZ characters is acceptable, using a
  *             single case is preferred; see DasDim_isKnownRole() for which
  *             names the library acts on rather than merely stores.
@@ -357,17 +357,17 @@ DAS_API bool DasDim_addVar(DasDim* pThis, const char* sRole, DasVar* pVar);
  * @param pThis A pointer to a dimension
  * 
  * @param sRole A string defining the role,  Any string may be used,
- *              standard values are provided in the defines: DASVAR_CENTER,
- *              DASVAR_MIN, DASVAR_MAX, DASVAR_WIDTH, DASVAR_REF, DASVAR_OFFSET, 
- *              DASVAR_MEAN, DASVAR_MEDIAN, DASVAR_MODE, DASVAR_MAX_ERR,
- *              DASVAR_MIN_ERR, DASVAR_STD_DEV, DASVAR_COUNT, DASVAR_WEIGHT
- *              and DASVAR_NORM.
+ *              standard values are provided in the defines: DASDIM_ROLE_CENTER,
+ *              DASDIM_ROLE_MIN, DASDIM_ROLE_MAX, DASDIM_ROLE_WIDTH, DASDIM_ROLE_REF, DASDIM_ROLE_OFFSET, 
+ *              DASDIM_ROLE_MEAN, DASDIM_ROLE_MEDIAN, DASDIM_ROLE_MODE, DASDIM_ROLE_MAX_ERR,
+ *              DASDIM_ROLE_MIN_ERR, DASDIM_ROLE_STD_DEV, DASDIM_ROLE_COUNT, DASDIM_ROLE_WEIGHT
+ *              and DASDIM_ROLE_NORM.
  * 
  * @returns A pointer to a DasVar or NULL if no variable exists within this 
  *         dimension for the given role.
  * @memberof DasDim
  */
-DAS_API DasVar* DasDim_getVar(DasDim* pThis, const char* sRole);
+DAS_API DasVar* DasDim_var(DasDim* pThis, const char* sRole);
 
 
 /** Get the number of vars in a dimension 
@@ -391,7 +391,7 @@ DAS_API size_t DasDim_numVars(const DasDim* pThis);
  *        defined at that index
  * @memberof DasDim
  */
-DAS_API DasVar* DasDim_getVarByIdx(const DasDim* pThis, size_t uIdx);
+DAS_API DasVar* DasDim_varAt(const DasDim* pThis, size_t uIdx);
 
 /** Get a variable's role by index
  * 
@@ -405,13 +405,13 @@ DAS_API DasVar* DasDim_getVarByIdx(const DasDim* pThis, size_t uIdx);
  *        if no variable is defined at that index
  * @memberof DasDim
  */
-DAS_API const char* DasDim_getRoleByIdx(const DasDim* pThis, size_t uIdx);
+DAS_API const char* DasDim_roleAt(const DasDim* pThis, size_t uIdx);
 
  
 
 /** Get a variable providing single point values in a dimension
  * 
- * The most common variable role, DASVAR_CENTER, is typically present in a 
+ * The most common variable role, DASDIM_ROLE_CENTER, is typically present in a 
  * dimension but not always.  Sometimes other roles take this variable's 
  * place, such as the mean, median or mode or an average of the minimum and
  * maximum values.  Use this function to autoselect a variable to use as the
@@ -427,7 +427,7 @@ DAS_API const char* DasDim_getRoleByIdx(const DasDim* pThis, size_t uIdx);
  * 
  * @memberof DasDim
  */
-DAS_API DasVar* DasDim_getPointVar(DasDim* pThis);
+DAS_API DasVar* DasDim_pointVar(DasDim* pThis);
 
 
 /** Remove a variable by role from a dimensions
@@ -460,8 +460,8 @@ DAS_API DasVar* DasDim_popVar(DasDim* pThis, const char* role);
  * 
  * @code
  * // Given two dimension structure pointer, pLat and pLong
- * ptrdiff_t lat_shape[VARIDX_MAX];
- * ptrdiff_t long_shape[VARIDX_MAX];
+ * ptrdiff_t lat_shape[DASIDX_MAX];
+ * ptrdiff_t long_shape[DASIDX_MAX];
  * 
  * DasDim_shape(pLat, lat_shape);
  * DasDim_shape(pLong, long_shape);
@@ -482,7 +482,7 @@ DAS_API DasVar* DasDim_popVar(DasDim* pThis, const char* role);
  * 
  * @param pThis the Coordinate Dimension or Data Dimension in question
  * 
- * @param pShape a pointer to an array up to VARIDX_MAX in size to receive the
+ * @param pShape a pointer to an array up to DASIDX_MAX in size to receive the
  *        shape values.  A -1 in any position means that the index in question
  *        does not affect any of variables within this dimension.
  * 
@@ -503,31 +503,31 @@ DAS_API int DasDim_shape(const DasDim* pThis, ptrdiff_t* pShape);
  * @param pThis A pointer to a DasDim structure
  * @param nIdx The number of location indices which may be less than the 
  *             number needed to specify an exact value.
- * @param pLoc A list of values for the previous indexes, must be a value 
+ * @param pAddr A list of values for the previous indexes, must be a value 
  *             greater than or equal to 0
  * @return The number of sub-elements at this index location or D2IDX_UNUSED
- *         if this variable doesn't depend on a given location, or VARIDX_UNUSED
+ *         if this variable doesn't depend on a given location, or DASIDX_UNUSED
  *         if this variable returns computed results for this location
  * 
  * @see DasAry_lengthIn
  * 
  * @memberof DasDim
  */
-DAS_API ptrdiff_t DasDim_lengthIn(const DasDim* pThis, int nIdx, ptrdiff_t* pLoc);
+DAS_API ptrdiff_t DasDim_lengthIn(const DasDim* pThis, int nIdx, ptrdiff_t* pAddr);
 
 
 /** Does a given extern index even matter to data in this physical dimension?
  * 
  * @param pThis A pointer to a DasDim structure
  * 
- * @param iIndex The index in question, from 0 to VARIDX_MAX - 1
+ * @param iIndex The index in question, from 0 to DASIDX_MAX - 1
  * 
  * @return true if varying this index could cause any variable's output
  *         to change, false if it would have no effect.
  * 
  * @memberof DasDim
  */
-DAS_API bool DasDim_degenerate(const DasDim* pThis, int iIndex);
+DAS_API bool DasDim_isDegenerate(const DasDim* pThis, int iIndex);
 
 
 #ifdef __cplusplus

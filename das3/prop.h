@@ -36,9 +36,9 @@ extern "C" {
  * Individual properties of a descriptor.
  *
  * Properties are always made by their container, which packs them into
- * storage it owns (a DasDesc, or the das_form_param_buf handed to
+ * storage it owns (a DasDesc, or the DasFormParamBuf handed to
  * DasForm_paramAt()).  Thus there are no "new_" or "del_" function for
- * properties, set them with the DasDesc_set*() calls and read them with
+ * properties, set them with the DasDesc_setProp*() calls and read them with
  * the accessors below.
  *
  * Each property has:
@@ -50,14 +50,14 @@ extern "C" {
  *   - Associated units
  *
  */
-typedef struct das_prop DasProp;
+typedef struct das_prop_t DasProp;
 
 /** @} */
 
 /** Get the units for a property
  * @memberof DasProp
  */
-DAS_API das_units DasProp_units(const DasProp* pProp);
+DAS_API DasUnits DasProp_units(const DasProp* pProp);
 
 /** Get name of a property
  * @memberof DasProp
@@ -103,7 +103,7 @@ DAS_API char DasProp_sep(const DasProp* pProp);
 /** Determine if two properties contain equal content 
  * @memberof DasProp
  */
-DAS_API bool DasProp_equal(const DasProp* pOne, const DasProp* pTwo);
+DAS_API bool DasProp_isEqual(const DasProp* pOne, const DasProp* pTwo);
 
 
 /** Get a das3 type string for this property 
@@ -128,7 +128,7 @@ DAS_API const char* DasProp_typeStr2(const DasProp* pProp);
  * 
  * @memberof DasProp
  */
-DAS_API int DasProp_convertInt(const DasProp* pProp, int64_t* pBuf, size_t uBufLen);
+DAS_API int DasProp_toInts(const DasProp* pProp, int64_t* pBuf, size_t uBufLen);
 
 /** Convert real-value properties to double
  * 
@@ -136,7 +136,7 @@ DAS_API int DasProp_convertInt(const DasProp* pProp, int64_t* pBuf, size_t uBufL
  * 
  * @memberof DasProp
  */
-DAS_API int DasProp_convertReal(const DasProp* pProp, double* pBuf, size_t uBufLen);
+DAS_API int DasProp_toDoubles(const DasProp* pProp, double* pBuf, size_t uBufLen);
 
 /** Convert boolean property values to bytes
  *
@@ -144,7 +144,7 @@ DAS_API int DasProp_convertReal(const DasProp* pProp, double* pBuf, size_t uBufL
  *
  * @memberof DasProp
  */
-DAS_API int DasProp_convertBool(const DasProp* pProp, uint8_t* pBuf, size_t uBufLen);
+DAS_API int DasProp_toBools(const DasProp* pProp, uint8_t* pBuf, size_t uBufLen);
 
 /** Convert datatime properties TT2K long integers 
  * 
@@ -152,12 +152,12 @@ DAS_API int DasProp_convertBool(const DasProp* pProp, uint8_t* pBuf, size_t uBuf
  * 
  * @memberof DasProp
  */
-DAS_API int DasProp_convertTt2k(const DasProp* pProp, int64_t* pBuf, size_t uBufLen);
+DAS_API int DasProp_toTt2ks(const DasProp* pProp, int64_t* pBuf, size_t uBufLen);
 
 /** Convert datatime properties to a double based value of units 
  * @memberof DasProp
  */
-DAS_API int DasProp_convertTime(const DasProp* pProp, uint64_t* pBuf, size_t uBufLen);
+DAS_API int DasProp_toTimes(const DasProp* pProp, uint64_t* pBuf, size_t uBufLen);
 
 /** Just extract the property strings, don't convert anything 
  * 
@@ -165,7 +165,7 @@ DAS_API int DasProp_convertTime(const DasProp* pProp, uint64_t* pBuf, size_t uBu
  * 
  * @memberof DasProp
  */
-DAS_API int DasProp_extractItems(const DasProp* pProp, char** psBuf, size_t uNumStrs, size_t uLenEa);
+DAS_API int DasProp_toStrs(const DasProp* pProp, char** psBuf, size_t uNumStrs, size_t uLenEa);
 
 
 /** Get a property type code.
@@ -174,7 +174,7 @@ DAS_API int DasProp_extractItems(const DasProp* pProp, char** psBuf, size_t uNum
  * 
  * @memberof DasProp
  */
-DAS_API ubyte DasProp_type(const DasProp* pProp);
+DAS_API uint8_t DasProp_type(const DasProp* pProp);
 
 /** Determine if this property has a valid type definition 
  * @memberof DasProp
@@ -184,7 +184,7 @@ DAS_API bool DasProp_isValid(const DasProp* pProp);
 /** Determine the number of items in a multi valued property 
  * @memberof DasProp
  */
-DAS_API int DasProp_items(const DasProp* pProp);
+DAS_API int DasProp_numItems(const DasProp* pProp);
 
 /** A mask to select a property's multiplicity setting.
  * This is useful when interpreting the results of DasProp_type() 
@@ -219,7 +219,7 @@ DAS_API int DasProp_items(const DasProp* pProp);
  *        matches.
  * @memberof DasProp
  */
-DAS_API bool DasProp_isType(const DasProp* pProp, ubyte uType);
+DAS_API bool DasProp_isType(const DasProp* pProp, uint8_t uType);
 
 /** Returns true if this property has range multiplicity (aka 2 items)
  *

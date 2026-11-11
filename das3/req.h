@@ -37,7 +37,7 @@ extern "C" {
  * simple.  A DasReq holds strings naming entries in the interface section
  * of a data source node. Everything that interprets a requisition is a
  * function of the DasSrc or it's derived classes. 
- * @see DasSrc_check() and DasStreamSrc_url()
+ * @see DasSrc_check() and DasSrc_reqUrl()
  *
  * A requisition is self contained and may outlive the interface it was
  * built from. It can be saved to a file one day, reloaded the next, and
@@ -52,7 +52,7 @@ extern "C" {
  * entry against a source, marking each one ok or bad and attaching a
  * reason to the bad ones.
  *
- * Sources create requisitions.  DasSrc_newReq() hands back one seeded
+ * Sources create requisitions.  new_DasReq_src() hands back one seeded
  * with a worked example, or a blank one listing every required key with
  * an empty value so that a form knows what must be filled.  Either way
  * the requisition is stamped with the source URI, and a later
@@ -96,22 +96,22 @@ extern "C" {
  */
 
 /** How an entry fared the last time a source looked at it */
-typedef enum das_req_verdict_enum {
-	das_req_unchecked = 0,  /**< not validated since it was set */
-	das_req_ok,             /**< the key resolved and the value is well formed */
-	das_req_bad             /**< see DasReq_why() */
-} das_req_verdict_e;
+typedef enum das_reqverdict_e {
+	DASREQVERDICT_UNCHECKED = 0,  /**< not validated since it was set */
+	DASREQVERDICT_OK,             /**< the key resolved and the value is well formed */
+	DASREQVERDICT_BAD             /**< see DasReq_whyAt() */
+} das_reqverdict;
 
 /** @class DasReq req.h <das3/req.h>
  *
- * A requisition.  Create with new_DasReq() or DasSrc_newReq(), free with
+ * A requisition.  Create with new_DasReq() or new_DasReq_src(), free with
  * del_DasReq().  Not thread safe for writers. */
-typedef struct das_req DasReq;
+typedef struct das_req_t DasReq;
 
 /** An empty requisition with no source stamp */
 DAS_API DasReq* new_DasReq(void);
 
-/** A requisition read from the JSON text written by DasReq_text().
+/** A requisition read from the JSON text written by DasReq_newJsonStr().
  * @returns a new requisition, or NULL after logging what was wrong with
  *        the text. */
 DAS_API DasReq* new_DasReq_text(const char* sJson, size_t uLen);
@@ -121,7 +121,7 @@ DAS_API DasReq* new_DasReq_text(const char* sJson, size_t uLen);
 DAS_API DasReq* new_DasReq_file(const char* sPath);
 
 /** A deep copy, verdicts included */
-DAS_API DasReq* DasReq_copy(const DasReq* pThis);
+DAS_API DasReq* new_DasReq_copy(const DasReq* pThis);
 
 DAS_API void del_DasReq(DasReq* pThis);
 
@@ -130,7 +130,7 @@ DAS_API void del_DasReq(DasReq* pThis);
 
 /** Record which source this requisition is for.
  *
- * DasSrc_newReq() does this for you.  Call it yourself when adopting a
+ * new_DasReq_src() does this for you.  Call it yourself when adopting a
  * requisition built from loose strings so that later checks hold it to
  * one source.
  *
@@ -155,7 +155,7 @@ DAS_API const char* DasReq_srcUrl(const DasReq* pThis);
 
 /** The node format version of the stamped source, "" when unknown.
  * @memberof DasReq */
-DAS_API const char* DasReq_srcVersion(const DasReq* pThis);
+DAS_API const char* DasReq_srcVer(const DasReq* pThis);
 
 /** A short description, the example label when seeded from one, else
  * "".  @memberof DasReq */
@@ -188,32 +188,32 @@ DAS_API das_errcode DasReq_set(DasReq* pThis, const char* sKey, const char* sVal
 /** The value stored under a key, exactly as set, or NULL when the key is
  * not present.  Only keys set directly are found, the derived entries a
  * check adds are reached by index.  @memberof DasReq */
-DAS_API const char* DasReq_value(const DasReq* pThis, const char* sKey);
+DAS_API const char* DasReq_val(const DasReq* pThis, const char* sKey);
 
 /** Drop an entry.  @returns true if there was one.  @memberof DasReq */
-DAS_API bool DasReq_remove(DasReq* pThis, const char* sKey);
+DAS_API bool DasReq_rmKey(DasReq* pThis, const char* sKey);
 
 /** Drop every entry and raw parameter, keeping the stamp and label.
  * @memberof DasReq */
 DAS_API void DasReq_clear(DasReq* pThis);
 
 /** The number of entries, including any a check derived, see
- * DasReq_derived().  @memberof DasReq */
-DAS_API size_t DasReq_count(const DasReq* pThis);
+ * DasReq_isDerivedAt().  @memberof DasReq */
+DAS_API size_t DasReq_numKeys(const DasReq* pThis);
 
 /** Entry number uIdx's key, or NULL past the end.  @memberof DasReq */
-DAS_API const char* DasReq_key(const DasReq* pThis, size_t uIdx);
+DAS_API const char* DasReq_keyAt(const DasReq* pThis, size_t uIdx);
 
 /** Entry number uIdx's value, or NULL past the end.  @memberof DasReq */
-DAS_API const char* DasReq_val(const DasReq* pThis, size_t uIdx);
+DAS_API const char* DasReq_valAt(const DasReq* pThis, size_t uIdx);
 
 /** @memberof DasReq */
-DAS_API das_req_verdict_e DasReq_verdict(const DasReq* pThis, size_t uIdx);
+DAS_API das_reqverdict DasReq_verdictAt(const DasReq* pThis, size_t uIdx);
 
 /** Why entry number uIdx was rejected, "" unless its verdict is
- * das_req_bad.  The text names the key and is meant to be shown as is.
+ * DASREQVERDICT_BAD.  The text names the key and is meant to be shown as is.
  * @memberof DasReq */
-DAS_API const char* DasReq_why(const DasReq* pThis, size_t uIdx);
+DAS_API const char* DasReq_whyAt(const DasReq* pThis, size_t uIdx);
 
 /** True for entries a check added rather than the client.
  *
@@ -225,7 +225,7 @@ DAS_API const char* DasReq_why(const DasReq* pThis, size_t uIdx);
  * client reading values back should too.
  * @memberof DasReq
  */
-DAS_API bool DasReq_derived(const DasReq* pThis, size_t uIdx);
+DAS_API bool DasReq_isDerivedAt(const DasReq* pThis, size_t uIdx);
 
 /** Index of the entry for a key, or -1.  @memberof DasReq */
 DAS_API int DasReq_find(const DasReq* pThis, const char* sKey);
@@ -238,14 +238,14 @@ DAS_API int DasReq_find(const DasReq* pThis, const char* sKey);
 DAS_API das_errcode DasReq_setRaw(DasReq* pThis, const char* sName, const char* sVal);
 
 /** @memberof DasReq */
-DAS_API size_t DasReq_rawCount(const DasReq* pThis);
+DAS_API size_t DasReq_numRaw(const DasReq* pThis);
 
 /** Raw parameter number uIdx.
  * @param pThis The requisition
- * @param uIdx Which parameter, 0 to DasReq_rawCount() - 1
+ * @param uIdx Which parameter, 0 to DasReq_numRaw() - 1
  * @param psVal Receives the value, may be NULL.
  * @returns The name, or NULL past the end.  @memberof DasReq */
-DAS_API const char* DasReq_raw(const DasReq* pThis, size_t uIdx, const char** psVal);
+DAS_API const char* DasReq_rawAt(const DasReq* pThis, size_t uIdx, const char** psVal);
 
 /* ************************************************************************* */
 /* Saving */
@@ -259,9 +259,9 @@ DAS_API const char* DasReq_raw(const DasReq* pThis, size_t uIdx, const char** ps
  *        ran out.
  * @memberof DasReq
  */
-DAS_API char* DasReq_text(const DasReq* pThis);
+DAS_API char* DasReq_newJsonStr(const DasReq* pThis);
 
-/** Write DasReq_text() to a file, replacing any existing file.
+/** Write DasReq_newJsonStr() to a file, replacing any existing file.
  * @returns DAS_OKAY, or DASERR_SRC after logging why not.  @memberof DasReq */
 DAS_API das_errcode DasReq_write(const DasReq* pThis, const char* sPath);
 

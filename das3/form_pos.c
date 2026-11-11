@@ -52,7 +52,7 @@
 #include "info_p.h"
 #include "form_p.h"
 
-#define REFUSE(...) (das_error(DASERR_FORM, __VA_ARGS__), dbsRefuse)
+#define REFUSE(...) (daserrf(DASERR_FORM, __VA_ARGS__), dbsRefuse)
 
 /* ************************************************************************* */
 /* The formalism                                                             */
@@ -67,29 +67,29 @@ typedef struct das_form_pos {
 	char sSurface[DASFORM_NAME_SZ]; /* the ellipsoid, for detic and graphic */
 	char sSysOrder[16];   /* "" only before validate() with no order given */
 	bool bFixed;
-	ubyte uSysType;
-	ubyte aDirs[3];
+	uint8_t uSysType;
+	uint8_t aDirs[3];
 
 	/* Slots this variable actually uses; see the same field on DasFormVec.
 	   0 until validate() is handed the internal shape. */
-	ubyte uComps;
+	uint8_t uComps;
 } DasFormPos;
 
 static DasForm* _new_DasFormPos_empty(void)
 {
 	DasFormPos* pThis = (DasFormPos*)calloc(1, sizeof(DasFormPos));
-	pThis->base.pVTbl = &das_form_pos_vtbl;
-	pThis->uSysType   = DAS_VSYS_CART;
+	pThis->base.pVTbl = &DasFormPos_vtable;
+	pThis->uSysType   = DASVECSYS_CART;
 	pThis->aDirs[0] = 0; pThis->aDirs[1] = 1; pThis->aDirs[2] = 2;
 	return &(pThis->base);
 }
 
 DasForm* new_DasFormPos(
 	const char* sBody, const char* sFrame, const char* sSurface,
-	bool bFixed, ubyte uSysType, const ubyte* pDirs
+	bool bFixed, uint8_t uSysType, const uint8_t* pDirs
 ){
 	if((sBody == NULL)||(sBody[0] == '\0')){
-		das_error(DASERR_FORM,
+		daserrf(DASERR_FORM,
 			"A position needs a body; values with no origin are free vectors "
 			"and belong in <ops kind=\"vector\">"
 		);
@@ -110,9 +110,9 @@ DasForm* new_DasFormPos(
 }
 
 #define POS_GET(FN, FIELD) \
-	ubyte FN(const DasForm* pThis){ \
-		if(!DasForm_isKind(pThis, DAS_FORM_POS)){ \
-			das_error(DASERR_FORM, "Not a position formalism"); \
+	uint8_t FN(const DasForm* pThis){ \
+		if(!DasForm_isKind(pThis, DASFORM_POS)){ \
+			daserrf(DASERR_FORM, "Not a position formalism"); \
 			return 0; \
 		} \
 		return ((const DasFormPos*)pThis)->FIELD; \
@@ -120,8 +120,8 @@ DasForm* new_DasFormPos(
 
 #define POS_GETSTR(FN, FIELD) \
 	const char* FN(const DasForm* pThis){ \
-		if(!DasForm_isKind(pThis, DAS_FORM_POS)){ \
-			das_error(DASERR_FORM, "Not a position formalism"); \
+		if(!DasForm_isKind(pThis, DASFORM_POS)){ \
+			daserrf(DASERR_FORM, "Not a position formalism"); \
 			return NULL; \
 		} \
 		const char* s = ((const DasFormPos*)pThis)->FIELD; \
@@ -131,21 +131,21 @@ DasForm* new_DasFormPos(
 POS_GETSTR(DasFormPos_body,    sBody)
 POS_GETSTR(DasFormPos_frame,   sFrame)
 POS_GETSTR(DasFormPos_surface, sSurface)
-POS_GET(DasFormPos_sysType,  uSysType)
+POS_GET(DasFormPos_sysId,  uSysType)
 
-bool DasFormPos_fixed(const DasForm* pThis)
+bool DasFormPos_isFixed(const DasForm* pThis)
 {
-	if(!DasForm_isKind(pThis, DAS_FORM_POS)){
-		das_error(DASERR_FORM, "Not a position formalism");
+	if(!DasForm_isKind(pThis, DASFORM_POS)){
+		daserrf(DASERR_FORM, "Not a position formalism");
 		return false;
 	}
 	return ((const DasFormPos*)pThis)->bFixed;
 }
 
-const ubyte* DasFormPos_dirs(const DasForm* pThis)
+const uint8_t* DasFormPos_dirs(const DasForm* pThis)
 {
-	if(!DasForm_isKind(pThis, DAS_FORM_POS)){
-		das_error(DASERR_FORM, "Not a position formalism");
+	if(!DasForm_isKind(pThis, DASFORM_POS)){
+		daserrf(DASERR_FORM, "Not a position formalism");
 		return NULL;
 	}
 	return ((const DasFormPos*)pThis)->aDirs;
@@ -153,25 +153,25 @@ const ubyte* DasFormPos_dirs(const DasForm* pThis)
 
 static const char* _DasFormPos_compSym(const DasForm* pThis, int iComp)
 {
-	if(!DasForm_isKind(pThis, DAS_FORM_POS)||(iComp < 0)) return NULL;
+	if(!DasForm_isKind(pThis, DASFORM_POS)||(iComp < 0)) return NULL;
 
 	/* Bounded by uComps, for the reason form_vec.c gives. */
 	const DasFormPos* pG = (const DasFormPos*)pThis;
 	if(iComp >= pG->uComps) return NULL;
 
-	return das_vsys_symbol(pG->uSysType, pG->aDirs[iComp]);
+	return dasvecsys_dirSym(pG->uSysType, pG->aDirs[iComp]);
 }
 
 /* --- parameters ---------------------------------------------------------- */
 
 static das_errcode _DasFormPos_setOrder(DasFormPos* pThis, const char* sOrd)
 {
-	ubyte aDir[3] = {0, 1, 2};
+	uint8_t aDir[3] = {0, 1, 2};
 	int iComp = 0;
 	for(const char* p = sOrd; (*p != '\0')&&(iComp < 3); ++p){
-		if((*p >= '0')&&(*p <= '2')){ aDir[iComp] = (ubyte)(*p - '0'); ++iComp; }
+		if((*p >= '0')&&(*p <= '2')){ aDir[iComp] = (uint8_t)(*p - '0'); ++iComp; }
 		else if(*p != ';')
-			return das_error(DASERR_FORM, "Bad sysorder token '%s'", sOrd);
+			return daserrf(DASERR_FORM, "Bad sysorder token '%s'", sOrd);
 	}
 	for(int i = 0; i < 3; ++i) pThis->aDirs[i] = aDir[i];
 	strncpy(pThis->sSysOrder, sOrd, sizeof(pThis->sSysOrder) - 1);
@@ -184,9 +184,9 @@ static das_errcode _DasFormPos_setParam(
 	DasFormPos* pThis = (DasFormPos*)pBase;
 
 	if(strcmp(sName, "system") == 0){
-		pThis->uSysType = das_vsys_fromStr(sVal);
+		pThis->uSysType = dasvecsys_id(sVal);
 		if(pThis->uSysType == 0)
-			return das_error(DASERR_FORM, "Unknown component system '%s'", sVal);
+			return daserrf(DASERR_FORM, "Unknown component system '%s'", sVal);
 		return DAS_OKAY;
 	}
 
@@ -213,9 +213,9 @@ static das_errcode _DasFormPos_setParam(
 	}
 
 	if(strcmp(sName, "fixed") == 0)
-		return das_str2bool(sVal, &(pThis->bFixed)) ? DAS_OKAY : DASERR_FORM;
+		return dasstr_toBool(sVal, &(pThis->bFixed)) ? DAS_OKAY : DASERR_FORM;
 
-	return das_error(DASERR_FORM,
+	return daserrf(DASERR_FORM,
 		"<ops kind=\"position\"> has no parameter '%s'", sName
 	);
 }
@@ -226,7 +226,7 @@ static das_errcode _DasFormPos_encode(
 	const DasFormPos* pThis = (const DasFormPos*)pBase;
 
 	if(pThis->sBody[0] == '\0')
-		return das_error(DASERR_FORM,
+		return daserrf(DASERR_FORM,
 			"A position can not be written without its body");
 
 	das_errcode nRet = DasBuf_printf(pBuf,
@@ -248,9 +248,9 @@ static das_errcode _DasFormPos_encode(
 	/* cartesian is the default, so naming it says nothing.  Same reasoning
 	   as the ascending sysorder below: emit a parameter only when it
 	   differs from what a reader would assume. */
-	if(pThis->uSysType != DAS_VSYS_CART){
+	if(pThis->uSysType != DASVECSYS_CART){
 		if((nRet = DasBuf_printf(pBuf, " system=\"%s\"",
-		                         das_vsys_toStr(pThis->uSysType))) != DAS_OKAY)
+		                         dasvecsys_name(pThis->uSysType))) != DAS_OKAY)
 			return nRet;
 	}
 
@@ -281,7 +281,7 @@ static das_errcode _DasFormPos_validate(
 	DasFormPos* pThis = (DasFormPos*)pBase;
 
 	if(pThis->sBody[0] == '\0')
-		return das_error(DASERR_FORM,
+		return daserrf(DASERR_FORM,
 			"<ops kind=\"position\"> has no body=.  A position is measured FROM "
 			"somewhere; values with no origin are free vectors and belong in "
 			"<ops kind=\"vector\">"
@@ -289,24 +289,24 @@ static das_errcode _DasFormPos_validate(
 
 	/* An ellipsoidal system measures against a reference surface, so naming
 	   one is not decoration. */
-	if(das_vsys_isEllipsoidal(pThis->uSysType)&&(pThis->sSurface[0] == '\0'))
-		return das_error(DASERR_FORM,
+	if(dasvecsys_isEllipsoidal(pThis->uSysType)&&(pThis->sSurface[0] == '\0'))
+		return daserrf(DASERR_FORM,
 			"system=\"%s\" is measured on an ellipsoid, so it needs a surface=",
-			das_vsys_toStr(pThis->uSysType)
+			dasvecsys_name(pThis->uSysType)
 		);
 
 	if(nIntRank != 1)
-		return das_error(DASERR_FORM,
+		return daserrf(DASERR_FORM,
 			"A position is one level of components, but this variable declares "
 			"%d internal levels", nIntRank
 		);
 
 	if((pIntShape[0] < 1)||(pIntShape[0] > 3))
-		return das_error(DASERR_FORM,
+		return daserrf(DASERR_FORM,
 			"A position has 1 to 3 components, not %zd", pIntShape[0]
 		);
 
-	pThis->uComps = (ubyte)pIntShape[0];
+	pThis->uComps = (uint8_t)pIntShape[0];
 
 	/* Respell to the real count, for the reasons _DasFormVec_validate gives */
 	_dasform_fmtOrder(pThis->sSysOrder, sizeof(pThis->sSysOrder), pThis->aDirs, pThis->uComps);
@@ -314,7 +314,7 @@ static das_errcode _DasFormPos_validate(
 }
 
 static const char* _DasFormPos_getParam(
-	const DasForm* pBase, const char* sName, ubyte* pType
+	const DasForm* pBase, const char* sName, uint8_t* pType
 )
 {
 	const DasFormPos* pThis = (const DasFormPos*)pBase;
@@ -333,7 +333,7 @@ static const char* _DasFormPos_getParam(
 	}
 	if(strcmp(sName, "system") == 0){
 		if(pType != NULL) *pType = DASPROP_STRING | DASPROP_SINGLE;
-		return das_vsys_toStr(pThis->uSysType);
+		return dasvecsys_name(pThis->uSysType);
 	}
 	if(strcmp(sName, "sysorder") == 0){
 		if(pType != NULL) *pType = DASPROP_INT | DASPROP_SET;
@@ -359,18 +359,18 @@ static const char* _DasFormPos_paramName(const DasForm* pBase, int iParam)
 /* --- presentation -------------------------------------------------------- */
 
 static char* _DasFormPos_prnRun(
-	const DasForm* pForm, const ubyte* pRun, uint32_t nElems,
-	das_val_type et, char* sBuf, size_t uLen
+	const DasForm* pForm, const uint8_t* pRun, uint32_t nElems,
+	das_vt et, char* sBuf, size_t uLen
 ){
 	const DasFormPos* pThis = (const DasFormPos*)pForm;
 
 	int n = _prn_catf(sBuf, uLen, 0, "%s@%s[",
-	                  das_vsys_toStr(pThis->uSysType), pThis->sBody);
+	                  dasvecsys_name(pThis->uSysType), pThis->sBody);
 
 	for(uint32_t u = 0; u < nElems; ++u){
 		double d = 0.0;
-		if(das_value_binXform(et, pRun + u*das_vt_size(et), NULL, vtDouble,
-		                      (ubyte*)&d, NULL, 0) != DAS_OKAY)
+		if(dasval_convert(et, pRun + u*dasvt_size(et), NULL, DASVT_DOUBLE,
+		                      (uint8_t*)&d, NULL, 0) != DAS_OKAY)
 			break;
 		n = _prn_catf(sBuf, uLen, n, "%s%.6g", (u > 0) ? " " : "", d);
 	}
@@ -379,21 +379,21 @@ static char* _DasFormPos_prnRun(
 }
 
 static bool _DasFormPos_pack(
-	const DasForm* pBase, const das_operand* pOp, const ubyte* pRun,
-	das_datum* pOut
+	const DasForm* pBase, const das_operand* pOp, const uint8_t* pRun,
+	DasDatum* pOut
 ){
 	if((pOp->nIntRank != 1)||(pOp->aIntShape[0] < 1)||(pOp->aIntShape[0] > 3))
-		return das_error_false(DASERR_FORM,
+		return daserr_falsef(DASERR_FORM,
 			"A position has 1 to 3 components in one level"
 		);
 
-	return das_datum_box(
+	return DasDatum_wrapElems(
 		pOut, pBase, pRun, pOp->nIntRank, pOp->aIntShape, pOp->vtElem,
 		pOp->units
 	);
 }
 
-static das_val_type _DasFormPos_datumType(const DasForm* pBase){ return vtComposite; }
+static das_vt _DasFormPos_datumType(const DasForm* pBase){ return DASVT_COMP; }
 
 
 static DasForm* _DasFormPos_copy(const DasForm* pBase)
@@ -412,26 +412,26 @@ static void _DasFormPos_release(DasForm* pBase){ free(pBase); }
 typedef struct das_binop_pos {
 	DasBinOp base;
 
-	das_val_type vtL, vtR;
+	das_vt vtL, vtR;
 	int    nOp;
 	int    nComp;
 
 	bool   bTwoPoints;      /* difference of two positions */
 	bool   bPosLeft;        /* which side carries the position, when mixed */
 
-	ubyte  uSysL, uSysR, uSysOut;
-	ubyte  aDirL[3], aDirR[3], aDirOut[3];
+	uint8_t  uSysL, uSysR, uSysOut;
+	uint8_t  aDirL[3], aDirR[3], aDirOut[3];
 	double rOtherScale;     /* unit conversion for the displacement operand */
 } DasBinOpPos;
 
 static bool _pos_gather(
-	const ubyte* pRun, das_val_type et, size_t uSz, int nComp,
-	const ubyte* pDirs, double* pOut
+	const uint8_t* pRun, das_vt et, size_t uSz, int nComp,
+	const uint8_t* pDirs, double* pOut
 ){
 	pOut[0] = pOut[1] = pOut[2] = 0.0;
 	for(int i = 0; i < nComp; ++i){
 		double d;
-		if(das_value_binXform(et, pRun + i*uSz, NULL, vtDouble, (ubyte*)&d,
+		if(dasval_convert(et, pRun + i*uSz, NULL, DASVT_DOUBLE, (uint8_t*)&d,
 		                      NULL, 0) != DAS_OKAY)
 			return false;
 		pOut[pDirs[i]] = d;
@@ -440,13 +440,13 @@ static bool _pos_gather(
 }
 
 static bool _DasBinOpPos_apply(
-	const DasBinOp* pOp, const ubyte* pLRun, const ubyte* pRRun, ubyte* pOutRun
+	const DasBinOp* pOp, const uint8_t* pLRun, const uint8_t* pRRun, uint8_t* pOutRun
 ){
 	const DasBinOpPos* pThis = (const DasBinOpPos*)pOp;
 
-	size_t uL   = das_vt_size(pThis->vtL);
-	size_t uR   = das_vt_size(pThis->vtR);
-	size_t uOut = das_vt_size(pOp->vtOut);
+	size_t uL   = dasvt_size(pThis->vtL);
+	size_t uR   = dasvt_size(pThis->vtR);
+	size_t uOut = dasvt_size(pOp->vtOut);
 
 	double aL[3], aR[3], aLc[3], aRc[3], aRes[3], aOut[3];
 
@@ -459,8 +459,8 @@ static bool _DasBinOpPos_apply(
 	   through cartesian and the result comes back in whichever system names
 	   it: the left operand's for a difference, the POSITION's when a
 	   displacement is applied. */
-	if(!das_vsys_toCart(pThis->uSysL, aL, aLc)) return false;
-	if(!das_vsys_toCart(pThis->uSysR, aR, aRc)) return false;
+	if(!dasvecsys_toCart(pThis->uSysL, aL, aLc)) return false;
+	if(!dasvecsys_toCart(pThis->uSysR, aR, aRc)) return false;
 
 	if(pThis->bTwoPoints){
 		for(int i = 0; i < 3; ++i)
@@ -469,7 +469,7 @@ static bool _DasBinOpPos_apply(
 	else if(pThis->bPosLeft){
 		for(int i = 0; i < 3; ++i){
 			double d = aRc[i]*pThis->rOtherScale;
-			aRes[i] = (pThis->nOp == D2BOP_SUB) ? (aLc[i] - d) : (aLc[i] + d);
+			aRes[i] = (pThis->nOp == DASOP_SUB) ? (aLc[i] - d) : (aLc[i] + d);
 		}
 	}
 	else{
@@ -478,11 +478,11 @@ static bool _DasBinOpPos_apply(
 			aRes[i] = aRc[i] + aLc[i]*pThis->rOtherScale;
 	}
 
-	if(!das_vsys_fromCart(pThis->uSysOut, aRes, aOut)) return false;
+	if(!dasvecsys_fromCart(pThis->uSysOut, aRes, aOut)) return false;
 
 	for(int i = 0; i < pThis->nComp; ++i){
 		double d = aOut[pThis->aDirOut[i]];
-		if(das_value_binXform(vtDouble, (const ubyte*)&d, NULL, pOp->vtOut,
+		if(dasval_convert(DASVT_DOUBLE, (const uint8_t*)&d, NULL, pOp->vtOut,
 		                      pOutRun + i*uOut, NULL, 0) != DAS_OKAY)
 			return false;
 	}
@@ -518,8 +518,8 @@ static das_binop_stat _pos_shapeOk(
 
 static DasBinOpPos* _new_DasBinOpPos(
 	const das_operand* pL, const das_operand* pR, int nOp, int nComp,
-	ubyte uSysL, const ubyte* pDirL, ubyte uSysR, const ubyte* pDirR,
-	ubyte uSysOut, const ubyte* pDirOut, double rScale
+	uint8_t uSysL, const uint8_t* pDirL, uint8_t uSysR, const uint8_t* pDirR,
+	uint8_t uSysOut, const uint8_t* pDirOut, double rScale
 ){
 	DasBinOpPos* pRes = (DasBinOpPos*)calloc(1, sizeof(DasBinOpPos));
 	pRes->base.pVTbl = &g_vtblPos;
@@ -548,8 +548,8 @@ static das_binop_stat _DasFormPos_binOpLeft(
 ){
 	const DasFormPos* pThis = (const DasFormPos*)pBase;
 
-	bool bRightIsPos = DasForm_isKind(pR->pForm, DAS_FORM_POS);
-	if(!bRightIsPos && !DasForm_isKind(pR->pForm, DAS_FORM_VEC))
+	bool bRightIsPos = DasForm_isKind(pR->pForm, DASFORM_POS);
+	if(!bRightIsPos && !DasForm_isKind(pR->pForm, DASFORM_VEC))
 		return dbsDecline;
 
 	int nComp = 0;
@@ -559,9 +559,9 @@ static das_binop_stat _DasFormPos_binOpLeft(
 	if(bRightIsPos){
 		const DasFormPos* pRg = (const DasFormPos*)pR->pForm;
 
-		if(nOp != D2BOP_SUB)
+		if(nOp != DASOP_SUB)
 			return REFUSE("Two positions can only be subtracted; '%s' of two "
-			              "of them has no meaning", das_op_toStr(nOp, NULL));
+			              "of them has no meaning", dasop_name(nOp, NULL));
 
 		/* Strict identity on the ORIGIN, the spatial twin of point's strict
 		   epoch rule.  Positions measured from different bodies have no
@@ -581,11 +581,11 @@ static das_binop_stat _DasFormPos_binOpLeft(
 
 		if(pL->units != pR->units)
 			return REFUSE("Subtracting positions needs one unit on both sides, "
-			              "have %s and %s", Units_toStr(pL->units),
-			              Units_toStr(pR->units));
+			              "have %s and %s", DasUnits_toStr(pL->units),
+			              DasUnits_toStr(pR->units));
 
 		DasBinOpPos* pRes = _new_DasBinOpPos(
-			pL, pR, D2BOP_SUB, nComp,
+			pL, pR, DASOP_SUB, nComp,
 			pThis->uSysType, pThis->aDirs, pRg->uSysType, pRg->aDirs,
 			pThis->uSysType, pThis->aDirs, 1.0
 		);
@@ -599,7 +599,7 @@ static das_binop_stat _DasFormPos_binOpLeft(
 		pRes->base.pForm = new_DasFormVec(
 			pThis->sFrame, pThis->uSysType, pThis->aDirs
 		);
-		pRes->base.vtOut = das_vt_merge(pL->vtElem, D2BOP_SUB, pR->vtElem);
+		pRes->base.vtOut = dasvt_merge(pL->vtElem, DASOP_SUB, pR->vtElem);
 
 		*ppOut = &(pRes->base);
 		return dbsOkay;
@@ -608,9 +608,9 @@ static das_binop_stat _DasFormPos_binOpLeft(
 	/* --- position OP displacement ---------------------------------------- */
 	const DasForm* pVf = pR->pForm;
 
-	if((nOp != D2BOP_ADD)&&(nOp != D2BOP_SUB))
+	if((nOp != DASOP_ADD)&&(nOp != DASOP_SUB))
 		return REFUSE("A position can only be moved by a displacement, '%s' is "
-		              "not defined on one", das_op_toStr(nOp, NULL));
+		              "not defined on one", dasop_name(nOp, NULL));
 
 	if(_pos_frameNe(pThis->sFrame, DasFormVec_frame(pVf)))
 		return REFUSE("The displacement is in a different frame than the "
@@ -618,16 +618,16 @@ static das_binop_stat _DasFormPos_binOpLeft(
 
 	double rScale = 1.0;
 	if(pL->units != pR->units){
-		if(!Units_canConvert(pR->units, pL->units))
+		if(!DasUnits_canConvert(pR->units, pL->units))
 			return REFUSE("Can not move a position in %s by a displacement in "
-			              "%s", Units_toStr(pL->units), Units_toStr(pR->units));
-		rScale = Units_convertTo(1.0, pR->units, pL->units);
+			              "%s", DasUnits_toStr(pL->units), DasUnits_toStr(pR->units));
+		rScale = DasUnits_convert(1.0, pR->units, pL->units);
 	}
 
 	DasBinOpPos* pRes = _new_DasBinOpPos(
 		pL, pR, nOp, nComp,
 		pThis->uSysType, pThis->aDirs,
-		DasFormVec_sysType(pVf), DasFormVec_dirs(pVf),
+		DasFormVec_sysId(pVf), DasFormVec_dirs(pVf),
 		pThis->uSysType, pThis->aDirs, rScale
 	);
 	pRes->bPosLeft = true;
@@ -638,7 +638,7 @@ static das_binop_stat _DasFormPos_binOpLeft(
 		pThis->sBody, pThis->sFrame, pThis->sSurface,
 		pThis->bFixed, pThis->uSysType, pThis->aDirs
 	);
-	pRes->base.vtOut = das_vt_merge(pL->vtElem, nOp, pR->vtElem);
+	pRes->base.vtOut = dasvt_merge(pL->vtElem, nOp, pR->vtElem);
 
 	*ppOut = &(pRes->base);
 	return dbsOkay;
@@ -654,14 +654,14 @@ static das_binop_stat _DasFormPos_binOpRight(
 ){
 	const DasFormPos* pThis = (const DasFormPos*)pBase;
 
-	if(!DasForm_isKind(pL->pForm, DAS_FORM_VEC)) return dbsDecline;
+	if(!DasForm_isKind(pL->pForm, DASFORM_VEC)) return dbsDecline;
 
-	if(nOp == D2BOP_SUB)
+	if(nOp == DASOP_SUB)
 		return REFUSE("A displacement minus a position is meaningless; write "
 		              "position - displacement to move it backward");
-	if(nOp != D2BOP_ADD)
+	if(nOp != DASOP_ADD)
 		return REFUSE("A displacement and a position can only be added, not "
-		              "'%s'", das_op_toStr(nOp, NULL));
+		              "'%s'", dasop_name(nOp, NULL));
 
 	int nComp = 0;
 	if(_pos_shapeOk(pL, pR, &nComp) != dbsOkay) return dbsRefuse;
@@ -672,15 +672,15 @@ static das_binop_stat _DasFormPos_binOpRight(
 
 	double rScale = 1.0;
 	if(pL->units != pR->units){
-		if(!Units_canConvert(pL->units, pR->units))
+		if(!DasUnits_canConvert(pL->units, pR->units))
 			return REFUSE("Can not move a position in %s by a displacement in "
-			              "%s", Units_toStr(pR->units), Units_toStr(pL->units));
-		rScale = Units_convertTo(1.0, pL->units, pR->units);
+			              "%s", DasUnits_toStr(pR->units), DasUnits_toStr(pL->units));
+		rScale = DasUnits_convert(1.0, pL->units, pR->units);
 	}
 
 	DasBinOpPos* pRes = _new_DasBinOpPos(
-		pL, pR, D2BOP_ADD, nComp,
-		DasFormVec_sysType(pL->pForm), DasFormVec_dirs(pL->pForm),
+		pL, pR, DASOP_ADD, nComp,
+		DasFormVec_sysId(pL->pForm), DasFormVec_dirs(pL->pForm),
 		pThis->uSysType, pThis->aDirs,
 		pThis->uSysType, pThis->aDirs, rScale
 	);
@@ -691,13 +691,13 @@ static das_binop_stat _DasFormPos_binOpRight(
 		pThis->sBody, pThis->sFrame, pThis->sSurface,
 		pThis->bFixed, pThis->uSysType, pThis->aDirs
 	);
-	pRes->base.vtOut = das_vt_merge(pL->vtElem, D2BOP_ADD, pR->vtElem);
+	pRes->base.vtOut = dasvt_merge(pL->vtElem, DASOP_ADD, pR->vtElem);
 
 	*ppOut = &(pRes->base);
 	return dbsOkay;
 }
 
-const DasForm_VTbl das_form_pos_vtbl = {
+const DasFormVTable DasFormPos_vtable = {
 	"position",
 	_new_DasFormPos_empty,
 	_DasFormPos_setParam,

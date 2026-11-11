@@ -84,21 +84,21 @@ static das_binop_stat _resolve(
 	return stat;
 }
 
-static void _cplxOperand(das_operand* pOp, DasForm* pForm, das_units units)
+static void _cplxOperand(das_operand* pOp, DasForm* pForm, DasUnits units)
 {
 	memset(pOp, 0, sizeof(das_operand));
 	pOp->pForm       = pForm;
-	pOp->vtElem      = vtDouble;
+	pOp->vtElem      = DASVT_DOUBLE;
 	pOp->units       = units;
 	pOp->nIntRank    = 1;
 	pOp->aIntShape[0] = 2;
 }
 
-static void _realOperand(das_operand* pOp, DasForm* pForm, das_units units)
+static void _realOperand(das_operand* pOp, DasForm* pForm, DasUnits units)
 {
 	memset(pOp, 0, sizeof(das_operand));
 	pOp->pForm    = pForm;
-	pOp->vtElem   = vtDouble;
+	pOp->vtElem   = DASVT_DOUBLE;
 	pOp->units    = units;
 	pOp->nIntRank = 0;
 }
@@ -110,7 +110,7 @@ static int test_cplx_wire(void)
 {
 	int nErrs = 0;
 
-	const DasForm_VTbl* pVTbl = das_form_lookup("complex");
+	const DasFormVTable* pVTbl = DasForm_lookup("complex");
 	MUST(pVTbl != NULL);
 	CHECK(strcmp(pVTbl->sKind, "complex") == 0);
 
@@ -118,15 +118,15 @@ static int test_cplx_wire(void)
 	const char* aBare[] = {"kind","complex", NULL};
 	DasForm* pBare = new_DasForm_pairs(aBare);
 	MUST(pBare != NULL);
-	CHECK(DasForm_isKind(pBare, DAS_FORM_CPLX));
-	CHECK(!DasForm_isKind(pBare, DAS_FORM_EXT));
-	CHECK(DasFormCplx_sysType(pBare) == DAS_VSYS_RECT);
+	CHECK(DasForm_isKind(pBare, DASFORM_CPLX));
+	CHECK(!DasForm_isKind(pBare, DASFORM_EXT));
+	CHECK(DasFormCplx_sysId(pBare) == DASCPLXSYS_RECT);
 
 	/* getParam hands back the WIRE spelling of a decoded value */
-	const char* sSys = DasForm_getParam(pBare, "system", NULL);
+	const char* sSys = DasForm_param(pBare, "system", NULL);
 	MUST(sSys != NULL);
 	CHECK(strcmp(sSys, "rectangular") == 0);
-	CHECK(DasForm_getParam(pBare, "frame", NULL) == NULL);
+	CHECK(DasForm_param(pBare, "frame", NULL) == NULL);
 
 	/* Exactly two components in one level, and nothing else */
 	ptrdiff_t aTwo[1]  = {2};
@@ -142,13 +142,13 @@ static int test_cplx_wire(void)
 	const char* aPolar[] = {"kind","complex", "system","polar", NULL};
 	DasForm* pPolar = new_DasForm_pairs(aPolar);
 	MUST(pPolar != NULL);
-	CHECK(DasFormCplx_sysType(pPolar) == DAS_VSYS_POLAR);
+	CHECK(DasFormCplx_sysId(pPolar) == DASCPLXSYS_POLAR);
 	del_DasForm(pPolar);
 
 	const char* aRect[] = {"kind","complex", "system","rect", NULL};
 	DasForm* pRect = new_DasForm_pairs(aRect);
 	MUST(pRect != NULL);
-	CHECK(DasFormCplx_sysType(pRect) == DAS_VSYS_RECT);
+	CHECK(DasFormCplx_sysId(pRect) == DASCPLXSYS_RECT);
 	del_DasForm(pRect);
 
 	/* A parameter this kind does not define is FATAL, never skipped: a
@@ -166,14 +166,14 @@ static int test_cplx_wire(void)
 	CHECK(new_DasForm_pairs(aFrame) == NULL);
 
 	/* The typed constructor refuses a geometric code by range */
-	CHECK(new_DasFormCplx(DAS_VSYS_CART) == NULL);
-	CHECK(new_DasFormCplx(DAS_VSYS_UNKNOWN) == NULL);
+	CHECK(new_DasFormCplx(DASVECSYS_CART) == NULL);
+	CHECK(new_DasFormCplx(DASVECSYS_UNKNOWN) == NULL);
 
 	/* encode() is TALKATIVE about system=, since rectangular and polar hold
 	   the same two numbers to entirely different meaning */
 	DasBuf* pBuf = new_DasBuf(256);
 	MUST(pBuf != NULL);
-	DasForm* pEnc = new_DasFormCplx(DAS_VSYS_POLAR);
+	DasForm* pEnc = new_DasFormCplx(DASCPLXSYS_POLAR);
 	MUST(pEnc != NULL);
 	CHECK(pEnc->pVTbl->encode(pEnc, pBuf) == DAS_OKAY);
 
@@ -197,10 +197,10 @@ static int test_cplx_mul(void)
 	/* Two DIFFERENT units on purpose: a product and a ratio of the same one
 	   runs into a units-layer wart (V/m over V/m renders as "V**0 m**0"
 	   rather than reducing) that has nothing to do with complex math. */
-	das_units unitsL = Units_fromStr("V/m");
-	das_units unitsR = Units_fromStr("s");
-	DasForm* pL = new_DasFormCplx(DAS_VSYS_RECT);
-	DasForm* pR = new_DasFormCplx(DAS_VSYS_RECT);
+	DasUnits unitsL = DasUnits_fromStr("V/m");
+	DasUnits unitsR = DasUnits_fromStr("s");
+	DasForm* pL = new_DasFormCplx(DASCPLXSYS_RECT);
+	DasForm* pR = new_DasFormCplx(DASCPLXSYS_RECT);
 	MUST(pL != NULL); MUST(pR != NULL);
 
 	das_operand opL, opR;
@@ -208,24 +208,24 @@ static int test_cplx_mul(void)
 	_cplxOperand(&opR, pR, unitsR);
 
 	DasBinOp* pOp = NULL;
-	MUST(_resolve(&opL, D2BOP_MUL, &opR, &pOp) == dbsOkay);
+	MUST(_resolve(&opL, DASOP_MUL, &opR, &pOp) == dbsOkay);
 	MUST(pOp != NULL);
 
 	CHECK(pOp->nIntRank == 1);
 	CHECK(pOp->aIntShape[0] == 2);
-	CHECK(DasForm_isKind(pOp->pForm, DAS_FORM_CPLX));
-	CHECK(pOp->units == Units_multiply(unitsL, unitsR));
+	CHECK(DasForm_isKind(pOp->pForm, DASFORM_CPLX));
+	CHECK(pOp->units == DasUnits_mul(unitsL, unitsR));
 
 	/* (1 + 2i)(3 + 4i) = -5 + 10i.  Component-wise would give (3, 8), which
 	   is the answer this whole formalism exists to prevent. */
 	double aL[2] = {1.0, 2.0}, aR[2] = {3.0, 4.0}, aOut[2] = {0.0, 0.0};
-	MUST(DasBinOp_apply(pOp, (const ubyte*)aL, (const ubyte*)aR, (ubyte*)aOut));
+	MUST(DasBinOp_apply(pOp, (const uint8_t*)aL, (const uint8_t*)aR, (uint8_t*)aOut));
 	CHECK(CLOSE(aOut[0], -5.0));
 	CHECK(CLOSE(aOut[1], 10.0));
 
 	/* i * i = -1, the identity that says the rule is right */
 	double aI[2] = {0.0, 1.0};
-	MUST(DasBinOp_apply(pOp, (const ubyte*)aI, (const ubyte*)aI, (ubyte*)aOut));
+	MUST(DasBinOp_apply(pOp, (const uint8_t*)aI, (const uint8_t*)aI, (uint8_t*)aOut));
 	CHECK(CLOSE(aOut[0], -1.0));
 	CHECK(CLOSE(aOut[1],  0.0));
 
@@ -233,12 +233,12 @@ static int test_cplx_mul(void)
 
 	/* Division inverts it: (-5 + 10i) / (3 + 4i) = 1 + 2i */
 	pOp = NULL;
-	MUST(_resolve(&opL, D2BOP_DIV, &opR, &pOp) == dbsOkay);
+	MUST(_resolve(&opL, DASOP_DIV, &opR, &pOp) == dbsOkay);
 	MUST(pOp != NULL);
-	CHECK(pOp->units == Units_divide(unitsL, unitsR));
+	CHECK(pOp->units == DasUnits_div(unitsL, unitsR));
 
 	double aProd[2] = {-5.0, 10.0};
-	MUST(DasBinOp_apply(pOp, (const ubyte*)aProd, (const ubyte*)aR, (ubyte*)aOut));
+	MUST(DasBinOp_apply(pOp, (const uint8_t*)aProd, (const uint8_t*)aR, (uint8_t*)aOut));
 	CHECK(CLOSE(aOut[0], 1.0));
 	CHECK(CLOSE(aOut[1], 2.0));
 	DasBinOp_decRef(pOp);
@@ -255,9 +255,9 @@ static int test_cplx_addsub(void)
 {
 	int nErrs = 0;
 
-	das_units units = Units_fromStr("V/m");
-	DasForm* pL = new_DasFormCplx(DAS_VSYS_RECT);
-	DasForm* pR = new_DasFormCplx(DAS_VSYS_RECT);
+	DasUnits units = DasUnits_fromStr("V/m");
+	DasForm* pL = new_DasFormCplx(DASCPLXSYS_RECT);
+	DasForm* pR = new_DasFormCplx(DASCPLXSYS_RECT);
 	MUST(pL != NULL); MUST(pR != NULL);
 
 	das_operand opL, opR;
@@ -265,18 +265,18 @@ static int test_cplx_addsub(void)
 	_cplxOperand(&opR, pR, units);
 
 	DasBinOp* pOp = NULL;
-	MUST(_resolve(&opL, D2BOP_ADD, &opR, &pOp) == dbsOkay);
+	MUST(_resolve(&opL, DASOP_ADD, &opR, &pOp) == dbsOkay);
 	CHECK(pOp->units == units);
 
 	double aL[2] = {1.0, 2.0}, aR[2] = {3.0, 4.0}, aOut[2] = {0.0, 0.0};
-	MUST(DasBinOp_apply(pOp, (const ubyte*)aL, (const ubyte*)aR, (ubyte*)aOut));
+	MUST(DasBinOp_apply(pOp, (const uint8_t*)aL, (const uint8_t*)aR, (uint8_t*)aOut));
 	CHECK(CLOSE(aOut[0], 4.0));
 	CHECK(CLOSE(aOut[1], 6.0));
 	DasBinOp_decRef(pOp);
 
 	pOp = NULL;
-	MUST(_resolve(&opL, D2BOP_SUB, &opR, &pOp) == dbsOkay);
-	MUST(DasBinOp_apply(pOp, (const ubyte*)aL, (const ubyte*)aR, (ubyte*)aOut));
+	MUST(_resolve(&opL, DASOP_SUB, &opR, &pOp) == dbsOkay);
+	MUST(DasBinOp_apply(pOp, (const uint8_t*)aL, (const uint8_t*)aR, (uint8_t*)aOut));
 	CHECK(CLOSE(aOut[0], -2.0));
 	CHECK(CLOSE(aOut[1], -2.0));
 	DasBinOp_decRef(pOp);
@@ -284,28 +284,28 @@ static int test_cplx_addsub(void)
 	/* A convertible right operand is scaled, and the scale reaches BOTH
 	   components: half a complex number is not half of its real part. */
 	das_operand opMilli;
-	DasForm* pMilli = new_DasFormCplx(DAS_VSYS_RECT);
+	DasForm* pMilli = new_DasFormCplx(DASCPLXSYS_RECT);
 	MUST(pMilli != NULL);
-	_cplxOperand(&opMilli, pMilli, Units_fromStr("mV/m"));
+	_cplxOperand(&opMilli, pMilli, DasUnits_fromStr("mV/m"));
 
 	pOp = NULL;
-	MUST(_resolve(&opL, D2BOP_ADD, &opMilli, &pOp) == dbsOkay);
+	MUST(_resolve(&opL, DASOP_ADD, &opMilli, &pOp) == dbsOkay);
 	CHECK(pOp->units == units);
 
 	double aMilli[2] = {1000.0, 2000.0};
-	MUST(DasBinOp_apply(pOp, (const ubyte*)aL, (const ubyte*)aMilli, (ubyte*)aOut));
+	MUST(DasBinOp_apply(pOp, (const uint8_t*)aL, (const uint8_t*)aMilli, (uint8_t*)aOut));
 	CHECK(CLOSE(aOut[0], 2.0));
 	CHECK(CLOSE(aOut[1], 4.0));
 	DasBinOp_decRef(pOp);
 
 	/* Units that do not convert are REFUSED, not quietly added */
 	das_operand opSec;
-	DasForm* pSec = new_DasFormCplx(DAS_VSYS_RECT);
+	DasForm* pSec = new_DasFormCplx(DASCPLXSYS_RECT);
 	MUST(pSec != NULL);
-	_cplxOperand(&opSec, pSec, Units_fromStr("s"));
+	_cplxOperand(&opSec, pSec, DasUnits_fromStr("s"));
 
 	pOp = NULL;
-	CHECK(_resolve(&opL, D2BOP_ADD, &opSec, &pOp) == dbsRefuse);
+	CHECK(_resolve(&opL, DASOP_ADD, &opSec, &pOp) == dbsRefuse);
 
 	del_DasForm(pSec);
 	del_DasForm(pMilli);
@@ -321,14 +321,14 @@ static int test_cplx_real(void)
 {
 	int nErrs = 0;
 
-	das_units units = Units_fromStr("V/m");
-	DasForm* pCplx = new_DasFormCplx(DAS_VSYS_RECT);
+	DasUnits units = DasUnits_fromStr("V/m");
+	DasForm* pCplx = new_DasFormCplx(DASCPLXSYS_RECT);
 	DasForm* pLin  = new_DasFormLin();
 	MUST(pCplx != NULL); MUST(pLin != NULL);
 
 	das_operand opCplx, opReal;
 	_cplxOperand(&opCplx, pCplx, units);
-	_realOperand(&opReal, pLin, UNIT_DIMENSIONLESS);
+	_realOperand(&opReal, pLin, DASUNITS_DIMENSIONLESS);
 
 	double aCplx[2] = {1.0, 2.0};
 	double rReal = 3.0;
@@ -336,9 +336,9 @@ static int test_cplx_real(void)
 
 	/* complex * real, claimed by the left hook */
 	DasBinOp* pOp = NULL;
-	MUST(_resolve(&opCplx, D2BOP_MUL, &opReal, &pOp) == dbsOkay);
-	CHECK(DasForm_isKind(pOp->pForm, DAS_FORM_CPLX));
-	MUST(DasBinOp_apply(pOp, (const ubyte*)aCplx, (const ubyte*)&rReal, (ubyte*)aOut));
+	MUST(_resolve(&opCplx, DASOP_MUL, &opReal, &pOp) == dbsOkay);
+	CHECK(DasForm_isKind(pOp->pForm, DASFORM_CPLX));
+	MUST(DasBinOp_apply(pOp, (const uint8_t*)aCplx, (const uint8_t*)&rReal, (uint8_t*)aOut));
 	CHECK(CLOSE(aOut[0], 3.0));
 	CHECK(CLOSE(aOut[1], 6.0));
 	DasBinOp_decRef(pOp);
@@ -346,9 +346,9 @@ static int test_cplx_real(void)
 	/* real * complex.  Linear declines (it may not learn what a complex is)
 	   and complex claims it from the right, which is the arrow working. */
 	pOp = NULL;
-	MUST(_resolve(&opReal, D2BOP_MUL, &opCplx, &pOp) == dbsOkay);
-	CHECK(DasForm_isKind(pOp->pForm, DAS_FORM_CPLX));
-	MUST(DasBinOp_apply(pOp, (const ubyte*)&rReal, (const ubyte*)aCplx, (ubyte*)aOut));
+	MUST(_resolve(&opReal, DASOP_MUL, &opCplx, &pOp) == dbsOkay);
+	CHECK(DasForm_isKind(pOp->pForm, DASFORM_CPLX));
+	MUST(DasBinOp_apply(pOp, (const uint8_t*)&rReal, (const uint8_t*)aCplx, (uint8_t*)aOut));
 	CHECK(CLOSE(aOut[0], 3.0));
 	CHECK(CLOSE(aOut[1], 6.0));
 	DasBinOp_decRef(pOp);
@@ -356,12 +356,12 @@ static int test_cplx_real(void)
 	/* real / complex is NOT complex / real, which is why the two hooks are
 	   two stated rules and never one commuted: 4 / (1 + i) = 2 - 2i */
 	das_operand opFour;
-	_realOperand(&opFour, pLin, UNIT_DIMENSIONLESS);
+	_realOperand(&opFour, pLin, DASUNITS_DIMENSIONLESS);
 	double rFour = 4.0, aOne[2] = {1.0, 1.0};
 
 	pOp = NULL;
-	MUST(_resolve(&opFour, D2BOP_DIV, &opCplx, &pOp) == dbsOkay);
-	MUST(DasBinOp_apply(pOp, (const ubyte*)&rFour, (const ubyte*)aOne, (ubyte*)aOut));
+	MUST(_resolve(&opFour, DASOP_DIV, &opCplx, &pOp) == dbsOkay);
+	MUST(DasBinOp_apply(pOp, (const uint8_t*)&rFour, (const uint8_t*)aOne, (uint8_t*)aOut));
 	CHECK(CLOSE(aOut[0],  2.0));
 	CHECK(CLOSE(aOut[1], -2.0));
 	DasBinOp_decRef(pOp);
@@ -372,9 +372,9 @@ static int test_cplx_real(void)
 	_realOperand(&opVolts, pLin, units);
 
 	pOp = NULL;
-	MUST(_resolve(&opCplx, D2BOP_ADD, &opVolts, &pOp) == dbsOkay);
+	MUST(_resolve(&opCplx, DASOP_ADD, &opVolts, &pOp) == dbsOkay);
 	CHECK(pOp->units == units);
-	MUST(DasBinOp_apply(pOp, (const ubyte*)aCplx, (const ubyte*)&rReal, (ubyte*)aOut));
+	MUST(DasBinOp_apply(pOp, (const uint8_t*)aCplx, (const uint8_t*)&rReal, (uint8_t*)aOut));
 	CHECK(CLOSE(aOut[0], 4.0));
 	CHECK(CLOSE(aOut[1], 2.0));
 	DasBinOp_decRef(pOp);
@@ -391,9 +391,9 @@ static int test_cplx_polar(void)
 {
 	int nErrs = 0;
 
-	das_units units = Units_fromStr("V/m");
-	DasForm* pP1 = new_DasFormCplx(DAS_VSYS_POLAR);
-	DasForm* pP2 = new_DasFormCplx(DAS_VSYS_POLAR);
+	DasUnits units = DasUnits_fromStr("V/m");
+	DasForm* pP1 = new_DasFormCplx(DASCPLXSYS_POLAR);
+	DasForm* pP2 = new_DasFormCplx(DASCPLXSYS_POLAR);
 	MUST(pP1 != NULL); MUST(pP2 != NULL);
 
 	das_operand opP1, opP2;
@@ -403,61 +403,61 @@ static int test_cplx_polar(void)
 	/* Magnitudes multiply and phases add.  Checked through the rectangular
 	   kernel rather than special cased, so this also pins the round trip. */
 	DasBinOp* pOp = NULL;
-	MUST(_resolve(&opP1, D2BOP_MUL, &opP2, &pOp) == dbsOkay);
-	CHECK(DasFormCplx_sysType(pOp->pForm) == DAS_VSYS_POLAR);
+	MUST(_resolve(&opP1, DASOP_MUL, &opP2, &pOp) == dbsOkay);
+	CHECK(DasFormCplx_sysId(pOp->pForm) == DASCPLXSYS_POLAR);
 
 	double aA[2] = {2.0, 30.0}, aB[2] = {3.0, 45.0}, aOut[2] = {0.0, 0.0};
-	MUST(DasBinOp_apply(pOp, (const ubyte*)aA, (const ubyte*)aB, (ubyte*)aOut));
+	MUST(DasBinOp_apply(pOp, (const uint8_t*)aA, (const uint8_t*)aB, (uint8_t*)aOut));
 	CHECK(CLOSE(aOut[0], 6.0));
 	CHECK(CLOSE(aOut[1], 75.0));
 	DasBinOp_decRef(pOp);
 
 	/* Two unit vectors 90 degrees apart sum to sqrt(2) at 45 */
 	pOp = NULL;
-	MUST(_resolve(&opP1, D2BOP_ADD, &opP2, &pOp) == dbsOkay);
+	MUST(_resolve(&opP1, DASOP_ADD, &opP2, &pOp) == dbsOkay);
 	double aE[2] = {1.0, 0.0}, aN[2] = {1.0, 90.0};
-	MUST(DasBinOp_apply(pOp, (const ubyte*)aE, (const ubyte*)aN, (ubyte*)aOut));
+	MUST(DasBinOp_apply(pOp, (const uint8_t*)aE, (const uint8_t*)aN, (uint8_t*)aOut));
 	CHECK(CLOSE(aOut[0], sqrt(2.0)));
 	CHECK(CLOSE(aOut[1], 45.0));
 	DasBinOp_decRef(pOp);
 
 	/* Mixed representations are legal and the LEFT operand names the result,
 	   the same rule form_vec.c follows for component systems. */
-	DasForm* pRect = new_DasFormCplx(DAS_VSYS_RECT);
+	DasForm* pRect = new_DasFormCplx(DASCPLXSYS_RECT);
 	MUST(pRect != NULL);
 	das_operand opRect;
 	_cplxOperand(&opRect, pRect, units);
 
 	pOp = NULL;
-	MUST(_resolve(&opRect, D2BOP_MUL, &opP1, &pOp) == dbsOkay);
-	CHECK(DasFormCplx_sysType(pOp->pForm) == DAS_VSYS_RECT);
+	MUST(_resolve(&opRect, DASOP_MUL, &opP1, &pOp) == dbsOkay);
+	CHECK(DasFormCplx_sysId(pOp->pForm) == DASCPLXSYS_RECT);
 
 	/* (0 + 1i) * (1 at 90 deg) = i * i = -1 */
 	double aImag[2] = {0.0, 1.0};
-	MUST(DasBinOp_apply(pOp, (const ubyte*)aImag, (const ubyte*)aN, (ubyte*)aOut));
+	MUST(DasBinOp_apply(pOp, (const uint8_t*)aImag, (const uint8_t*)aN, (uint8_t*)aOut));
 	CHECK(CLOSE(aOut[0], -1.0));
 	CHECK(CLOSE(aOut[1],  0.0));
 	DasBinOp_decRef(pOp);
 
 	pOp = NULL;
-	MUST(_resolve(&opP1, D2BOP_MUL, &opRect, &pOp) == dbsOkay);
-	CHECK(DasFormCplx_sysType(pOp->pForm) == DAS_VSYS_POLAR);
+	MUST(_resolve(&opP1, DASOP_MUL, &opRect, &pOp) == dbsOkay);
+	CHECK(DasFormCplx_sysId(pOp->pForm) == DASCPLXSYS_POLAR);
 	DasBinOp_decRef(pOp);
 
 	/* The conversion helpers on their own, since a caller may reach them
 	   without ever building a recipe */
 	double aRectVal[2] = {3.0, 4.0}, aPolarVal[2], aBack[2];
-	MUST(das_cplx_fromRect(DAS_VSYS_POLAR, aRectVal, aPolarVal));
+	MUST(dascplxsys_fromRect(DASCPLXSYS_POLAR, aRectVal, aPolarVal));
 	CHECK(CLOSE(aPolarVal[0], 5.0));
 	CHECK(CLOSE(aPolarVal[1], 53.13010235415598));
-	MUST(das_cplx_toRect(DAS_VSYS_POLAR, aPolarVal, aBack));
+	MUST(dascplxsys_toRect(DASCPLXSYS_POLAR, aPolarVal, aBack));
 	CHECK(CLOSE(aBack[0], 3.0));
 	CHECK(CLOSE(aBack[1], 4.0));
 
 	/* A geometric code is not a complex representation */
-	CHECK(!das_cplx_toRect(DAS_VSYS_SPH, aRectVal, aBack));
-	CHECK(das_cplxsys_fromStr("spherical") == DAS_VSYS_UNKNOWN);
-	CHECK(das_cplxsys_toStr(DAS_VSYS_CART) == NULL);
+	CHECK(!dascplxsys_toRect(DASVECSYS_SPH, aRectVal, aBack));
+	CHECK(dascplxsys_id("spherical") == DASVECSYS_UNKNOWN);
+	CHECK(dascplxsys_name(DASVECSYS_CART) == NULL);
 
 	del_DasForm(pRect);
 	del_DasForm(pP2);
@@ -472,8 +472,8 @@ static int test_cplx_refuse(void)
 {
 	int nErrs = 0;
 
-	das_units units = Units_fromStr("V/m");
-	DasForm* pCplx = new_DasFormCplx(DAS_VSYS_RECT);
+	DasUnits units = DasUnits_fromStr("V/m");
+	DasForm* pCplx = new_DasFormCplx(DASCPLXSYS_RECT);
 	DasForm* pLin  = new_DasFormLin();
 	MUST(pCplx != NULL); MUST(pLin != NULL);
 
@@ -484,44 +484,44 @@ static int test_cplx_refuse(void)
 
 	/* Not implemented is a REFUSAL with a reason, not a decline: sending this
 	   to the other operand would only produce a vaguer message. */
-	CHECK(_resolve(&opCplx, D2BOP_POW, &opCplx, &pOp) == dbsRefuse);
+	CHECK(_resolve(&opCplx, DASOP_POW, &opCplx, &pOp) == dbsRefuse);
 
 	/* A rank-1 run of two plain numbers is two numbers.  Linear claims no
 	   structure, so reading one as a complex pair would invent a meaning. */
-	_realOperand(&opOther, pLin, UNIT_DIMENSIONLESS);
+	_realOperand(&opOther, pLin, DASUNITS_DIMENSIONLESS);
 	opOther.nIntRank = 1;
 	opOther.aIntShape[0] = 2;
 	pOp = NULL;
-	CHECK(_resolve(&opCplx, D2BOP_MUL, &opOther, &pOp) == dbsRefuse);
+	CHECK(_resolve(&opCplx, DASOP_MUL, &opOther, &pOp) == dbsRefuse);
 
 	/* A complex operand that is not a pair */
 	_cplxOperand(&opOther, pCplx, units);
 	opOther.aIntShape[0] = 3;
 	pOp = NULL;
-	CHECK(_resolve(&opCplx, D2BOP_MUL, &opOther, &pOp) == dbsRefuse);
+	CHECK(_resolve(&opCplx, DASOP_MUL, &opOther, &pOp) == dbsRefuse);
 
 	/* Components have to be numbers.  Caught here rather than trusted to
-	   das_vt_merge(), which has a rule for vtTime that suits a calendar and
+	   dasvt_merge(), which has a rule for DASVT_TIME that suits a calendar and
 	   makes no sense at all for a phase. */
 	_cplxOperand(&opOther, pCplx, units);
-	opOther.vtElem = vtTime;
+	opOther.vtElem = DASVT_TIME;
 	pOp = NULL;
-	CHECK(_resolve(&opCplx, D2BOP_ADD, &opOther, &pOp) == dbsRefuse);
+	CHECK(_resolve(&opCplx, DASOP_ADD, &opOther, &pOp) == dbsRefuse);
 
 	/* A vector is DECLINED, not refused: neither formalism has a rule for the
 	   other, and the mechanism reporting "no rule" is the correct outcome. */
-	DasForm* pVec = new_DasFormVec("TSCS", DAS_VSYS_CART, NULL);
+	DasForm* pVec = new_DasFormVec("TSCS", DASVECSYS_CART, NULL);
 	MUST(pVec != NULL);
 	memset(&opOther, 0, sizeof(das_operand));
 	opOther.pForm = pVec;
-	opOther.vtElem = vtDouble;
+	opOther.vtElem = DASVT_DOUBLE;
 	opOther.units = units;
 	opOther.nIntRank = 1;
 	opOther.aIntShape[0] = 3;
 
 	pOp = NULL;
-	CHECK(_resolve(&opCplx, D2BOP_ADD, &opOther, &pOp) == dbsDecline);
-	CHECK(_resolve(&opOther, D2BOP_ADD, &opCplx, &pOp) == dbsDecline);
+	CHECK(_resolve(&opCplx, DASOP_ADD, &opOther, &pOp) == dbsDecline);
+	CHECK(_resolve(&opOther, DASOP_ADD, &opCplx, &pOp) == dbsDecline);
 
 	del_DasForm(pVec);
 	del_DasForm(pLin);
@@ -539,49 +539,49 @@ static int test_cplx_stream(void)
 {
 	int nErrs = 0;
 
-	DasStream* pSd = new_DasStream_path("TestCplx", "examples/ex43_msc_complex_cal.d3b");
+	DasStream* pSd = new_DasStream_file("TestCplx", "examples/ex43_msc_complex_cal.d3b");
 	MUST(pSd != NULL);
-	DasDesc* pDesc = DasStream_getDesc(pSd, 43);
-	MUST((pDesc != NULL)&&(DasDesc_type(pDesc) == DASDESC_DS));
+	DasDesc* pDesc = DasStream_desc(pSd, 43);
+	MUST((pDesc != NULL)&&(DasDesc_type(pDesc) == DASDESCTYPE_DS));
 	DasDs* pDs = (DasDs*)pDesc;
 
-	DasDim* pDim = DasDs_getDimByName(pDs, "cal_rect");
+	DasDim* pDim = DasDs_dim(pDs, "cal_rect");
 	MUST(pDim != NULL);
-	DasVar* pRect = DasDim_getVar(pDim, DASVAR_CENTER);
+	DasVar* pRect = DasDim_var(pDim, DASDIM_ROLE_CENTER);
 	MUST(pRect != NULL);
-	CHECK(DasVar_formIs(pRect, DAS_FORM_CPLX));
-	CHECK(DasFormCplx_sysType(DasVar_form(pRect)) == DAS_VSYS_RECT);
-	CHECK(DasVar_valType(pRect) == vtComposite);
-	CHECK(DasVar_units(pRect) == UNIT_DIMENSIONLESS);
-	ptrdiff_t aIntr[VARIDX_MAX] = {0};
+	CHECK(DasVar_hasForm(pRect, DASFORM_CPLX));
+	CHECK(DasFormCplx_sysId(DasVar_form(pRect)) == DASCPLXSYS_RECT);
+	CHECK(DasVar_vt(pRect) == DASVT_COMP);
+	CHECK(DasVar_units(pRect) == DASUNITS_DIMENSIONLESS);
+	ptrdiff_t aIntr[DASIDX_MAX] = {0};
 	CHECK(DasVar_intrShape(pRect, aIntr) == 1);
 	CHECK(aIntr[0] == 2);
 
-	ptrdiff_t aLoc[1] = { 0 };
-	das_datum dm = {{0},vtNull,0,NULL};
+	ptrdiff_t aAddr[1] = { 0 };
+	DasDatum dm = {{0},DASVT_NULL,0,NULL};
 	double aComp[2] = {0.0, 0.0};
 	char sBuf[64] = {'\0'};
-	MUST(DasVar_get(pRect, aLoc, (das_byte_seq){0}, &dm) == 0);
-	CHECK(dm.vt == vtComposite);
-	CHECK(das_datum_elemType(&dm) == vtDouble);
-	MUST(das_datum_toDoubles(&dm, aComp, 2) == 2);
+	MUST(DasVar_datumAt(pRect, aAddr, (DasByteSeq){0}, &dm) == 0);
+	CHECK(dm.vt == DASVT_COMP);
+	CHECK(DasDatum_et(&dm) == DASVT_DOUBLE);
+	MUST(DasDatum_toDoubles(&dm, aComp, 2) == 2);
 	/* the pinned digits are the fixture's printed eight, so compare to those */
 	CHECK((fabs(aComp[0] + 0.05220497) < 1e-8) && (fabs(aComp[1] + 0.81409886) < 1e-8));
-	CHECK(das_datum_toStrValOnly(&dm, 6, sBuf, 64) != NULL);
+	CHECK(DasDatum_toValStr(&dm, 6, sBuf, 64) != NULL);
 	CHECK(strcmp(sBuf, "-0.052205-0.814099i") == 0);
 
-	pDim = DasDs_getDimByName(pDs, "cal_polar");
+	pDim = DasDs_dim(pDs, "cal_polar");
 	MUST(pDim != NULL);
-	DasVar* pPolar = DasDim_getVar(pDim, DASVAR_CENTER);
+	DasVar* pPolar = DasDim_var(pDim, DASDIM_ROLE_CENTER);
 	MUST(pPolar != NULL);
-	CHECK(DasVar_formIs(pPolar, DAS_FORM_CPLX));
-	CHECK(DasFormCplx_sysType(DasVar_form(pPolar)) == DAS_VSYS_POLAR);
+	CHECK(DasVar_hasForm(pPolar, DASFORM_CPLX));
+	CHECK(DasFormCplx_sysId(DasVar_form(pPolar)) == DASCPLXSYS_POLAR);
 	memset(&dm, 0, sizeof(dm));
-	MUST(DasVar_get(pPolar, aLoc, (das_byte_seq){0}, &dm) == 0);
-	CHECK(das_datum_elemType(&dm) == vtFloat);
-	MUST(das_datum_toDoubles(&dm, aComp, 2) == 2);
+	MUST(DasVar_datumAt(pPolar, aAddr, (DasByteSeq){0}, &dm) == 0);
+	CHECK(DasDatum_et(&dm) == DASVT_FLOAT);
+	MUST(DasDatum_toDoubles(&dm, aComp, 2) == 2);
 	CHECK((fabs(aComp[0] - 0.815771) < 1e-6) && (fabs(aComp[1] + 93.66913) < 1e-4));
-	CHECK(das_datum_toStrValOnly(&dm, 6, sBuf, 64) != NULL);
+	CHECK(DasDatum_toValStr(&dm, 6, sBuf, 64) != NULL);
 	CHECK(strcmp(sBuf, "0.815771@-93.6691deg") == 0);
 
 	/* the two representations agree with each other */
@@ -599,7 +599,7 @@ int main(int argc, char** argv)
 	/* Unbuffered: a crash must not discard the checks that ran before it. */
 	setvbuf(stdout, NULL, _IONBF, 0);
 
-	das_init(argv[0], DASERR_DIS_RET, DASLOG_ERROR, NULL);
+	daslib_init(argv[0], DASERRDISP_RET, DASLOG_ERROR, NULL);
 
 	struct { const char* sName; int (*pFn)(void); } aCase[] = {
 		{"test_cplx_wire",   test_cplx_wire},

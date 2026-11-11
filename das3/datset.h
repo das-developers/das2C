@@ -133,7 +133,7 @@ extern "C" {
  * 
  * @extends DasDesc
  */
-typedef struct dataset DasDs;
+typedef struct das_ds_t DasDs;
 
 /**
  * @}
@@ -212,7 +212,7 @@ DAS_API DasDs* new_DasDs(
  * @returns A new dataset object allocated on the heap that shares it's
  *          storage arrays with the original dataset.
  */
-DAS_API DasDs* DasDs_copy(const DasDs* pThis);
+DAS_API DasDs* new_DasDs_copy(const DasDs* pThis);
 
 /** Swap a storage array in a dataset for a replacement
  *
@@ -222,10 +222,10 @@ DAS_API DasDs* DasDs_copy(const DasDs* pThis);
  * array-list entry, fixing the reference counts so the old array is released
  * once nothing else in this dataset holds it.
  *
- * This is the companion to DasDs_copy() for stream filters that must change a
+ * This is the companion to new_DasDs_copy() for stream filters that must change a
  * value type rather than just an encoding.  The motivating case is a binary ->
- * text re-encoder that turns an epoch integer/real array into a das_time array
- * so the codec can write ISO-8601: build the das_time array, then call this to
+ * text re-encoder that turns an epoch integer/real array into a DasTime array
+ * so the codec can write ISO-8601: build the DasTime array, then call this to
  * splice it in.  The replacement must have the same rank as the array it
  * replaces.
  *
@@ -281,10 +281,10 @@ DAS_API das_errcode DasDs_replaceAry(DasDs* pThis, const char* sOldId, DasAry* p
  *             * An integer from 0 to LONG_MAX indicating the valid range
  *               of values for this index.
  * 
- *             * The constant VARIDX_RAGGED indicating that the range of
+ *             * The constant DASIDX_RAGGED indicating that the range of
  *               values for this index depend on upper indices.
  * 
- *             * The constant VARIDX_UNUSED to indicate that a index is 
+ *             * The constant DASIDX_UNUSED to indicate that a index is 
  *               un-used by this dataset.
  *
  * @return The iteration rank sufficient to read all coordinate and data
@@ -302,16 +302,16 @@ DAS_API int DasDs_shape(const DasDs* pThis, ptrdiff_t* pShape);
  * @param pThis A pointer to a DasDim structure
  * @param nIdx The number of location indices which may be less than the 
  *             number needed to specify an exact value.
- * @param pLoc A list of values for the previous indexes, must be a value 
+ * @param pAddr A list of values for the previous indexes, must be a value 
  *             greater than or equal to 0
  * @return The number of sub-elements at this index location or D2IDX_UNUSED
- *         if this variable doesn't depend on a given location, or VARIDX_UNUSED
+ *         if this variable doesn't depend on a given location, or DASIDX_UNUSED
  *         if this variable returns computed results for this location
  * 
  * @see DasAry_lengthIn
  * @memberof DasDs
  */
-DAS_API ptrdiff_t DasDs_lengthIn(const DasDs* pThis, int nIdx, ptrdiff_t* pLoc);
+DAS_API ptrdiff_t DasDs_lengthIn(const DasDs* pThis, int nIdx, ptrdiff_t* pAddr);
 
 
 /** Get the data set group id
@@ -365,12 +365,12 @@ DAS_API const char* DasDs_name(const DasDs* pThis);
  * @returns the plot type, "" (never NULL) when the stream gave none
  * @memberof DasDs
  */
-DAS_API const char* DasDs_getPlot(const DasDs* pThis);
+DAS_API const char* DasDs_plot(const DasDs* pThis);
 
 /** Set the plot type hint for a dataset
  *
  * @param pThis A pointer to a dataset structure
- * @param sPlot One of the values listed at DasDs_getPlot(), or NULL or "" to
+ * @param sPlot One of the values listed at DasDs_plot(), or NULL or "" to
  *        clear the hint
  * @returns DAS_OKAY, or a DASERR_DS error, leaving the old value in place, if
  *        sPlot is not one of the schema's PlotType values
@@ -426,20 +426,20 @@ DAS_API das_errcode DasDs_addAry(DasDs* pThis, DasAry* pAry);
  * 
  * @memberof DasDs
  */
-DAS_API size_t DasDs_numAry(const DasDs* pThis);
+DAS_API size_t DasDs_numArys(const DasDs* pThis);
 
 /** Get the a specific array in the dataset, buy index.
  * 
  * @param pThis The dataset
  * 
  * @param uIdx The index of the array to access.  The valid range of this
- *    value is determined by the return of DasDs_numAry()
+ *    value is determined by the return of DasDs_numArys()
  *
  * @returns The array, or NULL if uIdx is out of range
  * 
  * @memberof DasDs
  */
-DAS_API DasAry* DasDs_getAry(const DasDs* pThis, size_t uIdx);
+DAS_API DasAry* DasDs_aryAt(const DasDs* pThis, size_t uIdx);
 
 
 /** Get a dataset array given it's identifier
@@ -456,7 +456,7 @@ DAS_API DasAry* DasDs_getAry(const DasDs* pThis, size_t uIdx);
  * 
  * @memberof DasDs
  */
-DAS_API DasAry* DasDs_getAryById(DasDs* pThis, const char* sAryId);
+DAS_API DasAry* DasDs_ary(DasDs* pThis, const char* sAryId);
 
 /** Get the currently used memory of all arrays in the dataset 
  * 
@@ -526,7 +526,7 @@ DAS_API size_t DasDs_numCodecs(const DasDs* pThis);
  * 
  * @memberof DasDs
  */
-DAS_API DasCodec* DasDs_getCodec(const DasDs* pThis, size_t uIdx);
+DAS_API DasCodec* DasDs_codecAt(const DasDs* pThis, size_t uIdx);
 
 /** Get the codec for a named array
  * 
@@ -543,7 +543,7 @@ DAS_API DasCodec* DasDs_getCodec(const DasDs* pThis, size_t uIdx);
  * 
  * @memberof DasDs
  */
-DAS_API DasCodec* DasDs_getCodecFor(
+DAS_API DasCodec* DasDs_codecFor(
 	const DasDs* pThis, const char* sAryId, int* pItems
 );
 
@@ -555,7 +555,7 @@ DAS_API DasCodec* DasDs_getCodecFor(
  * 
  * @memberof DasDs
  */
-DAS_API int DasDs_pktItems(const DasDs* pThis, size_t uIdx);
+DAS_API int DasDs_codecItemsAt(const DasDs* pThis, size_t uIdx);
 
 /** Define a packet data encoded/decoder for fixed length items and arrays
  * 
@@ -594,14 +594,14 @@ DAS_API int DasDs_pktItems(const DasDs* pThis, size_t uIdx);
  * @param nNumItems The number of items to read/write at a time.
  * 
  * @param bRead If true initialize a decoder, if false initialize an encoder.
- *        For readability the macros DASENC_READ and DASENC_WRITE can be used
+ *        For readability the macros DASCODEC_READ and DASCODEC_WRITE can be used
  * 
  * @returns NULL if the codec couldn't be defined, or a pointer to
  *        the new codec otherwise
  * 
  * @memberof DasDs
  */
-DAS_API DasCodec* DasDs_addFixedCodec(
+DAS_API DasCodec* DasDs_makeFixedCodec(
 	DasDs* pThis, const char* sAryId, const char* sSemantic, 
 	const char* sEncType, int nItemBytes, int nNumItems, bool bRead
 );
@@ -610,38 +610,38 @@ DAS_API DasCodec* DasDs_addFixedCodec(
  * in each packet
  * 
  * Despite the name, strings are just a run of bytes. These bytes need not
- * be valid utf8 encoding units. With the use of DASENC_ITEM_LEN, random
+ * be valid utf8 encoding units. With the use of DASCODEC_ITEM_LEN, random
  * blobs of arbitrary bytes can be read.
  * 
- * @param pThis @see DasDs_addFixedCodec
+ * @param pThis @see DasDs_makeFixedCodec
  * 
- * @param sAryId @see DasDs_addFixedCodec
+ * @param sAryId @see DasDs_makeFixedCodec
  * 
- * @param sEncType @see DasDs_addFixedCodec
+ * @param sEncType @see DasDs_makeFixedCodec
  * 
- * @param sSemantic @see DasDs_addFixedCodec
+ * @param sSemantic @see DasDs_makeFixedCodec
  * 
  * @param nItemTerm How the end of each variable length item is found.
- *        Either DASENC_ITEM_TERM, items end at a terminator byte, or
- *        DASENC_ITEM_LEN, each item is preceded by its length in the
+ *        Either DASCODEC_ITEM_TERM, items end at a terminator byte, or
+ *        DASCODEC_ITEM_LEN, each item is preceded by its length in the
  *        packet.
  * 
  * @param uTerm The byte that ends an item, used when nItemTerm is
- *        DASENC_ITEM_TERM.
+ *        DASCODEC_ITEM_TERM.
  * 
  * @param nNumItems The number of items to read or write at a time
  * 
  * @param bRead If true initialize a decoder, if false initialize an encoder.
- *        For readability the macros DASENC_READ and DASENC_WRITE can be used
+ *        For readability the macros DASCODEC_READ and DASCODEC_WRITE can be used
  * 
  * @returns NULL if the codec couldn't be defined, or a pointer to
  *        the new codec otherwise
  * 
  * @memberof DasDs
  */
-DAS_API DasCodec* DasDs_addStringCodec(
+DAS_API DasCodec* DasDs_makeStrCodec(
     DasDs* pThis, const char* sAryId, const char* sSemantic, 
-    const char* sEncType, int nItemTerm, ubyte uTerm, int nNumItems,
+    const char* sEncType, int nItemTerm, uint8_t uTerm, int nNumItems,
     bool bRead
 );
 
@@ -663,14 +663,14 @@ DAS_API DasCodec* DasDs_addStringCodec(
  * @param nNumItems The number of items to read/write at a time. 
  * 
  * @param bRead If true initialize a decoder, if false initialize an encoder.
- *        For readability the macros DASENC_READ and DASENC_WRITE can be used
+ *        For readability the macros DASCODEC_READ and DASCODEC_WRITE can be used
  * 
  * @returns NULL if the codec couldn't be defined, or a pointer to
  *        the new codec otherwise
  * 
  * @memberof DasDs
  */
-DAS_API DasCodec* DasDs_addCodecFrom(
+DAS_API DasCodec* DasDs_cloneCodec(
 	DasDs* pThis, const char* sAryId, const DasCodec* pOther, int nNumItems,
 	bool bRead
 );
@@ -684,13 +684,13 @@ DAS_API DasCodec* DasDs_addCodecFrom(
  * The run terminators (DasCodec_setIdxTerms()) and trim survive.
  *
  * @param pThis the dataset owning the codec
- * @param uIdx which codec, as for DasDs_getCodec()
- * @param bRead DASENC_READ for a decoder, DASENC_WRITE for an encoder.
+ * @param uIdx which codec, as for DasDs_codecAt()
+ * @param bRead DASCODEC_READ for a decoder, DASCODEC_WRITE for an encoder.
  *        Always required; a reader can be turned into a writer this way.
  * @param sAryId a different array for the codec, or NULL to keep its own.
  *        Use this after DasDs_replaceAry(), which does not touch codecs.
- * @param sEncType a new encoding, as for DasDs_addFixedCodec(), or NULL
- * @param nItemBytes a new value width, DASENC_ITEM_LEN for length tagged
+ * @param sEncType a new encoding, as for DasDs_makeFixedCodec(), or NULL
+ * @param nItemBytes a new value width, DASCODEC_ITEM_LEN for length tagged
  *        values, or 0 to keep the current one
  * @param cSep a byte that ends a text value, or 0 to keep the current one
  * @param epoch time units for datetimes stored as numbers, or NULL
@@ -702,7 +702,7 @@ DAS_API DasCodec* DasDs_addCodecFrom(
  */
 DAS_API das_errcode DasDs_updateCodec(
 	DasDs* pThis, size_t uIdx, bool bRead, const char* sAryId,
-	const char* sEncType, int16_t nItemBytes, ubyte cSep, das_units epoch,
+	const char* sEncType, int16_t nItemBytes, uint8_t cSep, DasUnits epoch,
 	const char* sOutFmt
 );
 
@@ -781,7 +781,7 @@ DAS_API das_errcode DasDs_encodeData(DasDs* pThis, DasBuf* pBuf, ptrdiff_t iIdx0
  * 
  * @memberof DasAry
  */
-DAS_API size_t DasDs_clearRagged0(DasDs* pThis);
+DAS_API size_t DasDs_clearIdx0(DasDs* pThis);
 
 
 /** Make a new dimension within this dataset
@@ -807,7 +807,7 @@ DAS_API size_t DasDs_clearRagged0(DasDs* pThis);
  * @memberof DasDs
  */
 DAS_API DasDim* DasDs_makeDim(
-	DasDs* pThis, das_dim_type_e dType, const char* sDim, const char* sName
+	DasDs* pThis, das_dimtype dType, const char* sDim, const char* sName
 );
 
 /** Add a physical dimension to the dataset
@@ -829,11 +829,11 @@ DAS_API das_errcode DasDs_addDim(DasDs* pThis, DasDim* pDim);
 /** Get the number of physical dimensions in this dataset
  *
  * @param pThis The dataset object
- * @param dmt The dimension type, DASDIM_COORD or DASDIM_DATA
+ * @param dmt The dimension type, DASDIMTYPE_COORD or DASDIMTYPE_DATA
  * @return The number of data functions provided for a dataset.
  * @memberof DasDs
  */
-DAS_API size_t DasDs_numDims(const DasDs* pThis, das_dim_type_e dmt);
+DAS_API size_t DasDs_numDims(const DasDs* pThis, das_dimtype dmt);
 
 
 /** Get a dimension by it's basic kind
@@ -843,12 +843,12 @@ DAS_API size_t DasDs_numDims(const DasDs* pThis, das_dim_type_e dmt);
  * @param sDim The general dimension type, like time, position, voltage, etc.
  *        The comparison to Dimension IDs is not case sensitive.
  * 
- * @param dmt The dimension type, DASDIM_COORD or DASDIM_DATA
+ * @param dmt The dimension type, DASDIMTYPE_COORD or DASDIMTYPE_DATA
  * 
  * @memberof DasDs
  */
-DAS_API DasDim* DasDs_getDim(
-	DasDs* pThis, const char* sDim, das_dim_type_e dmt
+DAS_API DasDim* DasDs_physDim(
+	DasDs* pThis, const char* sDim, das_dimtype dmt
 );
 
 /** Get a dimension by index
@@ -858,8 +858,8 @@ DAS_API DasDim* DasDs_getDim(
  * @returns A Variable pointer or NULL if idx is invalid
  * @memberof DasDs
  */
-DAS_API DasDim* DasDs_getDimByIdx(
-	DasDs* pThis, size_t idx, das_dim_type_e vt
+DAS_API DasDim* DasDs_dimAt(
+	DasDs* pThis, size_t idx, das_dimtype vt
 );
 
 /** Get a dimension by name
@@ -873,7 +873,7 @@ DAS_API DasDim* DasDs_getDimByIdx(
  *          name 
  * @memberof DasDs
  */
-DAS_API DasDim* DasDs_getDimByName(DasDs* pThis, const char* sName);
+DAS_API DasDim* DasDs_dim(DasDs* pThis, const char* sName);
 
 
 /** Print a multi-line description of this dataset.

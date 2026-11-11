@@ -18,7 +18,7 @@
 /* The DasBuf layout, for lib code managing DasBuf structures on the stack.
  *
  * Code outside buffer.c should still use member functions. The layout is
- * here so that DasPlane_setTimeValue() and others can wrap a local array
+ * here so that DasPlane_setTimeAt() and others can wrap a local array
  * without a malloc on each call, not for direct field access.  
  *
  * Seriously, use the functions. The compiler will optimize out function
@@ -34,7 +34,7 @@
 extern "C" {
 #endif
 
-struct das_buffer {
+struct das_buf_t {
 	char* sBuf;
 	size_t uLen;
 	char* pWrite;            /* NULL marks a read-only buffer */

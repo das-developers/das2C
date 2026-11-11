@@ -55,7 +55,7 @@ static bool _DasEnc_guessAsciiFmt(DasEnc* pThis)
 	if(nPrec < 0)  nPrec = 0;
 	if(nPrec > 16) nPrec = 16;
 
-	snprintf(pThis->sFmt, DASENC_FMT_LEN, "%%%d.%de", pThis->nWidth - 1, nPrec);
+	snprintf(pThis->sFmt, DASENC_FMT_SZ, "%%%d.%de", pThis->nWidth - 1, nPrec);
 	return true;
 }
 
@@ -78,45 +78,45 @@ static bool _DasEnc_guessTimeFmt(DasEnc* pThis)
 	switch(pThis->nWidth){  /* Remember, width includes the separator */
 	
 	/* Year only */
-	case 5: strncpy(pThis->sFmt, "%04d", DASENC_FMT_LEN-1); break;
-	case 6: strncpy(pThis->sFmt, "%04d ", DASENC_FMT_LEN-1); break;
-	case 7: strncpy(pThis->sFmt, "%04d  ", DASENC_FMT_LEN-1); break;
+	case 5: strncpy(pThis->sFmt, "%04d", DASENC_FMT_SZ-1); break;
+	case 6: strncpy(pThis->sFmt, "%04d ", DASENC_FMT_SZ-1); break;
+	case 7: strncpy(pThis->sFmt, "%04d  ", DASENC_FMT_SZ-1); break;
 	
 	/* Year and Month */
-	case 8: strncpy(pThis->sFmt,  "%04d-%02d",DASENC_FMT_LEN-1); break;
-	case 9: strncpy(pThis->sFmt,  "%04d-%02d ",DASENC_FMT_LEN-1); break;
-	case 10: strncpy(pThis->sFmt, "%04d-%02d  ",DASENC_FMT_LEN-1); break;
+	case 8: strncpy(pThis->sFmt,  "%04d-%02d",DASENC_FMT_SZ-1); break;
+	case 9: strncpy(pThis->sFmt,  "%04d-%02d ",DASENC_FMT_SZ-1); break;
+	case 10: strncpy(pThis->sFmt, "%04d-%02d  ",DASENC_FMT_SZ-1); break;
 	
 	/* Year/Month/Day of Month */
-	case 11: strncpy(pThis->sFmt, "%04d-%02d-%02d",DASENC_FMT_LEN-1); break;
-	case 12: strncpy(pThis->sFmt, "%04d-%02d-%02d ",DASENC_FMT_LEN-1); break;
-	case 13: strncpy(pThis->sFmt, "%04d-%02d-%02d  ",DASENC_FMT_LEN-1); break;
+	case 11: strncpy(pThis->sFmt, "%04d-%02d-%02d",DASENC_FMT_SZ-1); break;
+	case 12: strncpy(pThis->sFmt, "%04d-%02d-%02d ",DASENC_FMT_SZ-1); break;
+	case 13: strncpy(pThis->sFmt, "%04d-%02d-%02d  ",DASENC_FMT_SZ-1); break;
 	
 	/* Date + Hour */
-	case 14: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d",DASENC_FMT_LEN-1); break;
-	case 15: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d ",DASENC_FMT_LEN-1); break;
-	case 16: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d  ",DASENC_FMT_LEN-1); break;
+	case 14: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d",DASENC_FMT_SZ-1); break;
+	case 15: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d ",DASENC_FMT_SZ-1); break;
+	case 16: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d  ",DASENC_FMT_SZ-1); break;
 	
 	/* Date + Hour:min */
-	case 17: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d",DASENC_FMT_LEN-1); break;
-	case 18: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d ",DASENC_FMT_LEN-1); break;
-	case 19: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d  ",DASENC_FMT_LEN-1); break;
+	case 17: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d",DASENC_FMT_SZ-1); break;
+	case 18: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d ",DASENC_FMT_SZ-1); break;
+	case 19: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d  ",DASENC_FMT_SZ-1); break;
 	
 	/* Date + Hour:min:sec */
-	case 20: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%02.0f",DASENC_FMT_LEN-1); break;
-	case 21: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%02.0f ",DASENC_FMT_LEN-1); break;
+	case 20: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%02.0f",DASENC_FMT_SZ-1); break;
+	case 21: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%02.0f ",DASENC_FMT_SZ-1); break;
 	
 	/* Date + hour:min:sec + frac seconds */
-	case 22: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%04.1f",DASENC_FMT_LEN-1); break;
-	case 23: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%05.2f",DASENC_FMT_LEN-1); break;
-	case 24: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%06.3f",DASENC_FMT_LEN-1); break;
-	case 25: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%06.3f ",DASENC_FMT_LEN-1); break;
-	case 26: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%06.3f  ",DASENC_FMT_LEN-1); break;
-	case 27: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%09.6f",DASENC_FMT_LEN-1); break;
-	case 28: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%09.6f ",DASENC_FMT_LEN-1); break;
-	case 29: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%09.6f  ",DASENC_FMT_LEN-1); break;
-	case 30: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%012.9f",DASENC_FMT_LEN-1); break;
-	case 31: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%012.9f ",DASENC_FMT_LEN-1); break;
+	case 22: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%04.1f",DASENC_FMT_SZ-1); break;
+	case 23: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%05.2f",DASENC_FMT_SZ-1); break;
+	case 24: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%06.3f",DASENC_FMT_SZ-1); break;
+	case 25: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%06.3f ",DASENC_FMT_SZ-1); break;
+	case 26: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%06.3f  ",DASENC_FMT_SZ-1); break;
+	case 27: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%09.6f",DASENC_FMT_SZ-1); break;
+	case 28: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%09.6f ",DASENC_FMT_SZ-1); break;
+	case 29: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%09.6f  ",DASENC_FMT_SZ-1); break;
+	case 30: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%012.9f",DASENC_FMT_SZ-1); break;
+	case 31: strncpy(pThis->sFmt, "%04d-%02d-%02dT%02d:%02d:%012.9f ",DASENC_FMT_SZ-1); break;
 	
 	/* If nano-seconds isn't good enough, revise in the future */
 	}
@@ -130,19 +130,19 @@ DasEnc* new_DasEnc(int nCat, int nWidth, const char* sFmt){
 	
 	if(nCat != DAS2DT_BE_REAL && nCat != DAS2DT_LE_REAL &&
 		nCat != DAS2DT_ASCII   && nCat != DAS2DT_TIME ){
-		das_error(14, "Encoding category 0x%04X is unknown", nCat);
+		daserrf(14, "Encoding category 0x%04X is unknown", nCat);
 		return NULL;
 	}
 	
 	if(nCat == DAS2DT_BE_REAL || nCat == DAS2DT_LE_REAL){
 		if(nWidth != 4 && nWidth != 8){
-			das_error(14, "%d-byte binary reals are not supported", nWidth);
+			daserrf(14, "%d-byte binary reals are not supported", nWidth);
 			return NULL;
 		}
 	}
 
 	if(nWidth < 2 || nWidth > DASENC_MAX_WIDTH){
-		das_error(14, "Encoding width %d is out of range, valid field width "
+		daserrf(14, "Encoding width %d is out of range, valid field width "
 		              "range is 2 to %d characters", nWidth, DASENC_MAX_WIDTH);
 		return NULL;
 	}
@@ -155,12 +155,12 @@ DasEnc* new_DasEnc(int nCat, int nWidth, const char* sFmt){
 	pThis->nCat = nCat;
 	pThis->nWidth = nWidth;
 	if(sFmt != NULL){
-		if(strlen(sFmt) >= DASENC_FMT_LEN){
-			das_error(14, "Format string is longer than %d bytes",DASENC_FMT_LEN-1);
+		if(strlen(sFmt) >= DASENC_FMT_SZ){
+			daserrf(14, "Format string is longer than %d bytes",DASENC_FMT_SZ-1);
 			free(pThis);
 			return NULL;
 		}
-		strncpy(pThis->sFmt, sFmt, DASENC_FMT_LEN-1);
+		strncpy(pThis->sFmt, sFmt, DASENC_FMT_SZ-1);
 	}
 	else{
 		if(nCat == DAS2DT_TIME)
@@ -169,8 +169,8 @@ DasEnc* new_DasEnc(int nCat, int nWidth, const char* sFmt){
 			_DasEnc_guessAsciiFmt(pThis);
 	}
 	
-	if(DasEnc_toStr(pThis, pThis->sType, DASENC_TYPE_LEN) == NULL){
-		das_error(14, "Encoding type name is longer than %d bytes", DASENC_TYPE_LEN - 1);
+	if(DasEnc_toStr(pThis, pThis->sType, DASENC_TYPE_SZ) == NULL){
+		daserrf(14, "Encoding type name is longer than %d bytes", DASENC_TYPE_SZ - 1);
 		free(pThis);
 		return NULL;
 	}
@@ -183,11 +183,11 @@ DasEnc* new_DasEnc_str(const char* sType)
 	char sBuf[4] = {'\0'};
 	
 	if(sType == NULL)
-		das_error(5, "Null pointer in dasEncoding_fromString");
+		daserrf(5, "Null pointer in dasEncoding_fromString");
 	
 	DasEnc* pThis = (DasEnc*)calloc(1, sizeof(DasEnc));
 	
-	strncpy(pThis->sType, sType, DASENC_TYPE_LEN - 1);
+	strncpy(pThis->sType, sType, DASENC_TYPE_SZ - 1);
 	
 	/* Real encodings*/
 	if((strcmp(sType, "sun_real8" ) == 0)||(strcmp(sType, "double") == 0)){
@@ -230,14 +230,14 @@ DasEnc* new_DasEnc_str(const char* sType)
 		sBuf[i] = sType[i+nOff];
 	}
 	if(sscanf(sBuf, "%d", &(pThis->nWidth)) != 1){
-		das_error(14, "Error parsing encoding type '%s'", sType);
+		daserrf(14, "Error parsing encoding type '%s'", sType);
 		free(pThis);
 		return NULL;
 	}
 	
 	if(pThis->nWidth < 2 || pThis->nWidth > DASENC_MAX_WIDTH){
 		free(pThis);
-		das_error(14, "Error in encoding type %s, valid field width range "
+		daserrf(14, "Error in encoding type %s, valid field width range "
 		              "is 2 to %d characters", sType, DASENC_MAX_WIDTH);
 		return NULL;
 	}
@@ -262,7 +262,7 @@ bool DasEnc_isUtf8(const DasEnc* pThis)
 }
 
 /* Copy Constructor */
-DasEnc* DasEnc_copy(const DasEnc* pThis)
+DasEnc* new_DasEnc_copy(const DasEnc* pThis)
 {
 	DasEnc* pOther = (DasEnc*)calloc(1, sizeof(DasEnc));
 	
@@ -300,17 +300,17 @@ unsigned int DasEnc_hash(const DasEnc* pThis)
 /* ************************************************************************* */
 /* Setting String Formatters */
 
-void DasEnc_setAsciiFormat(
+void DasEnc_setAsciiFmt(
 	DasEnc* pThis, const char* sValFmt, int nFmtWidth
 ){
 	if(pThis->nCat != DAS2DT_ASCII)
-		das_error(14, "Encoding %s is not a general ASCII type", pThis->sType); 
+		daserrf(14, "Encoding %s is not a general ASCII type", pThis->sType); 
 	
 	pThis->nWidth = nFmtWidth + 1;
-	strncpy(pThis->sFmt, sValFmt, DASENC_FMT_LEN - 1);	
+	strncpy(pThis->sFmt, sValFmt, DASENC_FMT_SZ - 1);	
 }
 
-void DasEnc_setTimeFormat(
+void DasEnc_setTimeFmt(
 	DasEnc* pThis, const char* sValFmt, int nFmtWidth
 ){
 	/* Yea, yea same code as above.  But these are kept separate for library
@@ -318,10 +318,10 @@ void DasEnc_setTimeFormat(
 		strings are very different from general value format strings. -cwp */
 	
 	if(pThis->nCat != DAS2DT_TIME)
-		das_error(14, "Encoding %s is not a ASCII Time type", pThis->sType); 
+		daserrf(14, "Encoding %s is not a ASCII Time type", pThis->sType); 
 	
 	pThis->nWidth = nFmtWidth + 1;
-	strncpy(pThis->sFmt, sValFmt, DASENC_FMT_LEN - 1);	
+	strncpy(pThis->sFmt, sValFmt, DASENC_FMT_SZ - 1);	
 }
 
 /* ************************************************************************* */
@@ -350,7 +350,7 @@ char* DasEnc_toStr(const DasEnc* pThis, char* sType, size_t uLen)
 		case DAS2DT_ASCII: n = snprintf(sType, uLen, "ascii%d", pThis->nWidth); break;
 		case DAS2DT_TIME:  n = snprintf(sType, uLen, "time%d", pThis->nWidth);  break;
 		default:
-			das_error(14, "Value Encoding category %d is unknown", pThis->nCat);
+			daserrf(14, "Value Encoding category %d is unknown", pThis->nCat);
 			return NULL;
 		}
 	}
@@ -363,7 +363,7 @@ char* DasEnc_toStr(const DasEnc* pThis, char* sType, size_t uLen)
 
 static das_errcode _writePacketMsb4(DasBuf* pBuf, void* pData)
 {
-#ifdef HOST_IS_LSB_FIRST
+#ifdef DASHOST_LSB_FIRST
 	unsigned char cdata[4];
 	cdata[0] = *(((unsigned char*)pData) + 3);
 	cdata[1] = *(((unsigned char*)pData) + 2);
@@ -378,7 +378,7 @@ static das_errcode _writePacketMsb4(DasBuf* pBuf, void* pData)
 
 static das_errcode _writePacketLsb4(DasBuf* pBuf, void* pData)
 {
-#ifdef HOST_IS_LSB_FIRST
+#ifdef DASHOST_LSB_FIRST
 	return DasBuf_write(pBuf, pData, 4);
 #else
 	unsigned char cdata[4];
@@ -393,7 +393,7 @@ static das_errcode _writePacketLsb4(DasBuf* pBuf, void* pData)
 
 static das_errcode _writePacketMsb8(DasBuf* pBuf, void* pData)
 {
-#ifdef HOST_IS_LSB_FIRST
+#ifdef DASHOST_LSB_FIRST
 	unsigned char cdata[8];
 	cdata[0] = *(((unsigned char*)pData) + 7);
 	cdata[1] = *(((unsigned char*)pData) + 6);
@@ -412,7 +412,7 @@ static das_errcode _writePacketMsb8(DasBuf* pBuf, void* pData)
 
 static das_errcode _writePacketLsb8(DasBuf* pBuf, void* pData)
 {
-#ifdef HOST_IS_LSB_FIRST
+#ifdef DASHOST_LSB_FIRST
 	return DasBuf_write(pBuf, pData, 8);
 #else
 	unsigned char cdata[8];
@@ -435,8 +435,8 @@ static das_errcode _encodeAsciiValue(DasEnc* pThis, DasBuf* pBuf, double data)
 	
 	/* Select a default output format if needed */
 	if((pThis->sFmt[0] == '\0')&&(!_DasEnc_guessAsciiFmt(pThis)))
-		return das_error(14, "No default format for encoding '%s', use "
-		                 "DasEnc_setAsciiFormat for general ASCII values in "
+		return daserrf(14, "No default format for encoding '%s', use "
+		                 "DasEnc_setAsciiFmt for general ASCII values in "
 		                 "less than 7 characters", pThis->sType);
 	
 	/* Formatted locally, checked, then copied: a pointer into pBuf would go
@@ -444,11 +444,11 @@ static das_errcode _encodeAsciiValue(DasEnc* pThis, DasBuf* pBuf, double data)
 	char sVal[DASENC_MAX_WIDTH + 1];
 	int nLen = snprintf(sVal, sizeof(sVal), pThis->sFmt, data);
 	if(nLen < 0)
-		return das_error(14, "Format '%s' failed for encoding '%s'",
+		return daserrf(14, "Format '%s' failed for encoding '%s'",
 		                 pThis->sFmt, pThis->sType);
 	
 	if(nLen != nExpect)
-		return das_error(
+		return daserrf(
 			14, "Output value '%s' using format '%s' for encoding '%s' occupied %d "
 			"bytes, expected %d", sVal, pThis->sFmt, pThis->sType, nLen, nExpect
 		);
@@ -457,21 +457,21 @@ static das_errcode _encodeAsciiValue(DasEnc* pThis, DasBuf* pBuf, double data)
 }
 
 static das_errcode _encodeTimeValue(
-	DasEnc* pThis, DasBuf* pBuf, double data, das_units units
+	DasEnc* pThis, DasBuf* pBuf, double data, DasUnits units
 ){
 
-	das_time dt = {0};
-	if(data != DAS_FILL_VALUE)
-		Units_convertToDt(&dt, data, units);
+	DasTime dt = {0};
+	if(data != DASVAL_FILL)
+		DasTime_fromPoint(&dt, data, units);
 	else
-		dt_set(&dt, 1, 1, 1, 1, 0, 0, 0.0);
+		DasTime_set(&dt, 1, 1, 1, 1, 0, 0, 0.0);
 	
 	int nExpect = pThis->nWidth - 1;
 	
 	/* Select a default output format if needed */
 	if((pThis->sFmt[0] == '\0')&&(!_DasEnc_guessTimeFmt(pThis)))
-		return das_error(14, "No default format for encoding '%s', use "
-		                 "DasEnc_setTimeFormat for ASCII time values in less "
+		return daserrf(14, "No default format for encoding '%s', use "
+		                 "DasEnc_setTimeFmt for ASCII time values in less "
 		                 "than 5 or more than 31 characters", pThis->sType);
 	
 	/* Local first, for the same reason as _encodeAsciiValue() */
@@ -479,11 +479,11 @@ static das_errcode _encodeTimeValue(
 	int nLen = snprintf(sVal, sizeof(sVal), pThis->sFmt, dt.year, dt.month,
 	                    dt.mday, dt.hour, dt.minute, dt.second);
 	if(nLen < 0)
-		return das_error(14, "Format '%s' failed for encoding '%s'",
+		return daserrf(14, "Format '%s' failed for encoding '%s'",
 		                 pThis->sFmt, pThis->sType);
 	
 	if(nLen != nExpect){
-		return das_error(14, "Output value '%s' for encoding %s occupied %d "
+		return daserrf(14, "Output value '%s' for encoding %s occupied %d "
 				            "bytes, expected %d", sVal, pThis->sType, nLen, nExpect);
 	}
 	return DasBuf_write(pBuf, sVal, (size_t)nLen);
@@ -491,7 +491,7 @@ static das_errcode _encodeTimeValue(
 
 
 das_errcode DasEnc_write(
-	DasEnc* pThis, DasBuf* pBuf, double value, das_units units
+	DasEnc* pThis, DasBuf* pBuf, double value, DasUnits units
 ){
 	int nHash = DasEnc_hash(pThis);
 	float fTmp;
@@ -514,7 +514,7 @@ das_errcode DasEnc_write(
 	if(pThis->nCat == DAS2DT_TIME)
 		return _encodeTimeValue(pThis, pBuf, value, units);
 	
-	return das_error(14, "Don't know how to encode values to format %s", 
+	return daserrf(14, "Don't know how to encode values to format %s", 
 			          pThis->sType);
 }
 
@@ -522,15 +522,15 @@ das_errcode DasEnc_write(
 /* Decoding */
 
 das_errcode DasEnc_read(
-	const DasEnc* pThis, DasBuf* pBuf, das_units units, double* pOut
+	const DasEnc* pThis, DasBuf* pBuf, DasUnits units, double* pOut
 ){
-	*pOut = DAS_FILL_VALUE;
+	*pOut = DASVAL_FILL;
 	
 	char sBuf[DASENC_MAX_WIDTH + 1] = {'\0'};
 	int nHash = DasEnc_hash(pThis);
 	
 	if( DasBuf_read(pBuf, sBuf, pThis->nWidth) != pThis->nWidth)
-		return das_error(14, "Input buffer ends in the middle of a value");
+		return daserrf(14, "Input buffer ends in the middle of a value");
 	
 	int i = 0;
 	const float* fbuf = NULL;
@@ -572,21 +572,21 @@ das_errcode DasEnc_read(
 		return 0;
 	}
 	
-	das_time dt = {0};
+	DasTime dt = {0};
 	if(pThis->nCat == DAS2DT_TIME){
 		/* String parsing can be persnickety, copy over to a null terminated buffer */
 		if(pThis->nWidth > 63)
-			return das_error(14, "Time values wider than 63 bytes are not "
+			return daserrf(14, "Time values wider than 63 bytes are not "
 					            "handled by the das2C");
 	
-		if(! dt_parsetime(&dt, sBuf)){
-			return das_error(14, "Error in parsetime for ACSII time type.\n" );
+		if(! DasTime_fromStr(&dt, sBuf)){
+			return daserrf(14, "Error in parsetime for ACSII time type.\n" );
 		}
-		*pOut = Units_convertFromDt(&dt, units);
+		*pOut = DasTime_toPoint(&dt, units);
 		return 0;
 	}
 	
-	return das_error(14, "Don't know how to decode values stored as '%s'", 
+	return daserrf(14, "Don't know how to decode values stored as '%s'", 
 			            pThis->sType);
 }
 

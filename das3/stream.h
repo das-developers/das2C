@@ -34,8 +34,8 @@ extern "C" {
 
 /* Counts, so the largest ID is one less.  das3 IDs stop at 0xFEFF; the top
    256 values, 0xFF00 to 0xFFFF, are reserved and never valid on a stream. */
-#define DAS2_MAX_PKTIDS 100
-#define DAS3_MAX_PKTIDS 0xFF00
+#define DASSTREAM_V2_ENDPKTID 100
+#define DASSTREAM_V3_ENDPKTID 0xFF00
 
 
 /** @defgroup datamodel Data Model
@@ -69,11 +69,11 @@ extern "C" {
  * means the stream header itself.
  *
  * The ID belongs to the stream, not to the descriptor: ask the stream with
- * DasStream_getPktId(), and the stream processor callbacks in io.h pass it
+ * DasStream_pktId(), and the stream processor callbacks in io.h pass it
  * along with each descriptor.  A descriptor that is not attached to a
  * stream has no ID.
  *
- * A stream accepts IDs from 1 to DAS3_MAX_PKTIDS - 1 (0xFEFF).  Writing a
+ * A stream accepts IDs from 1 to DASSTREAM_V3_ENDPKTID - 1 (0xFEFF).  Writing a
  * das2 stream narrows that to 1 to 99, since das2 packet tags have two
  * digits; DasIO checks this when the header or data is written, not when
  * the descriptor is attached, so a das3 stream can be read and its IDs
@@ -83,7 +83,7 @@ extern "C" {
  *
  * A stream may hold more than one dataset under the same ID.  The one
  * attached most recently is the @em active one: it is what
- * DasStream_getDesc() returns and where new data for that ID goes.  The
+ * DasStream_desc() returns and where new data for that ID goes.  The
  * older ones stay attached, with their records, and are still visited by
  * DasStream_nextDesc().  Removing the active one with DasStream_freeDesc()
  * makes the next most recent one active again, like popping a stack.
@@ -99,7 +99,7 @@ extern "C" {
  * @nosubgrouping
  * @ingroup streams
  */
-typedef struct das_stream DasStream;
+typedef struct das_stream_t DasStream;
 
 /** @} */
 
@@ -114,36 +114,36 @@ DAS_API DasStream* new_DasStream(void);
 
 /** The stream version as an enumeration, parsed from the version attribute.
  *
- * @returns STREAM_VER_UNK if the version string is not one this library
+ * @returns DASSTREAMVER_UNK if the version string is not one this library
  *          knows how to read.  Never a 1.x value, das1 streams have no header.
  * @memberof DasStream
  */
-DAS_API das_stream_ver DasStream_getVer(const DasStream* pThis);
+DAS_API das_streamver DasStream_ver(const DasStream* pThis);
 
 /** Set the stream version
  *
  * @param pThis The stream
- * @param nVer STREAM_VER_2_2 or STREAM_VER_3_0
+ * @param nVer DASSTREAMVER_2_2 or DASSTREAMVER_3_0
  * @returns DAS_OKAY, or an error code for any other version
  * @memberof DasStream
  */
-DAS_API das_errcode DasStream_setVer(DasStream* pThis, das_stream_ver nVer);
+DAS_API das_errcode DasStream_setVer(DasStream* pThis, das_streamver nVer);
 
 /** The stream container type as an enumeration, parsed from the type attribute.
  *
  * A missing attribute means a basic stream, the only container das 2.2 had.
  * @memberof DasStream
  */
-DAS_API das_stream_type DasStream_getType(const DasStream* pThis);
+DAS_API das_streamtype DasStream_type(const DasStream* pThis);
 
 /** Set the stream container type
  *
  * @param pThis The stream
- * @param nType STREAM_TYPE_BASIC or STREAM_TYPE_DOC
- * @returns DAS_OKAY, or an error code for STREAM_TYPE_UNK
+ * @param nType DASSTREAMTYPE_BASIC or DASSTREAMTYPE_DOC
+ * @returns DAS_OKAY, or an error code for DASSTREAMTYPE_UNK
  * @memberof DasStream
  */
-DAS_API das_errcode DasStream_setType(DasStream* pThis, das_stream_type nType);
+DAS_API das_errcode DasStream_setType(DasStream* pThis, das_streamtype nType);
 
 
 /** Print a short description of the stream to a string buffer.
@@ -166,7 +166,7 @@ DAS_API das_errcode DasStream_setType(DasStream* pThis, das_stream_type nType);
  *
  * @memberof DasStream
  */
-DAS_API int DasStream_info(const DasStream* pSd, char* sBuf, size_t uLen);
+DAS_API int DasStream_toInfoStr(const DasStream* pSd, char* sBuf, size_t uLen);
 
 /** Print a one line summary of the stream header
  *
@@ -204,7 +204,7 @@ DAS_API char* DasStream_toStr(const DasStream* pThis, char* sBuf, size_t uLen);
  * 
  * @memberof DasStream
  */
-DAS_API DasStream* DasStream_copy(const DasStream* pThis);
+DAS_API DasStream* new_DasStream_copy(const DasStream* pThis);
 
 /** Count the descriptors attached to this stream
  *
@@ -212,20 +212,20 @@ DAS_API DasStream* DasStream_copy(const DasStream* pThis);
  * active or not (see "Several datasets under one ID" in the DasStream
  * overview).  Handy for sizing an array before a DasStream_nextDesc() walk:
  * @code
- *   size_t uDs = DasStream_numDesc(pSd, DASDESC_DS);
+ *   size_t uDs = DasStream_numDesc(pSd, DASDESCTYPE_DS);
  *   DasDs** ppDs = (DasDs**)calloc(uDs, sizeof(DasDs*));
  * @endcode
  *
  * @param pThis The stream to query
  *
- * @param dtype DASDESC_PKT to count das2 packets, DASDESC_DS to count das3
- *        datasets, or DASDESC_UNK to count both.
+ * @param dtype DASDESCTYPE_PKT to count das2 packets, DASDESCTYPE_DS to count das3
+ *        datasets, or DASDESCTYPE_UNK to count both.
  *
  * @return The number of matching descriptors.
  *
  * @memberof DasStream
  */
-DAS_API size_t DasStream_numDesc(const DasStream* pThis, das_desc_type_e dtype);
+DAS_API size_t DasStream_numDesc(const DasStream* pThis, das_desctype dtype);
 
 /** Walk the descriptors attached to this stream
  *
@@ -235,9 +235,9 @@ DAS_API size_t DasStream_numDesc(const DasStream* pThis, das_desc_type_e dtype);
  *
  * @code
  * DasDesc* pDesc = NULL;
- * while((pDesc = DasStream_nextDesc(pSd, pDesc, DASDESC_DS)) != NULL){
+ * while((pDesc = DasStream_nextDesc(pSd, pDesc, DASDESCTYPE_DS)) != NULL){
  *   DasDs* pDs = (DasDs*)pDesc;    // only datasets, the filter saw to it
- *   int nPktId = DasStream_getPktId(pSd, pDesc);
+ *   int nPktId = DasStream_pktId(pSd, pDesc);
  *   // Do stuff
  * }
  * @endcode
@@ -247,9 +247,9 @@ DAS_API size_t DasStream_numDesc(const DasStream* pThis, das_desc_type_e dtype);
  * walk, get the next one before freeing the current one:
  *
  * @code
- * DasDesc* pNext = DasStream_nextDesc(pSd, NULL, DASDESC_UNK);
+ * DasDesc* pNext = DasStream_nextDesc(pSd, NULL, DASDESCTYPE_UNK);
  * while((pDesc = pNext) != NULL){
- *   pNext = DasStream_nextDesc(pSd, pDesc, DASDESC_UNK);
+ *   pNext = DasStream_nextDesc(pSd, pDesc, DASDESCTYPE_UNK);
  *   if(want_gone(pDesc)) DasStream_freeDesc(pSd, pDesc);
  * }
  * @endcode
@@ -259,8 +259,8 @@ DAS_API size_t DasStream_numDesc(const DasStream* pThis, das_desc_type_e dtype);
  * @param pPrev The descriptor returned by the previous call, or NULL to get
  *        the first one.
  *
- * @param dtype DASDESC_PKT to visit only das2 packets, DASDESC_DS to visit
- *        only das3 datasets, or DASDESC_UNK to visit both.
+ * @param dtype DASDESCTYPE_PKT to visit only das2 packets, DASDESCTYPE_DS to visit
+ *        only das3 datasets, or DASDESCTYPE_UNK to visit both.
  *
  * @returns The next matching descriptor, or NULL at the end of the list.
  *        NULL with an error logged if pPrev is not attached to this stream.
@@ -268,7 +268,7 @@ DAS_API size_t DasStream_numDesc(const DasStream* pThis, das_desc_type_e dtype);
  * @memberof DasStream
  */
 DAS_API DasDesc* DasStream_nextDesc(
-	const DasStream* pThis, const DasDesc* pPrev, das_desc_type_e dtype
+	const DasStream* pThis, const DasDesc* pPrev, das_desctype dtype
 );
 
 
@@ -318,22 +318,22 @@ DAS_API void DasStream_addStdProps(DasStream* pThis);
  * This can be useful when debugging.
  * @memberof DasStream
  */
-DAS_API void DasStream_addCmdLineProp(DasStream* pThis, int argc, char* argv[] );
+DAS_API void DasStream_addArgvProp(DasStream* pThis, int argc, char* argv[] );
 
 /** Creates a descriptor structure that for a stream packet type.
  *
  * Initially this descriptor will only have xtags, but additional data planes
  * are added.  The packet ID for the new descriptor is automatically assigned
  * so to be the lowest ID from 1 to 99 that has no descriptor at all; use
- * DasStream_getPktId() to learn which one it got.
+ * DasStream_pktId() to learn which one it got.
  * 
  * @param pThis The stream descriptor object that will receive the new packet 
  *        type.
  *
  * @param xUnits is a UnitType (currently char *) that describes the data.
- *        Generally this is used to identify times (e.g.UNIT_MJ1958,UNIT_US2000)
- *        or is UNIT_DIMENSIONLESS, but other UnitTypes are defined (e.g. 
- *        UNIT_HERTZ, UNIT_DB).  
+ *        Generally this is used to identify times (e.g.DASUNITS_MJ1958,DASUNITS_US2000)
+ *        or is DASUNITS_DIMENSIONLESS, but other UnitTypes are defined (e.g. 
+ *        DASUNITS_HERTZ, DASUNITS_DB).  
  *
  * @param pXEncoder The encoder for X-plane values on this stream. The
  *         DasStream object takes ownership of the encoder's memory. 
@@ -346,7 +346,7 @@ DAS_API void DasStream_addCmdLineProp(DasStream* pThis, int argc, char* argv[] )
  * @memberof DasStream
  */
 DAS_API DasPkt* DasStream_createPkt(
-	DasStream* pThis, DasEnc* pXEncoder, das_units xUnits 
+	DasStream* pThis, DasEnc* pXEncoder, DasUnits xUnits 
 );
 
 
@@ -362,13 +362,13 @@ DAS_API DasPkt* DasStream_createPkt(
  *          no das2 packet with that ID, or this stream already uses it.
  * @memberof DasStream
  */
-DAS_API DasPkt* DasStream_clonePktById(
+DAS_API DasPkt* DasStream_clonePkt(
 	DasStream* pThis, const DasStream* pOther, int nPktId
 );
 
 /** Get the active das2 packet for an ID.
  *
- * Same as DasStream_getDesc() but only answers for das2 packets.
+ * Same as DasStream_desc() but only answers for das2 packets.
  *
  * @param pThis The stream to search
  * @param id The packet ID, 1 to 0xFEFF
@@ -376,7 +376,7 @@ DAS_API DasPkt* DasStream_clonePktById(
  * @returns The packet, or NULL if the ID is unused or holds a dataset.
  * @memberof DasStream
  */
-DAS_API DasPkt* DasStream_getPkt(const DasStream* pThis, int id);
+DAS_API DasPkt* DasStream_pkt(const DasStream* pThis, int id);
 
 /** Get the active descriptor for a packet ID.
  *
@@ -385,7 +385,7 @@ DAS_API DasPkt* DasStream_getPkt(const DasStream* pThis, int id);
  * ID is not an error, so this is also the way to test whether an ID is
  * free:
  * @code
- *   if(DasStream_getDesc(pSd, 7) == NULL)
+ *   if(DasStream_desc(pSd, 7) == NULL)
  *     DasStream_addDesc(pSd, (DasDesc*)pDs, 7);
  * @endcode
  *
@@ -397,7 +397,7 @@ DAS_API DasPkt* DasStream_getPkt(const DasStream* pThis, int id);
  *        logged if the ID is out of range.
  * @memberof DasStream
  */
-DAS_API DasDesc* DasStream_getDesc(const DasStream* pThis, int id);
+DAS_API DasDesc* DasStream_desc(const DasStream* pThis, int id);
 
 /** Get the packet ID a descriptor is filed under in this stream
  *
@@ -412,20 +412,20 @@ DAS_API DasDesc* DasStream_getDesc(const DasStream* pThis, int id);
  *
  * @memberof DasStream
  */
-DAS_API int DasStream_getPktId(const DasStream* pThis, const DasDesc* pDesc);
+DAS_API int DasStream_pktId(const DasStream* pThis, const DasDesc* pDesc);
 
 /** Is this the active descriptor for its packet ID?
  *
  * The same answer as
  * @code
- *   DasStream_getDesc(pSd, DasStream_getPktId(pSd, pDesc)) == pDesc
+ *   DasStream_desc(pSd, DasStream_pktId(pSd, pDesc)) == pDesc
  * @endcode
  * in one call.  das2 packets are always active, since they never share an
  * ID.  Useful when walking a stream to skip, or flush, datasets that a
  * later one with the same ID has replaced:
  * @code
  * DasDesc* pDesc = NULL;
- * while((pDesc = DasStream_nextDesc(pSd, pDesc, DASDESC_DS)) != NULL){
+ * while((pDesc = DasStream_nextDesc(pSd, pDesc, DASDESCTYPE_DS)) != NULL){
  *   if(!DasStream_isDescActive(pSd, pDesc)) continue;
  *   // Only the datasets that new data would go to
  * }
@@ -495,15 +495,15 @@ DAS_API das_errcode DasStream_freeDesc(DasStream* pThis, DasDesc* pDesc);
  *        error.
  * @memberof DasDs
  */
-DAS_API DasDs* new_DasDs_packet(
+DAS_API DasDs* new_DasDs_fromPkt(
 	DasStream* pSd, DasPkt* pPd, int nPktId, const char* sGroup, bool bCodecs
 );
 
 /** The stream header text for a version, "2.2", "3.0" etc. */
-DAS_API const char* das_stream_ver_toStr(das_stream_ver ver);
+DAS_API const char* DasStream_verToStr(das_streamver ver);
 
 /** The stream header text for a container type, "das-basic-stream" etc. */
-DAS_API const char* das_stream_type_toStr(das_stream_type type);
+DAS_API const char* DasStream_typeToStr(das_streamtype type);
 
 #ifdef __cplusplus
 }

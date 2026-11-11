@@ -1561,7 +1561,7 @@ double das_selreal(const DasSelector* pSel, const char* sOp, double rDefault)
 		
 	errno = 0;
 	
-	rRet = das_strtod_c(sValue, &endptr); 
+	rRet = dasstr_toDoubleCLocale(sValue, &endptr); 
 	
 	if( (errno == ERANGE) || ((errno != 0) && (rRet == 0)) ||
 	    (endptr == sValue) ){
@@ -1584,7 +1584,7 @@ void das_get_seltime(
 }
 
 void das_get_seldastime(
-	const DasSelector* pSels, const char* sKey, const char* sOp, das_time* pDt
+	const DasSelector* pSels, const char* sKey, const char* sOp, DasTime* pDt
 ){
 	das_get_seltime(pSels, sKey, sOp, &(pDt->year), &(pDt->month), &(pDt->mday),
 	                &(pDt->yday), &(pDt->hour), &(pDt->minute), &(pDt->second));
@@ -1611,8 +1611,8 @@ void das_seltime(const DasSelector* pSel, const char* sOp, int* yr, int* mon,
 		exit(USAGE_ERROR);
 	}
 	
-	das_time dt;
-	if(!dt_parsetime(&dt, sValue)){
+	DasTime dt;
+	if(!DasTime_fromStr(&dt, sValue)){
 		fprintf(stderr, "Couldn't parse value portion of '%s%s%s' as a time point.\n",
 		        pSel->sKey, sOp, sValue);	
 		exit(CLI_ERROR);
@@ -1623,7 +1623,7 @@ void das_seltime(const DasSelector* pSel, const char* sOp, int* yr, int* mon,
 	if(doy != NULL) *doy = dt.yday;
 }
 
-void das_seldastime(const DasSelector* pSel, const char* sOp, das_time* pDt)
+void das_seldastime(const DasSelector* pSel, const char* sOp, DasTime* pDt)
 {
 	das_seltime(pSel, sOp, &(pDt->year), &(pDt->month), &(pDt->mday),
 	            &(pDt->yday), &(pDt->hour), &(pDt->minute), &(pDt->second));
@@ -1679,7 +1679,7 @@ double das_outinterval(const DasOutput* pOut, double rDefault)
 	
 	errno = 0;
 	
-	rRet = das_strtod_c(pOut->sInterval, &endptr); 
+	rRet = dasstr_toDoubleCLocale(pOut->sInterval, &endptr); 
 	
 	if( (errno == ERANGE) || ((errno != 0) && (rRet == 0)) ||
 	    (endptr == pOut->sInterval) ){

@@ -38,7 +38,7 @@ take some restructuring of http.c and a new build target.
    Windows and MacOS.  The das3_from_cdf and das2_from_cdf programs and their
    shared CDF model have Linux build rules only so far.
    Fix GitHub issue #3 during the Windows pass, before the v3.0.0 tag:
-   `das_term_prompt()` in `creds.c` reads the login and password with
+   `DasCredMgr_termPrompt()` in `creds.c` reads the login and password with
    `scanf`, so on Windows the bytes arrive in the console's code page rather
    than UTF-8, and a failed read (no console, as under the IDL workbench)
    leaves both buffers unset.  `SetStdinEcho()` there also tests `WIN32`
@@ -75,7 +75,7 @@ Ragged runs (by design, see the DasAry invariant):
   Probe: `test/streams/notimp_zero_subrun.d3b` (holds both `[j|0]` and `[k|0]`).
 - `gen.c` x3, `var_bin.c`, `var.c` (computed run with no fixed
   width) -- a ragged ITEM run has no fixed width, so eval-into-a-buffer and
-  subset refuse; DasGen_at and DasVar_get are the per-item path.
+  subset refuse; DasGen_at and DasVar_datumAt are the per-item path.
 - `var.c` (squaring off) -- a variable-width run that is not fill
   terminated cannot be qubed without destroying each item's length.
 - `datset_3.c` (intern=) -- ragged internal levels; every level needs a
@@ -125,9 +125,9 @@ sites are known design decisions, not surprises.
 
 ## Test coverage gaps
 
-More coverage of the DASERR_DIS_RET error path is needed throughout the
-library.  The default disposition is DASERR_DIS_EXIT, so under the normal test
-harness an error just exits so any lines in a function AFTER a `das_error()` 
+More coverage of the DASERRDISP_RET error path is needed throughout the
+library.  The default disposition is DASERRDISP_EXIT, so under the normal test
+harness an error just exits so any lines in a function AFTER a `daserrf()` 
 statement are rarely run.  Sweep for bugs by updating test programs to take
 an error disposition argument.
 

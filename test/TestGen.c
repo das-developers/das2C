@@ -63,18 +63,18 @@ static int test_elem_drift(void)
 {
 	int nErrs = 0;
 
-	CHECK(etNull    == (int)vtNull);
-	CHECK(etUByte   == (int)vtUByte);
-	CHECK(etByte    == (int)vtByte);
-	CHECK(etUShort  == (int)vtUShort);
-	CHECK(etShort   == (int)vtShort);
-	CHECK(etUInt    == (int)vtUInt);
-	CHECK(etInt     == (int)vtInt);
-	CHECK(etULong   == (int)vtULong);
-	CHECK(etLong    == (int)vtLong);
-	CHECK(etFloat   == (int)vtFloat);
-	CHECK(etDouble  == (int)vtDouble);
-	CHECK(etTime    == (int)vtTime);
+	CHECK(DASET_NULL    == (int)DASVT_NULL);
+	CHECK(DASET_UBYTE   == (int)DASVT_UBYTE);
+	CHECK(DASET_BYTE    == (int)DASVT_BYTE);
+	CHECK(DASET_USHORT  == (int)DASVT_USHORT);
+	CHECK(DASET_SHORT   == (int)DASVT_SHORT);
+	CHECK(DASET_UINT    == (int)DASVT_UINT);
+	CHECK(DASET_INT     == (int)DASVT_INT);
+	CHECK(DASET_ULONG   == (int)DASVT_ULONG);
+	CHECK(DASET_LONG    == (int)DASVT_LONG);
+	CHECK(DASET_FLOAT   == (int)DASVT_FLOAT);
+	CHECK(DASET_DOUBLE  == (int)DASVT_DOUBLE);
+	CHECK(DASET_TIME    == (int)DASVT_TIME);
 	return nErrs;
 }
 
@@ -83,35 +83,35 @@ static int test_gen_const_seq(void)
 {
 	int nErrs = 0;
 
-	ptrdiff_t aShape[1] = { VARIDX_RAGGED };
+	ptrdiff_t aShape[1] = { DASIDX_RAGGED };
 	double rVal = 4.75;
-	DasGen* pConst = new_DasGenConst(etDouble, (const ubyte*)&rVal, 1, aShape);
+	DasGen* pConst = new_DasGenConst(DASET_DOUBLE, (const uint8_t*)&rVal, 1, aShape);
 	MUST(pConst != NULL);
 
-	ptrdiff_t aLoc[1] = { 117 };
+	ptrdiff_t aAddr[1] = { 117 };
 	double rOut = 0.0;
-	CHECK(DasGen_eval(pConst, aLoc, (ubyte*)&rOut, sizeof(rOut)) == 1);
+	CHECK(DasGen_eval(pConst, aAddr, (uint8_t*)&rOut, sizeof(rOut)) == 1);
 	CHECK(rOut == 4.75);
 
 	/* a 100 Hz offset sequence: 0.01 s per sample */
 	double rIntercept = 0.0, rSlope = 0.01;
 	DasGen* pSeq = new_DasGenSeq(
-		etDouble, (const ubyte*)&rIntercept, 1, (const ubyte*)&rSlope, aShape
+		DASET_DOUBLE, (const uint8_t*)&rIntercept, 1, (const uint8_t*)&rSlope, aShape
 	);
 	MUST(pSeq != NULL);
-	aLoc[0] = 250;
-	CHECK(DasGen_eval(pSeq, aLoc, (ubyte*)&rOut, sizeof(rOut)) == 1);
+	aAddr[0] = 250;
+	CHECK(DasGen_eval(pSeq, aAddr, (uint8_t*)&rOut, sizeof(rOut)) == 1);
 	CHECK(rOut == 2.5);
 
 	/* a TT2000 tick sequence, whole nanoseconds */
 	int64_t nIntercept = 1000000000LL, nSlope = 250000LL;
 	DasGen* pTicks = new_DasGenSeq(
-		etLong, (const ubyte*)&nIntercept, 1, (const ubyte*)&nSlope, aShape
+		DASET_LONG, (const uint8_t*)&nIntercept, 1, (const uint8_t*)&nSlope, aShape
 	);
 	MUST(pTicks != NULL);
-	aLoc[0] = 4;
+	aAddr[0] = 4;
 	int64_t nOut = 0;
-	CHECK(DasGen_eval(pTicks, aLoc, (ubyte*)&nOut, sizeof(nOut)) == 1);
+	CHECK(DasGen_eval(pTicks, aAddr, (uint8_t*)&nOut, sizeof(nOut)) == 1);
 	CHECK(nOut == 1001000000LL);
 
 	CHECK(DasGen_decRef(pConst) == 0);
@@ -127,26 +127,26 @@ static int test_gen_array(void)
 
 	float fill = -1.0f;
 	DasAry* pAry = new_DasAry(
-		"b_vals", vtFloat, 0, (const ubyte*)&fill, RANK_2(0, 3), UNIT_DIMENSIONLESS
+		"b_vals", DASVT_FLOAT, 0, (const uint8_t*)&fill, DAS_SHAPE2(0, 3), DASUNITS_DIMENSIONLESS
 	);
 	MUST(pAry != NULL);
 
 	float aVals[12];
 	for(int i = 0; i < 12; ++i) aVals[i] = (float)i;
-	MUST(DasAry_append(pAry, (const ubyte*)aVals, 12) != NULL);
+	MUST(DasAry_append(pAry, (const uint8_t*)aVals, 12) != NULL);
 
 	int8_t aMap[1] = { 0 };
 	DasGen* pGen = new_DasGenAry(pAry, 1, aMap);
 	MUST(pGen != NULL);
-	CHECK(DasGen_elemType(pGen) == etFloat);
+	CHECK(DasGen_elemType(pGen) == DASET_FLOAT);
 
 	/* records of 3: the item run at external index 2 is {6,7,8} */
-	ptrdiff_t aLoc[1] = { 2 };
+	ptrdiff_t aAddr[1] = { 2 };
 	float aRun[3] = {0.0f, 0.0f, 0.0f};
-	CHECK(DasGen_eval(pGen, aLoc, (ubyte*)aRun, sizeof(aRun)) == 3);
+	CHECK(DasGen_eval(pGen, aAddr, (uint8_t*)aRun, sizeof(aRun)) == 3);
 	CHECK((aRun[0] == 6.0f)&&(aRun[1] == 7.0f)&&(aRun[2] == 8.0f));
 
-	ptrdiff_t aShape[VARIDX_MAX];
+	ptrdiff_t aShape[DASIDX_MAX];
 	CHECK(DasGen_extShape(pGen, aShape) == 1);
 	CHECK(aShape[0] == 4);
 
@@ -168,7 +168,7 @@ static int test_gen_ary_refs(void)
 
 	float fill = -1.0f;
 	DasAry* pAry = new_DasAry(
-		"refs", vtFloat, 0, (const ubyte*)&fill, RANK_2(0,3), UNIT_DIMENSIONLESS
+		"refs", DASVT_FLOAT, 0, (const uint8_t*)&fill, DAS_SHAPE2(0,3), DASUNITS_DIMENSIONLESS
 	);
 	MUST(pAry != NULL);
 	CHECK(ref_DasAry(pAry) == 1);           /* just mine */
@@ -189,13 +189,13 @@ static int test_gen_ary_refs(void)
 
 	/* setArray adds one to the replacement and drops one from the original */
 	DasAry* pNew = new_DasAry(
-		"refs_time", vtDouble, 0, NULL, RANK_2(0,3), UNIT_DIMENSIONLESS
+		"refs_time", DASVT_DOUBLE, 0, NULL, DAS_SHAPE2(0,3), DASUNITS_DIMENSIONLESS
 	);
 	MUST(pNew != NULL);
 	MUST(DasGen_setArray(pGen, pNew));
 	CHECK(ref_DasAry(pNew) == 2);           /* mine + the generator's */
 	CHECK(ref_DasAry(pAry) == 1);           /* only mine now */
-	CHECK(DasGen_elemType(pGen) == etDouble);   /* re-derived from the new store */
+	CHECK(DasGen_elemType(pGen) == DASET_DOUBLE);   /* re-derived from the new store */
 
 	CHECK(DasGen_decRef(pGen) == 0);
 	CHECK(ref_DasAry(pNew) == 1);           /* the generator gave it back */
@@ -213,7 +213,7 @@ int main(int argc, char** argv)
 	   See the same note in TestVar.c. */
 	setvbuf(stdout, NULL, _IONBF, 0);
 
-	das_init(argv[0], DASERR_DIS_RET, DASLOG_ERROR, NULL);
+	daslib_init(argv[0], DASERRDISP_RET, DASLOG_ERROR, NULL);
 
 	struct { const char* sName; int (*pFn)(void); } aCase[] = {
 		{"test_elem_drift",    test_elem_drift},

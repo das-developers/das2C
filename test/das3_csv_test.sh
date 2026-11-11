@@ -4,7 +4,7 @@
 # check over fixtures too large to keep as gold.
 #
 # ex23: a stream carrying a SIGNED 1-byte column (encoding "byte").  A deliberate
-# regression watch: das2C once coerced every 1-byte scalar variable to vtUByte
+# regression watch: das2C once coerced every 1-byte scalar variable to DASVT_UBYTE
 # (unsigned), which made das3_csv fail on a signed column.  The fixture's first
 # records carry negative values (-1, -128, -42, ...) precisely because a positive
 # byte (0..127) renders the SAME whether read signed or unsigned -- only a

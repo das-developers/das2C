@@ -34,22 +34,22 @@ extern "C" {
 
 /** enumeration of Descriptor types, used internally for type checking.
  * May have one of the following values:
- *    -# DASDESC_STREAM
- *    -# DASDESC_PKT
- *    -# DASDESC_PLANE
- *    -# DASDESC_DS
- *    -# DASDESC_DIM
- *    -# DASDESC_VAR
+ *    -# DASDESCTYPE_STREAM
+ *    -# DASDESCTYPE_PKT
+ *    -# DASDESCTYPE_PLANE
+ *    -# DASDESCTYPE_DS
+ *    -# DASDESCTYPE_DIM
+ *    -# DASDESCTYPE_VAR
  */
-typedef enum das_desc_type {
-	DASDESC_UNK=0, DASDESC_STREAM=14000, 
-   DASDESC_PLANE=14001, DASDESC_PKT=14002, 
-   DASDESC_DS=15000, DASDESC_DIM=15001, 
-   DASDESC_VAR=15002,
-} das_desc_type_e;
+typedef enum das_desctype_e {
+	DASDESCTYPE_UNK=0, DASDESCTYPE_STREAM=14000, 
+   DASDESCTYPE_PLANE=14001, DASDESCTYPE_PKT=14002, 
+   DASDESCTYPE_DS=15000, DASDESCTYPE_DIM=15001, 
+   DASDESCTYPE_VAR=15002,
+} das_desctype;
 
 
-DAS_API const char* das_desc_type_toStr(das_desc_type_e dt);
+DAS_API const char* dasdesctype_name(das_desctype dt);
 
 /** @class DasDesc desc.h <das3/desc.h>
  *
@@ -74,23 +74,23 @@ DAS_API const char* das_desc_type_toStr(das_desc_type_e dt);
  * @todo Move child relationship into the descriptor base class, parent is there
  *       but the other direction is missing
  */
-typedef struct das_descriptor DasDesc;
+typedef struct das_desc_t DasDesc;
 
 /** Get the type of this descriptor
  *
  * @param pThis A pointer to a descriptor structure
  *
- * @returns One of the values for the enumeration das_desc_type_e
+ * @returns One of the values for the enumeration das_desctype
  *
  * @memberof DasDesc
  */
-DAS_API das_desc_type_e DasDesc_type(const DasDesc* pThis);
+DAS_API das_desctype DasDesc_type(const DasDesc* pThis);
 
 /** Attach application data to a descriptor
  *
  * Works for any descriptor. The library never reads, @b copies or frees
  * this pointer.  All new descriptors, including those made
- * by the *_copy() functions and DasStream_clonePktById(), start with NULL.
+ * by the *_copy() functions and DasStream_clonePkt(), start with NULL.
  *
  * @param pThis The descriptor
  * @param pUser Anything, the library treats it as an opaque value
@@ -104,7 +104,7 @@ DAS_API void DasDesc_setUser(DasDesc* pThis, void* pUser);
  * @returns The pointer last given to DasDesc_setUser(), or NULL
  * @memberof DasDesc
  */
-DAS_API void* DasDesc_getUser(const DasDesc* pThis);
+DAS_API void* DasDesc_user(const DasDesc* pThis);
 
 /* @name DasDesc Functions
  * These work for any type of Descriptor, including ::DasPlane ,
@@ -186,7 +186,7 @@ DAS_API void DasDesc_clearProps(DasDesc* pThis);
  * @param pOther The second descriptor
  * @memberof DasDesc
  */
-DAS_API bool DasDesc_equals(const DasDesc* pThis, const DasDesc* pOther);
+DAS_API bool DasDesc_isEqual(const DasDesc* pThis, const DasDesc* pOther);
 
 /** The the parent of a Descriptor
  * 
@@ -210,15 +210,15 @@ DAS_API const DasDesc* DasDesc_parent(const DasDesc* pThis);
  * or ancestors.
  * 
  * This is useful when iterating over all properties in a descriptor.  
- * @see DasDesc_getNameByIdx()
- * @see DasDesc_getValByIdx()
- * @see DasDesc_getTypeByIdx()
+ * @see DasDesc_propNameAt()
+ * @see DasDesc_valAt()
+ * @see DasDesc_propTypeAt()
  * 
  * @param pThis A pointer to the descriptor to query
  * @return The number of properties in this, and only this, descriptor.
  * @memberof DasDesc
  */
-DAS_API size_t DasDesc_length(const DasDesc* pThis);
+DAS_API size_t DasDesc_numProps(const DasDesc* pThis);
 
 /** Get a property name by an index 
  * 
@@ -226,7 +226,7 @@ DAS_API size_t DasDesc_length(const DasDesc* pThis);
  * valid properties owed by a descriptor are queried in this manner.  Parent
  * descriptors are not consulted.
  * 
- * @see DasDesc_length()
+ * @see DasDesc_numProps()
  * @param pThis A pointer to the descriptor to query
  * 
  * @param uIdx The index of the property, will be a value between 0 and
@@ -235,12 +235,12 @@ DAS_API size_t DasDesc_length(const DasDesc* pThis);
  *        of those after it.
  *
  * @return A pointer the requested property, or NULL if uIdx is not less
- *       than DasDesc_length()
+ *       than DasDesc_numProps()
  * 
- * @see DasDesc_getProp() for how long the returned pointer stays valid
+ * @see DasDesc_prop() for how long the returned pointer stays valid
  * @memberof DasDesc
  */
-DAS_API const DasProp* DasDesc_getPropByIdx(const DasDesc* pThis, size_t uIdx);
+DAS_API const DasProp* DasDesc_propAt(const DasDesc* pThis, size_t uIdx);
 
 /** Get a property name by an index 
  * 
@@ -248,16 +248,16 @@ DAS_API const DasProp* DasDesc_getPropByIdx(const DasDesc* pThis, size_t uIdx);
  * properties owed by a descriptor are queried in this manner.  Parent
  * descriptors are not consulted.
  * 
- * @see DasDesc_length()
+ * @see DasDesc_numProps()
  * @param pThis A pointer to the descriptor to query
  * @param uIdx The index of the property, will be a value between 0 and
  *        the return value from Desc_length()
  * @return A pointer the requested property name or NULL if there is no
  *        property at the given index.
- * @see DasDesc_getProp() for how long the returned pointer stays valid
+ * @see DasDesc_prop() for how long the returned pointer stays valid
  * @memberof DasDesc
  */
-DAS_API const char* DasDesc_getNameByIdx(const DasDesc* pThis, size_t uIdx);
+DAS_API const char* DasDesc_propNameAt(const DasDesc* pThis, size_t uIdx);
 
 /** Get a property value by an index 
  * 
@@ -265,21 +265,21 @@ DAS_API const char* DasDesc_getNameByIdx(const DasDesc* pThis, size_t uIdx);
  * properties owned by a descriptor are queried in this manner.  Parent
  * descriptors are not consulted.
  * 
- * @see DasDesc_length()
+ * @see DasDesc_numProps()
  * @param pThis A pointer to the descriptor to query
  * @param uIdx The number of the property, will be a value from 0 and 1 less 
  *        than the return value from Desc_length()
  * @return A pointer the requested property value or NULL if there is no
  *        property at the given index.
- * @see DasDesc_getProp() for how long the returned pointer stays valid
+ * @see DasDesc_prop() for how long the returned pointer stays valid
  * @memberof DasDesc
  */
-DAS_API const char* DasDesc_getValByIdx(const DasDesc* pThis, size_t uIdx);
+DAS_API const char* DasDesc_valAt(const DasDesc* pThis, size_t uIdx);
 
 /** Get a data type of a property by an index 
  * @memberof DasDesc
  */
-DAS_API const char* DasDesc_getTypeByIdx(const DasDesc* pThis, size_t uIdx);
+DAS_API const char* DasDesc_propTypeAt(const DasDesc* pThis, size_t uIdx);
 
 
 /** Generic property setter
@@ -304,7 +304,7 @@ DAS_API const char* DasDesc_getTypeByIdx(const DasDesc* pThis, size_t uIdx);
  * @return 0 on success or a positive error code if there is a problem.
  * @memberof DasDesc
  */
-DAS_API das_errcode DasDesc_set(
+DAS_API das_errcode DasDesc_setProp(
 	DasDesc* pThis, const char* sType, const char* sName, const char* sVal
 );
 
@@ -345,7 +345,7 @@ DAS_API das_errcode DasDesc_set(
  *
  * @param units The units for this value.  If the type is Datum or DatumRange
  *              this value will be ignored, otherwise if this value is NULL
- *              then UNIT_DIMENSIONLESS will be assigned.
+ *              then DASUNITS_DIMENSIONLESS will be assigned.
  *
  * @param nStandard  One of DASPROP_DAS1, _DAS2 or _DAS3.  For das2 & 3,
  *              property names may only consist of the characters
@@ -355,31 +355,31 @@ DAS_API das_errcode DasDesc_set(
  * @memberof DasDesc
  */
 DAS_API das_errcode DasDesc_flexSet(
-   DasDesc* pThis, const char* sType, ubyte uType, const char* sName,
-   const char* sVal, char cSep, das_units units, int nStandard
+   DasDesc* pThis, const char* sType, uint8_t uType, const char* sName,
+   const char* sVal, char cSep, DasUnits units, int nStandard
 );
 
 /** Overwrite, or copy-in a fully formatted property 
  * 
  * * @memberof DasDesc
  */
-DAS_API das_errcode DasDesc_setProp(DasDesc* pThis, const DasProp* pProp);
+DAS_API das_errcode DasDesc_copyProp(DasDesc* pThis, const DasProp* pProp);
 
 /** Get the type string for a property 
  * 
  * * @memberof DasDesc
  */
-DAS_API const char* DasDesc_getType(const DasDesc* pThis, const char* sName);
+DAS_API const char* DasDesc_propType(const DasDesc* pThis, const char* sName);
 
 /** Get the units of a property
  *
- * @returns the property's units, or UNIT_DIMENSIONLESS when the property is
+ * @returns the property's units, or DASUNITS_DIMENSIONLESS when the property is
  *          missing or carries none, so the two cases can't be told apart.
  *          Check DasDesc_has() first if that matters.
  *
  * @memberof DasDesc
  */
-DAS_API das_units DasDesc_getUnits(const DasDesc* pThis, const char* sName);
+DAS_API DasUnits DasDesc_propUnits(const DasDesc* pThis, const char* sName);
 
 /** Determine if a property is present in a Descriptor or it's ancestors.
  *
@@ -407,11 +407,11 @@ DAS_API bool DasDesc_hasLocal(const DasDesc* pThis, const char* sName);
  *        NULL otherwise.  The pointer is into the descriptor's packed
  *        property storage: setting any property on the descriptor that
  *        holds it may move that storage, so do not keep the pointer across
- *        DasDesc_set*() calls on this descriptor or its parents.  Calls
- *        that copy the value out, such as DasDesc_getInt(),
- *        DasDesc_getDouble() or DasDesc_getStrRng(), avoid the issue.
+ *        DasDesc_setProp*() calls on this descriptor or its parents.  Calls
+ *        that copy the value out, such as DasDesc_valInt(),
+ *        DasDesc_valDouble() or DasDesc_valRng(), avoid the issue.
  */
-DAS_API const DasProp* DasDesc_getProp(const DasDesc* pThis, const char* sName);
+DAS_API const DasProp* DasDesc_prop(const DasDesc* pThis, const char* sName);
 
 /** Get a property if present in this descriptor only (das3)
  * 
@@ -422,9 +422,9 @@ DAS_API const DasProp* DasDesc_getProp(const DasDesc* pThis, const char* sName);
  * @param pThis the descriptor object to query
  * @param sName  the name of the property to retrieve.
  * @returns a the property, if present here NULL otherwise
- * @see DasDesc_getProp() for how long the returned pointer stays valid
+ * @see DasDesc_prop() for how long the returned pointer stays valid
  */
-DAS_API const DasProp* DasDesc_getLocal(const DasDesc* pThis, const char* sName);
+DAS_API const DasProp* DasDesc_localProp(const DasDesc* pThis, const char* sName);
 
 /** Remove a property from a descriptor, if preset
  *
@@ -435,15 +435,15 @@ DAS_API const DasProp* DasDesc_getLocal(const DasDesc* pThis, const char* sName)
  *          otherwise
  * @memberof DasDesc
  * */
-DAS_API bool DasDesc_remove(DasDesc* pThis, const char* sName);
+DAS_API bool DasDesc_rmProp(DasDesc* pThis, const char* sName);
 
 /** read the property of type String named sName.
  *
  * The raw property string, no transforms from the backing store.
- * @see DasDesc_getProp() for how long the returned pointer stays valid
+ * @see DasDesc_prop() for how long the returned pointer stays valid
  * @memberof DasDesc
  */
-DAS_API const char* DasDesc_getStr(const DasDesc* pThis, const char* sName);
+DAS_API const char* DasDesc_val(const DasDesc* pThis, const char* sName);
 
 
 /** Get a multi-valued string property
@@ -490,10 +490,10 @@ DAS_API const char* DasDesc_getStr(const DasDesc* pThis, const char* sName);
  *
  * @memberof DasDesc
  *
- * @see DasDesc_getStr to retrieve the original property value in
+ * @see DasDesc_val to retrieve the original property value in
  * a single buffer unaltered.
  */
-DAS_API size_t DasDesc_getStrAry(
+DAS_API size_t DasDesc_valStrs(
 	DasDesc* pThis, const char* sName, char* pBuf, size_t uBufSz,
 	char** psVals, size_t uMaxVals
 );
@@ -505,9 +505,9 @@ DAS_API size_t DasDesc_getStrAry(
  * SEP and does not break a field.  Literal '\\' characters have no meaning
  * unless followed by a SEP character.
  *
- * @see DasDesc_getStrAry
+ * @see DasDesc_valStrs
  */
-DAS_API size_t DasDesc_getArray(
+DAS_API size_t DasDesc_valStrsSep(
 	DasDesc* pThis, const char* sName, char cSep,
 	char* pBuf, size_t uBufSz, char** psVals, size_t uMaxVals
 );
@@ -518,14 +518,14 @@ DAS_API size_t DasDesc_getArray(
  * a type so that it will be parsed into the given type.
  * @memberof DasDesc
  */
-DAS_API das_errcode DasDesc_setStr(
+DAS_API das_errcode DasDesc_setVal(
 	DasDesc* pThis, const char* sName, const char* sVal
 );
 
 /** Set a string property in the manner of sprintf
  * @memberof DasDesc
  */
-DAS_API das_errcode DasDesc_vSetStr(
+DAS_API das_errcode DasDesc_setValf(
 	DasDesc* pThis, const char* sName, const char* sFmt, ...
 );
 
@@ -534,12 +534,12 @@ DAS_API das_errcode DasDesc_vSetStr(
  * The property value is parsed using sscanf.
  * @memberof DasDesc
  */
-DAS_API double DasDesc_getDouble(const DasDesc* pThis, const char* sName);
+DAS_API double DasDesc_valDouble(const DasDesc* pThis, const char* sName);
 
 /** Set property of type double.  
  * @memberof DasDesc
  */
-DAS_API das_errcode DasDesc_setDouble(
+DAS_API das_errcode DasDesc_setValDouble(
 	DasDesc* pThis, const char* sName, double value
 );
 
@@ -553,12 +553,12 @@ DAS_API das_errcode DasDesc_setDouble(
  *        represented.  If the property value is stored in a different set of
  *        units than those indicated by this parameter than the output will be
  *        converted to the given unit type.  
- * @returns The converted value or @b DAS_FILL_VALUE if conversion to the desired
+ * @returns The converted value or @b DASVAL_FILL if conversion to the desired
  *        units is not possible.
  * @memberof DasDesc
  */
-DAS_API double DasDesc_getDatum(
-	DasDesc* pThis, const char* sName, das_units units 
+DAS_API double DasDesc_valDatum(
+	DasDesc* pThis, const char* sName, DasUnits units 
 );
 
 /** Set property of type Datum (double, UnitType pair)
@@ -573,8 +573,8 @@ DAS_API double DasDesc_getDatum(
  *
  * @memberof DasDesc
  */
-DAS_API das_errcode DasDesc_setDatum(
-   DasDesc* pThis, const char* sName, double rVal, das_units units
+DAS_API das_errcode DasDesc_setValDatum(
+   DasDesc* pThis, const char* sName, double rVal, DasUnits units
 );
 
 /** Get the values of an array property
@@ -589,20 +589,20 @@ DAS_API das_errcode DasDesc_setDatum(
  *
  * @returns A pointer to a double array allocated on the heap. If the
  *          named property doesn't exist, or a value is not a number, 
- *          das_error() is called and *pNumItems = 0
+ *          daserrf() is called and *pNumItems = 0
  * 
  * @see DasDesc_has()
  *
  * @memberof DasDesc
  */
-DAS_API double* DasDesc_getDoubleAry(
+DAS_API double* DasDesc_newValDoubles(
    DasDesc* pThis, const char* sName, int* pNumItems
 );
 
 /** Set the property of type double array.
  * @memberof DasDesc
  */
-DAS_API das_errcode DasDesc_setDoubleArray(
+DAS_API das_errcode DasDesc_setValDoubles(
 	DasDesc* pThis, const char* sName, int nItems, double* pValues
 );
 
@@ -616,12 +616,12 @@ DAS_API das_errcode DasDesc_setDoubleArray(
  * @see DasDesc_has()
  * @memberof DasDesc
  */
-DAS_API int DasDesc_getInt(const DasDesc* pThis, const char* sName);
+DAS_API int DasDesc_valInt(const DasDesc* pThis, const char* sName);
 
 /** Set the property of type int.
  * @memberof DasDesc
  */
-DAS_API das_errcode DasDesc_setInt(DasDesc* pThis, const char* sName, int nVal);
+DAS_API das_errcode DasDesc_setValInt(DasDesc* pThis, const char* sName, int nVal);
 
 /** Get a property boolean value
  * 
@@ -630,7 +630,7 @@ DAS_API das_errcode DasDesc_setInt(DasDesc* pThis, const char* sName, int nVal);
  * @returns True if the value is "true", or any positive integer, false otherwise.
  * @memberof DasDesc
  */
-DAS_API bool DasDesc_getBool(DasDesc* pThis, const char* sName);
+DAS_API bool DasDesc_valBool(DasDesc* pThis, const char* sName);
 
 /** Set a boolean property
  * Encodes the value as either the string "true" or the string "false"
@@ -638,15 +638,15 @@ DAS_API bool DasDesc_getBool(DasDesc* pThis, const char* sName);
  * @param sName the name of the property
  * @param bVal either true or false.
  */
-DAS_API das_errcode DasDesc_setBool(
+DAS_API das_errcode DasDesc_setValBool(
 	DasDesc* pThis, const char* sName, bool bVal
 );
 
 /** Set property of type DatumRange (double, double, UnitType triple)
  * @memberof DasDesc
  */
-DAS_API das_errcode DasDesc_setDatumRng(
-	DasDesc* pThis, const char* sName, double beg, double end, das_units units
+DAS_API das_errcode DasDesc_setValDatumRng(
+	DasDesc* pThis, const char* sName, double beg, double end, DasUnits units
 );
 
 /** Get a property of type DatumRange with unconverted strings. 
@@ -656,16 +656,16 @@ DAS_API das_errcode DasDesc_setDatumRng(
  * value.
  * @memberof DasDesc
  */
-DAS_API das_errcode DasDesc_getStrRng(
+DAS_API das_errcode DasDesc_valRng(
 	DasDesc* pThis, const char* sName, char* sMin, char* sMax, 
-	das_units* pUnits, size_t uLen
+	DasUnits* pUnits, size_t uLen
 );
 
 /** Set the property of type float array.
  * Note the array is cast to a double array before encoding.
  * @memberof DasDesc
  */
-DAS_API das_errcode DasDesc_setFloatAry(
+DAS_API das_errcode DasDesc_setValFloats(
 	DasDesc* pThis, const char* sName, int nItems, float* pValues
 );
 

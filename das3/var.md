@@ -1,4 +1,4 @@
-# Developer notes for DasVar_subset() and \_DasVarAry_strideSubset()
+# Developer notes for new_DasAry_subset() and \_DasVarAry_strideSubset()
 
 DasAry is unique in that it allows all array dimensions to be completly ragged.
 This is rare.  Most major binary array implementations such as those in NumPy, 
@@ -7,14 +7,14 @@ This is reasonable as the majority of real world datasets can be accessed
 via strided indexing.  And those that can't are often fill-padded to so that
 strided indexing applies.
 
-Since strided arrays are common, the `DasVar_subset()` function switches over
+Since strided arrays are common, the `new_DasAry_subset()` function switches over
 to strided copies when the extraction region satisfies the strided condition.
 This allows for copy out in a loop that skips the slow top-down access function
-`DasAry_getAt()`.  In addition, if the requested subsection is actually a 
+`DasAry_valAt()`.  In addition, if the requested subsection is actually a 
 continous range of memory with no repeats, then a simple memcpy() is used to
 speed up the process further.
 
-To understand the internal implementation of DasVar_subset() a bit more, some
+To understand the internal implementation of new_DasAry_subset() a bit more, some
 background is useful.
 
 ## Strided Arrays

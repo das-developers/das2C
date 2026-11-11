@@ -48,7 +48,7 @@
 #include "http.h"
 #include "util_p.h"
 #include "ver_p.h"
-#include "array.h"   /* VARIDX_MAX */
+#include "array.h"   /* DASIDX_MAX */
 #include "io_p.h"    /* the limits below come from where they are enforced */
 #include "prop_p.h"
 #include "enc_p.h"
@@ -65,7 +65,7 @@ static char g_sUserDir[HOME_DIR_SZ] = {'\0'};
 /* ************************************************************************** */
 /* Let clients get the version of the library */
 
-const char* das_lib_version(void)
+const char* daslib_version(void)
 {
 	/* A checkout passes its own description, see the makefile.  A release
 	   tarball has none to pass and was stamped by git archive instead. */
@@ -83,27 +83,27 @@ const char* das_lib_version(void)
 /* Each value is the macro the owning module enforces, so a build that
    changes one (DASIO_MAX_PKT_SZ from the make line, say) reports it.
    Append only, names are API. */
-static const das_limit g_aLimits[] = {
+static const DasLimit g_aLimits[] = {
 	{"max_packet_bytes",      DASIO_MAX_PKT_SZ},
 	{"das2_max_header_bytes", DAS2_LEN_MAX},
-	{"das2_max_packet_id",    DAS2_MAX_PKTIDS - 1},
-	{"das3_max_packet_id",    DAS3_MAX_PKTIDS - 1},
+	{"das2_max_packet_id",    DASSTREAM_V2_ENDPKTID - 1},
+	{"das3_max_packet_id",    DASSTREAM_V3_ENDPKTID - 1},
 	{"max_prop_name_bytes",   DASPROP_NMAX_SZ},
 	{"max_prop_value_bytes",  DASPROP_VMAX_SZ},
-	{"max_dataset_rank",      VARIDX_MAX},
+	{"max_dataset_rank",      DASIDX_MAX},
 	{"das2_max_item_bytes",   DASENC_MAX_WIDTH}
 };
-#define DASLIMIT_COUNT (sizeof(g_aLimits) / sizeof(das_limit))
+#define DASLIMIT_COUNT (sizeof(g_aLimits) / sizeof(DasLimit))
 
-const das_limit* daslimit_get(const char* sName)
+const DasLimit* DasLimit_lookup(const char* sName)
 {
 	if(sName == NULL) return NULL;
 	for(size_t u = 0; u < DASLIMIT_COUNT; ++u)
-		if(strcmp(g_aLimits[u].sName, sName) == 0) return g_aLimits + u;
+		if(strcmp(g_aLimits[u].name, sName) == 0) return g_aLimits + u;
 	return NULL;
 }
 
-const das_limit* daslimit_getNext(const das_limit* pPrev)
+const DasLimit* DasLimit_next(const DasLimit* pPrev)
 {
 	if(pPrev == NULL) return g_aLimits;
 
@@ -112,27 +112,27 @@ const das_limit* daslimit_getNext(const das_limit* pPrev)
 	uintptr_t uBeg = (uintptr_t)g_aLimits;
 	uintptr_t uPtr = (uintptr_t)pPrev;
 	if((uPtr < uBeg)||(uPtr >= (uintptr_t)(g_aLimits + DASLIMIT_COUNT))||
-	   (((uPtr - uBeg) % sizeof(das_limit)) != 0)
+	   (((uPtr - uBeg) % sizeof(DasLimit)) != 0)
 	){
-		das_error(DASERR_UTIL, "Limit at %p is not from this library's table, "
-		          "use daslimit_get() or daslimit_getNext()", (const void*)pPrev);
+		daserrf(DASERR_UTIL, "Limit at %p is not from this library's table, "
+		          "use DasLimit_lookup() or DasLimit_next()", (const void*)pPrev);
 		return NULL;
 	}
 
-	size_t uNext = (uPtr - uBeg) / sizeof(das_limit) + 1;
+	size_t uNext = (uPtr - uBeg) / sizeof(DasLimit) + 1;
 	return (uNext < DASLIMIT_COUNT) ? g_aLimits + uNext : NULL;
 }
 
 /* ************************************************************************** */
 /* Unavoidable global library structure initialization */
 
-das_errcode das_init(
-	const char* sProgName, das_errdis_e nErrDis, int nLevel,
-	const das_loghook* pHook
+das_errcode daslib_init(
+	const char* sProgName, das_errdisp nErrDis, int nLevel,
+	const DasLogHook* pHook
 ){
 	/* The hook goes in first, so anything that goes wrong below is reported
 	   where the caller asked for messages to go */
-	daslog_sethook(pHook);
+	daslog_setHook(pHook);
 
 	/* Das2 Lib is UTF-8 internally, so set to an appropriate codepage */
 #ifdef LOCALE
@@ -142,45 +142,45 @@ das_errcode das_init(
 #endif
 
 #ifdef _WIN32
-	_dasstr_resetCLocale();  /* das_strtod_c's C locale, str.c */
+	_dasstr_resetCLocale();  /* dasstr_toDoubleCLocale's C locale, str.c */
 #endif
 
 	/* With no valid disposition to follow, take the default one */
-	if((nErrDis != DASERR_DIS_EXIT) && (nErrDis != DASERR_DIS_RET)){
-		daserr_setdisp(DASERR_DIS_EXIT);
-		return das_error(DASERR_INIT, "(%s) das_init: Invalid error disposition %d",
+	if((nErrDis != DASERRDISP_EXIT) && (nErrDis != DASERRDISP_RET)){
+		daserr_setDisp(DASERRDISP_EXIT);
+		return daserrf(DASERR_INIT, "(%s) daslib_init: Invalid error disposition %d",
 		                 sProgName, (int)nErrDis);
 	}
-	daserr_setdisp(nErrDis);
+	daserr_setDisp(nErrDis);
 
-	if((nLevel < DASLOG_TRACE) || (nLevel > DASLOG_CRIT))
-		return das_error(DASERR_INIT, "(%s) das_init: Invalid log level %d",
+	if((nLevel < DASLOG_TRACE) || (nLevel > DASLOG_CRITICAL))
+		return daserrf(DASERR_INIT, "(%s) daslib_init: Invalid log level %d",
 		                 sProgName, nLevel);
 
-	if((nErrDis == DASERR_DIS_RET) && (nLevel > DASLOG_ERROR))
-		return das_error(DASERR_INIT, "(%s) das_init: Log level %s with return on "
+	if((nErrDis == DASERRDISP_RET) && (nLevel > DASLOG_ERROR))
+		return daserrf(DASERR_INIT, "(%s) daslib_init: Log level %s with return on "
 		                 "errors would hide every error message", sProgName,
-		                 daslog_levelstr(nLevel));
+		                 daslog_levelToStr(nLevel));
 
-	daslog_setlevel(nLevel);
+	daslog_setLevel(nLevel);
 
 	if( ! das_units_init(sProgName) )
-		return das_error(DASERR_INIT, "(%s) Failed units initialization", sProgName);
+		return daserrf(DASERR_INIT, "(%s) Failed units initialization", sProgName);
 
 /* FFTW support enabled/disable see defs.h) */
 #ifndef DAS_NO_DFT
 	if( ! das_dft_init(sProgName) )
-		return das_error(DASERR_INIT, "(%s) Failed DFT initialization", sProgName);
+		return daserrf(DASERR_INIT, "(%s) Failed DFT initialization", sProgName);
 #endif
 
 /* network support enabled/disable see defs.h) */
-#ifndef DAS_NO_NETWORK
+#ifndef DASCONF_NO_NET
 	if( ! das_http_init(sProgName))
-		return das_error(DASERR_INIT, "(%s) Failed HTTP initialization", sProgName);
+		return daserrf(DASERR_INIT, "(%s) Failed HTTP initialization", sProgName);
 #endif
 	
 	if( ! das_tt2K_init(sProgName))
-		return das_error(DASERR_INIT, "(%s) Failed TT2000 leap second "
+		return daserrf(DASERR_INIT, "(%s) Failed TT2000 leap second "
 		                 "initialization", sProgName);
 	
 	
@@ -202,14 +202,14 @@ das_errcode das_init(
 	 * every OS the way ssh and git do it, unless DAS_USERDIR says otherwise.
 	 * Read once here so a setenv() later in the process cannot move the
 	 * cache or the credentials file out from under an open session.  A
-	 * program that wants to choose calls das_set_userdir(). */
-	das_set_userdir(NULL);
+	 * program that wants to choose calls dasfs_setUserDir(). */
+	dasfs_setUserDir(NULL);
 	return DAS_OKAY;
 }
 
-void das_finish(){
+void daslib_finish(){
 	/* A do nothing function on Unix, closes network sockets on windows */
-#ifndef DAS_NO_NETWORK
+#ifndef DASCONF_NO_NET
 	das_http_finish();
 #endif
 }
@@ -227,15 +227,15 @@ uint8_t* das_memset(
 ){
 	if(uCount == 0) return pDest;  /* Successfully did nothing */
 	if(uElemSz == 0){ 
-		das_error(DASERR_UTIL, "Invalid element size");
+		daserrf(DASERR_UTIL, "Invalid element size");
 		return NULL;
 	}
 	if(pDest == NULL){ 
-		das_error(DASERR_UTIL, "Invalid destination");
+		daserrf(DASERR_UTIL, "Invalid destination");
 		return NULL;
 	}
 	if(pSrc == NULL){ 
-		das_error(DASERR_UTIL, "Invalid source");
+		daserrf(DASERR_UTIL, "Invalid source");
 		return NULL;
 	}
 	
@@ -264,7 +264,7 @@ uint8_t* das_memset(
 
 /* ************************************************************************* */
 /* File utilities */
-bool das_isdir(const char* path)
+bool dasfs_isDir(const char* path)
 {
 	struct stat stbuf;
 	if(stat(path, &stbuf) != 0) return false;
@@ -273,17 +273,17 @@ bool das_isdir(const char* path)
 	else return false;
 }
 
-const char* das_userhome(void)
+const char* dasfs_userHome(void)
 {
 	return g_sHome;
 }
 
-const char* das_userdir(void)
+const char* dasfs_userDir(void)
 {
 	return g_sUserDir;
 }
 
-void das_set_userdir(const char* sDir)
+void dasfs_setUserDir(const char* sDir)
 {
 	if((sDir == NULL)||(sDir[0] == '\0')) sDir = getenv("DAS_USERDIR");
 	if((sDir != NULL) && (sDir[0] != '\0')){
@@ -291,11 +291,11 @@ void das_set_userdir(const char* sDir)
 		g_sUserDir[HOME_DIR_SZ - 1] = '\0';
 	}
 	else{
-		snprintf(g_sUserDir, HOME_DIR_SZ, "%s" DAS_DSEPS ".das", g_sHome);
+		snprintf(g_sUserDir, HOME_DIR_SZ, "%s" DASFS_SEPS ".das", g_sHome);
 	}
 }
 
-bool das_isfile(const char* path)
+bool dasfs_isFile(const char* path)
 {
 	struct stat stbuf;
 	if(stat(path, &stbuf) != 0) return false;
@@ -304,7 +304,7 @@ bool das_isfile(const char* path)
 	else return false;
 }
 
-int das_rename(const char* sFrom, const char* sTo)
+int dasfs_rename(const char* sFrom, const char* sTo)
 {
 #ifdef _WIN32
 	if(MoveFileExA(sFrom, sTo, MOVEFILE_REPLACE_EXISTING)) return 0;
@@ -320,7 +320,7 @@ int das_rename(const char* sFrom, const char* sTo)
 #endif
 }
 
-void das_stdio_binary(FILE* pFile)
+void dasfs_setStdioBinary(FILE* pFile)
 {
 #ifdef _WIN32
 	if(pFile != NULL) _setmode(_fileno(pFile), _O_BINARY);
@@ -343,16 +343,16 @@ static size_t _das_drivelen(const char* sPath)
 }
 
 #ifndef WIN32
-bool das_copyfile(const char* src, const char* dest, mode_t mode)
+bool dasfs_copyFile(const char* src, const char* dest, mode_t mode)
 #else
-bool das_copyfile(const char* src, const char* dest)
+bool dasfs_copyFile(const char* src, const char* dest)
 #endif
 {
 	
 	/* See if you can read the old file first */
 	FILE* pIn = fopen(src, "rb");
 	if(pIn == NULL){
-		das_error(DASERR_UTIL, "Can not read source file %s.", src);
+		daserrf(DASERR_UTIL, "Can not read source file %s.", src);
 		return false;
 	}
 	
@@ -369,12 +369,12 @@ bool das_copyfile(const char* src, const char* dest)
 #endif
 
 	if((src == NULL)||(src[0] == '\0')){
-		das_error(DASERR_UTIL, "src is NULL or empty");
+		daserrf(DASERR_UTIL, "src is NULL or empty");
 		fclose(pIn);
 		return false;
 	}
 	if((dest == NULL)||(dest[0] == '\0')){
-		das_error(DASERR_UTIL, "dest is NULL or empty");
+		daserrf(DASERR_UTIL, "dest is NULL or empty");
 		fclose(pIn);
 		return false;
 	}
@@ -386,11 +386,11 @@ bool das_copyfile(const char* src, const char* dest)
 	size_t uDrive = _das_drivelen(sPath);
 
 	for(u = 0; u<uLen; u++){
-		if(((sPath[u] == '/')||(sPath[u] == DAS_DSEPC)) && (u>uDrive) && (u < uLen-1)){
+		if(((sPath[u] == '/')||(sPath[u] == DASFS_SEPC)) && (u>uDrive) && (u < uLen-1)){
 			char cSep = sPath[u];
 			sPath[u] = '\0';
 			
-			if(! das_isdir(sPath) ){
+			if(! dasfs_isDir(sPath) ){
 #ifndef WIN32
 				if(mkdir(sPath, dirmode) != 0)
 #else
@@ -399,7 +399,7 @@ bool das_copyfile(const char* src, const char* dest)
 				{
 					nErr = errno;
 					fclose(pIn);
-					das_error(
+					daserrf(
 						DASERR_UTIL, "Cannot make directory '%s' because '%s'.",
 					 	sPath, strerror(nErr)
 					);
@@ -414,7 +414,7 @@ bool das_copyfile(const char* src, const char* dest)
 	/* Make the file */
 	FILE* pOut = fopen(dest, "wb");
 	if(pOut == NULL){
-		das_error(DASERR_UTIL, "Can not create output file '%s'", dest);
+		daserrf(DASERR_UTIL, "Can not create output file '%s'", dest);
 		fclose(pIn);
 		return false;
 	}
@@ -424,7 +424,7 @@ bool das_copyfile(const char* src, const char* dest)
 	size_t uRead = 0;
 	while( (uRead = fread(buffer, sizeof(char), 65536, pIn)) > 0){
 		if(uRead != fwrite(buffer, sizeof(char), uRead, pOut)){
-			das_error(DASERR_UTIL, "Error writing to file '%s'", dest);
+			daserrf(DASERR_UTIL, "Error writing to file '%s'", dest);
 			fclose(pIn);
 			fclose(pOut);
 			return false;
@@ -442,7 +442,7 @@ bool das_copyfile(const char* src, const char* dest)
 	return true;	
 }
 
-das_errcode das_mkdirsto(const char* path)
+das_errcode dasfs_mkdirsTo(const char* path)
 {
 	/* Walk the set of items, make directories for everything upto the last */
 
@@ -459,11 +459,11 @@ das_errcode das_mkdirsto(const char* path)
 	int nErr;
 
 	for(size_t u = 0; u < uLen; u++){
-		if(((sPath[u] == '/')||(sPath[u] == DAS_DSEPC)) && (u>uDrive) && (u < uLen-1)){
+		if(((sPath[u] == '/')||(sPath[u] == DASFS_SEPC)) && (u>uDrive) && (u < uLen-1)){
 			char cSep = sPath[u];
 			sPath[u] = '\0';
 			
-			if(! das_isdir(sPath) ){
+			if(! dasfs_isDir(sPath) ){
 #ifndef WIN32
 				if(mkdir(sPath, dirmode) != 0)
 #else
@@ -471,7 +471,7 @@ das_errcode das_mkdirsto(const char* path)
 #endif
 				{
 					nErr = errno;
-					return das_error(
+					return daserrf(
 						DASERR_UTIL, "Cannot make directory '%s' because '%s'.",
 					 	sPath, strerror(nErr)
 					);
@@ -491,7 +491,7 @@ static int _wrap_strcmp(const void* vp1, const void* vp2){
 	return strcmp(p1, p2);
 }
 
-int das_dirlist(
+int dasfs_listDir(
 	const char* sPath, char ppDirList[][256], size_t uMaxDirs, char cType
 ){
 	int nErrno = 0;
@@ -500,7 +500,7 @@ int das_dirlist(
 	char sItemPath[260];
 
 	if( (pDir = opendir(sPath)) == NULL){
-		return - das_error(DASERR_UTIL, "Can't read directory %s", sPath);
+		return - daserrf(DASERR_UTIL, "Can't read directory %s", sPath);
 	}
 
 	size_t uEntry = 0;
@@ -514,13 +514,13 @@ int das_dirlist(
 
 		if(cType == 'd' || cType == 'f'){
 			snprintf(sItemPath, 259, "%s/%s", sPath, pEnt->d_name);
-			if(cType == 'd' && das_isfile(sItemPath)) continue;
-			if(cType == 'f' && das_isdir(sItemPath)) continue;
+			if(cType == 'd' && dasfs_isFile(sItemPath)) continue;
+			if(cType == 'f' && dasfs_isDir(sItemPath)) continue;
 		}
 
 		if(uEntry >= uMaxDirs){
 			closedir(pDir);
-			return - das_error(DASERR_UTIL, "Directory contains more than %zu items", uMaxDirs);
+			return - daserrf(DASERR_UTIL, "Directory contains more than %zu items", uMaxDirs);
 		}
 
 		strncpy(pNext, pEnt->d_name, 256);
@@ -532,7 +532,7 @@ int das_dirlist(
 	closedir(pDir);
 
 	if((pEnt == NULL)&&(nErrno != 0))
-		return - das_error(DASERR_UTIL, "Could not read all the directory entries from %s",
+		return - daserrf(DASERR_UTIL, "Could not read all the directory entries from %s",
 		                    sPath);
 
 	/* Client can handle sorting. */
@@ -545,7 +545,7 @@ int das_dirlist(
 /* Command line helps */
 
 /* See a given string matches the short or long form of an argument */
-bool dascmd_isArg(
+bool dasarg_isOpt(
 	const char* sArg, const char* sShort, const char* sLong, bool* pLong 
 ){
 	if(strcmp(sArg, sShort) == 0){
@@ -564,13 +564,13 @@ bool dascmd_isArg(
 /* Get the value of an argument if the current entry in argv matches
  * either the short or long form */
 
-bool dascmd_getArgVal(
+bool dasarg_getOptVal(
 	char** argv, int argc, const char* sShort, const char* sLong, int* pArgIdx, 
 	char* sDest, size_t uDest
 ){
 	bool bIsLong = false;
 
-	if(! dascmd_isArg(argv[*pArgIdx], sShort, sLong, &bIsLong))
+	if(! dasarg_isOpt(argv[*pArgIdx], sShort, sLong, &bIsLong))
 		return false;
 	
 	const char* sVal;
@@ -593,14 +593,14 @@ bool dascmd_getArgVal(
 	return true;
 	
 NO_ARG:
-	das_error(DASERR_UTIL, "Missing option after argument %s", argv[*pArgIdx]);
+	daserrf(DASERR_UTIL, "Missing option after argument %s", argv[*pArgIdx]);
 	return false;
 }
 
 /* ************************************************************************* */
 /* Strings that name places: URLs, files and catalog URIs */
 
-bool das_isUri(const char* sPath)
+bool dasurl_hasScheme(const char* sPath)
 {
 	if((sPath == NULL) || !isalpha((unsigned char)sPath[0])) return false;
 	const char* p = sPath + 1;
@@ -624,7 +624,7 @@ static bool _url_ieq(const char* pIn, size_t uLen, const char* sLower)
 	return true;
 }
 
-static void _url_set(das_url_parts* pParts, das_url_part_e ePart, size_t uOff, size_t uLen)
+static void _url_set(DasUrlParts* pParts, das_urlpart ePart, size_t uOff, size_t uLen)
 {
 	pParts->aOff[ePart] = (uint16_t)uOff;
 	pParts->aLen[ePart] = (uint16_t)uLen;
@@ -633,7 +633,7 @@ static void _url_set(das_url_parts* pParts, das_url_part_e ePart, size_t uOff, s
 /* Hand rolled on purpose: uriparser does not take UTF-8 natively and curl is
  * a large dependency to carry for a handful of fields.  Only the split is
  * done here, decoding and scheme rules belong to the caller. */
-bool das_url_parse(das_url_parts* pParts, const char* sUrl)
+bool DasUrlParts_fromStr(DasUrlParts* pParts, const char* sUrl)
 {
 	for(int i = 0; i < 12; ++i){
 		pParts->aOff[i] = _URL_ABSENT;
@@ -657,7 +657,7 @@ bool das_url_parse(das_url_parts* pParts, const char* sUrl)
 	while((u < uLen) && (isalnum((unsigned char)sUrl[u]) || strchr("+-.", sUrl[u])))
 		++u;
 	if((u == uLen)||(sUrl[u] != ':')) return false;
-	_url_set(pParts, DASURL_SCHEME, 0, u);
+	_url_set(pParts, DASURLPART_SCHEME, 0, u);
 	++u;
 
 	/* Authority: [userinfo@]host[:port] */
@@ -671,7 +671,7 @@ bool das_url_parse(das_url_parts* pParts, const char* sUrl)
 		size_t uHostBeg = uAuthBeg;
 		for(size_t v = uAuthBeg; v < uAuthEnd; ++v) if(sUrl[v] == '@') uHostBeg = v + 1;
 		if(uHostBeg > uAuthBeg)
-			_url_set(pParts, DASURL_USERINFO, uAuthBeg, uHostBeg - uAuthBeg - 1);
+			_url_set(pParts, DASURLPART_USERINFO, uAuthBeg, uHostBeg - uAuthBeg - 1);
 
 		size_t uHostEnd = uHostBeg;
 		if((uHostEnd < uAuthEnd) && (sUrl[uHostEnd] == '[')){   /* IPv6 literal */
@@ -681,7 +681,7 @@ bool das_url_parse(das_url_parts* pParts, const char* sUrl)
 		}
 		else
 			while((uHostEnd < uAuthEnd) && (sUrl[uHostEnd] != ':')) ++uHostEnd;
-		_url_set(pParts, DASURL_HOST, uHostBeg, uHostEnd - uHostBeg);
+		_url_set(pParts, DASURLPART_HOST, uHostBeg, uHostEnd - uHostBeg);
 
 		if((uHostEnd < uAuthEnd) && (sUrl[uHostEnd] == ':')){
 			size_t uPortBeg = uHostEnd + 1;
@@ -693,7 +693,7 @@ bool das_url_parse(das_url_parts* pParts, const char* sUrl)
 			}
 			if(uAuthEnd > uPortBeg){             /* "host:" is allowed, no port */
 				if((nPort < 1)||(nPort > 65535)) return false;
-				_url_set(pParts, DASURL_PORT, uPortBeg, uAuthEnd - uPortBeg);
+				_url_set(pParts, DASURLPART_PORT, uPortBeg, uAuthEnd - uPortBeg);
 			}
 		}
 		else if(uHostEnd != uAuthEnd) return false;   /* junk after an IPv6 literal */
@@ -703,21 +703,21 @@ bool das_url_parse(das_url_parts* pParts, const char* sUrl)
 	/* Path, then query, then fragment */
 	size_t uPathEnd = u;
 	while((uPathEnd < uLen) && (sUrl[uPathEnd] != '?') && (sUrl[uPathEnd] != '#')) ++uPathEnd;
-	_url_set(pParts, DASURL_PATH, u, uPathEnd - u);
+	_url_set(pParts, DASURLPART_PATH, u, uPathEnd - u);
 	u = uPathEnd;
 
 	if((u < uLen) && (sUrl[u] == '?')){
 		size_t uQryBeg = u + 1;
 		size_t uQryEnd = uQryBeg;
 		while((uQryEnd < uLen) && (sUrl[uQryEnd] != '#')) ++uQryEnd;
-		_url_set(pParts, DASURL_QUERY, uQryBeg, uQryEnd - uQryBeg);
+		_url_set(pParts, DASURLPART_QUERY, uQryBeg, uQryEnd - uQryBeg);
 
 		/* das2.2 dataset=, a whole parameter, not a suffix of another name */
 		for(size_t v = uQryBeg; v + 8 <= uQryEnd; ++v){
 			if(((v == uQryBeg)||(sUrl[v-1] == '&')) && (strncmp(sUrl + v, "dataset=", 8) == 0)){
 				size_t uValEnd = v + 8;
 				while((uValEnd < uQryEnd) && (sUrl[uValEnd] != '&')) ++uValEnd;
-				_url_set(pParts, DASURL_DATASET, v + 8, uValEnd - (v + 8));
+				_url_set(pParts, DASURLPART_DATASET, v + 8, uValEnd - (v + 8));
 				break;
 			}
 		}
@@ -725,16 +725,16 @@ bool das_url_parse(das_url_parts* pParts, const char* sUrl)
 	}
 
 	if((u < uLen) && (sUrl[u] == '#'))
-		_url_set(pParts, DASURL_FRAGMENT, u + 1, uLen - (u + 1));
+		_url_set(pParts, DASURLPART_FRAGMENT, u + 1, uLen - (u + 1));
 
 	return true;
 }
 
-const char* das_url_part(
-	const das_url_parts* pParts, const char* sUrl, das_url_part_e ePart, size_t* pLen
+const char* DasUrlParts_get(
+	const DasUrlParts* pParts, const char* sUrl, das_urlpart ePart, size_t* pLen
 ){
 	*pLen = 0;
-	if((sUrl == NULL)||(pParts == NULL)||(ePart < DASURL_SCHEME)||(ePart > DASURL_DATASET))
+	if((sUrl == NULL)||(pParts == NULL)||(ePart < DASURLPART_SCHEME)||(ePart > DASURLPART_DATASET))
 		return NULL;
 
 	if(pParts->aOff[ePart] != _URL_ABSENT){
@@ -743,8 +743,8 @@ const char* das_url_part(
 	}
 
 	/* A missing port is the scheme's default, for the schemes we speak */
-	if((ePart == DASURL_PORT) && (pParts->aOff[DASURL_SCHEME] != _URL_ABSENT)){
-		size_t uScheme = pParts->aLen[DASURL_SCHEME];
+	if((ePart == DASURLPART_PORT) && (pParts->aOff[DASURLPART_SCHEME] != _URL_ABSENT)){
+		size_t uScheme = pParts->aLen[DASURLPART_SCHEME];
 		if(_url_ieq(sUrl, uScheme, "http")) { *pLen = 2; return "80"; }
 		if(_url_ieq(sUrl, uScheme, "https")){ *pLen = 3; return "443"; }
 	}

@@ -4,7 +4,7 @@
 # handful of small fixtures, plus a check that -q reports parse status through
 # the exit code alone.
 #
-# The golds pin DasStream_info(), DasDs_toStr(), DasDim_toStr() and
+# The golds pin DasStream_toInfoStr(), DasDs_toStr(), DasDim_toStr() and
 # DasVar_toStr(), which are the strings das3_text, das3_csv and das2py show
 # people when they ask what a dataset is made of.  A variable line has three
 # pipe separated sections: source with element type and units, item counts

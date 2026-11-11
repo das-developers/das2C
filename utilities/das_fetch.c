@@ -63,10 +63,10 @@
 #define PROG "das_fetch"
 #define PERR (DASERR_MAX + 1)
 
-#define CRED_FILE     "servers"    /* under das_userdir(); the older ~/.dasauth is not read */
+#define CRED_FILE     "servers"    /* under dasfs_userDir(); the older ~/.dasauth is not read */
 
 #ifndef _WIN32
-#define HOME_VAR "$HOME"           /* for help text, das_userdir() does the lookup */
+#define HOME_VAR "$HOME"           /* for help text, dasfs_userDir() does the lookup */
 #else
 #define HOME_VAR "%USERPROFILE%"
 #endif
@@ -82,12 +82,12 @@
 #define RET_WRITE  7
 
 /* Command line bounds.  Identifiers in a node follow the das3 rule enforced
- * by das_assert_valid_id(), at most 63 characters, and a full key is
+ * by dasid_check(), at most 63 characters, and a full key is
  * "section.group.prop", so KEY_SZ comes from that rule, not from a guess. */
 #define MAX_KEYS 512    /* KEY=VALUE arguments on one command line */
 #define MAX_RAW   32    /* -p arguments */
-#define KEY_SZ   (8 + 2*DAS_MAX_ID_BUFSZ)
-#define NAME_SZ  DAS_MAX_ID_BUFSZ
+#define KEY_SZ   (8 + 2*DASID_SZ)
+#define NAME_SZ  DASID_SZ
 #define URI_SZ 1024
 #define URL_SZ 4096
 #define ERR_SZ 1024
@@ -150,7 +150,7 @@ static void prnHelpMain(void)
 "   Paths are catalog paths, not web paths.  Any of these forms work:\n"
 "\n"
 "      uiowa/juno/wav/survey             relative to the prefix, by\n"
-"                                        default '" DASCAT_DEF_PREFIX "'\n"
+"                                        default '" DASCAT_SITE_PREFIX "'\n"
 "      site:/uiowa/juno/wav/survey       shorthand for the URI form below\n"
 "      tag:das2.org,2012:site:/uiowa     full catalog path URI\n"
 "      https://host/some/node.json       a node by direct URL\n"
@@ -162,7 +162,7 @@ static void prnHelpMain(void)
 "\n"
 "   -r, --start START  Where relative paths start, in one of three forms.\n"
 "                      A catalog URI prefix, default\n"
-"                      '" DASCAT_DEF_PREFIX "':\n"
+"                      '" DASCAT_SITE_PREFIX "':\n"
 "                         -r tag:das2.org,2012:test:/\n"
 "                      A URL or file, the node there becomes the seed, a\n"
 "                      root: paths are relative to it, names below it are\n"
@@ -455,19 +455,19 @@ static bool isDigits(const char* s)
  * documents directly, everything about a source comes through DasSrc. */
 static const char* jstr(const DasJdo* p, const char* sPath)
 {
-	return (p == NULL) ? NULL : DasJdo_string(DasJdo_get(p, sPath));
+	return (p == NULL) ? NULL : DasJdo_str(DasJdo_subtree(p, sPath));
 }
 
 /* Section names as typed in -s lists, singular or plural */
-static bool secAlias(const char* s, das_src_sec_e* pSec)
+static bool secAlias(const char* s, das_srcsec* pSec)
 {
 	if(strieq(s,"coord")||strieq(s,"coords")||strieq(s,"coordinate")||strieq(s,"coordinates")){
-		*pSec = das_src_sec_coord; return true;
+		*pSec = DASSRCSEC_COORD; return true;
 	}
-	if(strieq(s,"data")){ *pSec = das_src_sec_data; return true; }
-	if(strieq(s,"format")||strieq(s,"formats")||strieq(s,"fmt")){ *pSec = das_src_sec_format; return true; }
+	if(strieq(s,"data")){ *pSec = DASSRCSEC_DATA; return true; }
+	if(strieq(s,"format")||strieq(s,"formats")||strieq(s,"fmt")){ *pSec = DASSRCSEC_FORMAT; return true; }
 	if(strieq(s,"option")||strieq(s,"options")||strieq(s,"opt")||strieq(s,"opts")){
-		*pSec = das_src_sec_option; return true;
+		*pSec = DASSRCSEC_OPTION; return true;
 	}
 	return false;
 }
@@ -476,9 +476,9 @@ static bool secAlias(const char* s, das_src_sec_e* pSec)
 /* Display settings and terminal wrapping */
 
 /* Which parts of a source 'node' prints: one bit per section plus examples */
-#define SHOW_EXAMPLES (1u << das_src_sec_size)
-#define SHOW_ALL      ((1u << (das_src_sec_size + 1)) - 1)
-static unsigned g_uShow = SHOW_ALL & ~(1u << das_src_sec_format);
+#define SHOW_EXAMPLES (1u << DASSRCSEC_SIZE)
+#define SHOW_ALL      ((1u << (DASSRCSEC_SIZE + 1)) - 1)
+static unsigned g_uShow = SHOW_ALL & ~(1u << DASSRCSEC_FORMAT);
 static bool g_bVerbose = false;
 static int  g_nCols = 0;    /* terminal width, 0 when stdout is not a terminal */
 
@@ -567,11 +567,11 @@ static const char* propTypeName(const DasSrcProp* p)
 	const char* s = DasSrcProp_typeName(p);
 	if((s != NULL)&&(s[0] != '\0')) return s;
 	switch(DasSrcProp_type(p)){
-	case das_srcprop_bool: return "boolean";
-	case das_srcprop_int:  return "integer";
-	case das_srcprop_real: return "real";
-	case das_srcprop_time: return "isotime";
-	case das_srcprop_enum: return "enum";
+	case DASSRCPROPTYPE_BOOL: return "boolean";
+	case DASSRCPROPTYPE_INT:  return "integer";
+	case DASSRCPROPTYPE_REAL: return "real";
+	case DASSRCPROPTYPE_TIME: return "isotime";
+	case DASSRCPROPTYPE_ENUM: return "enum";
 	default:               return "string";
 	}
 }
@@ -583,11 +583,11 @@ static void propValues(const DasSrcProp* p, char* sBuf, size_t uLen)
 	const DasSrcCtrl* pC = DasSrcProp_ctrl(p);
 	if(pC == NULL) return;
 
-	size_t uEnum = DasSrcCtrl_enumCount(pC);
+	size_t uEnum = DasSrcCtrl_numEnums(pC);
 	if(uEnum > 0){
 		size_t u = 0;
 		for(size_t i = 0; i < uEnum; ++i){
-			const char* sVal = DasSrcCtrl_enum(pC, i);
+			const char* sVal = DasSrcCtrl_enumAt(pC, i);
 			if(u + strlen(sVal) + 3 >= uLen){ strcpyz(sBuf + u, "...", uLen - u); return; }
 			u += snprintf(sBuf + u, uLen - u, "%s%s", (u > 0) ? ", " : "", sVal);
 		}
@@ -599,7 +599,7 @@ static void propValues(const DasSrcProp* p, char* sBuf, size_t uLen)
 		snprintf(sBuf, uLen, "%s to %s", sLo, sHi);
 		return;
 	}
-	if(DasSrcProp_type(p) == das_srcprop_bool) strcpyz(sBuf, "true, false", uLen);
+	if(DasSrcProp_type(p) == DASSRCPROPTYPE_BOOL) strcpyz(sBuf, "true, false", uLen);
 }
 
 /* Print the arguments that reproduce an example, indented under its row.
@@ -607,15 +607,15 @@ static void propValues(const DasSrcProp* p, char* sBuf, size_t uLen)
  * layout, so this is a requisition read back as KEY=VALUE pairs. */
 static void printExampleArgs(const DasSrc* pSrc, size_t uIdx, int nCol, FILE* pOut)
 {
-	DasReq* pReq = DasSrc_newReq(pSrc, (int)uIdx);
+	DasReq* pReq = new_DasReq_src(pSrc, (int)uIdx);
 	if(pReq == NULL) return;
 	char sArgs[4096] = {'\0'};
 	size_t u = 0;
-	for(size_t i = 0; (i < DasReq_count(pReq)) && (u < sizeof(sArgs)); ++i)
-		u += snprintf(sArgs + u, sizeof(sArgs) - u, "%s=%s ", DasReq_key(pReq, i), DasReq_val(pReq, i));
-	for(size_t i = 0; (i < DasReq_rawCount(pReq)) && (u < sizeof(sArgs)); ++i){
+	for(size_t i = 0; (i < DasReq_numKeys(pReq)) && (u < sizeof(sArgs)); ++i)
+		u += snprintf(sArgs + u, sizeof(sArgs) - u, "%s=%s ", DasReq_keyAt(pReq, i), DasReq_valAt(pReq, i));
+	for(size_t i = 0; (i < DasReq_numRaw(pReq)) && (u < sizeof(sArgs)); ++i){
 		const char* sVal = NULL;
-		const char* sName = DasReq_raw(pReq, i, &sVal);
+		const char* sName = DasReq_rawAt(pReq, i, &sVal);
 		u += snprintf(sArgs + u, sizeof(sArgs) - u, "-p %s=%s ", sName, sVal);
 	}
 	del_DasReq(pReq);
@@ -628,7 +628,7 @@ static void printExampleArgs(const DasSrc* pSrc, size_t uIdx, int nCol, FILE* pO
 /* The examples table: number and what it provides, arguments only with -v */
 static void printExamples(const DasSrc* pSrc, FILE* pOut)
 {
-	size_t uEx = DasSrc_exampleCount(pSrc);
+	size_t uEx = DasSrc_numExamples(pSrc);
 	if(uEx == 0) return;
 	size_t wKey = 3;
 	char sNum[16];
@@ -642,7 +642,7 @@ static void printExamples(const DasSrc* pSrc, FILE* pOut)
 	int nCol = 2 + (int)wKey + 2;
 	for(size_t u = 0; u < uEx; ++u){
 		fprintf(pOut, "  %-*zu  ", (int)wKey, u);
-		fputsWrapped(DasSrc_exampleLabel(pSrc, u), nCol, pOut);
+		fputsWrapped(DasSrc_exampleLblAt(pSrc, u), nCol, pOut);
 		fputc('\n', pOut);
 		if(g_bVerbose) printExampleArgs(pSrc, u, nCol, pOut);
 	}
@@ -658,11 +658,11 @@ static void prnAuth(const DasSrc* pSrc, FILE* pOut)
 	if(!DasSrc_needsAuth(pSrc)){ fputs("Auth:     not required\n", pOut); return; }
 	fputs("Auth:     REQUIRED", pOut);
 	if(jstr(pAuth, "realm")) fprintf(pOut, ", realm \"%s\"", jstr(pAuth, "realm"));
-	const DasJdo* pMeth = DasJdo_get(pAuth, "methods");
-	if((pMeth != NULL)&&(pMeth->type == das_json_type_ary)){
+	const DasJdo* pMeth = DasJdo_subtree(pAuth, "methods");
+	if((pMeth != NULL)&&(pMeth->type == DASJSONTYPE_ARY)){
 		fputs(" via", pOut);
-		for(const das_json_ary_el* pEl = DasJdo_aryFirst(pMeth); pEl; pEl = pEl->next)
-			fprintf(pOut, " %s", DasJdo_string(pEl->value) ? DasJdo_string(pEl->value) : "?");
+		for(const DasJsonAryEl* pEl = DasJdo_aryFirst(pMeth); pEl; pEl = pEl->next)
+			fprintf(pOut, " %s", DasJdo_str(pEl->value) ? DasJdo_str(pEl->value) : "?");
 	}
 	if(jstr(pAuth, "description")) fprintf(pOut, "\n          %s", jstr(pAuth, "description"));
 	fputs("\n", pOut);
@@ -672,13 +672,13 @@ static void prnAuth(const DasSrc* pSrc, FILE* pOut)
  * type it produces */
 static void prnFormats(const DasSrc* pSrc, FILE* pOut)
 {
-	size_t uGroups = DasSrc_groupCount(pSrc, das_src_sec_format);
+	size_t uGroups = DasSrc_numGroups(pSrc, DASSRCSEC_FORMAT);
 	if(uGroups > 0){
 		fputs("Formats: ", pOut);
 		for(size_t g = 0; g < uGroups; ++g){
-			const DasSrcGroup* pG = DasSrc_group(pSrc, das_src_sec_format, g);
+			const DasSrcGroup* pG = DasSrc_groupAt(pSrc, DASSRCSEC_FORMAT, g);
 			fprintf(pOut, " %s", DasSrcGroup_name(pG));
-			const DasSrcProp* pOn = DasSrcGroup_enable(pG);
+			const DasSrcProp* pOn = DasSrcGroup_enableProp(pG);
 			if((pOn != NULL) && strieq(DasSrcProp_value(pOn), "true")) fputs(" (default)", pOut);
 		}
 		fputs("\n", pOut);
@@ -699,18 +699,18 @@ static void printKeyTables(const DasSrc* pSrc, FILE* pOut)
 	char sVals[80];
 	char sTitle[64];
 
-	for(int iSec = 0; iSec < das_src_sec_size; ++iSec){
-		das_src_sec_e sec = (das_src_sec_e)iSec;
+	for(int iSec = 0; iSec < DASSRCSEC_SIZE; ++iSec){
+		das_srcsec sec = (das_srcsec)iSec;
 		if(!(g_uShow & (1u << sec))) continue;
 
 		/* First pass: is there anything to show, and how wide is it */
 		size_t aW[C_COUNT];
 		for(int c = 0; c < C_COUNT; ++c) aW[c] = strlen(aHdr[c]);
 		size_t uRows = 0;
-		for(size_t g = 0; g < DasSrc_groupCount(pSrc, sec); ++g){
-			const DasSrcGroup* pG = DasSrc_group(pSrc, sec, g);
-			for(size_t i = 0; i < DasSrcGroup_propCount(pG); ++i){
-				const DasSrcProp* p = DasSrcGroup_prop(pG, i);
+		for(size_t g = 0; g < DasSrc_numGroups(pSrc, sec); ++g){
+			const DasSrcGroup* pG = DasSrc_groupAt(pSrc, sec, g);
+			for(size_t i = 0; i < DasSrcGroup_numProps(pG); ++i){
+				const DasSrcProp* p = DasSrcGroup_propAt(pG, i);
 				if((DasSrcProp_ctrl(p) == NULL) && !g_bVerbose) continue;
 				++uRows;
 				const char* sKey = DasSrcProp_key(p);
@@ -728,7 +728,7 @@ static void printKeyTables(const DasSrc* pSrc, FILE* pOut)
 		int nDescCol = 2;
 		for(int c = 0; c < C_DESC; ++c) nDescCol += (int)aW[c] + 2;
 
-		fprintf(pOut, "\n%s:\n", das_src_sec_name(sec));
+		fprintf(pOut, "\n%s:\n", dassrcsec_name(sec));
 		fprintf(pOut, "  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s  %s\n",
 		        (int)aW[C_KEY], aHdr[C_KEY], (int)aW[C_TYPE], aHdr[C_TYPE],
 		        (int)aW[C_UNITS], aHdr[C_UNITS], (int)aW[C_DEF], aHdr[C_DEF],
@@ -741,16 +741,16 @@ static void printKeyTables(const DasSrc* pSrc, FILE* pOut)
 		}
 		fputs("\n", pOut);
 
-		for(size_t g = 0; g < DasSrc_groupCount(pSrc, sec); ++g){
-			const DasSrcGroup* pG = DasSrc_group(pSrc, sec, g);
-			for(size_t i = 0; i < DasSrcGroup_propCount(pG); ++i){
-				const DasSrcProp* p = DasSrcGroup_prop(pG, i);
+		for(size_t g = 0; g < DasSrc_numGroups(pSrc, sec); ++g){
+			const DasSrcGroup* pG = DasSrc_groupAt(pSrc, sec, g);
+			for(size_t i = 0; i < DasSrcGroup_numProps(pG); ++i){
+				const DasSrcProp* p = DasSrcGroup_propAt(pG, i);
 				const DasSrcCtrl* pC = DasSrcProp_ctrl(p);
 				if((pC == NULL) && !g_bVerbose) continue;
 				const char* sKey = DasSrcProp_key(p);
 				const char* sShort = strchr(sKey, '.') ? strchr(sKey, '.') + 1 : sKey;
 				const char* sDef = DasSrcProp_value(p);
-				const char* sReq = (pC == NULL) ? "fixed" : DasSrcCtrl_required(pC) ? "yes" : "";
+				const char* sReq = (pC == NULL) ? "fixed" : DasSrcCtrl_isRequired(pC) ? "yes" : "";
 				propValues(p, sVals, sizeof(sVals));
 				if(pC == NULL) fputs(dimOn(), pOut);
 				fprintf(pOut, "  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s  ",
@@ -770,14 +770,14 @@ static void printKeyTables(const DasSrc* pSrc, FILE* pOut)
 static void printShortcuts(const DasSrc* pSrc, FILE* pOut)
 {
 	fputs("\nShortcuts:\n", pOut);
-	for(size_t g = 0; g < DasSrc_groupCount(pSrc, das_src_sec_coord); ++g){
-		const DasSrcGroup* pG = DasSrc_group(pSrc, das_src_sec_coord, g);
-		const DasSrcProp* pMin = DasSrcGroup_findProp(pG, "min");
-		const DasSrcProp* pMax = DasSrcGroup_findProp(pG, "max");
+	for(size_t g = 0; g < DasSrc_numGroups(pSrc, DASSRCSEC_COORD); ++g){
+		const DasSrcGroup* pG = DasSrc_groupAt(pSrc, DASSRCSEC_COORD, g);
+		const DasSrcProp* pMin = DasSrcGroup_prop(pG, "min");
+		const DasSrcProp* pMax = DasSrcGroup_prop(pG, "max");
 		if((pMin == NULL)||(pMax == NULL)||(DasSrcProp_ctrl(pMin) == NULL)||(DasSrcProp_ctrl(pMax) == NULL))
 			continue;
-		const DasSrcProp* pRes = DasSrcGroup_findProp(pG, "res");
-		const DasSrcProp* pInt = DasSrcGroup_findProp(pG, "inter");
+		const DasSrcProp* pRes = DasSrcGroup_prop(pG, "res");
+		const DasSrcProp* pInt = DasSrcGroup_prop(pG, "inter");
 		const char* sStep = (pRes && DasSrcProp_ctrl(pRes)) ? "RES" :
 		                    (pInt && DasSrcProp_ctrl(pInt)) ? "INTER" : NULL;
 		fprintf(pOut, "  %s=MIN,MAX%s%s\n", DasSrcGroup_name(pG), sStep ? "," : "", sStep ? sStep : "");
@@ -792,13 +792,13 @@ static void describeSrc(const DasSrc* pSrc, FILE* pOut, const char* sUri)
 	const char* sVer = DasSrc_version(pSrc);
 	fprintf(pOut, "HttpStreamSrc%s%s:  %s\n", sVer[0] ? " " : "", sVer, DasSrc_name(pSrc));
 	prnField(pOut, "Title:", DasSrc_title(pSrc));
-	prnField(pOut, "Summary:", DasJdo_string(DasSrc_jdo(pSrc, DASNODE_FRAG_DESC)));
+	prnField(pOut, "Summary:", DasJdo_str(DasSrc_jdo(pSrc, DASNODE_FRAG_DESC)));
 	prnField(pOut, "URI:", sUri);
 	if(g_bVerbose){
 		prnField(pOut, "From:", DasSrc_url(pSrc));
-		size_t uBases = DasStreamSrc_urlCount(pSrc);
+		size_t uBases = DasSrc_numBaseUrls(pSrc);
 		if(uBases > 0){
-			fprintf(pOut, "Server:   %s", DasStreamSrc_baseUrl(pSrc, 0));
+			fprintf(pOut, "Server:   %s", DasSrc_baseUrlAt(pSrc, 0));
 			if(uBases > 1) fprintf(pOut, " (+%zu alternate)", uBases - 1);
 			fputs("\n", pOut);
 		}
@@ -809,8 +809,8 @@ static void describeSrc(const DasSrc* pSrc, FILE* pOut, const char* sUri)
 	if(g_uShow & SHOW_EXAMPLES) printExamples(pSrc, pOut);
 
 	size_t uCtrls = 0;
-	for(size_t u = 0; u < DasSrc_propCount(pSrc); ++u)
-		if(DasSrcProp_ctrl(DasSrc_prop(pSrc, u)) != NULL) ++uCtrls;
+	for(size_t u = 0; u < DasSrc_numProps(pSrc); ++u)
+		if(DasSrcProp_ctrl(DasSrc_propAt(pSrc, u)) != NULL) ++uCtrls;
 	if(uCtrls == 0){
 		fputs("\nThis source takes no query parameters.\n", pOut);
 		if(!g_bVerbose) return;
@@ -831,7 +831,7 @@ static void describeSrc(const DasSrc* pSrc, FILE* pOut, const char* sUri)
 
 static void listCatalog(const DasNode* pNode, FILE* pOut, const char* sUri)
 {
-	const char* sType = jstr(DasNode_getJdo(pNode, NULL), DASNODE_FRAG_TYPE);
+	const char* sType = jstr(DasNode_jdo(pNode, NULL), DASNODE_FRAG_TYPE);
 	const char* sVer = DasNode_version(pNode);
 	fprintf(pOut, "%s%s%s:  %s\n", sType ? sType : "Node", sVer ? " " : "", sVer ? sVer : "",
 	        DasNode_label(pNode) ? DasNode_label(pNode) : "");
@@ -839,13 +839,13 @@ static void listCatalog(const DasNode* pNode, FILE* pOut, const char* sUri)
 	prnField(pOut, "URI:", sUri);
 	if(g_bVerbose) prnField(pOut, "From:", DasNode_srcUrl(pNode));
 
-	size_t uKids = DasNode_subCount(pNode);
+	size_t uKids = DasNode_numSubs(pNode);
 	if(uKids == 0){ fputs("\nNo children listed.\n", pOut); return; }
 
 	size_t wName = 4, wType = 4;
 	for(size_t u = 0; u < uKids; ++u){
-		const char* sName = DasNode_subName(pNode, u);
-		const char* sT = jstr(DasNode_subStub(pNode, u), DASNODE_FRAG_TYPE);
+		const char* sName = DasNode_subNameAt(pNode, u);
+		const char* sT = jstr(DasNode_subStubAt(pNode, u), DASNODE_FRAG_TYPE);
 		if(sName && (strlen(sName) > wName)) wName = strlen(sName);
 		if(sT && (strlen(sT) > wType)) wType = strlen(sT);
 	}
@@ -854,13 +854,13 @@ static void listCatalog(const DasNode* pNode, FILE* pOut, const char* sUri)
 	fprintf(pOut, "\nChildren (%zu):\n\n", uKids);
 	bool bUnsupported = false;
 	for(size_t u = 0; u < uKids; ++u){
-		const char* sName = DasNode_subName(pNode, u);
-		const DasJdo* pStub = DasNode_subStub(pNode, u);
+		const char* sName = DasNode_subNameAt(pNode, u);
+		const DasJdo* pStub = DasNode_subStubAt(pNode, u);
 		const char* sT = jstr(pStub, DASNODE_FRAG_TYPE);
 		const char* sDesc = jstr(pStub, DASNODE_FRAG_TITLE);
 		if(sDesc == NULL) sDesc = jstr(pStub, DASNODE_FRAG_LABEL);
 		if(sDesc == NULL) sDesc = jstr(pStub, DASNODE_FRAG_DESC);
-		bool bKnown = (DasNode_subType(pNode, u) != DASNODE_INV);
+		bool bKnown = (DasNode_subTypeAt(pNode, u) != DASNODETYPE_INV);
 		if(!bKnown) bUnsupported = true;
 		fprintf(pOut, "  %-*s  %-*s%s  ", (int)wName, sName ? sName : "?",
 		        (int)wType, sT ? sT : "?", bKnown ? " " : "*");
@@ -917,8 +917,8 @@ static bool applyStartArg(DasCat* pCat, const char* sVal, bool bMount)
 	const char* pEq = strrchr(sVal, '=');
 	const char* sName = (pEq != NULL) ? pEq + 1 : NULL;
 	bool bNamed = false;
-	if((sName != NULL) && (sName[0] != '\0') && !das_isUrlOrFile(sName)){
-		if(das_isUri(sName)) bNamed = true;
+	if((sName != NULL) && (sName[0] != '\0') && !DasCat_isNodeUrl(sName)){
+		if(dasurl_hasScheme(sName)) bNamed = true;
 		else bNamed = (memchr(sVal, '?', (size_t)(pEq - sVal)) == NULL);
 	}
 
@@ -928,7 +928,7 @@ static bool applyStartArg(DasCat* pCat, const char* sVal, bool bMount)
 		if(uLen >= sizeof(sUrl)) uLen = sizeof(sUrl) - 1;
 		memcpy(sUrl, sVal, uLen);
 		sUrl[uLen] = '\0';
-		if(!das_isUrlOrFile(sUrl)){
+		if(!DasCat_isNodeUrl(sUrl)){
 			fprintf(stderr, PROG ": %s takes URL=URI, '%s' before the '=' is not a URL or a file\n", sOpt, sUrl);
 			return false;
 		}
@@ -937,7 +937,7 @@ static bool applyStartArg(DasCat* pCat, const char* sVal, bool bMount)
 	}
 
 	/* A location after the '=' is the old order, URI=URL, or "=URL" */
-	if((sName != NULL) && das_isUrlOrFile(sName)){
+	if((sName != NULL) && DasCat_isNodeUrl(sName)){
 		fprintf(stderr, PROG ": %s takes URL=URI, the location first and the catalog name "
 		        "it stands for after the '='\n", sOpt);
 		return false;
@@ -946,7 +946,7 @@ static bool applyStartArg(DasCat* pCat, const char* sVal, bool bMount)
 		fprintf(stderr, PROG ": -m needs URL=URI, see -h\n");
 		return false;
 	}
-	if(das_isUrlOrFile(sVal)) return DasCat_setSeed(pCat, sVal, NULL) == DAS_OKAY;   /* a root */
+	if(DasCat_isNodeUrl(sVal)) return DasCat_setSeed(pCat, sVal, NULL) == DAS_OKAY;   /* a root */
 	if(pEq != NULL){
 		fprintf(stderr, PROG ": -r takes URL=URI, and '%s' after the '=' is not a catalog name\n", sName);
 		return false;
@@ -960,8 +960,8 @@ static bool applyStartArg(DasCat* pCat, const char* sVal, bool bMount)
    provides list at all.  Parameters on the catalog side are cut. */
 static bool stubProvides(const DasJdo* pStub, const char* sAccept)
 {
-	const DasJdo* pProv = (pStub == NULL) ? NULL : DasJdo_get(pStub, "provides");
-	bool bList = (pProv != NULL) && (pProv->type == das_json_type_ary);
+	const DasJdo* pProv = (pStub == NULL) ? NULL : DasJdo_subtree(pStub, "provides");
+	bool bList = (pProv != NULL) && (pProv->type == DASJSONTYPE_ARY);
 
 	const char* sWant = sAccept;
 	while(true){
@@ -970,8 +970,8 @@ static bool stubProvides(const DasJdo* pStub, const char* sAccept)
 		if(uWant == 0) return false;
 		if((uWant == 3) && (strncmp(sWant, "*/*", 3) == 0)) return true;
 		if(bList){
-			for(const das_json_ary_el* pEl = DasJdo_aryFirst(pProv); pEl; pEl = pEl->next){
-				const char* sHas = DasJdo_string(pEl->value);
+			for(const DasJsonAryEl* pEl = DasJdo_aryFirst(pProv); pEl; pEl = pEl->next){
+				const char* sHas = DasJdo_str(pEl->value);
 				if(sHas == NULL) continue;
 				size_t uHas = strcspn(sHas, "; \t");
 				if((uHas == uWant) && (strncasecmp(sWant, sHas, uWant) == 0)) return true;
@@ -983,9 +983,9 @@ static bool stubProvides(const DasJdo* pStub, const char* sAccept)
 
 static const DasJdo* childStub(const DasNode* pNode, const char* sName)
 {
-	size_t uKids = DasNode_subCount(pNode);
+	size_t uKids = DasNode_numSubs(pNode);
 	for(size_t u = 0; u < uKids; ++u)
-		if(strcmp(DasNode_subName(pNode, u), sName) == 0) return DasNode_subStub(pNode, u);
+		if(strcmp(DasNode_subNameAt(pNode, u), sName) == 0) return DasNode_subStubAt(pNode, u);
 	return NULL;
 }
 
@@ -1002,7 +1002,7 @@ static DasSrc* pickSrc(DasCat* pCat, DasNode* pNode, const char* sAccept)
 	if(DasNode_isStreamSrc(pNode)) return new_DasSrc_node(pNode);
 
 	const char* aNames[MAX_KIDS];
-	size_t uKids = dassrc_loadable(pNode, aNames, MAX_KIDS);
+	size_t uKids = DasSrc_loadable(pNode, aNames, MAX_KIDS);
 	if(uKids == 0){
 		fprintf(stderr, PROG ": nothing under %s is a source this program can fetch from\n",
 		        DasNode_pathUri(pNode));
@@ -1056,7 +1056,7 @@ static void explainUnresolved(DasCat* pCat, const char* sPath)
 	/* The common mistake with a seed is asking for something it does not
 	   cover, say so instead of hunting for a parent */
 	if(!DasCat_covers(pCat, sFullUri)){
-		daslog_error_v("'%s' is outside the -r seed %s, use -m to mount it on the "
+		daslog_errorf("'%s' is outside the -r seed %s, use -m to mount it on the "
 		               "federated catalog instead", sFullUri, DasCat_prefix(pCat));
 		return;
 	}
@@ -1066,9 +1066,9 @@ static void explainUnresolved(DasCat* pCat, const char* sPath)
 	if((pNode == NULL)||(sRest == NULL)||(sRest[0] == '\0')){
 		/* A root seed has no URI, so the path to it is empty; name the file */
 		if((sFullUri[0] == '\0') && DasCat_hasSeed(pCat))
-			daslog_error_v("Couldn't load the seed %s", DasCat_seedUrl(pCat));
+			daslog_errorf("Couldn't load the seed %s", DasCat_seedUrl(pCat));
 		else
-			daslog_error_v("Couldn't resolve catalog path '%s'", sFullUri);
+			daslog_errorf("Couldn't resolve catalog path '%s'", sFullUri);
 		return;
 	}
 	const char* sParentUri = DasCat_lastUri(pCat);
@@ -1081,14 +1081,14 @@ static void explainUnresolved(DasCat* pCat, const char* sPath)
 	if(pSlash != NULL) *pSlash = '\0';
 
 	char sMsg[ERR_SZ];
-	size_t uKids = DasNode_subCount(pNode);
+	size_t uKids = DasNode_numSubs(pNode);
 	size_t n = 0;
 	bool bFound = false;
 	for(size_t u = 0; u < uKids; ++u){
-		const char* sName = DasNode_subName(pNode, u);
+		const char* sName = DasNode_subNameAt(pNode, u);
 		if(strieq(sName, sChild)){
-			const char* sType = jstr(DasNode_subStub(pNode, u), DASNODE_FRAG_TYPE);
-			if(DasNode_subType(pNode, u) == DASNODE_INV)
+			const char* sType = jstr(DasNode_subStubAt(pNode, u), DASNODE_FRAG_TYPE);
+			if(DasNode_subTypeAt(pNode, u) == DASNODETYPE_INV)
 				n = snprintf(sMsg, sizeof(sMsg), "'%s' under %s is a %s node, which " PROG
 				             " can list but not load or fetch from", sChild, sParentUri, sType ? sType : "?");
 			else
@@ -1102,9 +1102,9 @@ static void explainUnresolved(DasCat* pCat, const char* sPath)
 	if(uKids > 0){
 		n += snprintf(sMsg + n, sizeof(sMsg) - n, ".  Children:");
 		for(size_t u = 0; (u < uKids) && (n < sizeof(sMsg)); ++u)
-			n += snprintf(sMsg + n, sizeof(sMsg) - n, " %s", DasNode_subName(pNode, u));
+			n += snprintf(sMsg + n, sizeof(sMsg) - n, " %s", DasNode_subNameAt(pNode, u));
 	}
-	daslog_error_v("%s", sMsg);
+	daslog_errorf("%s", sMsg);
 }
 
 /* Everything main() owns.  The catalog frees its nodes, then the credential
@@ -1120,20 +1120,20 @@ static int finish(DasCat* pCat, int nRet)
 
 static int streamUrl(DasCat* pCat, const char* sUrl, float rTimeout)
 {
-	daslog_info_v("Requesting %s", sUrl);
+	daslog_infof("Requesting %s", sUrl);
 
 	DasHttpResp* pRes = new_DasHttpResp_get(
-		sUrl, DasCat_agent(pCat), DasCat_credMngr(pCat), rTimeout
+		sUrl, DasCat_agent(pCat), DasCat_credMgr(pCat), rTimeout
 	);
 	if(pRes == NULL) return RET_SERVER;   /* out of memory, already reported */
 
-	if(!DasHttpResp_ok(pRes)){
+	if(!DasHttpResp_isOk(pRes)){
 		int nCode = DasHttpResp_code(pRes);
 		int nRet = RET_SERVER;
 		if((nCode == 401)||(nCode == 403)) nRet = RET_AUTH;
 		else if(nCode == 400) nRet = RET_QUERY;
 		const char* sErr = DasHttpResp_error(pRes);
-		daslog_error_v("%s", sErr ? sErr : "Request failed");
+		daslog_errorf("%s", sErr ? sErr : "Request failed");
 		if(nCode == 400)
 			daslog_error("The server rejected the query.  Check the keys with '"
 			               PROG " node' or try the URL from '" PROG " url' in a browser");
@@ -1142,9 +1142,9 @@ static int streamUrl(DasCat* pCat, const char* sUrl, float rTimeout)
 	}
 
 	if(strcmp(DasHttpResp_url(pRes), sUrl) != 0)
-		daslog_info_v("Redirected to %s", DasHttpResp_url(pRes));
+		daslog_infof("Redirected to %s", DasHttpResp_url(pRes));
 	if(DasHttpResp_mime(pRes))
-		daslog_info_v("Content type %s", DasHttpResp_mime(pRes));
+		daslog_infof("Content type %s", DasHttpResp_mime(pRes));
 
 	DasXport* pBody = DasHttpResp_takeBody(pRes);
 	del_DasHttpResp(pRes);
@@ -1158,22 +1158,22 @@ static int streamUrl(DasCat* pCat, const char* sUrl, float rTimeout)
 	int nRet = RET_OK;
 	if(DasXport_copyTo(pBody, pOut, NULL, NULL, &nTotal) != DAS_OKAY){
 		if(DasXport_error(pOut) != NULL){
-			daslog_error_v("Writing output, %s", DasXport_error(pOut));
+			daslog_errorf("Writing output, %s", DasXport_error(pOut));
 			nRet = RET_WRITE;
 		}
 		else{
-			daslog_error_v("Reading %s, %s", sUrl, DasXport_error(pBody));
+			daslog_errorf("Reading %s, %s", sUrl, DasXport_error(pBody));
 			nRet = RET_SERVER;
 		}
 	}
 	if((DasXport_close(pOut) != DAS_OKAY) && (nRet == RET_OK)){
-		daslog_error_v("Writing output, %s", DasXport_error(pOut));
+		daslog_errorf("Writing output, %s", DasXport_error(pOut));
 		nRet = RET_WRITE;
 	}
 	del_DasXport(pOut);
 	del_DasXport(pBody);
 
-	daslog_info_v("%" PRId64 " bytes written", nTotal);
+	daslog_infof("%" PRId64 " bytes written", nTotal);
 	return nRet;
 }
 
@@ -1203,7 +1203,7 @@ static bool parseShow(const char* sList, unsigned* puShow)
 	strcpyz(sCopy, sList, sizeof(sCopy));
 	*puShow = 0;
 	for(char* pTok = strtok(sCopy, ","); pTok != NULL; pTok = strtok(NULL, ",")){
-		das_src_sec_e sec;
+		das_srcsec sec;
 		if(strieq(pTok, "all")) *puShow = SHOW_ALL;
 		else if(strieq(pTok, "examples")||strieq(pTok, "example")||strieq(pTok, "ex")) *puShow |= SHOW_EXAMPLES;
 		else if(secAlias(pTok, &sec)) *puShow |= (1u << sec);
@@ -1214,11 +1214,11 @@ static bool parseShow(const char* sList, unsigned* puShow)
 
 int main(int argc, char** argv)
 {
-	das_init(PROG, DASERR_DIS_EXIT, DASLOG_WARN, NULL);
-	daslog_showline(false);   /* messages here are for users, not debuggers */
+	daslib_init(PROG, DASERRDISP_EXIT, DASLOG_WARN, NULL);
+	daslog_showLine(false);   /* messages here are for users, not debuggers */
 
 	char sAgent[64];
-	snprintf(sAgent, sizeof(sAgent), PROG " (das2C %s)", das_lib_version());
+	snprintf(sAgent, sizeof(sAgent), PROG " (das2C %s)", daslib_version());
 	DasCat* pCat = NULL;   /* made once the arguments are in, see below */
 
 	const char* sCmd = NULL;
@@ -1242,11 +1242,11 @@ int main(int argc, char** argv)
 		const char* sArg = argv[i];
 		if((strcmp(sArg, "-h") == 0)||(strcmp(sArg, "--help") == 0)){ bHelp = true; continue; }
 		if((strcmp(sArg, "-V") == 0)||(strcmp(sArg, "--version") == 0)){
-			printf(PROG " (das2C %s)\n", das_lib_version());
+			printf(PROG " (das2C %s)\n", daslib_version());
 			return RET_OK;
 		}
-		if(strcmp(sArg, "-q") == 0){ daslog_setlevel(DASLOG_ERROR); bQuiet = true; continue; }
-		if(strcmp(sArg, "-v") == 0){ daslog_setlevel(DASLOG_INFO); g_bVerbose = true; g_uShow = SHOW_ALL; continue; }
+		if(strcmp(sArg, "-q") == 0){ daslog_setLevel(DASLOG_ERROR); bQuiet = true; continue; }
+		if(strcmp(sArg, "-v") == 0){ daslog_setLevel(DASLOG_INFO); g_bVerbose = true; g_uShow = SHOW_ALL; continue; }
 		if(strcmp(sArg, "-f") == 0){ bFresh = true; continue; }
 		if(strcmp(sArg, "--start") == 0) sArg = "-r";
 		if(strcmp(sArg, "--mount") == 0) sArg = "-m";
@@ -1278,8 +1278,8 @@ int main(int argc, char** argv)
 			case 'C': sCacheArg = sVal; break;
 			case 't': rTimeout = (float)atof(sVal); break;
 			case 'l':{
-				int nLvl = daslog_strlevel(sVal);
-				daslog_setlevel(nLvl);
+				int nLvl = daslog_levelFromStr(sVal);
+				daslog_setLevel(nLvl);
 				break;
 			}
 			case 'p':{
@@ -1311,11 +1311,11 @@ int main(int argc, char** argv)
 	/* Credentials: saved ones are tried before the terminal prompt.  The
 	   catalog owns the manager and hands it to every node and request. */
 	char sCredFile[256] = {'\0'};
-	snprintf(sCredFile, sizeof(sCredFile), "%s" DAS_DSEPS CRED_FILE, das_userdir());
-	DasCredMngr* pMgr = new_DasCredMngr();
-	DasCredMngr_setFileStore(pMgr, sCredFile);
-	DasCredMngr_load(pMgr);   /* no file yet is fine */
-	DasCredMngr_setPrompt(pMgr, das_term_prompt, NULL);
+	snprintf(sCredFile, sizeof(sCredFile), "%s" DASFS_SEPS CRED_FILE, dasfs_userDir());
+	DasCredMgr* pMgr = new_DasCredMgr();
+	DasCredMgr_setStore(pMgr, sCredFile);
+	DasCredMgr_load(pMgr);   /* no file yet is fine */
+	DasCredMgr_setPrompt(pMgr, DasCredMgr_termPrompt, NULL);
 	pCat = new_DasCat(pMgr, sAgent);
 
 	/* Environment fallbacks for -r and -m, for people who live in one test
@@ -1337,7 +1337,7 @@ int main(int argc, char** argv)
 
 	if(strcmp(sCmd, "seeds") == 0){
 		size_t uSeeds = 0;
-		const char** psSeeds = das_seed_urls(&uSeeds);
+		const char** psSeeds = DasNode_seedUrls(&uSeeds);
 		for(size_t u = 0; u < uSeeds; ++u) printf("%s\n", psSeeds[u]);
 		return finish(pCat, RET_OK);
 	}
@@ -1364,7 +1364,7 @@ int main(int argc, char** argv)
 	if((sCacheArg != NULL) && strieq(sCacheArg, "none"))
 		DasCat_setCache(pCat, NULL, 0);
 	else if(sCacheArg != NULL)
-		DasCat_setCache(pCat, sCacheArg, bFresh ? 0 : DASCAT_DEF_CACHE_SEC);
+		DasCat_setCache(pCat, sCacheArg, bFresh ? 0 : DASCAT_NODE_TTL_SEC);
 	else if(bFresh)
 		DasCat_setCache(pCat, DasCat_cacheDir(pCat), 0);
 
@@ -1376,7 +1376,7 @@ int main(int argc, char** argv)
 		char* pHash = strchr(sPathBuf, '#');
 		if(pHash != NULL){ *pHash = '\0'; sFrag = pHash + 1; }
 		/* "a/b/" means the same as "a/b", shell completion adds the slash */
-		if(!das_isUrlOrFile(sPathBuf)){
+		if(!DasCat_isNodeUrl(sPathBuf)){
 			size_t u = strlen(sPathBuf);
 			while((u > 1) && (sPathBuf[u-1] == '/') && (sPathBuf[u-2] != ':')) sPathBuf[--u] = '\0';
 		}
@@ -1394,13 +1394,13 @@ int main(int argc, char** argv)
 	int nRet = RET_OK;
 
 	if(bJson){
-		const DasJdo* pJdo = DasNode_getJdo(pNode, sFrag);
+		const DasJdo* pJdo = DasNode_jdo(pNode, sFrag);
 		if(pJdo == NULL){
-			daslog_error_v("Node has no element at '%s'", sFrag ? sFrag : "");
+			daslog_errorf("Node has no element at '%s'", sFrag ? sFrag : "");
 			nRet = RET_NODE;
 		}
 		else{
-			char* sPretty = (char*)DasJdo_writePretty(pJdo, "  ", "\n", NULL);
+			char* sPretty = (char*)DasJdo_newPrettyStr(pJdo, "  ", "\n", NULL);
 			if(sPretty){ fputs(sPretty, stdout); fputs("\n", stdout); free(sPretty); }
 		}
 		return finish(pCat, nRet);
@@ -1413,8 +1413,8 @@ int main(int argc, char** argv)
 			   default source and describe it under the container's URI.  The
 			   container listing itself only matters once more than one source
 			   type can be fetched from, so it is verbose only for now. */
-			das_node_type_e nType = DasNode_type(pNode);
-			bool bSrcSet = (nType == DASNODE_SRCSET)||(nType == DASNODE_COLLECTION);
+			das_nodetype nType = DasNode_type(pNode);
+			bool bSrcSet = (nType == DASNODETYPE_SRCSET)||(nType == DASNODETYPE_COLLECTION);
 			if(!bSrcSet || g_bVerbose) listCatalog(pNode, stdout, sShow);
 
 			if(bSrcSet){
@@ -1458,7 +1458,7 @@ int main(int argc, char** argv)
 			}
 		}
 		else{
-			const char* sType = jstr(DasNode_getJdo(pNode, NULL), DASNODE_FRAG_TYPE);
+			const char* sType = jstr(DasNode_jdo(pNode, NULL), DASNODE_FRAG_TYPE);
 			printf("%s:  %s\n%-10s%s\n", sType ? sType : "Node",
 			       DasNode_label(pNode) ? DasNode_label(pNode) : "", "URI:", sShow);
 			if(g_bVerbose) printf("From:     %s\n", DasNode_srcUrl(pNode));
@@ -1487,7 +1487,7 @@ int main(int argc, char** argv)
 				            ((uLen == 8) && (strncmp(sArg, "examples", 8) == 0));
 				if(bSec){
 					if(!isDigits(pDot + 1)){
-						daslog_error_v("Examples are numbered, there is no '%s'", sArg);
+						daslog_errorf("Examples are numbered, there is no '%s'", sArg);
 						del_DasSrc(pSrc);
 						return finish(pCat, RET_QUERY);
 					}
@@ -1502,15 +1502,15 @@ int main(int argc, char** argv)
 
 	/* Nothing asked for at all: run the first example so there is always a
 	   quick way to see a source work, and say so */
-	if((nExample < 0) && (uKeyVals == 0) && (uRaw == 0) && (DasSrc_exampleCount(pSrc) > 0)){
+	if((nExample < 0) && (uKeyVals == 0) && (uRaw == 0) && (DasSrc_numExamples(pSrc) > 0)){
 		nExample = 0;
 		if(!bQuiet)
-			fprintf(stderr, PROG ": no query given, using example 0, \"%s\"\n", DasSrc_exampleLabel(pSrc, 0));
+			fprintf(stderr, PROG ": no query given, using example 0, \"%s\"\n", DasSrc_exampleLblAt(pSrc, 0));
 	}
 
 	/* Order matters: the example is the base, explicit keys override it, and
 	   -p raw parameters have the last word when the URL is built. */
-	DasReq* pReq = DasSrc_newReq(pSrc, nExample);
+	DasReq* pReq = new_DasReq_src(pSrc, nExample);
 	if(pReq == NULL){
 		del_DasSrc(pSrc);
 		return finish(pCat, RET_QUERY);
@@ -1546,7 +1546,7 @@ int main(int argc, char** argv)
 	   words here.  Too small a buffer is the one case that is ours. */
 	char sUrl[URL_SZ];
 	if(bUrl){
-		size_t uNeed = DasStreamSrc_url(pSrc, pReq, 0, sUrl, sizeof(sUrl));
+		size_t uNeed = DasSrc_reqUrl(pSrc, pReq, 0, sUrl, sizeof(sUrl));
 		if(uNeed == 0) nRet = RET_QUERY;
 		else if(uNeed >= sizeof(sUrl)){ daslog_error("Query URL too long"); nRet = RET_QUERY; }
 		else printf("%s\n", sUrl);
@@ -1559,19 +1559,19 @@ int main(int argc, char** argv)
 	   answers with an error is an answer, only connection failures move on.
 	   Base 0 is always asked for, so a source with no base URLs at all is
 	   reported by the library like any other unusable one. */
-	size_t uBases = DasStreamSrc_urlCount(pSrc);
+	size_t uBases = DasSrc_numBaseUrls(pSrc);
 	for(size_t u = 0; ; ++u){
-		size_t uNeed = DasStreamSrc_url(pSrc, pReq, u, sUrl, sizeof(sUrl));
+		size_t uNeed = DasSrc_reqUrl(pSrc, pReq, u, sUrl, sizeof(sUrl));
 		if(uNeed == 0){ nRet = RET_QUERY; break; }
 		if(uNeed >= sizeof(sUrl)){ daslog_error("Query URL too long"); nRet = RET_QUERY; break; }
 		nRet = streamUrl(pCat, sUrl, rTimeout);
 		if((nRet != RET_SERVER)||(u + 1 >= uBases)) break;
-		daslog_warn_v("Trying alternate server %s", DasStreamSrc_baseUrl(pSrc, u + 1));
+		daslog_warnf("Trying alternate server %s", DasSrc_baseUrlAt(pSrc, u + 1));
 	}
 
 	del_DasReq(pReq);
 	del_DasSrc(pSrc);
 	finish(pCat, nRet);
-	das_finish();
+	daslib_finish();
 	return nRet;
 }

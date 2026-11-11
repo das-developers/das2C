@@ -129,8 +129,8 @@ void prnHelp(FILE* pFile){
 
 /* ************************************************************************* */
 void prnTime(double dTime){
-	das_time dt;
-	dt_emitt(&dt, dTime);
+	DasTime dt;
+	DasTime_fromSec1958(&dt, dTime);
 		
 	printf("%04d-%02d-%02dT%02d:%02d:%06.3fZ", dt.year, dt.month, dt.mday,
 			       dt.hour, dt.minute, dt.second);
@@ -138,10 +138,10 @@ void prnTime(double dTime){
 
 
 /* ************************************************************************* */
-int prnFloats(const das_time* dtBeg, int nItems, char* sTestBuf)
+int prnFloats(const DasTime* dtBeg, int nItems, char* sTestBuf)
 {
 	
-	double dBeg = dt_ttime(dtBeg);
+	double dBeg = DasTime_toSec1958(dtBeg);
 		
 	unsigned char* sBuf = (unsigned char*)calloc((nItems+1) * sizeof(float), 1);
 	float*         fBuf = (float*)calloc(nItems+1, sizeof(float));
@@ -152,13 +152,13 @@ int prnFloats(const das_time* dtBeg, int nItems, char* sTestBuf)
 	memcpy(sBuf, sTestBuf, 8);
 	size_t uOffset = 2*sizeof(float);
 	int nFlts2Read = (nItems + 1) - 2;
-	das_time dt = {0};
+	DasTime dt = {0};
 	int i = 0;
 	while(fread(sBuf+uOffset, sizeof(float), nFlts2Read, stdin) >= nFlts2Read){
 	 
 		for(i = 0; i<nItems+1; ++i) fBuf[i] = make_float(sBuf + i*sizeof(float));
 	  
-		dt_emitt(&dt, dBeg + fBuf[0]);
+		DasTime_fromSec1958(&dt, dBeg + fBuf[0]);
 		
 		printf("%04d-%02d-%02dT%02d:%02d:%06.3fZ", dt.year, dt.month, dt.mday,
 		      dt.hour, dt.minute, dt.second);
@@ -174,9 +174,9 @@ int prnFloats(const das_time* dtBeg, int nItems, char* sTestBuf)
 }
 
 /* ************************************************************************* */
-int prnPackets(const das_time* dtBeg, char* sFirstHdr, bool bXYZ)
+int prnPackets(const DasTime* dtBeg, char* sFirstHdr, bool bXYZ)
 {
-	double dBeg = dt_ttime(dtBeg);
+	double dBeg = DasTime_toSec1958(dtBeg);
 	
 	size_t u;
 	char sHdr[16] = {0};
@@ -201,7 +201,7 @@ int prnPackets(const das_time* dtBeg, char* sFirstHdr, bool bXYZ)
 	int nPkt = 1;	
 	while(true){
 		
-		if(!das_strn2baseint(sHdr + 4, 4, 16, &nBytes)){
+		if(!dasstr_toBaseIntN(sHdr + 4, 4, 16, &nBytes)){
 			fprintf(stderr, "ERROR: In packet %d, can't parse byte length "
 			        "from %4s\n", nPkt, sHdr + 4);
 			return 100;
@@ -348,7 +348,7 @@ int main (int argc, char *argv[])
 {
 	int i;
 	int nItems = 0;
-	das_time dtBeg = {0};
+	DasTime dtBeg = {0};
 	char sTestBuf[24] = {'\0'}; 
 	bool bHasPkts = false;
 	bool bXYZ = false;
@@ -385,7 +385,7 @@ int main (int argc, char *argv[])
 		}
 		
 		if(dtBeg.year == 0){
-			if(!dt_parsetime(&dtBeg, argv[i])){ 
+			if(!DasTime_fromStr(&dtBeg, argv[i])){ 
 				fprintf(stderr, "Couldn't parse %s as a date-time\n", argv[i]);
 				return 13;
 			}

@@ -29,7 +29,7 @@
 #include "oob_p.h"
 #include "util_p.h"
 
-/* Maps das_except_e enum values to wire type strings, indexed [version][das_except_e].
+/* Maps das_excepttype enum values to wire type strings, indexed [version][das_excepttype].
  * version 0 = das2.2, version 1 = das3.0
  * Column order mirrors the enum: UNKNOWN, NO_DATA, SERVER_ERR, QUERY_ERR
  */
@@ -38,29 +38,29 @@ static const char* g_aExceptTypes[2][4] = {
 	{"Unknown", "NoMatchingData",   "ServerError", "QueryError"}
 };
 
-const char* das_except_toStr(das_except_e nType, int nDasVer)
+const char* dasexcepttype_name(das_excepttype nType, int nDasVer)
 {
-	if((nType < DAS_EX_UNKNOWN)||(nType > DAS_EX_QUERY_ERR)) return NULL;
+	if((nType < DASEXCEPTTYPE_UNKNOWN)||(nType > DASEXCEPTTYPE_QUERY_ERR)) return NULL;
 	if((nDasVer < 2)||(nDasVer > 3)) return NULL;
 	return g_aExceptTypes[nDasVer - 2][nType];
 }
 
 /* Search both version rows, see the header for why that is safe */
-das_except_e das_except_fromStr(const char* sType)
+das_excepttype dasexcepttype_id(const char* sType)
 {
-	if(sType == NULL) return DAS_EX_UNKNOWN;
+	if(sType == NULL) return DASEXCEPTTYPE_UNKNOWN;
 	for(int iType = 0; iType < 4; ++iType)
 		for(int iVer = 0; iVer < 2; ++iVer)
 			if(strcmp(sType, g_aExceptTypes[iVer][iType]) == 0)
-				return (das_except_e)iType;
-	return DAS_EX_UNKNOWN;
+				return (das_excepttype)iType;
+	return DASEXCEPTTYPE_UNKNOWN;
 }
 
 /* An nType outside the enum, cast in by a caller of new_DasExcept(), writes
    as Unknown rather than reading past the table */
 static const char* _except_wireType(const DasExcept* pThis, int nDasVer)
 {
-	const char* sType = das_except_toStr(pThis->nType, nDasVer);
+	const char* sType = dasexcepttype_name(pThis->nType, nDasVer);
 	return (sType == NULL) ? "Unknown" : sType;
 }
 
@@ -70,7 +70,7 @@ static const char* _except_wireType(const DasExcept* pThis, int nDasVer)
 void init_DasExcept(DasExcept* pThis)
 {
 	pThis->base.pkttype = OOB_EXCEPT;
-	pThis->nType = DAS_EX_UNKNOWN;
+	pThis->nType = DASEXCEPTTYPE_UNKNOWN;
 	pThis->uMsgLen = 1024;
 	pThis->sMsg = (char*)calloc(pThis->uMsgLen, sizeof(char));
 }
@@ -81,7 +81,7 @@ void fini_DasExcept(DasExcept* pThis)
 	pThis->sMsg = NULL; pThis->uMsgLen = 0;
 }
 
-DasExcept* new_DasExcept(das_except_e nType, const char* sMsg)
+DasExcept* new_DasExcept(das_excepttype nType, const char* sMsg)
 {
 	if(sMsg == NULL) sMsg = "";
 
@@ -106,9 +106,9 @@ void del_DasExcept(DasExcept* pThis)
 	free(pThis);
 }
 
-das_except_e DasExcept_type(const DasExcept* pThis){ return pThis->nType; }
+das_excepttype DasExcept_type(const DasExcept* pThis){ return pThis->nType; }
 
-const char* DasExcept_typeStr(const DasExcept* pThis)
+const char* DasExcept_typeStr3(const DasExcept* pThis)
 {
 	return _except_wireType(pThis, 3);
 }
@@ -144,7 +144,7 @@ static void _OobExcept_start(void *data, const char *el, const char **attr){
 	}
 
 	/* Same object for every exception in a stream, see _OobComment_start */
-	pThis->nType = DAS_EX_UNKNOWN;
+	pThis->nType = DASEXCEPTTYPE_UNKNOWN;
 	if(pThis->sMsg != NULL) pThis->sMsg[0] = '\0';
 
 	for(i = 0; attr[i]; i += 2){
@@ -154,7 +154,7 @@ static void _OobExcept_start(void *data, const char *el, const char **attr){
 			continue;
 		}
 		if(strcmp(attr[i], "type") == 0){
-			pThis->nType = das_except_fromStr(attr[i+1]);
+			pThis->nType = dasexcepttype_id(attr[i+1]);
 			continue;
 		}
 		/* das3.0 permits arbitrary extra attributes; skip silently */
@@ -190,7 +190,7 @@ das_errcode OobExcept_decode(DasExcept* se, DasBuf* pBuf)
 
 	XML_Parser p = XML_ParserCreate("UTF-8");
 	if(!p)
-		return das_error(20, "couldn't create xml parser\n");
+		return daserrf(20, "couldn't create xml parser\n");
 	XML_SetUserData(p, (void*)&stack);
 	XML_SetElementHandler(p, _OobExcept_start, _OobExcept_end);
 	XML_SetCharacterDataHandler(p, _OobExcept_chardata);
@@ -200,7 +200,7 @@ das_errcode OobExcept_decode(DasExcept* se, DasBuf* pBuf)
 	int nParRet = XML_Parse(p, sXml, (int)uXml, 1);
 	if(!nParRet){
 		/* Report before the free, the offset and code live in the parser */
-		das_errcode nRet = das_error(20, "Parse error at offset %ld:\n%s\n",
+		das_errcode nRet = daserrf(20, "Parse error at offset %ld:\n%s\n",
 			XML_GetCurrentByteIndex(p), XML_ErrorString(XML_GetErrorCode(p)));
 		XML_ParserFree(p);
 		return nRet;
@@ -208,7 +208,7 @@ das_errcode OobExcept_decode(DasExcept* se, DasBuf* pBuf)
 	XML_ParserFree(p);
 
 	if(stack.errorCode != 0)
-		return das_error_str(stack.errorCode, stack.errorMessage);
+		return daserr(stack.errorCode, stack.errorMessage);
 
 	return DAS_OKAY;
 }
@@ -244,17 +244,17 @@ static const char* _xml_escape_val(
 ){
 	*ppAlloc = NULL;
 	if(strlen(src) < 128){
-		das_xml_escape(src, stk, 256);
+		dasxml_escape(src, stk, 256);
 		return stk;
 	}
 	size_t uSz = strlen(src) * 6 + 2;
 	*ppAlloc = malloc(uSz);
 	if(!*ppAlloc){
 		/* malloc failed: encode into stack buffer, value will be truncated */
-		das_xml_escape(src, stk, 256);
+		dasxml_escape(src, stk, 256);
 		return stk;
 	}
-	das_xml_escape(src, *ppAlloc, uSz);
+	dasxml_escape(src, *ppAlloc, uSz);
 	return *ppAlloc;
 }
 
@@ -358,7 +358,7 @@ das_errcode DasComment_set(DasComment* pThis, const char* sName, const char* sVa
 	size_t* puLen = NULL;
 	char** psSlot = _DasComment_slot(pThis, sName, &puLen);
 	if(psSlot == NULL)
-		return das_error(DASERR_OOB,
+		return daserrf(DASERR_OOB,
 			"Unknown comment value name '%s', expected type, source or value",
 			sName ? sName : "(null)"
 		);
@@ -453,7 +453,7 @@ das_errcode OobComment_decode(DasComment* pSc, DasBuf* pBuf)
 
 	XML_Parser p = XML_ParserCreate("UTF-8");
 	if(!p)
-		return das_error(20, "couldn't create xml parser\n");
+		return daserrf(20, "couldn't create xml parser\n");
 	XML_SetUserData(p, &stack);
 	XML_SetElementHandler(p, _OobComment_start, _OobComment_end);
 	XML_SetCharacterDataHandler(p, _OobComment_chardata);
@@ -463,7 +463,7 @@ das_errcode OobComment_decode(DasComment* pSc, DasBuf* pBuf)
 	int nParRet = XML_Parse(p, sXml, (int)uXml, 1);
 	if(!nParRet){
 		/* Report before the free, the offset and code live in the parser */
-		das_errcode nRet = das_error(20, "Parse error at offset %ld:\n%s\n",
+		das_errcode nRet = daserrf(20, "Parse error at offset %ld:\n%s\n",
 			XML_GetCurrentByteIndex(p), XML_ErrorString(XML_GetErrorCode(p)));
 		XML_ParserFree(p);
 		return nRet;
@@ -471,7 +471,7 @@ das_errcode OobComment_decode(DasComment* pSc, DasBuf* pBuf)
 	XML_ParserFree(p);
 
 	if(stack.errorCode != 0)
-		return das_error_str(stack.errorCode, stack.errorMessage);
+		return daserr(stack.errorCode, stack.errorMessage);
 
 	return DAS_OKAY;
 }
@@ -486,7 +486,7 @@ das_errcode OobComment_encode(const DasComment* pSc, DasBuf* pBuf)
 	const char* sType = _stomp_xml_attr(DasComment_get(pSc, "type"), sTypeStk, &pTypeAlloc);
 	const char* sSrc  = _stomp_xml_attr(DasComment_get(pSc, "source"), sSrcStk, &pSrcAlloc);
 	if((sType == NULL)||(sSrc == NULL)){
-		nRet = das_error(DASERR_OOB, "Couldn't allocate comment attribute space");
+		nRet = daserrf(DASERR_OOB, "Couldn't allocate comment attribute space");
 		goto cleanup;
 	}
 
@@ -526,7 +526,7 @@ das_errcode OobComment_encode3(const DasComment* pSc, DasBuf* pBuf)
 	const char* sType = _stomp_xml_attr(DasComment_get(pSc, "type"), sTypeStk, &pTypeAlloc);
 	const char* sSrc  = _stomp_xml_attr(DasComment_get(pSc, "source"), sSrcStk, &pSrcAlloc);
 	if((sType == NULL)||(sSrc == NULL)){
-		nRet = das_error(DASERR_OOB, "Couldn't allocate comment attribute space");
+		nRet = daserrf(DASERR_OOB, "Couldn't allocate comment attribute space");
 		goto cleanup;
 	}
 
@@ -549,25 +549,25 @@ cleanup:
 /* Generic XX packet parser */
 das_errcode OutOfBand_decode(DasBuf* pBuf, OutOfBand** ppObjs, int* which)
 {
-	char sName[DAS_XML_NODE_NAME_LEN] = {'\0'};
+	char sName[DASXML_NAME_LEN] = {'\0'};
 
 	/* Eat the whitespace on either end */
 	DasBuf_strip(pBuf);
 
 	if(DasBuf_unread(pBuf) == 0)
-		return das_error(19, "Empty out-of-Band packet in Stream");
+		return daserrf(19, "Empty out-of-Band packet in Stream");
 
 	size_t uPos = DasBuf_readOffset(pBuf);
 	char b;
 	if(DasBuf_read(pBuf, &b, 1) < 1)
-		return das_error(19, "%s: Error reading out-of-band packet", __func__);
+		return daserrf(19, "%s: Error reading out-of-band packet", __func__);
 
 	if(b != '<')
-		return das_error(19, "found \"%c\", expected \"<\"", b);
+		return daserrf(19, "found \"%c\", expected \"<\"", b);
 
 	int i = 0;
 	while(DasBuf_read(pBuf, &b, 1) == 1     &&
-	      i < (DAS_XML_NODE_NAME_LEN - 1) &&
+	      i < (DASXML_NAME_LEN - 1) &&
 	      !isspace((unsigned char)b) && b != '\0' && b != '>' && b != '/'){
 		sName[i] = b;
 		i++;

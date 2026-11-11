@@ -34,7 +34,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdbool.h>
-#include <string.h>  /* Only needed for DasJdo_get, could do manually */
+#include <string.h>  /* Only needed for DasJdo_subtree, could do manually */
 #include <ctype.h>
 
 #include "util.h"
@@ -231,10 +231,10 @@ static int json_skip_all_skippables(struct json_parse_state_s *state) {
   int did_consume = 0;
   const size_t size = state->size;
 
-  if (das_jparse_flags_allow_c_style_comments & state->flags_bitset) {
+  if (DASJPARSE_ALLOW_C_STYLE_COMMENTS & state->flags_bitset) {
     do {
       if (state->offset == size) {
-        state->error = das_jparse_error_premature_end_of_buffer;
+        state->error = DASJPARSEERR_PREMATURE_END_OF_BUFFER;
         return 1;
       }
 
@@ -242,7 +242,7 @@ static int json_skip_all_skippables(struct json_parse_state_s *state) {
 
       // This should really be checked on access, not in front of every call
       if (state->offset == size) {
-        state->error = das_jparse_error_premature_end_of_buffer;
+        state->error = DASJPARSEERR_PREMATURE_END_OF_BUFFER;
         return 1;
       }
 
@@ -251,7 +251,7 @@ static int json_skip_all_skippables(struct json_parse_state_s *state) {
   } else {
     do {
       if (state->offset == size) {
-        state->error = das_jparse_error_premature_end_of_buffer;
+        state->error = DASJPARSEERR_PREMATURE_END_OF_BUFFER;
         return 1;
       }
 
@@ -260,7 +260,7 @@ static int json_skip_all_skippables(struct json_parse_state_s *state) {
   }
 
   if (state->offset == size) {
-    state->error = das_jparse_error_premature_end_of_buffer;
+    state->error = DASJPARSEERR_PREMATURE_END_OF_BUFFER;
     return 1;
   }
 
@@ -281,18 +281,18 @@ static int json_get_string_size(struct json_parse_state_s *state,
   const size_t flags_bitset = state->flags_bitset;
   unsigned long codepoint;
 
-  if ((das_jparse_flags_allow_location_information & flags_bitset) != 0 &&
+  if ((DASJPARSE_ALLOW_LOCATION_INFORMATION & flags_bitset) != 0 &&
       is_key != 0) {
-    state->dom_size += sizeof(struct das_json_str_ex_s);
+    state->dom_size += sizeof(struct das_jsonstrex_t);
   } else {
-    state->dom_size += sizeof(struct das_json_str_s);
+    state->dom_size += sizeof(struct das_jsonstr_t);
   }
 
   if ('"' != src[offset]) {
     // if we are allowed single quoted strings check for that too
-    if (!((das_jparse_flags_allow_single_quoted_strings & flags_bitset) &&
+    if (!((DASJPARSE_ALLOW_SINGLE_QUOTED_STRINGS & flags_bitset) &&
           is_single_quote)) {
-      state->error = das_jparse_error_expected_opening_quote;
+      state->error = DASJPARSEERR_EXPECTED_OPENING_QUOTE;
       state->offset = offset;
       return 1;
     }
@@ -310,14 +310,14 @@ static int json_get_string_size(struct json_parse_state_s *state,
       offset++;
 
       if (offset == size) {
-        state->error = das_jparse_error_premature_end_of_buffer;
+        state->error = DASJPARSEERR_PREMATURE_END_OF_BUFFER;
         state->offset = offset;
         return 1;
       }
 
       switch (src[offset]) {
       default:
-        state->error = das_jparse_error_invalid_string_escape_sequence;
+        state->error = DASJPARSEERR_INVALID_STRING_ESCAPE_SEQUENCE;
         state->offset = offset;
         return 1;
       case '"':
@@ -334,7 +334,7 @@ static int json_get_string_size(struct json_parse_state_s *state,
       case 'u':
         if (!(offset + 5 < size)) {
           // invalid escaped unicode sequence!
-          state->error = das_jparse_error_invalid_string_escape_sequence;
+          state->error = DASJPARSEERR_INVALID_STRING_ESCAPE_SEQUENCE;
           state->offset = offset;
           return 1;
         }
@@ -342,7 +342,7 @@ static int json_get_string_size(struct json_parse_state_s *state,
         codepoint = 0;
         if (!json_hexadecimal_value(&src[offset + 1], 4, &codepoint)) {
           // escaped unicode sequences must contain 4 hexadecimal digits!
-          state->error = das_jparse_error_invalid_string_escape_sequence;
+          state->error = DASJPARSEERR_INVALID_STRING_ESCAPE_SEQUENCE;
           state->offset = offset;
           return 1;
         }
@@ -364,7 +364,7 @@ static int json_get_string_size(struct json_parse_state_s *state,
           data_size += 2;
         }
         else if (codepoint >= 0xd800 && codepoint <= 0xdfff) {
-          state->error = das_jparse_error_invalid_string_escape_sequence;
+          state->error = DASJPARSEERR_INVALID_STRING_ESCAPE_SEQUENCE;
           state->offset = offset;
           return 1;
         }
@@ -377,9 +377,9 @@ static int json_get_string_size(struct json_parse_state_s *state,
         break;
       }
     } else if (('\r' == src[offset]) || ('\n' == src[offset])) {
-      if (!(das_jparse_flags_allow_multi_line_strings & flags_bitset)) {
+      if (!(DASJPARSE_ALLOW_MULTI_LINE_STRINGS & flags_bitset)) {
         // invalid escaped unicode sequence!
-        state->error = das_jparse_error_invalid_string_escape_sequence;
+        state->error = DASJPARSEERR_INVALID_STRING_ESCAPE_SEQUENCE;
         state->offset = offset;
         return 1;
       }
@@ -414,7 +414,7 @@ static int is_valid_unquoted_key_char(const char c) {
 static int json_get_key_size(struct json_parse_state_s *state) {
   const size_t flags_bitset = state->flags_bitset;
 
-  if (das_jparse_flags_allow_unquoted_keys & flags_bitset) {
+  if (DASJPARSE_ALLOW_UNQUOTED_KEYS & flags_bitset) {
     size_t offset = state->offset;
     const size_t size = state->size;
     const char *const src = state->src;
@@ -424,7 +424,7 @@ static int json_get_key_size(struct json_parse_state_s *state) {
     if ('"' == src[offset]) {
       // ... if we got a comma, just parse the key as a string as normal
       return json_get_string_size(state, 1);
-    } else if ((das_jparse_flags_allow_single_quoted_strings & flags_bitset) &&
+    } else if ((DASJPARSE_ALLOW_SINGLE_QUOTED_STRINGS & flags_bitset) &&
                ('\'' == src[offset])) {
       // ... if we got a comma, just parse the key as a string as normal
       return json_get_string_size(state, 1);
@@ -437,10 +437,10 @@ static int json_get_key_size(struct json_parse_state_s *state) {
       // one more byte for null terminator ending the string!
       data_size++;
 
-      if (das_jparse_flags_allow_location_information & flags_bitset) {
-        state->dom_size += sizeof(struct das_json_str_ex_s);
+      if (DASJPARSE_ALLOW_LOCATION_INFORMATION & flags_bitset) {
+        state->dom_size += sizeof(struct das_jsonstrex_t);
       } else {
-        state->dom_size += sizeof(struct das_json_str_s);
+        state->dom_size += sizeof(struct das_jsonstr_t);
       }
 
       // update offset
@@ -476,7 +476,7 @@ static int json_get_object_size(struct json_parse_state_s *state,
 
   if (!is_global_object) {
     if ('{' != src[state->offset]) {
-      state->error = das_jparse_error_unknown;
+      state->error = DASJPARSEERR_UNKNOWN;
       return 1;
     }
 
@@ -484,12 +484,12 @@ static int json_get_object_size(struct json_parse_state_s *state,
     state->offset++;
   }
 
-  state->dom_size += sizeof(struct das_json_dict_s);
+  state->dom_size += sizeof(struct das_jsondict_t);
 
   while (state->offset < size) {
     if (!is_global_object) {
       if (json_skip_all_skippables(state)) {
-        state->error = das_jparse_error_premature_end_of_buffer;
+        state->error = DASJPARSEERR_PREMATURE_END_OF_BUFFER;
         return 1;
       }
       if ('}' == src[state->offset]) {
@@ -513,20 +513,20 @@ static int json_get_object_size(struct json_parse_state_s *state,
         // skip comma
         state->offset++;
         allow_comma = 0;
-      } else if (das_jparse_flags_allow_no_commas & flags_bitset) {
+      } else if (DASJPARSE_ALLOW_NO_COMMAS & flags_bitset) {
         // we don't require a comma, and we didn't find one, which is ok!
         allow_comma = 0;
       } else {
         // otherwise we are required to have a comma, and we found none
-        state->error = das_jparse_error_expected_comma_or_closing_bracket;
+        state->error = DASJPARSEERR_EXPECTED_COMMA_OR_CLOSING_BRACKET;
         return 1;
       }
 
-      if (das_jparse_flags_allow_trailing_comma & flags_bitset) {
+      if (DASJPARSE_ALLOW_TRAILING_COMMA & flags_bitset) {
         continue;
       } else {
         if (json_skip_all_skippables(state)) {
-          state->error = das_jparse_error_premature_end_of_buffer;
+          state->error = DASJPARSEERR_PREMATURE_END_OF_BUFFER;
           return 1;
         }
       }
@@ -534,24 +534,24 @@ static int json_get_object_size(struct json_parse_state_s *state,
 
     if (json_get_key_size(state)) {
       // key parsing failed!
-      state->error = das_jparse_error_invalid_string;
+      state->error = DASJPARSEERR_INVALID_STRING;
       return 1;
     }
 
     if (json_skip_all_skippables(state)) {
-      state->error = das_jparse_error_premature_end_of_buffer;
+      state->error = DASJPARSEERR_PREMATURE_END_OF_BUFFER;
       return 1;
     }
 
-    if (das_jparse_flags_allow_equals_in_object & flags_bitset) {
+    if (DASJPARSE_ALLOW_EQUALS_IN_OBJECT & flags_bitset) {
       const char current = src[state->offset];
       if ((':' != current) && ('=' != current)) {
-        state->error = das_jparse_error_expected_colon;
+        state->error = DASJPARSEERR_EXPECTED_COLON;
         return 1;
       }
     } else {
       if (':' != src[state->offset]) {
-        state->error = das_jparse_error_expected_colon;
+        state->error = DASJPARSEERR_EXPECTED_COLON;
         return 1;
       }
     }
@@ -560,7 +560,7 @@ static int json_get_object_size(struct json_parse_state_s *state,
     state->offset++;
 
     if (json_skip_all_skippables(state)) {
-      state->error = das_jparse_error_premature_end_of_buffer;
+      state->error = DASJPARSEERR_PREMATURE_END_OF_BUFFER;
       return 1;
     }
 
@@ -574,7 +574,7 @@ static int json_get_object_size(struct json_parse_state_s *state,
     allow_comma = 1;
   }
 
-  state->dom_size += sizeof(struct das_json_dict_el_s) * elements;
+  state->dom_size += sizeof(struct das_jsondictel_t) * elements;
 
   return 0;
 }
@@ -588,18 +588,18 @@ static int json_get_array_size(struct json_parse_state_s *state) {
 
   if ('[' != src[state->offset]) {
     // expected array to begin with leading '['
-    state->error = das_jparse_error_unknown;
+    state->error = DASJPARSEERR_UNKNOWN;
     return 1;
   }
 
   // skip leading '['
   state->offset++;
 
-  state->dom_size += sizeof(struct das_json_ary_s);
+  state->dom_size += sizeof(struct das_jsonary_t);
 
   while (state->offset < size) {
     if (json_skip_all_skippables(state)) {
-      state->error = das_jparse_error_premature_end_of_buffer;
+      state->error = DASJPARSEERR_PREMATURE_END_OF_BUFFER;
       return 1;
     }
 
@@ -607,7 +607,7 @@ static int json_get_array_size(struct json_parse_state_s *state) {
       // skip trailing ']'
       state->offset++;
 
-      state->dom_size += sizeof(struct das_json_ary_el_s) * elements;
+      state->dom_size += sizeof(struct das_jsonaryel_t) * elements;
 
       // finished the object!
       return 0;
@@ -619,17 +619,17 @@ static int json_get_array_size(struct json_parse_state_s *state) {
         // skip comma
         state->offset++;
         allow_comma = 0;
-      } else if (!(das_jparse_flags_allow_no_commas & flags_bitset)) {
-        state->error = das_jparse_error_expected_comma_or_closing_bracket;
+      } else if (!(DASJPARSE_ALLOW_NO_COMMAS & flags_bitset)) {
+        state->error = DASJPARSEERR_EXPECTED_COMMA_OR_CLOSING_BRACKET;
         return 1;
       }
 
-      if (das_jparse_flags_allow_trailing_comma & flags_bitset) {
+      if (DASJPARSE_ALLOW_TRAILING_COMMA & flags_bitset) {
         allow_comma = 0;
         continue;
       } else {
         if (json_skip_all_skippables(state)) {
-          state->error = das_jparse_error_premature_end_of_buffer;
+          state->error = DASJPARSEERR_PREMATURE_END_OF_BUFFER;
           return 1;
         }
       }
@@ -646,7 +646,7 @@ static int json_get_array_size(struct json_parse_state_s *state) {
   }
 
   // we consumed the entire input before finding the closing ']' of the array!
-  state->error = das_jparse_error_premature_end_of_buffer;
+  state->error = DASJPARSEERR_PREMATURE_END_OF_BUFFER;
   return 1;
 }
 
@@ -661,9 +661,9 @@ static int json_get_number_size(struct json_parse_state_s *state) {
   int had_leading_digits = 0;
   const char *const src = state->src;
 
-  state->dom_size += sizeof(struct das_json_num_s);
+  state->dom_size += sizeof(struct das_jsonnum_t);
 
-  if ((das_jparse_flags_allow_hexadecimal_numbers & flags_bitset) &&
+  if ((DASJPARSE_ALLOW_HEXADECIMAL_NUMBERS & flags_bitset) &&
       (offset + 1 < size) && ('0' == src[offset]) &&
       (('x' == src[offset + 1]) || ('X' == src[offset + 1]))) {
     // skip the leading 0x that identifies a hexadecimal number
@@ -681,7 +681,7 @@ static int json_get_number_size(struct json_parse_state_s *state) {
 
     if ((offset < size) &&
         (('-' == src[offset]) ||
-         ((das_jparse_flags_allow_leading_plus_sign & flags_bitset) &&
+         ((DASJPARSE_ALLOW_LEADING_PLUS_SIGN & flags_bitset) &&
           ('+' == src[offset])))) {
       // skip valid leading '-' or '+'
       offset++;
@@ -689,7 +689,7 @@ static int json_get_number_size(struct json_parse_state_s *state) {
       found_sign = 1;
     }
 
-    if (das_jparse_flags_allow_inf_and_nan & flags_bitset) {
+    if (DASJPARSE_ALLOW_INF_AND_NAN & flags_bitset) {
       const char inf[9] = "Infinity";
       const size_t inf_strlen = sizeof(inf) - 1;
       const char nan[4] = "NaN";
@@ -735,11 +735,11 @@ static int json_get_number_size(struct json_parse_state_s *state) {
     if (found_sign && !inf_or_nan && (offset < size) &&
         !('0' <= src[offset] && src[offset] <= '9')) {
       // check if we are allowing leading '.'
-      if (!(das_jparse_flags_allow_leading_or_trailing_decimal_point &
+      if (!(DASJPARSE_ALLOW_LEADING_OR_TRAILING_DECIMAL_POINT &
             flags_bitset) ||
           ('.' != src[offset])) {
         // a leading '-' must be immediately followed by any digit!
-        state->error = das_jparse_error_invalid_number_format;
+        state->error = DASJPARSEERR_INVALID_NUMBER_FORMAT;
         state->offset = offset;
         return 1;
       }
@@ -754,7 +754,7 @@ static int json_get_number_size(struct json_parse_state_s *state) {
 
       if ((offset < size) && ('0' <= src[offset] && src[offset] <= '9')) {
         // a leading '0' must not be immediately followed by any digit!
-        state->error = das_jparse_error_invalid_number_format;
+        state->error = DASJPARSEERR_INVALID_NUMBER_FORMAT;
         state->offset = offset;
         return 1;
       }
@@ -772,11 +772,11 @@ static int json_get_number_size(struct json_parse_state_s *state) {
       offset++;
 
       if (!('0' <= src[offset] && src[offset] <= '9')) {
-        if (!(das_jparse_flags_allow_leading_or_trailing_decimal_point &
+        if (!(DASJPARSE_ALLOW_LEADING_OR_TRAILING_DECIMAL_POINT &
               flags_bitset) ||
             !had_leading_digits) {
           // a decimal point must be followed by at least one digit
-          state->error = das_jparse_error_invalid_number_format;
+          state->error = DASJPARSEERR_INVALID_NUMBER_FORMAT;
           state->offset = offset;
           return 1;
         }
@@ -817,11 +817,11 @@ static int json_get_number_size(struct json_parse_state_s *state) {
       // all of the above are ok
       break;
     case '=':
-      if (das_jparse_flags_allow_equals_in_object & flags_bitset) {
+      if (DASJPARSE_ALLOW_EQUALS_IN_OBJECT & flags_bitset) {
         break;
       }
     default:
-      state->error = das_jparse_error_invalid_number_format;
+      state->error = DASJPARSEERR_INVALID_NUMBER_FORMAT;
       state->offset = offset;
       return 1;
     }
@@ -847,17 +847,17 @@ static int json_get_value_size(struct json_parse_state_s *state,
   size_t offset;
   const size_t size = state->size;
 
-  if (das_jparse_flags_allow_location_information & flags_bitset) {
-    state->dom_size += sizeof(struct das_json_val_ex_s);
+  if (DASJPARSE_ALLOW_LOCATION_INFORMATION & flags_bitset) {
+    state->dom_size += sizeof(struct das_jsonvalex_t);
   } else {
-    state->dom_size += sizeof(struct das_json_obj_s);
+    state->dom_size += sizeof(struct das_jdo_t);
   }
 
   if (is_global_object) {
     return json_get_object_size(state, /* is_global_object = */ 1);
   } else {
     if (json_skip_all_skippables(state)) {
-      state->error = das_jparse_error_premature_end_of_buffer;
+      state->error = DASJPARSEERR_PREMATURE_END_OF_BUFFER;
       return 1;
     }
 
@@ -868,11 +868,11 @@ static int json_get_value_size(struct json_parse_state_s *state,
     case '"':
       return json_get_string_size(state, 0);
     case '\'':
-      if (das_jparse_flags_allow_single_quoted_strings & flags_bitset) {
+      if (DASJPARSE_ALLOW_SINGLE_QUOTED_STRINGS & flags_bitset) {
         return json_get_string_size(state, 0);
       } else {
         // invalid value!
-        state->error = das_jparse_error_invalid_value;
+        state->error = DASJPARSEERR_INVALID_VALUE;
         return 1;
       }
     case '{':
@@ -892,20 +892,20 @@ static int json_get_value_size(struct json_parse_state_s *state,
     case '9':
       return json_get_number_size(state);
     case '+':
-      if (das_jparse_flags_allow_leading_plus_sign & flags_bitset) {
+      if (DASJPARSE_ALLOW_LEADING_PLUS_SIGN & flags_bitset) {
         return json_get_number_size(state);
       } else {
         // invalid value!
-        state->error = das_jparse_error_invalid_number_format;
+        state->error = DASJPARSEERR_INVALID_NUMBER_FORMAT;
         return 1;
       }
     case '.':
-      if (das_jparse_flags_allow_leading_or_trailing_decimal_point &
+      if (DASJPARSE_ALLOW_LEADING_OR_TRAILING_DECIMAL_POINT &
           flags_bitset) {
         return json_get_number_size(state);
       } else {
         // invalid value!
-        state->error = das_jparse_error_invalid_number_format;
+        state->error = DASJPARSEERR_INVALID_NUMBER_FORMAT;
         return 1;
       }
     default:
@@ -925,11 +925,11 @@ static int json_get_value_size(struct json_parse_state_s *state,
                  'l' == state->src[offset + 3]) {
         state->offset += 4;
         return 0;
-      } else if ((das_jparse_flags_allow_inf_and_nan & flags_bitset) &&
+      } else if ((DASJPARSE_ALLOW_INF_AND_NAN & flags_bitset) &&
                  (offset + 3) <= size && 'N' == src[offset + 0] &&
                  'a' == src[offset + 1] && 'N' == src[offset + 2]) {
         return json_get_number_size(state);
-      } else if ((das_jparse_flags_allow_inf_and_nan & flags_bitset) &&
+      } else if ((DASJPARSE_ALLOW_INF_AND_NAN & flags_bitset) &&
                  (offset + 8) <= size && 'I' == src[offset + 0] &&
                  'n' == src[offset + 1] && 'f' == src[offset + 2] &&
                  'i' == src[offset + 3] && 'n' == src[offset + 4] &&
@@ -939,17 +939,17 @@ static int json_get_value_size(struct json_parse_state_s *state,
       }
 
       // invalid value!
-      state->error = das_jparse_error_invalid_value;
+      state->error = DASJPARSEERR_INVALID_VALUE;
       return 1;
     }
   }
 }
 
 static void json_parse_value(struct json_parse_state_s *state,
-                             int is_global_object, struct das_json_obj_s *value);
+                             int is_global_object, struct das_jdo_t *value);
 
 static void json_parse_string(struct json_parse_state_s *state,
-                              struct das_json_str_s *string) {
+                              struct das_jsonstr_t *string) {
   size_t offset = state->offset;
   size_t bytes_written = 0;
   const char *const src = state->src;
@@ -1042,7 +1042,7 @@ static void json_parse_string(struct json_parse_state_s *state,
   offset++;
 
   // record the size of the string
-  string->string_size = bytes_written;
+  string->stringSize = bytes_written;
 
   // add null terminator to string
   data[bytes_written++] = '\0';
@@ -1055,8 +1055,8 @@ static void json_parse_string(struct json_parse_state_s *state,
 }
 
 static void json_parse_key(struct json_parse_state_s *state,
-                           struct das_json_str_s *string) {
-  if (das_jparse_flags_allow_unquoted_keys & state->flags_bitset) {
+                           struct das_jsonstr_t *string) {
+  if (DASJPARSE_ALLOW_UNQUOTED_KEYS & state->flags_bitset) {
     const char *const src = state->src;
     char *const data = state->data;
     size_t offset = state->offset;
@@ -1078,7 +1078,7 @@ static void json_parse_key(struct json_parse_state_s *state,
       data[size] = '\0';
 
       // record the size of the string
-      string->string_size = size++;
+      string->stringSize = size++;
 
       // move data along
       state->data += size;
@@ -1094,13 +1094,13 @@ static void json_parse_key(struct json_parse_state_s *state,
 
 static void json_parse_object(struct json_parse_state_s *state,
                               int is_global_object,
-                              struct das_json_dict_s *object) {
+                              struct das_jsondict_t *object) {
   const size_t flags_bitset = state->flags_bitset;
   const size_t size = state->size;
   const char *const src = state->src;
   size_t elements = 0;
   int allow_comma = 0;
-  struct das_json_dict_el_s *previous = 0;
+  struct das_jsondictel_t *previous = 0;
 
   if (is_global_object) {
     // if we skipped some whitespace, and then found an opening '{' of an
@@ -1122,9 +1122,9 @@ static void json_parse_object(struct json_parse_state_s *state,
   elements = 0;
 
   while (state->offset < size) {
-    struct das_json_dict_el_s *element = 0;
-    struct das_json_str_s *string = 0;
-    struct das_json_obj_s *value = 0;
+    struct das_jsondictel_t *element = 0;
+    struct das_jsonstr_t *string = 0;
+    struct das_jdo_t *value = 0;
 
     if (!is_global_object) {
       (void)json_skip_all_skippables(state);
@@ -1153,9 +1153,9 @@ static void json_parse_object(struct json_parse_state_s *state,
       }
     }
 
-    element = (struct das_json_dict_el_s *)state->dom;
+    element = (struct das_jsondictel_t *)state->dom;
 
-    state->dom += sizeof(struct das_json_dict_el_s);
+    state->dom += sizeof(struct das_jsondictel_t);
 
     if (0 == previous) {
       // this is our first element, so record it in our object
@@ -1166,19 +1166,19 @@ static void json_parse_object(struct json_parse_state_s *state,
 
     previous = element;
 
-    if (das_jparse_flags_allow_location_information & flags_bitset) {
-      struct das_json_str_ex_s *string_ex =
-          (struct das_json_str_ex_s *)state->dom;
-      state->dom += sizeof(struct das_json_str_ex_s);
+    if (DASJPARSE_ALLOW_LOCATION_INFORMATION & flags_bitset) {
+      struct das_jsonstrex_t *string_ex =
+          (struct das_jsonstrex_t *)state->dom;
+      state->dom += sizeof(struct das_jsonstrex_t);
 
       string_ex->offset = state->offset;
-      string_ex->line_no = state->line_no;
-      string_ex->row_no = state->offset - state->line_offset;
+      string_ex->line = state->line_no;
+      string_ex->row = state->offset - state->line_offset;
 
       string = &(string_ex->string);
     } else {
-      string = (struct das_json_str_s *)state->dom;
-      state->dom += sizeof(struct das_json_str_s);
+      string = (struct das_jsonstr_t *)state->dom;
+      state->dom += sizeof(struct das_jsonstr_t);
     }
 
     element->name = string;
@@ -1192,18 +1192,18 @@ static void json_parse_object(struct json_parse_state_s *state,
 
     (void)json_skip_all_skippables(state);
 
-    if (das_jparse_flags_allow_location_information & flags_bitset) {
-      struct das_json_val_ex_s *value_ex = (struct das_json_val_ex_s *)state->dom;
-      state->dom += sizeof(struct das_json_val_ex_s);
+    if (DASJPARSE_ALLOW_LOCATION_INFORMATION & flags_bitset) {
+      struct das_jsonvalex_t *value_ex = (struct das_jsonvalex_t *)state->dom;
+      state->dom += sizeof(struct das_jsonvalex_t);
 
       value_ex->offset = state->offset;
-      value_ex->line_no = state->line_no;
-      value_ex->row_no = state->offset - state->line_offset;
+      value_ex->line = state->line_no;
+      value_ex->row = state->offset - state->line_offset;
 
       value = &(value_ex->value);
     } else {
-      value = (struct das_json_obj_s *)state->dom;
-      state->dom += sizeof(struct das_json_obj_s);
+      value = (struct das_jdo_t *)state->dom;
+      state->dom += sizeof(struct das_jdo_t);
     }
 
     element->value = value;
@@ -1228,12 +1228,12 @@ static void json_parse_object(struct json_parse_state_s *state,
 }
 
 static void json_parse_array(struct json_parse_state_s *state,
-                             struct das_json_ary_s *array) {
+                             struct das_jsonary_t *array) {
   const char *const src = state->src;
   const size_t size = state->size;
   size_t elements = 0;
   int allow_comma = 0;
-  struct das_json_ary_el_s *previous = 0;
+  struct das_jsonaryel_t *previous = 0;
 
   // skip leading '['
   state->offset++;
@@ -1244,8 +1244,8 @@ static void json_parse_array(struct json_parse_state_s *state,
   elements = 0;
 
   do {
-    struct das_json_ary_el_s *element = 0;
-    struct das_json_obj_s *value = 0;
+    struct das_jsonaryel_t *element = 0;
+    struct das_jdo_t *value = 0;
 
     (void)json_skip_all_skippables(state);
 
@@ -1267,9 +1267,9 @@ static void json_parse_array(struct json_parse_state_s *state,
       }
     }
 
-    element = (struct das_json_ary_el_s *)state->dom;
+    element = (struct das_jsonaryel_t *)state->dom;
 
-    state->dom += sizeof(struct das_json_ary_el_s);
+    state->dom += sizeof(struct das_jsonaryel_t);
 
     if (0 == previous) {
       // this is our first element, so record it in our array
@@ -1280,18 +1280,18 @@ static void json_parse_array(struct json_parse_state_s *state,
 
     previous = element;
 
-    if (das_jparse_flags_allow_location_information & state->flags_bitset) {
-      struct das_json_val_ex_s *value_ex = (struct das_json_val_ex_s *)state->dom;
-      state->dom += sizeof(struct das_json_val_ex_s);
+    if (DASJPARSE_ALLOW_LOCATION_INFORMATION & state->flags_bitset) {
+      struct das_jsonvalex_t *value_ex = (struct das_jsonvalex_t *)state->dom;
+      state->dom += sizeof(struct das_jsonvalex_t);
 
       value_ex->offset = state->offset;
-      value_ex->line_no = state->line_no;
-      value_ex->row_no = state->offset - state->line_offset;
+      value_ex->line = state->line_no;
+      value_ex->row = state->offset - state->line_offset;
 
       value = &(value_ex->value);
     } else {
-      value = (struct das_json_obj_s *)state->dom;
-      state->dom += sizeof(struct das_json_obj_s);
+      value = (struct das_jdo_t *)state->dom;
+      state->dom += sizeof(struct das_jdo_t);
     }
 
     element->value = value;
@@ -1316,7 +1316,7 @@ static void json_parse_array(struct json_parse_state_s *state,
 }
 
 static void json_parse_number(struct json_parse_state_s *state,
-                              struct das_json_num_s *number) {
+                              struct das_jsonnum_t *number) {
   const size_t flags_bitset = state->flags_bitset;
   size_t offset = state->offset;
   const size_t size = state->size;
@@ -1326,7 +1326,7 @@ static void json_parse_number(struct json_parse_state_s *state,
 
   number->number = data;
 
-  if (das_jparse_flags_allow_hexadecimal_numbers & flags_bitset) {
+  if (DASJPARSE_ALLOW_HEXADECIMAL_NUMBERS & flags_bitset) {
     if (('0' == src[offset]) &&
         (('x' == src[offset + 1]) || ('X' == src[offset + 1]))) {
       // consume hexadecimal digits
@@ -1371,7 +1371,7 @@ static void json_parse_number(struct json_parse_state_s *state,
     }
   }
 
-  if (das_jparse_flags_allow_inf_and_nan & flags_bitset) {
+  if (DASJPARSE_ALLOW_INF_AND_NAN & flags_bitset) {
     const char inf[9] = "Infinity";
     const size_t inf_strlen = sizeof(inf) - 1;
     const char nan[4] = "NaN";
@@ -1399,7 +1399,7 @@ static void json_parse_number(struct json_parse_state_s *state,
   }
 
   // record the size of the number
-  number->number_size = bytes_written;
+  number->numberSize = bytes_written;
   // add null terminator to number string
   data[bytes_written++] = '\0';
   // move data along
@@ -1409,7 +1409,7 @@ static void json_parse_number(struct json_parse_state_s *state,
 }
 
 static void json_parse_value(struct json_parse_state_s *state,
-                             int is_global_object, struct das_json_obj_s *value) {
+                             int is_global_object, struct das_jdo_t *value) {
   const size_t flags_bitset = state->flags_bitset;
   const char *const src = state->src;
   const size_t size = state->size;
@@ -1421,32 +1421,32 @@ static void json_parse_value(struct json_parse_state_s *state,
   offset = state->offset;
 
   if (is_global_object) {
-    value->type = das_json_type_dict;
+    value->type = DASJSONTYPE_DICT;
     value->value = state->dom;
-    state->dom += sizeof(struct das_json_dict_s);
+    state->dom += sizeof(struct das_jsondict_t);
     json_parse_object(state, /* is_global_object = */ 1,
-                      (struct das_json_dict_s *)value->value);
+                      (struct das_jsondict_t *)value->value);
   } else {
     switch (src[offset]) {
     case '"':
     case '\'':
-      value->type = das_json_type_str;
+      value->type = DASJSONTYPE_STR;
       value->value = state->dom;
-      state->dom += sizeof(struct das_json_str_s);
-      json_parse_string(state, (struct das_json_str_s *)value->value);
+      state->dom += sizeof(struct das_jsonstr_t);
+      json_parse_string(state, (struct das_jsonstr_t *)value->value);
       break;
     case '{':
-      value->type = das_json_type_dict;
+      value->type = DASJSONTYPE_DICT;
       value->value = state->dom;
-      state->dom += sizeof(struct das_json_dict_s);
+      state->dom += sizeof(struct das_jsondict_t);
       json_parse_object(state, /* is_global_object = */ 0,
-                        (struct das_json_dict_s *)value->value);
+                        (struct das_jsondict_t *)value->value);
       break;
     case '[':
-      value->type = das_json_type_ary;
+      value->type = DASJSONTYPE_ARY;
       value->value = state->dom;
-      state->dom += sizeof(struct das_json_ary_s);
-      json_parse_array(state, (struct das_json_ary_s *)value->value);
+      state->dom += sizeof(struct das_jsonary_t);
+      json_parse_array(state, (struct das_jsonary_t *)value->value);
       break;
     case '-':
     case '+':
@@ -1461,68 +1461,68 @@ static void json_parse_value(struct json_parse_state_s *state,
     case '8':
     case '9':
     case '.':
-      value->type = das_json_type_num;
+      value->type = DASJSONTYPE_NUM;
       value->value = state->dom;
-      state->dom += sizeof(struct das_json_num_s);
-      json_parse_number(state, (struct das_json_num_s *)value->value);
+      state->dom += sizeof(struct das_jsonnum_t);
+      json_parse_number(state, (struct das_jsonnum_t *)value->value);
       break;
     default:
       if ((offset + 4) <= size && 't' == src[offset + 0] &&
           'r' == src[offset + 1] && 'u' == src[offset + 2] &&
           'e' == src[offset + 3]) {
-        value->type = das_json_type_true;
+        value->type = DASJSONTYPE_TRUE;
         value->value = 0;
         state->offset += 4;
       } else if ((offset + 5) <= size && 'f' == src[offset + 0] &&
                  'a' == src[offset + 1] && 'l' == src[offset + 2] &&
                  's' == src[offset + 3] && 'e' == src[offset + 4]) {
-        value->type = das_json_type_false;
+        value->type = DASJSONTYPE_FALSE;
         value->value = 0;
         state->offset += 5;
       } else if ((offset + 4) <= size && 'n' == src[offset + 0] &&
                  'u' == src[offset + 1] && 'l' == src[offset + 2] &&
                  'l' == src[offset + 3]) {
-        value->type = das_json_type_null;
+        value->type = DASJSONTYPE_NULL;
         value->value = 0;
         state->offset += 4;
-      } else if ((das_jparse_flags_allow_inf_and_nan & flags_bitset) &&
+      } else if ((DASJPARSE_ALLOW_INF_AND_NAN & flags_bitset) &&
                  (offset + 3) <= size && 'N' == src[offset + 0] &&
                  'a' == src[offset + 1] && 'N' == src[offset + 2]) {
-        value->type = das_json_type_num;
+        value->type = DASJSONTYPE_NUM;
         value->value = state->dom;
-        state->dom += sizeof(struct das_json_num_s);
-        json_parse_number(state, (struct das_json_num_s *)value->value);
-      } else if ((das_jparse_flags_allow_inf_and_nan & flags_bitset) &&
+        state->dom += sizeof(struct das_jsonnum_t);
+        json_parse_number(state, (struct das_jsonnum_t *)value->value);
+      } else if ((DASJPARSE_ALLOW_INF_AND_NAN & flags_bitset) &&
                  (offset + 8) <= size && 'I' == src[offset + 0] &&
                  'n' == src[offset + 1] && 'f' == src[offset + 2] &&
                  'i' == src[offset + 3] && 'n' == src[offset + 4] &&
                  'i' == src[offset + 5] && 't' == src[offset + 6] &&
                  'y' == src[offset + 7]) {
-        value->type = das_json_type_num;
+        value->type = DASJSONTYPE_NUM;
         value->value = state->dom;
-        state->dom += sizeof(struct das_json_num_s);
-        json_parse_number(state, (struct das_json_num_s *)value->value);
+        state->dom += sizeof(struct das_jsonnum_t);
+        json_parse_number(state, (struct das_jsonnum_t *)value->value);
       }
       break;
     }
   }
 }
 
-struct das_json_obj_s *
-das_json_parse_ex(const void *src, size_t src_size, size_t flags_bitset,
+struct das_jdo_t *
+new_DasJdo_parseEx(const void *src, size_t src_size, size_t flags_bitset,
               void *(*alloc_func_ptr)(void *user_data, size_t size),
-              void *user_data, struct das_json_parse_result_s *result) {
+              void *user_data, DasJparseResult *result) {
   struct json_parse_state_s state;
   void *allocation;
-  struct das_json_obj_s *value;
+  struct das_jdo_t *value;
   size_t total_size;
   int input_error;
 
   if (result) {
-    result->error = das_jparse_error_none;
-    result->error_offset = 0;
-    result->error_line_no = 0;
-    result->error_row_no = 0;
+    result->error = DASJPARSEERR_NONE;
+    result->errOffset = 0;
+    result->errLine = 0;
+    result->errRow = 0;
   }
 
   if (0 == src) {
@@ -1535,13 +1535,13 @@ das_json_parse_ex(const void *src, size_t src_size, size_t flags_bitset,
   state.offset = 0;
   state.line_no = 1;
   state.line_offset = 0;
-  state.error = das_jparse_error_none;
+  state.error = DASJPARSEERR_NONE;
   state.dom_size = 0;
   state.data_size = 0;
   state.flags_bitset = flags_bitset;
 
   input_error = json_get_value_size(
-      &state, /* is_global_object = */ (das_jparse_flags_allow_global_object &
+      &state, /* is_global_object = */ (DASJPARSE_ALLOW_GLOBAL_OBJECT &
                                         state.flags_bitset));
 
   if (0 == input_error) {
@@ -1551,7 +1551,7 @@ das_json_parse_ex(const void *src, size_t src_size, size_t flags_bitset,
       /* our parsing didn't have an error, but there are characters remaining in
        * the input that weren't part of the JSON! */
 
-      state.error = das_jparse_error_unexpected_trailing_characters;
+      state.error = DASJPARSEERR_UNEXPECTED_TRAILING_CHARACTERS;
       input_error = 1;
     }
   }
@@ -1560,9 +1560,9 @@ das_json_parse_ex(const void *src, size_t src_size, size_t flags_bitset,
     // parsing value's size failed (most likely an invalid JSON DOM!)
     if (result) {
       result->error = state.error;
-      result->error_offset = state.offset;
-      result->error_line_no = state.line_no;
-      result->error_row_no = state.offset - state.line_offset;
+      result->errOffset = state.offset;
+      result->errLine = state.line_no;
+      result->errRow = state.offset - state.line_offset;
     }
     return 0;
   }
@@ -1581,10 +1581,10 @@ das_json_parse_ex(const void *src, size_t src_size, size_t flags_bitset,
   if (0 == allocation) {
     // malloc failed!
     if (result) {
-      result->error = das_jparse_error_allocator_failed;
-      result->error_offset = 0;
-      result->error_line_no = 0;
-      result->error_row_no = 0;
+      result->error = DASJPARSEERR_ALLOCATOR_FAILED;
+      result->errOffset = 0;
+      result->errLine = 0;
+      result->errRow = 0;
     }
 
     return 0;
@@ -1600,45 +1600,45 @@ das_json_parse_ex(const void *src, size_t src_size, size_t flags_bitset,
   state.dom = (char *)allocation;
   state.data = state.dom + state.dom_size;
 
-  if (das_jparse_flags_allow_location_information & state.flags_bitset) {
-    struct das_json_val_ex_s *value_ex = (struct das_json_val_ex_s *)state.dom;
-    state.dom += sizeof(struct das_json_val_ex_s);
+  if (DASJPARSE_ALLOW_LOCATION_INFORMATION & state.flags_bitset) {
+    struct das_jsonvalex_t *value_ex = (struct das_jsonvalex_t *)state.dom;
+    state.dom += sizeof(struct das_jsonvalex_t);
 
     value_ex->offset = state.offset;
-    value_ex->line_no = state.line_no;
-    value_ex->row_no = state.offset - state.line_offset;
+    value_ex->line = state.line_no;
+    value_ex->row = state.offset - state.line_offset;
 
     value = &(value_ex->value);
   } else {
-    value = (struct das_json_obj_s *)state.dom;
-    state.dom += sizeof(struct das_json_obj_s);
+    value = (struct das_jdo_t *)state.dom;
+    state.dom += sizeof(struct das_jdo_t);
   }
 
   json_parse_value(&state, /* is_global_object = */
-                   (das_jparse_flags_allow_global_object & state.flags_bitset),
+                   (DASJPARSE_ALLOW_GLOBAL_OBJECT & state.flags_bitset),
                    value);
 
-  return (struct das_json_obj_s *)allocation;
+  return (struct das_jdo_t *)allocation;
 }
 
-struct das_json_obj_s *das_json_parse(const void *src, size_t src_size) {
-  return das_json_parse_ex(src, src_size, das_jparse_flags_default, 0, 0, 0);
+struct das_jdo_t *new_DasJdo_parse(const void *src, size_t src_size) {
+  return new_DasJdo_parseEx(src, src_size, DASJPARSE_DEFAULT, 0, 0, 0);
 }
 
 void del_DasJdo(DasJdo* pThis)
 {
-	free(pThis);  /* The tree is one allocation, see das_json_parse_ex() */
+	free(pThis);  /* The tree is one allocation, see new_DasJdo_parseEx() */
 }
 
-static int json_write_minified_get_value_size(const struct das_json_obj_s *value,
+static int json_write_minified_get_value_size(const struct das_jdo_t *value,
                                               size_t *size);
 
-static int json_write_get_number_size(const struct das_json_num_s *number,
+static int json_write_get_number_size(const struct das_jsonnum_t *number,
                                       size_t *size) {
   unsigned long long parsed_number;
   size_t i;
 
-  if (number->number_size >= 2) {
+  if (number->numberSize >= 2) {
     switch (number->number[1]) {
     default:
       break;
@@ -1665,17 +1665,17 @@ static int json_write_get_number_size(const struct das_json_num_s *number,
   i = 0;
 
   // skip any leading '+' or '-'
-  if ((i < number->number_size) &&
+  if ((i < number->numberSize) &&
       (('+' == number->number[i]) || ('-' == number->number[i]))) {
     i++;
   }
 
   // check if we have infinity
-  if ((i < number->number_size) && ('I' == number->number[i])) {
+  if ((i < number->numberSize) && ('I' == number->number[i])) {
     char *inf = "Infinity";
     size_t k;
 
-    for (k = i; k < number->number_size; k++) {
+    for (k = i; k < number->numberSize; k++) {
       const char c = *inf++;
 
       // Check if we found the Infinity string!
@@ -1700,11 +1700,11 @@ static int json_write_get_number_size(const struct das_json_num_s *number,
   }
 
   // check if we have nan
-  if ((i < number->number_size) && ('N' == number->number[i])) {
+  if ((i < number->numberSize) && ('N' == number->number[i])) {
     char *nan = "NaN";
     size_t k;
 
-    for (k = i; k < number->number_size; k++) {
+    for (k = i; k < number->numberSize; k++) {
       const char c = *nan++;
 
       // Check if we found the NaN string!
@@ -1724,13 +1724,13 @@ static int json_write_get_number_size(const struct das_json_num_s *number,
   }
 
   // if we had a leading decimal point
-  if ((i < number->number_size) && ('.' == number->number[i])) {
+  if ((i < number->numberSize) && ('.' == number->number[i])) {
     // 1 + because we had a leading decimal point
     *size += 1;
     goto cleanup;
   }
 
-  for (; i < number->number_size; i++) {
+  for (; i < number->numberSize; i++) {
     const char c = number->number[i];
     if (!('0' <= c && c <= '9')) {
       break;
@@ -1738,14 +1738,14 @@ static int json_write_get_number_size(const struct das_json_num_s *number,
   }
 
   // if we had a trailing decimal point
-  if ((i + 1 == number->number_size) && ('.' == number->number[i])) {
+  if ((i + 1 == number->numberSize) && ('.' == number->number[i])) {
     // 1 + because we had a trailing decimal point
     *size += 1;
     goto cleanup;
   }
 
 cleanup:
-  *size += number->number_size; // the actual string of the number
+  *size += number->numberSize; // the actual string of the number
 
   // if we had a leading '+' we don't record it in the JSON output
   if ('+' == number->number[0]) {
@@ -1755,10 +1755,10 @@ cleanup:
   return 0;
 }
 
-static int json_write_get_string_size(const struct das_json_str_s *string,
+static int json_write_get_string_size(const struct das_jsonstr_t *string,
                                       size_t *size) {
   size_t i;
-  for (i = 0; i < string->string_size; i++) {
+  for (i = 0; i < string->stringSize; i++) {
     switch (string->string[i]) {
     case '"':
     case '\\':
@@ -1780,9 +1780,9 @@ static int json_write_get_string_size(const struct das_json_str_s *string,
   return 0;
 }
 
-static int json_write_minified_get_array_size(const struct das_json_ary_s *array,
+static int json_write_minified_get_array_size(const struct das_jsonary_t *array,
                                               size_t *size) {
-  struct das_json_ary_el_s *element;
+  struct das_jsonaryel_t *element;
 
   *size += 2; // '[' and ']'
 
@@ -1801,9 +1801,9 @@ static int json_write_minified_get_array_size(const struct das_json_ary_s *array
 }
 
 static int
-json_write_minified_get_object_size(const struct das_json_dict_s *object,
+json_write_minified_get_object_size(const struct das_jsondict_t *object,
                                     size_t *size) {
-  struct das_json_dict_el_s *element;
+  struct das_jsondictel_t *element;
 
   *size += 2; // '{' and '}'
 
@@ -1828,44 +1828,44 @@ json_write_minified_get_object_size(const struct das_json_dict_s *object,
   return 0;
 }
 
-static int json_write_minified_get_value_size(const struct das_json_obj_s *value,
+static int json_write_minified_get_value_size(const struct das_jdo_t *value,
                                               size_t *size) {
   switch (value->type) {
   default:
     // unknown value type found!
     return 1;
-  case das_json_type_num:
-    return json_write_get_number_size((struct das_json_num_s *)value->value,
+  case DASJSONTYPE_NUM:
+    return json_write_get_number_size((struct das_jsonnum_t *)value->value,
                                       size);
-  case das_json_type_str:
-    return json_write_get_string_size((struct das_json_str_s *)value->value,
+  case DASJSONTYPE_STR:
+    return json_write_get_string_size((struct das_jsonstr_t *)value->value,
                                       size);
-  case das_json_type_ary:
+  case DASJSONTYPE_ARY:
     return json_write_minified_get_array_size(
-        (struct das_json_ary_s *)value->value, size);
-  case das_json_type_dict:
+        (struct das_jsonary_t *)value->value, size);
+  case DASJSONTYPE_DICT:
     return json_write_minified_get_object_size(
-        (struct das_json_dict_s *)value->value, size);
-  case das_json_type_true:
+        (struct das_jsondict_t *)value->value, size);
+  case DASJSONTYPE_TRUE:
     *size += 4; // the string "true"
     return 0;
-  case das_json_type_false:
+  case DASJSONTYPE_FALSE:
     *size += 5; // the string "false"
     return 0;
-  case das_json_type_null:
+  case DASJSONTYPE_NULL:
     *size += 4; // the string "null"
     return 0;
   }
 }
 
-static char *json_write_minified_value(const struct das_json_obj_s *value,
+static char *json_write_minified_value(const struct das_jdo_t *value,
                                        char *data);
 
-static char *json_write_number(const struct das_json_num_s *number, char *data) {
+static char *json_write_number(const struct das_jsonnum_t *number, char *data) {
   unsigned long long parsed_number, backup;
   size_t i;
 
-  if (number->number_size >= 2) {
+  if (number->numberSize >= 2) {
     switch (number->number[1]) {
     default:
       break;
@@ -1908,17 +1908,17 @@ static char *json_write_number(const struct das_json_num_s *number, char *data) 
   i = 0;
 
   // skip any leading '-'
-  if ((i < number->number_size) &&
+  if ((i < number->numberSize) &&
       (('+' == number->number[i]) || ('-' == number->number[i]))) {
     i++;
   }
 
   // check if we have infinity
-  if ((i < number->number_size) && ('I' == number->number[i])) {
+  if ((i < number->numberSize) && ('I' == number->number[i])) {
     char *inf = "Infinity";
     size_t k;
 
-    for (k = i; k < number->number_size; k++) {
+    for (k = i; k < number->numberSize; k++) {
       const char c = *inf++;
 
       // Check if we found the Infinity string!
@@ -1947,11 +1947,11 @@ static char *json_write_number(const struct das_json_num_s *number, char *data) 
   }
 
   // check if we have nan
-  if ((i < number->number_size) && ('N' == number->number[i])) {
+  if ((i < number->numberSize) && ('N' == number->number[i])) {
     char *nan = "NaN";
     size_t k;
 
-    for (k = i; k < number->number_size; k++) {
+    for (k = i; k < number->numberSize; k++) {
       const char c = *nan++;
 
       // Check if we found the NaN string!
@@ -1970,7 +1970,7 @@ static char *json_write_number(const struct das_json_num_s *number, char *data) 
   }
 
   // if we had a leading decimal point
-  if ((i < number->number_size) && ('.' == number->number[i])) {
+  if ((i < number->numberSize) && ('.' == number->number[i])) {
     i = 0;
 
     // skip any leading '+'
@@ -1988,14 +1988,14 @@ static char *json_write_number(const struct das_json_num_s *number, char *data) 
     *data++ = '0';
 
     // and output the rest of the number as normal
-    for (; i < number->number_size; i++) {
+    for (; i < number->numberSize; i++) {
       *data++ = number->number[i];
     }
 
     return data;
   }
 
-  for (; i < number->number_size; i++) {
+  for (; i < number->numberSize; i++) {
     const char c = number->number[i];
     if (!('0' <= c && c <= '9')) {
       break;
@@ -2003,7 +2003,7 @@ static char *json_write_number(const struct das_json_num_s *number, char *data) 
   }
 
   // if we had a trailing decimal point
-  if ((i + 1 == number->number_size) && ('.' == number->number[i])) {
+  if ((i + 1 == number->numberSize) && ('.' == number->number[i])) {
     i = 0;
 
     // skip any leading '+'
@@ -2018,7 +2018,7 @@ static char *json_write_number(const struct das_json_num_s *number, char *data) 
     }
 
     // and output the rest of the number as normal
-    for (; i < number->number_size; i++) {
+    for (; i < number->numberSize; i++) {
       *data++ = number->number[i];
     }
 
@@ -2035,19 +2035,19 @@ static char *json_write_number(const struct das_json_num_s *number, char *data) 
     i++;
   }
 
-  for (; i < number->number_size; i++) {
+  for (; i < number->numberSize; i++) {
     *data++ = number->number[i];
   }
 
   return data;
 }
 
-static char *json_write_string(const struct das_json_str_s *string, char *data) {
+static char *json_write_string(const struct das_jsonstr_t *string, char *data) {
   size_t i;
 
   *data++ = '"'; // open the string
 
-  for (i = 0; i < string->string_size; i++) {
+  for (i = 0; i < string->stringSize; i++) {
     switch (string->string[i]) {
     case '"':
       *data++ = '\\'; // escape the control character
@@ -2088,9 +2088,9 @@ static char *json_write_string(const struct das_json_str_s *string, char *data) 
   return data;
 }
 
-static char *json_write_minified_array(const struct das_json_ary_s *array,
+static char *json_write_minified_array(const struct das_jsonary_t *array,
                                        char *data) {
-  struct das_json_ary_el_s *element = 0;
+  struct das_jsonaryel_t *element = 0;
 
   *data++ = '['; // open the array
 
@@ -2112,9 +2112,9 @@ static char *json_write_minified_array(const struct das_json_ary_s *array,
   return data;
 }
 
-static char *json_write_minified_object(const struct das_json_dict_s *object,
+static char *json_write_minified_object(const struct das_jsondict_t *object,
                                         char *data) {
-  struct das_json_dict_el_s *element = 0;
+  struct das_jsondictel_t *element = 0;
 
   *data++ = '{'; // open the object
 
@@ -2145,36 +2145,36 @@ static char *json_write_minified_object(const struct das_json_dict_s *object,
   return data;
 }
 
-static char *json_write_minified_value(const struct das_json_obj_s *value,
+static char *json_write_minified_value(const struct das_jdo_t *value,
                                        char *data) {
   switch (value->type) {
   default:
     // unknown value type found!
     return 0;
-  case das_json_type_num:
-    return json_write_number((struct das_json_num_s *)value->value, data);
-  case das_json_type_str:
-    return json_write_string((struct das_json_str_s *)value->value, data);
-  case das_json_type_ary:
-    return json_write_minified_array((struct das_json_ary_s *)value->value,
+  case DASJSONTYPE_NUM:
+    return json_write_number((struct das_jsonnum_t *)value->value, data);
+  case DASJSONTYPE_STR:
+    return json_write_string((struct das_jsonstr_t *)value->value, data);
+  case DASJSONTYPE_ARY:
+    return json_write_minified_array((struct das_jsonary_t *)value->value,
                                      data);
-  case das_json_type_dict:
-    return json_write_minified_object((struct das_json_dict_s *)value->value,
+  case DASJSONTYPE_DICT:
+    return json_write_minified_object((struct das_jsondict_t *)value->value,
                                       data);
-  case das_json_type_true:
+  case DASJSONTYPE_TRUE:
     data[0] = 't';
     data[1] = 'r';
     data[2] = 'u';
     data[3] = 'e';
     return data + 4;
-  case das_json_type_false:
+  case DASJSONTYPE_FALSE:
     data[0] = 'f';
     data[1] = 'a';
     data[2] = 'l';
     data[3] = 's';
     data[4] = 'e';
     return data + 5;
-  case das_json_type_null:
+  case DASJSONTYPE_NULL:
     data[0] = 'n';
     data[1] = 'u';
     data[2] = 'l';
@@ -2183,7 +2183,7 @@ static char *json_write_minified_value(const struct das_json_obj_s *value,
   }
 }
 
-void* DasJdo_writeMinified(const DasJdo* pThis, size_t *out_size) {
+void* DasJdo_newMiniStr(const DasJdo* pThis, size_t *out_size) {
   size_t size = 0;
   char *data = 0;
   char *data_end = 0;
@@ -2222,14 +2222,14 @@ void* DasJdo_writeMinified(const DasJdo* pThis, size_t *out_size) {
   return data;
 }
 
-static int json_write_pretty_get_value_size(const struct das_json_obj_s *value,
+static int json_write_pretty_get_value_size(const struct das_jdo_t *value,
                                             size_t depth, size_t indent_size,
                                             size_t newline_size, size_t *size);
 
-static int json_write_pretty_get_array_size(const struct das_json_ary_s *array,
+static int json_write_pretty_get_array_size(const struct das_jsonary_t *array,
                                             size_t depth, size_t indent_size,
                                             size_t newline_size, size_t *size) {
-  struct das_json_ary_el_s *element;
+  struct das_jsonaryel_t *element;
 
   *size += 1; // '['
 
@@ -2263,11 +2263,11 @@ static int json_write_pretty_get_array_size(const struct das_json_ary_s *array,
   return 0;
 }
 
-static int json_write_pretty_get_object_size(const struct das_json_dict_s *object,
+static int json_write_pretty_get_object_size(const struct das_jsondict_t *object,
                                              size_t depth, size_t indent_size,
                                              size_t newline_size,
                                              size_t *size) {
-  struct das_json_dict_el_s *element;
+  struct das_jsondictel_t *element;
 
   *size += 1; // '{'
 
@@ -2303,48 +2303,48 @@ static int json_write_pretty_get_object_size(const struct das_json_dict_s *objec
   return 0;
 }
 
-static int json_write_pretty_get_value_size(const struct das_json_obj_s *value,
+static int json_write_pretty_get_value_size(const struct das_jdo_t *value,
                                             size_t depth, size_t indent_size,
                                             size_t newline_size, size_t *size) {
   switch (value->type) {
   default:
     // unknown value type found!
     return 1;
-  case das_json_type_num:
-    return json_write_get_number_size((struct das_json_num_s *)value->value,
+  case DASJSONTYPE_NUM:
+    return json_write_get_number_size((struct das_jsonnum_t *)value->value,
                                       size);
-  case das_json_type_str:
-    return json_write_get_string_size((struct das_json_str_s *)value->value,
+  case DASJSONTYPE_STR:
+    return json_write_get_string_size((struct das_jsonstr_t *)value->value,
                                       size);
-  case das_json_type_ary:
+  case DASJSONTYPE_ARY:
     return json_write_pretty_get_array_size(
-        (struct das_json_ary_s *)value->value, depth, indent_size, newline_size,
+        (struct das_jsonary_t *)value->value, depth, indent_size, newline_size,
         size);
-  case das_json_type_dict:
+  case DASJSONTYPE_DICT:
     return json_write_pretty_get_object_size(
-        (struct das_json_dict_s *)value->value, depth, indent_size,
+        (struct das_jsondict_t *)value->value, depth, indent_size,
         newline_size, size);
-  case das_json_type_true:
+  case DASJSONTYPE_TRUE:
     *size += 4; // the string "true"
     return 0;
-  case das_json_type_false:
+  case DASJSONTYPE_FALSE:
     *size += 5; // the string "false"
     return 0;
-  case das_json_type_null:
+  case DASJSONTYPE_NULL:
     *size += 4; // the string "null"
     return 0;
   }
 }
 
-static char *json_write_pretty_value(const struct das_json_obj_s *value,
+static char *json_write_pretty_value(const struct das_jdo_t *value,
                                      size_t depth, const char *indent,
                                      const char *newline, char *data);
 
-static char *json_write_pretty_array(const struct das_json_ary_s *array,
+static char *json_write_pretty_array(const struct das_jsonary_t *array,
                                      size_t depth, const char *indent,
                                      const char *newline, char *data) {
   size_t k, m;
-  struct das_json_ary_el_s *element;
+  struct das_jsonaryel_t *element;
 
   *data++ = '['; // open the array
 
@@ -2393,11 +2393,11 @@ static char *json_write_pretty_array(const struct das_json_ary_s *array,
   return data;
 }
 
-static char *json_write_pretty_object(const struct das_json_dict_s *object,
+static char *json_write_pretty_object(const struct das_jsondict_t *object,
                                       size_t depth, const char *indent,
                                       const char *newline, char *data) {
   size_t k, m;
-  struct das_json_dict_el_s *element;
+  struct das_jsondictel_t *element;
 
   *data++ = '{'; // open the object
 
@@ -2458,37 +2458,37 @@ static char *json_write_pretty_object(const struct das_json_dict_s *object,
   return data;
 }
 
-static char *json_write_pretty_value(const struct das_json_obj_s *value,
+static char *json_write_pretty_value(const struct das_jdo_t *value,
                                      size_t depth, const char *indent,
                                      const char *newline, char *data) {
   switch (value->type) {
   default:
     // unknown value type found!
     return 0;
-  case das_json_type_num:
-    return json_write_number((struct das_json_num_s *)value->value, data);
-  case das_json_type_str:
-    return json_write_string((struct das_json_str_s *)value->value, data);
-  case das_json_type_ary:
-    return json_write_pretty_array((struct das_json_ary_s *)value->value, depth,
+  case DASJSONTYPE_NUM:
+    return json_write_number((struct das_jsonnum_t *)value->value, data);
+  case DASJSONTYPE_STR:
+    return json_write_string((struct das_jsonstr_t *)value->value, data);
+  case DASJSONTYPE_ARY:
+    return json_write_pretty_array((struct das_jsonary_t *)value->value, depth,
                                    indent, newline, data);
-  case das_json_type_dict:
-    return json_write_pretty_object((struct das_json_dict_s *)value->value,
+  case DASJSONTYPE_DICT:
+    return json_write_pretty_object((struct das_jsondict_t *)value->value,
                                     depth, indent, newline, data);
-  case das_json_type_true:
+  case DASJSONTYPE_TRUE:
     data[0] = 't';
     data[1] = 'r';
     data[2] = 'u';
     data[3] = 'e';
     return data + 4;
-  case das_json_type_false:
+  case DASJSONTYPE_FALSE:
     data[0] = 'f';
     data[1] = 'a';
     data[2] = 'l';
     data[3] = 's';
     data[4] = 'e';
     return data + 5;
-  case das_json_type_null:
+  case DASJSONTYPE_NULL:
     data[0] = 'n';
     data[1] = 'u';
     data[2] = 'l';
@@ -2497,7 +2497,7 @@ static char *json_write_pretty_value(const struct das_json_obj_s *value,
   }
 }
 
-void *DasJdo_writePretty(const DasJdo* pThis, const char *indent,
+void *DasJdo_newPrettyStr(const DasJdo* pThis, const char *indent,
                         const char *newline, size_t *out_size) {
   size_t size = 0;
   size_t indent_size = 0;
@@ -2559,43 +2559,43 @@ void *DasJdo_writePretty(const DasJdo* pThis, const char *indent,
 /* ************************************************************************* */
 /* End of Sheredom's original work, add-ons below */
 
-const char* das_json_parse_error_info(
-	const struct das_json_parse_result_s* pRes, char* sTmp, size_t uLen
+const char* DasJparseResult_info(
+	const DasJparseResult* pRes, char* sTmp, size_t uLen
 ){
 	const char* s;
 	switch(pRes->error){
-	case das_jparse_error_none: 
+	case DASJPARSEERR_NONE: 
 		s = "No Problem, why did you call me?";
 		break;
-	case das_jparse_error_expected_comma_or_closing_bracket:
+	case DASJPARSEERR_EXPECTED_COMMA_OR_CLOSING_BRACKET:
 		s = "expected either a comma or a closing '}' or ']' to close an "
 		    "object or array";
 		break;
-	case das_jparse_error_expected_colon:
+	case DASJPARSEERR_EXPECTED_COLON:
 		s = "colon separating name/value pair was missing";
 		break;
-	case das_jparse_error_expected_opening_quote:
+	case DASJPARSEERR_EXPECTED_OPENING_QUOTE:
 		s = "expected string to begin with '\"'";
 		break;
-	case das_jparse_error_invalid_string_escape_sequence:
+	case DASJPARSEERR_INVALID_STRING_ESCAPE_SEQUENCE:
 		s = "invalid escaped sequence in string";
 		break;
-	case das_jparse_error_invalid_number_format:
+	case DASJPARSEERR_INVALID_NUMBER_FORMAT:
 		s = "invalid number format";
 		break;
-	case das_jparse_error_invalid_value:
+	case DASJPARSEERR_INVALID_VALUE:
 		s = "invalid value";
 		break;
-	case das_jparse_error_premature_end_of_buffer:
+	case DASJPARSEERR_PREMATURE_END_OF_BUFFER:
 		s = "reached end of buffer before object/array was complete";
 		break;
-	case das_jparse_error_invalid_string:
+	case DASJPARSEERR_INVALID_STRING:
 		s = "string was malformed";
 		break;
-	case das_jparse_error_allocator_failed:
+	case DASJPARSEERR_ALLOCATOR_FAILED:
 		s = "a call to malloc, or a user provider allocator, failed";
 		break;
-	case das_jparse_error_unexpected_trailing_characters:
+	case DASJPARSEERR_UNEXPECTED_TRAILING_CHARACTERS:
 		s = "the JSON input had unexpected trailing characters that weren't "
 		    "part of the JSON value";
 		break;
@@ -2603,55 +2603,55 @@ const char* das_json_parse_error_info(
 		s = "Unknown error, something exploded (real bad chi!)";
 		break;
 	}
-	snprintf(sTmp, uLen, "%s @ line %zd, offset %zd", s, pRes->error_line_no,
-			   pRes->error_offset);
+	snprintf(sTmp, uLen, "%s @ line %zd, offset %zd", s, pRes->errLine,
+			   pRes->errOffset);
 	return sTmp;
 }
 
-const char* DasJdo_string(const DasJdo* pThis) {
+const char* DasJdo_str(const DasJdo* pThis) {
 	
 	if( (pThis != NULL) &&
-	    (pThis->type == das_json_type_str) &&
+	    (pThis->type == DASJSONTYPE_STR) &&
 	    (pThis->value != NULL) )
-		return ((das_json_str*)pThis->value)->string;
+		return ((DasJsonStr*)pThis->value)->string;
 	
 	return NULL;
 }
 
-const das_json_dict* DasJdo_dict(const DasJdo* pThis) {
+const DasJsonDict* DasJdo_dict(const DasJdo* pThis) {
 	
-	if( (pThis != NULL) && (pThis->type == das_json_type_dict) )
-		return (das_json_dict*) pThis->value;
+	if( (pThis != NULL) && (pThis->type == DASJSONTYPE_DICT) )
+		return (DasJsonDict*) pThis->value;
 	
 	return NULL;
 }
 
-const das_json_dict_el* DasJdo_dictFirst(const DasJdo* pThis)
+const DasJsonDictEl* DasJdo_dictFirst(const DasJdo* pThis)
 {
-	if( (pThis != NULL) && (pThis->type == das_json_type_dict) ){
-		if(pThis->value) return ((das_json_dict*)pThis->value)->start;
+	if( (pThis != NULL) && (pThis->type == DASJSONTYPE_DICT) ){
+		if(pThis->value) return ((DasJsonDict*)pThis->value)->start;
 	}
 	return NULL;
 }
 
-const das_json_ary_el* DasJdo_aryFirst(const DasJdo* pThis)
+const DasJsonAryEl* DasJdo_aryFirst(const DasJdo* pThis)
 {
-	if( (pThis != NULL) && (pThis->type == das_json_type_ary) ){
-		if(pThis->value) return ((das_json_ary*)pThis->value)->start;
+	if( (pThis != NULL) && (pThis->type == DASJSONTYPE_ARY) ){
+		if(pThis->value) return ((DasJsonAry*)pThis->value)->start;
 	}
 	return NULL;
 }
 
-const das_json_ary* DasJdo_array(const DasJdo* pThis) {
+const DasJsonAry* DasJdo_ary(const DasJdo* pThis) {
 	
-	if( (pThis != NULL) && (pThis->type == das_json_type_ary) )
-		return (das_json_ary*) pThis->value;
+	if( (pThis != NULL) && (pThis->type == DASJSONTYPE_ARY) )
+		return (DasJsonAry*) pThis->value;
 	
 	return NULL;
 }
 
 /* The path parser, allows integers be used on dictionaries as well */
-const DasJdo* DasJdo_get(const DasJdo* pThis, const char* sRelPath){
+const DasJdo* DasJdo_subtree(const DasJdo* pThis, const char* sRelPath){
 	
 	const char* pSep = sRelPath;
 	while((*pSep != '/')&&(*pSep != '\0')) ++pSep;
@@ -2674,9 +2674,9 @@ const DasJdo* DasJdo_get(const DasJdo* pThis, const char* sRelPath){
 	
 	/* Really should avoid linear searches like this */
 	int i = 0;
-	if(pThis->type == das_json_type_dict){
+	if(pThis->type == DASJSONTYPE_DICT){
 		
-		const das_json_dict_el* pEl = NULL;
+		const DasJsonDictEl* pEl = NULL;
 		
 		for(pEl = DasJdo_dictFirst(pThis); pEl != NULL; pEl = pEl->next){
 			
@@ -2685,7 +2685,7 @@ const DasJdo* DasJdo_get(const DasJdo* pThis, const char* sRelPath){
 				(strlen(pEl->name->string) == uLen)
 			)){
 				if(bRecurse)
-					return DasJdo_get(pEl->value, pSep+1);
+					return DasJdo_subtree(pEl->value, pSep+1);
 				else
 					return pEl->value;
 			}
@@ -2693,14 +2693,14 @@ const DasJdo* DasJdo_get(const DasJdo* pThis, const char* sRelPath){
 		}
 	}
 	else{
-		if(pThis->type == das_json_type_ary){
-			const das_json_ary_el* pEl = NULL;
+		if(pThis->type == DASJSONTYPE_ARY){
+			const DasJsonAryEl* pEl = NULL;
 		
 			for(pEl = DasJdo_aryFirst(pThis); pEl != NULL; pEl = pEl->next){
 			
 				if(i == iItem){
 					if(bRecurse)
-						return DasJdo_get(pEl->value, pSep+1);
+						return DasJdo_subtree(pEl->value, pSep+1);
 					else
 						return pEl->value;
 				}

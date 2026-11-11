@@ -40,14 +40,14 @@ extern "C" {
  * @returns an Descriptor object allocated on the heap, or NULL if there
  *          was a parsing error.  Free it with del_DasDesc().
  */
-DAS_API DasDesc* dsdf_parse(const char* sFileName);
+DAS_API DasDesc* new_DasDesc_dsdf(const char* sFileName);
 
 
 /** Helper function to parse a DSDF value as a double array
  *
  * Certain Das1 DSDF values such as the y_coordinate contained executable
  * IDL code instead of a simple array of values.  If a global IDL executable
- * has been set via dsdf_setIdlBin, then any arrays this function cannot 
+ * has been set via dasdsdf_setIdlBin, then any arrays this function cannot 
  * parse will be handed by an IDL subprocess.
  * 
  * @param[in] sValue - The DSDF value to parse
@@ -57,7 +57,7 @@ DAS_API DasDesc* dsdf_parse(const char* sFileName);
  * @return - A pointer to an array of doubles allocated on the heap, or NULL
  *           if parsing failed.
  */
-DAS_API double* dsdf_valToArray(const char* sValue, size_t* pLen); 
+DAS_API double* dasdsdf_newDoubles(const char* sValue, size_t* pLen); 
 
 
 /** Set the location of the IDL binary.  
@@ -67,7 +67,7 @@ DAS_API double* dsdf_valToArray(const char* sValue, size_t* pLen);
  * needed when parsing Das 2.2 (or higher) compliant DSDF files.  Only programs
  * that read older Das1 DSDF files may have the need to call IDL.
  */
-DAS_API const char* dsdf_setIdlBin(const char* sIdlBin);
+DAS_API const char* dasdsdf_setIdlBin(const char* sIdlBin);
 	
 
 
@@ -94,7 +94,7 @@ DAS_API const char* dsdf_setIdlBin(const char* sIdlBin);
  *         string if not NULL and uLen is at least 2
  *
  */
-DAS_API char* dsdf_valToNormParam(
+DAS_API char* dasdsdf_normParam(
 	const char* sRawParam, char* sNormParam, size_t uNormLen
 );
 

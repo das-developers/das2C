@@ -43,24 +43,24 @@ extern "C" {
  *          characters as the input string or NULL if the input length was
  *          zero
  */
-DAS_API char* das_strdup(const char* sIn);
+DAS_API char* dasstr_new(const char* sIn);
 
 /** Allocate a new string on the heap and format it
  *
- * Except for using das_error on a failure, this is a copy of the
+ * Except for using daserrf on a failure, this is a copy of the
  * code out of man 3 printf on Linux.
  *
  * @returns A pointer to the newly allocated and formatted string on
  *          the heap, or NULL if the function failed and the das2 error
  *          disposition allows for continuation after a failure
  */
-DAS_API char* das_string(const char* fmt, ...);
+DAS_API char* dasstr_newf(const char* fmt, ...);
 
 /** Store a formatted string in a newly allocated buffer
  *
  * This version is suitable for calling from variable argument functions.
  *
- * Except for using das_error on a failure, this is a copy of the
+ * Except for using daserrf on a failure, this is a copy of the
  * code out of man 3 printf on Linux.
  *
  * @param fmt - a printf format string
@@ -70,7 +70,7 @@ DAS_API char* das_string(const char* fmt, ...);
  *          the heap, or NULL if the function failed and the das2 error
  *          disposition allows for continuation after a failure
  */
-DAS_API char* das_vstring(const char* fmt, va_list ap);
+DAS_API char* dasstr_newvf(const char* fmt, va_list ap);
 
 /* ************************************************************************* */
 /* Cleanup */
@@ -90,7 +90,7 @@ DAS_API char* das_vstring(const char* fmt, va_list ap);
  *          returned.  A null character will be written to the string
  *          at the start of trailing whitespace.
  */
-DAS_API char* das_strip(char* sLine, char cComment);
+DAS_API char* dasstr_strip(char* sLine, char cComment);
 
 /* ************************************************************************* */
 /* Text to numbers */
@@ -106,7 +106,7 @@ DAS_API char* das_strip(char* sLine, char cComment);
  *        other reason, conversion will fail if the resulting value won't fit
  *        in a 8 byte float.
  */
-DAS_API bool das_str2double(const char* str, double* pRes);
+DAS_API bool dasstr_toDouble(const char* str, double* pRes);
 
 /** Convert the initial portion of a string to an integer with explicit 
  * over/underflow checks
@@ -120,7 +120,7 @@ DAS_API bool das_str2double(const char* str, double* pRes);
  *
  * @returns @c true if the conversion succeeded, @c false otherwise.
  */
-DAS_API bool das_str2int(const char* str, int* pRes);
+DAS_API bool dasstr_toInt(const char* str, int* pRes);
 
 /** Convert a string value to a boolean value.
  *
@@ -132,7 +132,7 @@ DAS_API bool das_str2int(const char* str, int* pRes);
  * @param pRes the location to store the resulting boolean value
  * @return true if the string could be converted to a boolean, false otherwise.
  */
-DAS_API bool das_str2bool(const char* str, bool* pRes);
+DAS_API bool dasstr_toBool(const char* str, bool* pRes);
 
 /** Convert a string to an integer with explicit base and overflow
  * checking.
@@ -149,7 +149,7 @@ DAS_API bool das_str2bool(const char* str, bool* pRes);
  *
  * @returns @c true if the conversion succeeded, @c false otherwise.
  */
-DAS_API bool das_str2baseint(const char* str, int base, int* pRes);
+DAS_API bool dasstr_toBaseInt(const char* str, int base, int* pRes);
 
 /** Convert an explicit length string to an integer with explicit base with
  * over/underflow checks.
@@ -173,7 +173,7 @@ DAS_API bool das_str2baseint(const char* str, int base, int* pRes);
  * Will only inspect up to 64 non-whitespace characters when converting a
  * value.
  */
-DAS_API bool das_strn2baseint(const char* str, int nLen, int base, int* pRes);
+DAS_API bool dasstr_toBaseIntN(const char* str, int nLen, int base, int* pRes);
 
 /** A C locale string to double converter 
  * 
@@ -187,7 +187,7 @@ DAS_API bool das_strn2baseint(const char* str, int nLen, int base, int* pRes);
  * 
  * Notes: Errno is set as normal for the underlying strtod implementation.
  */
-DAS_API double das_strtod_c(const char *nptr, char **endptr);
+DAS_API double dasstr_toDoubleCLocale(const char *nptr, char **endptr);
 
 /** Small helper for printing reals in less space 
  * 
@@ -196,7 +196,7 @@ DAS_API double das_strtod_c(const char *nptr, char **endptr);
  * extra digits are just zeros.  Use this function to shorten real values 
  * that after they have been written to a buffer.
  */
-DAS_API void das_value_trimReal(char* sVal);
+DAS_API void dasstr_trimReal(char* sVal);
 
 /* ************************************************************************* */
 /* Comma separated lists */
@@ -214,10 +214,10 @@ DAS_API void das_value_trimReal(char* sVal);
  * @returns a new double array allocated on the heap  
  *          Not NULL on success: blank text is an empty list, a zero count
  *          and a one slot array.  
- *          NULL, with *pNumItems = 0, after das_error() for NULL
+ *          NULL, with *pNumItems = 0, after daserrf() for NULL
  *          text or a field that is not a number.
  */
-DAS_API double* das_csv2doubles(const char* sCsv, int* pNumItems);
+DAS_API double* dascsv_newDoubles(const char* sCsv, int* pNumItems);
 
 /** Print an array of doubles into a string buffer.
  * Prints an array of doubles into a string buffer with commas and spaces
@@ -230,13 +230,13 @@ DAS_API double* das_csv2doubles(const char* sCsv, int* pNumItems);
  * @param[out] pBuf a pointer to the buffer to receive the printed values
  * @param[in]  uBufSz The length of the buffer to received the converted values
  *
- * @returns A pointer to the supplied buffer, or NULL after das_error() if
+ * @returns A pointer to the supplied buffer, or NULL after daserrf() if
  *          the values do not all fit.
  */
-DAS_API char* das_doubles2csv(const double* pValues, int nValues, char* pBuf, size_t uBufSz);
+DAS_API char* dascsv_fromDoubles(const double* pValues, int nValues, char* pBuf, size_t uBufSz);
 
-/** Similar to das_doubles2csv, but for 32-bit floats */
-DAS_API char* das_floats2csv(const float* pValues, int nValues, char* pBuf, size_t uBufSz);
+/** Similar to dascsv_fromDoubles, but for 32-bit floats */
+DAS_API char* dascsv_fromFloats(const float* pValues, int nValues, char* pBuf, size_t uBufSz);
 
 /* ************************************************************************* */
 /* Escapes and encodings */
@@ -255,7 +255,7 @@ DAS_API char* das_floats2csv(const float* pValues, int nValues, char* pBuf, size
  *
  * @returns the parameter dest cast to a constant pointer.
  */
-DAS_API const char* das_xml_escape(const char* src, char* dest, size_t uOutLen);
+DAS_API const char* dasxml_escape(const char* src, char* dest, size_t uOutLen);
 
 /** Percent encode a string for use in a URL query.
  *
@@ -272,7 +272,7 @@ DAS_API const char* das_xml_escape(const char* src, char* dest, size_t uOutLen);
  * @returns The length of the full encoding, not counting the terminator.
  *        If this is uOut or more the output was cut short.
  */
-DAS_API size_t das_url_encode(const char* sIn, char* sOut, size_t uOut);
+DAS_API size_t dasurl_encode(const char* sIn, char* sOut, size_t uOut);
 
 /** Encode binary data as base64 (RFC 4648) characters in a new buffer.
  *
@@ -285,7 +285,7 @@ DAS_API size_t das_url_encode(const char* sIn, char* sOut, size_t uOut);
  * @returns A pointer to a newly allocated, NUL terminated string, or NULL
  *          if calloc failed.  Caller frees.
  */
-DAS_API char* das_b64_encode(
+DAS_API char* dasb64_encode(
    const unsigned char* data, size_t input_length, size_t* output_length
 );
 
@@ -302,18 +302,18 @@ DAS_API char* das_b64_encode(
  * @returns DAS_OKAY, or a negative das error code on malformed input or
  *          a short output buffer.
  */
-DAS_API int das_b64_decode_buf(
+DAS_API int dasb64_decodeBuf(
    const char* data, size_t input_length, unsigned char* out, size_t out_cap,
    size_t* output_length
 );
 
 /** Decode base64 (RFC 4648) into a newly allocated buffer, symmetric with
- * das_b64_encode.  Caller frees.  Returns NULL on malformed input or alloc
+ * dasb64_encode.  Caller frees.  Returns NULL on malformed input or alloc
  * failure (with *output_length set to 0).  
  *
- * @note For repeated decoding, use the no-alloc function das_b64_decode_buf().
+ * @note For repeated decoding, use the no-alloc function dasb64_decodeBuf().
  */
-DAS_API unsigned char* das_b64_decode(
+DAS_API unsigned char* dasb64_decode(
    const char* data, size_t input_length, size_t* output_length
 );
 

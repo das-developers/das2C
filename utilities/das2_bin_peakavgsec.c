@@ -53,23 +53,23 @@ long   g_lnBin[100] = {0};       /* The current X-axis 'bin number' by pkt id */
 size_t g_uOrigPlanes[100] = {0};
 
 /* Keep track of the peak plane for each original plane */
-size_t g_uPeakIndex[100][MAXPLANES] = {{0}};
+size_t g_uPeakIndex[100][DASPKT_MAX_PLANES] = {{0}};
 
 /* Sum accumulation array, one for each plane of each packet type, fill values
  * aren't added to the count */
-double* g_lrSum[100][MAXPLANES] = {{NULL}};
+double* g_lrSum[100][DASPKT_MAX_PLANES] = {{NULL}};
 
 /* Counting array, one for each plane of each packet type, fill values aren't
    added to the count. */
-double* g_lrCount[100][MAXPLANES] = {{NULL}};
+double* g_lrCount[100][DASPKT_MAX_PLANES] = {{NULL}};
 
 /* Peaks array, one for each plane of each packet type */
-double* g_lrPeaks[100][MAXPLANES] = {{NULL}};
+double* g_lrPeaks[100][DASPKT_MAX_PLANES] = {{NULL}};
 
 /* Values outside this range are left out of the averages and peaks, same
    as fill */
-double g_lrValidMin[100][MAXPLANES];
-double g_lrValidMax[100][MAXPLANES];
+double g_lrValidMin[100][DASPKT_MAX_PLANES];
+double g_lrValidMax[100][DASPKT_MAX_PLANES];
 
 /* True once this program ended the output with its own exception, so the
    close handler must not write the remaining bins after it */
@@ -89,7 +89,7 @@ das_errcode onComment(DasStream* pSd, const DasComment* sc, void* ex ) {
     int nProg;
     if(strcmp( DasComment_get(sc, "type"), "taskProgress" )==0 ) {
        nProg= atoi( DasComment_get(sc, "value") );
-       return DasIO_setTaskProgress(g_pIoOut, nProg);
+       return DasIO_setProgress(g_pIoOut, nProg);
     } else {
        return DasIO_comment(g_pIoOut, sc );
     }
@@ -101,26 +101,26 @@ das_errcode onComment(DasStream* pSd, const DasComment* sc, void* ex ) {
 
 das_errcode onStreamHdr(DasStream* pSdIn, void* v)
 {
-	g_pSdOut = DasStream_copy(pSdIn);
+	g_pSdOut = new_DasStream_copy(pSdIn);
 	double rBinSzSec = g_rBinSzMicroSec*1e-6;
 	double rCacheRes = rBinSzSec;
 	char sResInfo[64] = {'\0'};
 	
 	/* Update the output xTagWidth if it's less than the resolution */
 	if( DasDesc_has((DasDesc*)g_pSdOut, "xTagWidth" ) ) {
-		double rInWidth = DasDesc_getDatum((DasDesc*)g_pSdOut, "xTagWidth", UNIT_SECONDS);
+		double rInWidth = DasDesc_valDatum((DasDesc*)g_pSdOut, "xTagWidth", DASUNITS_SECONDS);
 		if(rInWidth < rBinSzSec)
-			DasDesc_setDatum((DasDesc*)g_pSdOut, "xTagWidth", rBinSzSec, UNIT_SECONDS);
+			DasDesc_setValDatum((DasDesc*)g_pSdOut, "xTagWidth", rBinSzSec, DASUNITS_SECONDS);
 		else
 			rCacheRes = rInWidth;
 	}
 	else{
-		DasDesc_setDatum((DasDesc*)g_pSdOut, "xTagWidth", rBinSzSec, UNIT_SECONDS);
+		DasDesc_setValDatum((DasDesc*)g_pSdOut, "xTagWidth", rBinSzSec, DASUNITS_SECONDS);
 	}
 	
 	/* Set the xCacheResolution, remember this should be no higher than the 
 	 * xTagWidth */
-	DasDesc_setDatum((DasDesc*)g_pSdOut, "xCacheResolution", rCacheRes, UNIT_SECONDS);
+	DasDesc_setValDatum((DasDesc*)g_pSdOut, "xCacheResolution", rCacheRes, DASUNITS_SECONDS);
 	
 	if(rCacheRes < 1.0){  snprintf(sResInfo, 63, " (%.0f ms Averages)", rCacheRes*1000); }
 	else{
@@ -137,12 +137,12 @@ das_errcode onStreamHdr(DasStream* pSdIn, void* v)
 			}
 		}
 	}
-	DasDesc_setStr((DasDesc*)g_pSdOut, "xCacheResInfo", sResInfo);
+	DasDesc_setVal((DasDesc*)g_pSdOut, "xCacheResInfo", sResInfo);
 
 	/* CDF Item:  If the Data_type property is present, change it from
 	   H0>High Resolution data to K0>Key Parameter */
 	if(DasDesc_has((DasDesc*)g_pSdOut, "Data_type"))
-		DasDesc_setStr((DasDesc*)g_pSdOut, "Data_type", "K0>Key Parameter");
+		DasDesc_setVal((DasDesc*)g_pSdOut, "Data_type", "K0>Key Parameter");
 
 	return DasIO_writeStreamDesc(g_pIoOut, g_pSdOut);
 }
@@ -155,7 +155,7 @@ das_errcode sendData(int nPktId)
 	/* Don't flush a packet that hasn't seen any data */
 	if( ! g_lbHasBinNo[nPktId] ) return 0;
 	
-	DasPkt* pPdOut = DasStream_getPkt(g_pSdOut, nPktId);
+	DasPkt* pPdOut = DasStream_pkt(g_pSdOut, nPktId);
 	
 	double value = 0.0;
 	double peakVal = 0.0;
@@ -163,15 +163,15 @@ das_errcode sendData(int nPktId)
 	DasPlane* pPeaks = NULL;
 	
 	for(size_t p = 0; p < g_uOrigPlanes[nPktId]; p++){
-		pPlane = DasPkt_getPlane(pPdOut, p);
+		pPlane = DasPkt_planeAt(pPdOut, p);
 		
-		for(size_t u = 0; u < DasPlane_getNItems(pPlane); u++){
-			if(DasPlane_getType(pPlane) == DASPLANE_X){
+		for(size_t u = 0; u < DasPlane_numItems(pPlane); u++){
+			if(DasPlane_type(pPlane) == DASPLANETYPE_X){
 				value = g_rBinSzMicroSec*(((double)g_lnBin[nPktId]) + 0.5) + g_rStartMicroSec;
 			}
 			else{
 				if(g_lrCount[nPktId][p][u] == 0.0){
-					value = DasPlane_getFill(pPlane);
+					value = DasPlane_fill(pPlane);
 					peakVal = value;
 				}
 				else{
@@ -179,11 +179,11 @@ das_errcode sendData(int nPktId)
 					peakVal = g_lrPeaks[nPktId][p][u];
 				}
 			}
-			DasPlane_setValue(pPlane, u, value);
+			DasPlane_setValAt(pPlane, u, value);
 			
-			if(DasPlane_getType(pPlane) != DASPLANE_X){
-				pPeaks = DasPkt_getPlane(pPdOut, g_uPeakIndex[nPktId][p]);
-				DasPlane_setValue(pPeaks, u, peakVal);
+			if(DasPlane_type(pPlane) != DASPLANETYPE_X){
+				pPeaks = DasPkt_planeAt(pPdOut, g_uPeakIndex[nPktId][p]);
+				DasPlane_setValAt(pPeaks, u, peakVal);
 			}
 			
 			g_lrSum[nPktId][p][u] = 0.0;
@@ -206,22 +206,22 @@ das_errcode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, int nPktId, void* v)
 	
 	/* If this output packet ID already exists, kick out any data associated
 	   with it and delete it */
-	DasDesc* pOld = DasStream_getDesc(g_pSdOut, nPktId);
+	DasDesc* pOld = DasStream_desc(g_pSdOut, nPktId);
 	if(pOld != NULL){
 		sendData(nPktId);
 		DasStream_freeDesc(g_pSdOut, pOld);
 	}
 	
 	/* Deepcopy's the packet descriptor preserving the ID */
-	DasPkt* pPdOut = DasStream_clonePktById(g_pSdOut, pSdIn, nPktId);
+	DasPkt* pPdOut = DasStream_clonePkt(g_pSdOut, pSdIn, nPktId);
 	
 	/* Indicate that the bin number field for this packet is not valid */
 	g_lbHasBinNo[nPktId] = false;
 	
 	/* Check to see if we have room for peaks planes */
-	g_uOrigPlanes[nPktId] = DasPkt_getNPlanes(pPdIn);
+	g_uOrigPlanes[nPktId] = DasPkt_numPlanes(pPdIn);
 	if(g_uOrigPlanes[nPktId] >= 48 ){
-		DasIO_exception_v(g_pIoOut, DAS_EX_SERVER_ERR,
+		DasIO_exceptionf(g_pIoOut, DASEXCEPTTYPE_SERVER_ERR,
 			"Input plane index >= 48, das2_bin_peakavgsec needs the "
 			"upper half of the plane index space to store peaks planes."
 		);
@@ -235,25 +235,25 @@ das_errcode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, int nPktId, void* v)
 	char sNewGroup[128] = {'\0'};
 	size_t uItems = 0;
 	for(size_t u = 0; u < g_uOrigPlanes[nPktId]; u++){
-		pPlOut = DasPkt_getPlane(pPdOut, u);
-		uItems = DasPlane_getNItems(pPlOut);
-		if(DasPlane_getType(pPlOut) == DASPLANE_X){
-			DasPlane_setUnits(pPlOut, UNIT_US2000);
+		pPlOut = DasPkt_planeAt(pPdOut, u);
+		uItems = DasPlane_numItems(pPlOut);
+		if(DasPlane_type(pPlOut) == DASPLANETYPE_X){
+			DasPlane_setUnits(pPlOut, DASUNITS_US2000);
 		}
 		else{
-			das2_validRange(DasPkt_getPlane(pPdIn, u),
+			das2_validRange(DasPkt_planeAt(pPdIn, u),
 				&g_lrValidMin[nPktId][u], &g_lrValidMax[nPktId][u]
 			);
-			pPeakPlane = DasPlane_copy(pPlOut);
-			snprintf(sNewGroup, 127, "%s.max", DasPlane_getName(pPlOut));
+			pPeakPlane = new_DasPlane_copy(pPlOut);
+			snprintf(sNewGroup, 127, "%s.max", DasPlane_name(pPlOut));
 			DasPlane_setName(pPeakPlane, sNewGroup);
-			DasDesc_setStr((DasDesc*)pPeakPlane, "source", DasPlane_getName(pPlOut));
-			DasDesc_setStr((DasDesc*)pPeakPlane, "operation", "BIN_MAX");
+			DasDesc_setVal((DasDesc*)pPeakPlane, "source", DasPlane_name(pPlOut));
+			DasDesc_setVal((DasDesc*)pPeakPlane, "operation", "BIN_MAX");
 			g_uPeakIndex[nPktId][u] = DasPkt_addPlane(pPdOut, pPeakPlane);
 			
 			/* The "out" plane is derived as well, it's the averages */
-			DasDesc_setStr((DasDesc*)pPlOut, "source", DasPlane_getName(pPlOut));
-			DasDesc_setStr((DasDesc*)pPlOut, "operation", "BIN_AVG");
+			DasDesc_setVal((DasDesc*)pPlOut, "source", DasPlane_name(pPlOut));
+			DasDesc_setVal((DasDesc*)pPlOut, "operation", "BIN_AVG");
 			
 			/* Now change the name of the averages plane 
 			 *
@@ -263,7 +263,7 @@ das_errcode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, int nPktId, void* v)
 			 * of the average! 
 			
 			 * memset(sNewName, 0, 128);
-			 * snprintf(sNewName, 127, "%s_avg", DasPlane_getName(pPlOut));
+			 * snprintf(sNewName, 127, "%s_avg", DasPlane_name(pPlOut));
 			 * DasPlane_setName(pPlOut, sNewName);
 			 */
 		}
@@ -289,9 +289,9 @@ das_errcode onPktData(DasPkt* pPdIn, int nPktId, void* ud)
 	
 	/* Check to see if this is the first time this packet type has
 	   been seen  (Note: output packet ID's mirror the input) */
-	DasPlane* pX = DasPkt_getXPlane(pPdIn);
-	double rCurTime = DasPlane_getValue(pX, 0);
-	rCurTime = Units_convertTo(rCurTime, DasPlane_getUnits(pX), UNIT_US2000);
+	DasPlane* pX = DasPkt_xPlane(pPdIn);
+	double rCurTime = DasPlane_valAt(pX, 0);
+	rCurTime = DasUnits_convert(rCurTime, DasPlane_units(pX), DASUNITS_US2000);
 	
 	/* Could be the first data packet of the entire stream */
 	if(! g_bHasStartTime){
@@ -308,25 +308,25 @@ das_errcode onPktData(DasPkt* pPdIn, int nPktId, void* ud)
 	g_lnBin[nPktId] = nCurBin;
 	g_lbHasBinNo[nPktId] = true;
 	
-	DasPkt* pPdOut = DasStream_getPkt(g_pSdOut, nPktId);
+	DasPkt* pPdOut = DasStream_pkt(g_pSdOut, nPktId);
 	DasPlane* pOutPlane = NULL;
 	DasPlane* pInPlane = NULL;
 	const double* pVals = NULL;
 	int nXPlanes = 0;
-	for(size_t u = 0; u < DasPkt_getNPlanes(pPdIn); u++){
-		pOutPlane = DasPkt_getPlane(pPdOut, u);
+	for(size_t u = 0; u < DasPkt_numPlanes(pPdIn); u++){
+		pOutPlane = DasPkt_planeAt(pPdOut, u);
 		
-		if(DasPlane_getType(pOutPlane) == DASPLANE_X){ 
+		if(DasPlane_type(pOutPlane) == DASPLANETYPE_X){ 
 			nXPlanes += 1;
 			if(nXPlanes > 1) 
-				return das_error(100, "das2_bin_peakavgsec reducer can't handle "
+				return daserrf(100, "das2_bin_peakavgsec reducer can't handle "
 						            "packets with more than one X plane.");
 			continue;
 		}
 		
-		pInPlane = DasPkt_getPlane(pPdIn, u);
-		pVals = DasPlane_getValues(pInPlane);
-		for(size_t v = 0; v < DasPlane_getNItems(pInPlane); v++){
+		pInPlane = DasPkt_planeAt(pPdIn, u);
+		pVals = DasPlane_vals(pInPlane);
+		for(size_t v = 0; v < DasPlane_numItems(pInPlane); v++){
 			if(!DasPlane_isFill(pInPlane, pVals[v]) && das2_inRange(
 				pVals[v], g_lrValidMin[nPktId][u], g_lrValidMax[nPktId][u]
 			)){
@@ -351,14 +351,14 @@ das_errcode onClose(DasStream* pSdIn, const DasExcept* pExcept, void* ud){
 	int nPktId;
 	das_errcode nRet = 0;
 	for (nPktId = 1; nPktId < 100; nPktId++){
-		if(DasStream_getDesc(g_pSdOut, nPktId) != NULL){
+		if(DasStream_desc(g_pSdOut, nPktId) != NULL){
 			if( (nRet = sendData(nPktId) ) != 0) return nRet;
 		}
 	}
 
 	if(pExcept == NULL) return 0;
 	DasIO_exception(g_pIoOut, pExcept);
-	return (DasExcept_type(pExcept) == DAS_EX_NO_DATA) ? 0 : P_ERR;
+	return (DasExcept_type(pExcept) == DASEXCEPTTYPE_NO_DATA) ? 0 : P_ERR;
 }
 
 /* ************************************************************************** */
@@ -423,7 +423,7 @@ int main( int argc, char *argv[])
 	double rBinSize;
 	
 	/* Exit on errors, log info messages and above */
-	das_init(argv[0], DASERR_DIS_EXIT, DASLOG_INFO, NULL);
+	daslib_init(argv[0], DASERRDISP_EXIT, DASLOG_INFO, NULL);
 	  
 	if(argc < 2){
 		fprintf(stderr, "Usage: das2_bin_peakavgsec BIN_SECONDS \n"
@@ -436,20 +436,20 @@ int main( int argc, char *argv[])
 	}
 	
 	if(strcmp(argv[1], "-v") == 0 || strcmp(argv[1], "--version") == 0){
-		printf("das2_bin_peakavgsec (das2C %s)\n", das_lib_version());
+		printf("das2_bin_peakavgsec (das2C %s)\n", daslib_version());
 		return 0;
 	}
 	
-	das_time dt = {0};
+	DasTime dt = {0};
 	for(int i = 1; i < argc; i++){
 		if(strcmp(argv[i], "-b") == 0){
 			if(i+1 == argc)
-				return das_error(P_ERR, "Begin bin position missing after -b");
+				return daserrf(P_ERR, "Begin bin position missing after -b");
 			iBinSzArg += 2;
-			if(! dt_parsetime(&dt, argv[i+1]))
-				return das_error(P_ERR, "Couldn't convert %s to a date-time", 
+			if(! DasTime_fromStr(&dt, argv[i+1]))
+				return daserrf(P_ERR, "Couldn't convert %s to a date-time", 
 						            argv[i+1]);
-			g_rStartMicroSec = Units_convertFromDt(&dt, UNIT_US2000);
+			g_rStartMicroSec = DasTime_toPoint(&dt, DASUNITS_US2000);
 			g_bHasStartTime = true;
 			break;
 		}
@@ -473,16 +473,16 @@ int main( int argc, char *argv[])
 	
 	g_pIoOut = new_DasIO("das2_bin_peakavgsec", new_DasXport_stdout(), NULL);
 
-	das_stream_proc proc;
-	das_stream_proc_init(&proc, NULL);
-	proc.onStreamDesc = onStreamHdr;
-	proc.onPktDesc = onPktHdr;
+	DasIOProc proc;
+	init_DasIOProc(&proc, NULL);
+	proc.onStream = onStreamHdr;
+	proc.onPkt = onPktHdr;
 	proc.onPktData = onPktData;
 	proc.onClose = onClose;
 	proc.onComment = onComment;
     
 	DasIO* pIn = new_DasIO("Standard Input", new_DasXport_stdin(), NULL);
-	DasIO_addProcessor(pIn, &proc);
+	DasIO_addProc(pIn, &proc);
 	 
 	return DasIO_readAll(pIn);
 }

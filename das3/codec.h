@@ -46,20 +46,20 @@ extern "C" {
  *
  * Reading and writing array data to buffers
  *
- * Codecs live inside a dataset.  Get one from DasDs_getCodec(),
- * DasDs_getCodecFor() or the DasDs_add*Codec() calls; the dataset owns it.
+ * Codecs live inside a dataset.  Get one from DasDs_codecAt(),
+ * DasDs_codecFor() or the DasDs_add*Codec() calls; the dataset owns it.
  * Change one with DasDs_updateCodec(), which keeps the codec's array inside
  * its dataset.
  */
-typedef struct das_codec DasCodec;
+typedef struct das_codec_t DasCodec;
 
-#define DASENC_READ  true
-#define DASENC_WRITE false
+#define DASCODEC_READ  true
+#define DASCODEC_WRITE false
 
-#define DASENC_ITEM_TERM -9  /* Packet items are terminated by a special byte sequence 
+#define DASCODEC_ITEM_TERM -9  /* Packet items are terminated by a special byte sequence 
                                aka: "Hi There!|Go Away.|" */
 
-#define DASENC_ITEM_LEN -1 /* Packet items have explicit byte lengths in packets
+#define DASCODEC_ITEM_LEN -1 /* Packet items have explicit byte lengths in packets
                               aka:  "|9|Hi There!|8|Go Away." */
 
 
@@ -81,13 +81,13 @@ typedef struct das_codec DasCodec;
  * the caller has to set this up.
  *
  * @param pThis the codec to configure
- * @param nLevels the number of run-terminator levels (1..VARIDX_MAX-1)
+ * @param nLevels the number of run-terminator levels (1..DASIDX_MAX-1)
  * @param sLevels the level bytes, outer-most first, nLevels long
  * @returns DAS_OKAY, or a das error code on a bad or colliding terminator
  *
  * @memberof DasCodec
  */
-DAS_API das_errcode DasCodec_setIdxTerms(DasCodec* pThis, ubyte nLevels, const char* sLevels);
+DAS_API das_errcode DasCodec_setIdxTerms(DasCodec* pThis, uint8_t nLevels, const char* sLevels);
 
 /** Is this codec setup and a reader from external buffers or a write to them ?
  *
@@ -135,12 +135,12 @@ DAS_API int DasCodec_itemBytes(const DasCodec* pThis);
  * @returns the array, owned by the codec's dataset
  * @memberof DasCodec
  */
-DAS_API DasAry* DasCodec_getAry(const DasCodec* pThis);
+DAS_API DasAry* DasCodec_ary(const DasCodec* pThis);
 
 /** The number of external ragged indices whose runs this codec closes
  *
  * Zero for a codec with a fixed item count.  When it is non-zero,
- * DasCodec_raggedIndices() says which indices they are.
+ * DasCodec_findRagged() says which indices they are.
  * @memberof DasCodec
  */
 DAS_API int DasCodec_numRagged(const DasCodec* pThis);
@@ -152,11 +152,11 @@ DAS_API int DasCodec_numRagged(const DasCodec* pThis);
  * first.
  *
  * @param pThis the codec; DasCodec_numRagged() must not be 0
- * @param aRagIdx receives the index positions; must hold VARIDX_MAX entries
+ * @param aRagIdx receives the index positions; must hold DASIDX_MAX entries
  * @returns the number of ragged levels (>= 1), or a negative das error code
  * @memberof DasCodec
  */
-DAS_API int DasCodec_raggedIndices(const DasCodec* pThis, int* aRagIdx);
+DAS_API int DasCodec_findRagged(const DasCodec* pThis, int* aRagIdx);
 
 /** @} */
 

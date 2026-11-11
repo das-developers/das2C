@@ -77,8 +77,8 @@ typedef struct cdf_var {
 
 	/* ISTP attributes the heuristics read, empty when absent */
 	char sVarType[32];
-	char asDepend[VARIDX_MAX][CVAR_NAME_SZ];    /* [0] = DEPEND_0 */
-	char asLablPtr[VARIDX_MAX][CVAR_NAME_SZ];   /* [1] = LABL_PTR_1 */
+	char asDepend[DASIDX_MAX][CVAR_NAME_SZ];    /* [0] = DEPEND_0 */
+	char asLablPtr[DASIDX_MAX][CVAR_NAME_SZ];   /* [1] = LABL_PTR_1 */
 	char sOffsetOf[CVAR_NAME_SZ];
 	char sDeltaPlus[CVAR_NAME_SZ];
 	char sDeltaMinus[CVAR_NAME_SZ];
@@ -95,7 +95,7 @@ typedef struct cdf_var {
 	char sOrigin[64];            /* FRAME_ORIGIN, the origin body of a position */
 	char sSurface[64];           /* opsSurface, a detic/graphic position's ellipsoid */
 	bool bFixed;                 /* FRAME_FIXED, a position's frame rotates with its origin */
-	char asAuxDepend[VARIDX_MAX][CVAR_NAME_SZ]; /* [1] = AUX_DEPEND_1 */
+	char asAuxDepend[DASIDX_MAX][CVAR_NAME_SZ]; /* [1] = AUX_DEPEND_1 */
 	char sUnitPtr[CVAR_NAME_SZ]; /* UNIT_PTR_N of the component axis */
 	char sPlotGroup[64];         /* plotGroup, the das3 group= of the source dataset */
 
@@ -119,8 +119,8 @@ typedef struct cdf_var {
 	char sSyms[64];              /* "x,y,z" */
 	char aLabels[MAX_COMPS][32]; /* component labels as read */
 	int  nLabels;
-	ubyte uSys;                  /* DAS_VSYS_* when sKind is vector */
-	ubyte aDirs[MAX_COMPS];      /* canonical direction of each component */
+	uint8_t uSys;                  /* DAS_VSYS_* when sKind is vector */
+	uint8_t aDirs[MAX_COMPS];      /* canonical direction of each component */
 	int  iCompDim;               /* CDF dim of the component axis, -1 if none */
 	int  iCompSel;               /* selected component on it, -1 = all */
 	char sCompSel[32];           /* how the user spelled it */
@@ -144,7 +144,7 @@ typedef struct cdf_ds {
 	char sGroup[64];             /* from plotGroup only, "" is the null group */
 	int  nRank;
 	int  iTime;
-	char sChain[VARIDX_MAX * CVAR_NAME_SZ];  /* DEPEND names joined, key with sGroup */
+	char sChain[DASIDX_MAX * CVAR_NAME_SZ];  /* DEPEND names joined, key with sGroup */
 	int  aMembers[MAX_CDF_VARS];
 	int  nMembers;
 
@@ -156,7 +156,7 @@ typedef struct cdf_ds {
 typedef struct cdf_file {
 	CDFid id;
 	long nMajority;              /* ROW_MAJOR or COLUMN_MAJOR, how records are stored */
-	char sPath[DURI_MAX_PATH];
+	char sPath[DASURITPLT_PATH_SZ];
 	char sSource[128];           /* Logical_source, or a short TITLE, or "" */
 	cdf_var_t aVars[MAX_CDF_VARS];
 	int nVars;
@@ -172,7 +172,7 @@ typedef struct cdf_select {
 	const char*  sDefVars;         /* --def-vars, comma separated */
 	const char** asVars;           /* named variables, VAR or VAR.COMPONENT */
 	int          nVars;
-	const das_range* pTimeRng;     /* the time range, NULL when unbounded */
+	const DasRng* pTimeRng;     /* the time range, NULL when unbounded */
 	bool         bDataOnly;        /* default selection: VAR_TYPE data only, no
 	                                  support variables and so no folding */
 } cdf_select_t;
@@ -198,7 +198,7 @@ void cdf_listFile(cdf_file_t* pFile, const cdf_select_t* pSel);
    the VAR.COMPONENT spelling and a one line description.  Classify with
    nothing named first so every time dependent variable is selected.
    Variables with more than nMaxRank coordinates go in a second section
-   headed sDeeperTitle; pass VARIDX_MAX and NULL for no split. */
+   headed sDeeperTitle; pass DASIDX_MAX and NULL for no split. */
 void cdf_listVars(cdf_file_t* pFile, int nMaxRank, const char* sDeeperTitle);
 
 /* Structure signature: what a later file must match to reuse the datasets */
@@ -219,8 +219,8 @@ int cdf_offsetTable(const cdf_file_t* pFile, const cdf_var_t* pV, int* pDim, boo
 
 bool cdf_isTimeType(long nType);
 
-/* das value type for a CDF type, vtUnknown for text and EPOCH16 */
-das_val_type cdf_valType(long nType);
+/* das value type for a CDF type, DASVT_UNK for text and EPOCH16 */
+das_vt cdf_valType(long nType);
 
 /* The das3 semantic word: datetime, real or int */
 const char* cdf_semantic(const cdf_var_t* pV);
@@ -228,10 +228,10 @@ const char* cdf_semantic(const cdf_var_t* pV);
 /* The fill for a variable's values: FILLVAL when present and of the same
    type, else the das default for the type.  Time bases are always TT2000
    longs.  pBuf must hold 16 bytes; the return may point into it. */
-const ubyte* cdf_varFill(cdf_file_t* pFile, const cdf_var_t* pV, ubyte* pBuf);
+const uint8_t* cdf_varFill(cdf_file_t* pFile, const cdf_var_t* pV, uint8_t* pBuf);
 
 /* Units for a variable, dimensionless for placeholders and parse failures */
-das_units cdf_varUnits(const cdf_var_t* pV);
+DasUnits cdf_varUnits(const cdf_var_t* pV);
 
 /* Is a non record varying rank-1 numeric table an arithmetic sequence? */
 bool cdf_isSequence(cdf_file_t* pFile, const cdf_var_t* pV, double* pMin, double* pStep);
@@ -266,7 +266,7 @@ long cdf_initReader(const cdf_file_t* pFile, int iVar, rec_reader_t* pR);
 /* Read a block of records of one variable into a malloc'ed buffer through
    the reader's window.  Records come back row major (last dim fastest)
    whatever the file's majority.  NULL on failure, after logging. */
-ubyte* cdf_readBlock(
+uint8_t* cdf_readBlock(
 	cdf_file_t* pFile, long nVarNum, const rec_reader_t* pR, long nRec0, long nRecs, size_t uElemSz
 );
 

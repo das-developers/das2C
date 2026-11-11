@@ -21,7 +21,7 @@
   inctime.c written by L. Granroth  01-28-98
   as a simple utility to increment a time string by a number of seconds.
 
-  Needs libdas3, for dt_parsetime() and dt_tnorm().
+  Needs libdas3, for DasTime_fromStr() and DasTime_normalize().
 
   cc -O -o inctime inctime.c -I/local/include -L/local/lib -ldas -lm
 
@@ -39,7 +39,7 @@
 int
 main (int argc, char *argv[])
 {
-  das_time dt;
+  DasTime dt;
   double increment;
   char s[80];
   int len, i;
@@ -70,7 +70,7 @@ main (int argc, char *argv[])
   s[79] = '\0';
 
   /* parse time string */
-  if (!dt_parsetime (&dt, s)) {
+  if (!DasTime_fromStr (&dt, s)) {
     fprintf (stderr, "%s: error parsing %s\n", argv[0], s);
     exit (-1);
   }
@@ -79,7 +79,7 @@ main (int argc, char *argv[])
   dt.second += increment;
 
   /* re-normalize the time (always watch for bugs in tnorm!) */
-  dt_tnorm (&dt);
+  DasTime_normalize (&dt);
 
   /* and spew the result */  
   fprintf (stdout, "%04d-%02d-%02d (%03d) %02d:%02d:%02d\n",

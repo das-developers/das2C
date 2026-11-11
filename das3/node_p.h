@@ -32,12 +32,12 @@
 
 /* How a node tree works, for readers of node.c and catalog.c.
  *
- * Derived types.  struct das_node is the common header of every node.
+ * Derived types.  struct das_node_t is the common header of every node.
  * Nodes that have children (Catalog, Collection, SourceSet and the SPASE
  * and SPDF trees) are really a DasCatNode, defined in node.c, whose first
  * member is a DasNode so that either can be handled through a DasNode*.
  * The type is checked before casting, see DasNode_isCatalog().  Terminal
- * nodes (stream sources, file aggregations) are a bare struct das_node.
+ * nodes (stream sources, file aggregations) are a bare struct das_node_t.
  *
  * Loading.  Every node begins as a JSON document that _dasnode_fromJson()
  * turns into a struct of the right type.  Where the bytes come from is
@@ -64,8 +64,8 @@
  * drives a DasNodeWalk with them.
  */
 
-struct das_node {
-	das_node_type_e nType;
+struct das_node_t {
+	das_nodetype nType;
 	char sURL[512];        /* where this node was loaded from */
 	char sPath[512];       /* the node's catalog path URI, may be empty */
 	bool bOwner;           /* handed out by a constructor: owns the tree below

@@ -31,12 +31,12 @@
    simultaneously human readable, diff-able, re-parseable and das_verify-able.
 
    The heavy lifting lives in das2C.  Reading lands the stream in the das3 data
-   model (DasDs / DasDim / DasVar / DasCodec).  Per dataset we DasDs_copy() the
+   model (DasDs / DasDim / DasVar / DasCodec).  Per dataset we new_DasDs_copy() the
    structure (sharing the storage arrays), then walk the codecs swapping each
    binary one for a UTF-8 text codec.  The only value type that can't be
    re-encoded in place is a binary epoch time: das3 stores those as integer or
-   real epoch counts, and the codec can only emit ISO-8601 from a das_time
-   array.  So for those we splice in a das_time array (DasDs_replaceAry) and
+   real epoch counts, and the codec can only emit ISO-8601 from a DasTime
+   array.  So for those we splice in a DasTime array (DasDs_replaceAry) and
    convert each record on the way out.
 
 ************************************************************************** */
@@ -55,13 +55,13 @@
 #define MAX_TIME_CONV 16   /* datetime coords converted per dataset */
 
 /* ************************************************************************* */
-/* A single epoch -> das_time conversion to run on each packet.  The epoch
-   array lives in the *input* dataset (the reader fills it); the das_time array
+/* A single epoch -> DasTime conversion to run on each packet.  The epoch
+   array lives in the *input* dataset (the reader fills it); the DasTime array
    lives in the *output* dataset (we fill it, the codec writes it). */
 typedef struct time_conv {
 	DasAry* pEpoch;     /* source: integer/real epoch counts (in the input ds) */
-	DasAry* pTime;      /* dest:   das_time values (in the output ds)           */
-	das_units epoch;    /* the epoch scale of pEpoch (TT2000, US2000, ...)      */
+	DasAry* pTime;      /* dest:   DasTime values (in the output ds)           */
+	DasUnits epoch;    /* the epoch scale of pEpoch (TT2000, US2000, ...)      */
 } TimeConv;
 
 /* Per output-dataset scratch, hung off the DasDs user pointer */
@@ -94,19 +94,19 @@ typedef struct context {
    round-trip would need 17/9 (DBL/FLT_DECIMAL_DIG); a caller who needs that passes
    -r explicitly. */
 
-static int _realWidth(const Context* p, das_val_type vt)
+static int _realWidth(const Context* p, das_vt vt)
 {
 	if(p->nGenRes > 0)                     /* -r N given */
 		return p->nGenRes + 7;
-	return (vt == vtDouble) ? 22 : 13;     /* DBL_DIG=15, FLT_DIG=6, + 7 columns */
+	return (vt == DASVT_DOUBLE) ? 22 : 13;     /* DBL_DIG=15, FLT_DIG=6, + 7 columns */
 }
 
-static int _intWidth(das_val_type vt)
+static int _intWidth(das_vt vt)
 {
 	switch(vt){
-	case vtLong: case vtULong: return 22;
-	case vtInt:  case vtUInt:  return 13;
-	case vtShort:case vtUShort:return 8;
+	case DASVT_LONG: case DASVT_ULONG: return 22;
+	case DASVT_INT:  case DASVT_UINT:  return 13;
+	case DASVT_SHORT:case DASVT_USHORT:return 8;
 	default:                   return 5;   /* byte/ubyte/bool */
 	}
 }
@@ -127,15 +127,15 @@ das_errcode onStream(DasStream* pSdIn, void* pUser)
 	/* The reader has already up-converted das2 into the das3 model in memory.
 	   We always *emit* das3, so a das2 input means a silent version change.
 	   Make that opt-in (-3) rather than accidental. */
-	if((DasStream_getVer(pSdIn) == STREAM_VER_2_2) && !pCtx->bUpConv){
-		return das_error(PERR,
+	if((DasStream_ver(pSdIn) == DASSTREAMVER_2_2) && !pCtx->bUpConv){
+		return daserrf(PERR,
 			"Input is a das v%s stream.  das3_text emits das3; pass -3 to "
 			"up-convert it, or use das2_ascii to keep it das2.",
-			das_stream_ver_toStr(STREAM_VER_2_2)
+			DasStream_verToStr(DASSTREAMVER_2_2)
 		);
 	}
 
-	pCtx->pSdOut = DasStream_copy(pSdIn);
+	pCtx->pSdOut = new_DasStream_copy(pSdIn);
 	return DasIO_writeDesc(pCtx->pOut, (DasDesc*)pCtx->pSdOut, 0);
 }
 
@@ -150,7 +150,7 @@ static const char RUN_TERM_MARKS[] = { '!', '$', '#', '@', '^', '~' };
 /* A var-count text codec needs run terminators to bound its runs in-band. */
 static das_errcode _installRunTerms(DasDs* pDs, size_t iCodec, DasCodec* pCodec)
 {
-	if(DasDs_pktItems(pDs, iCodec) >= 0)
+	if(DasDs_codecItemsAt(pDs, iCodec) >= 0)
 		return DAS_OKAY;   /* fixed item count: no run terminator needed */
 
 	/* We can't change the dataset shape, but we select our count terminators. 
@@ -160,20 +160,20 @@ static das_errcode _installRunTerms(DasDs* pDs, size_t iCodec, DasCodec* pCodec)
 
 	if(DasCodec_numRagged(pCodec) == 0)
 		return DAS_OKAY;
-	int aRagIdx[VARIDX_MAX];
-	int nRag = DasCodec_raggedIndices(pCodec, aRagIdx);
+	int aRagIdx[DASIDX_MAX];
+	int nRag = DasCodec_findRagged(pCodec, aRagIdx);
 	if(nRag < 0)
 		return -1 * nRag;
 	int nLvls = aRagIdx[nRag - 1];   /* span depth: terminators for indices 1..dLast */
 	if(nLvls > (int)sizeof(RUN_TERM_MARKS))
-		return das_error(PERR, "Too many ragged indices (%d) for the default terminators", nLvls);
+		return daserrf(PERR, "Too many ragged indices (%d) for the default terminators", nLvls);
 
 	/* Assign index run terminators.
 
    	For pretty printing, use '\n' for the outer terminator on the last I-slice of a 
    	variable in a packet.  */
 	bool bLastInPkt = (iCodec == (DasDs_numCodecs(pDs) - 1));
-	char aTerms[VARIDX_MAX];               /* outer-most first */
+	char aTerms[DASIDX_MAX];               /* outer-most first */
 	for(int L = 0; L < nLvls; ++L){
 		if((L == 0) && bLastInPkt)
 			aTerms[L] = '\n';                                   /* record boundary */
@@ -181,7 +181,7 @@ static das_errcode _installRunTerms(DasDs* pDs, size_t iCodec, DasCodec* pCodec)
 			aTerms[L] = RUN_TERM_MARKS[bLastInPkt ? (L - 1) : L];
 	}
 
-	return DasCodec_setIdxTerms(pCodec, (ubyte)nLvls, aTerms);
+	return DasCodec_setIdxTerms(pCodec, (uint8_t)nLvls, aTerms);
 }
 
 /* Dataset header: copy the structure, then re-aim every binary codec at a
@@ -191,9 +191,9 @@ das_errcode onDataSet(DasDs* pDsIn, int iPktId, void* pUser)
 {
 	Context* pCtx = (Context*)pUser;
 
-	DasDs* pDsOut = DasDs_copy(pDsIn);
+	DasDs* pDsOut = new_DasDs_copy(pDsIn);
 	if(pDsOut == NULL)
-		return das_error(PERR, "Couldn't copy dataset %s", DasDs_name(pDsIn));
+		return daserrf(PERR, "Couldn't copy dataset %s", DasDs_name(pDsIn));
 
 	if(DasStream_addDesc(pCtx->pSdOut, (DasDesc*)pDsOut, iPktId) != DAS_OKAY)
 		return PERR;
@@ -206,7 +206,7 @@ das_errcode onDataSet(DasDs* pDsIn, int iPktId, void* pUser)
 	/* Walk the copied codecs.  Every one is currently a reader (the input was
 	   parsed); output needs writers, so each branch re-initializes for write. */
 	for(size_t i = 0; i < DasDs_numCodecs(pDsOut); ++i){
-		DasCodec* pCodec = DasDs_getCodec(pDsOut, i);
+		DasCodec* pCodec = DasDs_codecAt(pDsOut, i);
 
 		/* Already text?  Flip it to a writer, encoding unchanged with one exception,
 			leave room to print all real values in scientific notation.  Also if 
@@ -215,12 +215,12 @@ das_errcode onDataSet(DasDs* pDsIn, int iPktId, void* pUser)
 		if(DasCodec_isText(pCodec)){
 			int16_t nWidth = 0;   /* 0 tells DasCodec_update to keep the parsed width */
 			if(strcmp(DasCodec_semantic(pCodec), "real") == 0){
-				das_val_type vtAry = DasAry_valType(DasCodec_getAry(pCodec));  /* vtFloat|vtDouble */
+				das_vt vtAry = DasAry_vt(DasCodec_ary(pCodec));  /* DASVT_FLOAT|DASVT_DOUBLE */
 				int nFloor = _realWidth(pCtx, vtAry);
 				if((DasCodec_itemBytes(pCodec) > 0) && (DasCodec_itemBytes(pCodec) != nFloor))
 					nWidth = (int16_t)nFloor;
 			}
-			if(DasDs_updateCodec(pDsOut, i, DASENC_WRITE, NULL, NULL, nWidth, '\0', NULL, NULL) != DAS_OKAY)
+			if(DasDs_updateCodec(pDsOut, i, DASCODEC_WRITE, NULL, NULL, nWidth, '\0', NULL, NULL) != DAS_OKAY)
 				return PERR;
 			if(_installRunTerms(pDsOut, i, pCodec) != DAS_OKAY)
 				return PERR;
@@ -233,36 +233,36 @@ das_errcode onDataSet(DasDs* pDsIn, int iPktId, void* pUser)
 		   (strcmp(DasCodec_encoding(pCodec), "blob") == 0)||   /* legacy spelling */
 		   (strcmp(DasCodec_encoding(pCodec), "base64") == 0)){
 			if(DasDs_updateCodec(
-				pDsOut, i, DASENC_WRITE, NULL, "base64", DASENC_ITEM_LEN, '\0', NULL, NULL
+				pDsOut, i, DASCODEC_WRITE, NULL, "base64", DASCODEC_ITEM_LEN, '\0', NULL, NULL
 			) != DAS_OKAY)
 				return PERR;
 			continue;
 		}
 
-		DasAry* pAry = DasCodec_getAry(pCodec);
-		das_val_type vtAry = DasAry_valType(pAry);
+		DasAry* pAry = DasCodec_ary(pCodec);
+		das_vt vtAry = DasAry_vt(pAry);
 		bool bDateTime = (strcmp(DasCodec_semantic(pCodec), "datetime") == 0);
 		bool bBool     = (strcmp(DasCodec_semantic(pCodec), "bool") == 0);
 
-		/* Datetime, default behavior: convert the epoch array to das_time so the
-		   codec can write ISO-8601.  This is the one case DasDs_copy alone can't
+		/* Datetime, default behavior: convert the epoch array to DasTime so the
+		   codec can write ISO-8601.  This is the one case new_DasDs_copy alone can't
 		   cover, since the surface value type has to change. */
 		if(bDateTime && !pCtx->bNoClock){
 			if(pWork->nConv >= MAX_TIME_CONV)
-				return das_error(PERR, "More than %d time coordinates in dataset %s",
+				return daserrf(PERR, "More than %d time coordinates in dataset %s",
 					MAX_TIME_CONV, DasDs_name(pDsOut));
 
-			das_units epoch = DasAry_units(pAry);
+			DasUnits epoch = DasAry_units(pAry);
 			char sTimeId[80];
 			snprintf(sTimeId, sizeof(sTimeId)-1, "%s_iso", DasAry_id(pAry));
 
-			/* das_time array shaped like the epoch array */
-			ptrdiff_t aShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
+			/* DasTime array shaped like the epoch array */
+			ptrdiff_t aShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
 			int nRank = DasAry_shape(pAry, aShape);
-			size_t aSz[VARIDX_MAX];
+			size_t aSz[DASIDX_MAX];
 			for(int k = 0; k < nRank; ++k) aSz[k] = (aShape[k] < 1) ? 0 : (size_t)aShape[k];
 			aSz[0] = 0;
-			DasAry* pTime = new_DasAry(sTimeId, vtTime, 0, NULL, nRank, aSz, UNIT_UTC);
+			DasAry* pTime = new_DasAry(sTimeId, DASVT_TIME, 0, NULL, nRank, aSz, DASUNITS_UTC);
 			if(pTime == NULL) return PERR;
 
 			/* Record the per-packet conversion (pAry still lives in the input
@@ -272,13 +272,13 @@ das_errcode onDataSet(DasDs* pDsIn, int iPktId, void* pUser)
 			pWork->aConv[pWork->nConv].epoch  = epoch;
 			pWork->nConv += 1;
 
-			/* Splice the das_time array in for the epoch array (repoints the
+			/* Splice the DasTime array in for the epoch array (repoints the
 			   variable), then re-aim this codec at it as a UTF-8 datetime writer. */
 			if(DasDs_replaceAry(pDsOut, DasAry_id(pAry), pTime) != DAS_OKAY)
 				return PERR;
 
 			if(DasDs_updateCodec(
-				pDsOut, i, DASENC_WRITE, sTimeId, "utf8",
+				pDsOut, i, DASCODEC_WRITE, sTimeId, "utf8",
 				(int16_t)_timeWidth(pCtx), ' ', NULL, NULL
 			) != DAS_OKAY)
 				return PERR;
@@ -292,22 +292,22 @@ das_errcode onDataSet(DasDs* pDsIn, int iPktId, void* pUser)
 		   we hand the codec the epoch units so its datetime semantic still
 		   validates; the integer/real value type makes it print the bare number. */
 		int nWidth;
-		das_units epoch = NULL;
+		DasUnits epoch = NULL;
 		if(bDateTime){
 			epoch = DasAry_units(pAry);
 			nWidth = _intWidth(vtAry);          /* integer epoch counts          */
-			if((vtAry == vtFloat)||(vtAry == vtDouble))
+			if((vtAry == DASVT_FLOAT)||(vtAry == DASVT_DOUBLE))
 				nWidth = _realWidth(pCtx, vtAry); /* or real epoch counts          */
 		}
 		else if(bBool)
 			nWidth = 2;                          /* one glyph (T, F or *) + a separator */
-		else if((vtAry == vtFloat)||(vtAry == vtDouble))
+		else if((vtAry == DASVT_FLOAT)||(vtAry == DASVT_DOUBLE))
 			nWidth = _realWidth(pCtx, vtAry);
 		else
 			nWidth = _intWidth(vtAry);
 
 		if(DasDs_updateCodec(
-			pDsOut, i, DASENC_WRITE, NULL, "utf8", (int16_t)nWidth, ' ', epoch, NULL
+			pDsOut, i, DASCODEC_WRITE, NULL, "utf8", (int16_t)nWidth, ' ', epoch, NULL
 		) != DAS_OKAY)
 			return PERR;
 		if(_installRunTerms(pDsOut, i, pCodec) != DAS_OKAY)
@@ -322,30 +322,30 @@ das_errcode onDataSet(DasDs* pDsIn, int iPktId, void* pUser)
 
 static das_errcode writeAndClear(Context* pCtx, int iPktId, DasDs* pDsIn)
 {
-	DasDs* pDsOut = (DasDs*)DasDesc_getUser((DasDesc*)pDsIn);
-	DsWork* pWork = (DsWork*)DasDesc_getUser((DasDesc*)pDsOut);
+	DasDs* pDsOut = (DasDs*)DasDesc_user((DasDesc*)pDsIn);
+	DsWork* pWork = (DsWork*)DasDesc_user((DasDesc*)pDsOut);
 
-	/* Run the epoch -> das_time conversions for this batch of records */
+	/* Run the epoch -> DasTime conversions for this batch of records */
 	for(int c = 0; c < pWork->nConv; ++c){
 		TimeConv* pC = &(pWork->aConv[c]);
-		das_val_type vt = DasAry_valType(pC->pEpoch);
+		das_vt vt = DasAry_vt(pC->pEpoch);
 
 		size_t uVals = 0;
-		const ubyte* pBeg = DasAry_getIn(pC->pEpoch, vt, 0, NULL, &uVals);
+		const uint8_t* pBeg = DasAry_valsIn(pC->pEpoch, vt, 0, NULL, &uVals);
 		if(pBeg == NULL) continue;
 
 		/* A fill value is converted by its meaning, not by arithmetic: running an
 		   epoch fill sentinel (e.g. INT64_MAX) through the calendar math overflows.
-		   Recognize a value equal to the input array's fill and emit the das_time
+		   Recognize a value equal to the input array's fill and emit the DasTime
 		   fill instead -- that round-trips and stays semantically "fill". */
-		const ubyte* pEpFill   = DasAry_getFill(pC->pEpoch);
-		const ubyte* pTimeFill = DasAry_getFill(pC->pTime);
-		int64_t nFillL = (vt == vtLong)   ? *((const int64_t*)pEpFill) : 0;
-		double  rFillD = (vt == vtDouble) ? *((const double*)pEpFill)  : 0.0;
+		const uint8_t* pEpFill   = DasAry_fill(pC->pEpoch);
+		const uint8_t* pTimeFill = DasAry_fill(pC->pTime);
+		int64_t nFillL = (vt == DASVT_LONG)   ? *((const int64_t*)pEpFill) : 0;
+		double  rFillD = (vt == DASVT_DOUBLE) ? *((const double*)pEpFill)  : 0.0;
 
-		das_time dt;
+		DasTime dt;
 		for(size_t u = 0; u < uVals; ++u){
-			bool bFill = (vt == vtLong)
+			bool bFill = (vt == DASVT_LONG)
 				? (((const int64_t*)pBeg)[u] == nFillL)
 				: (((const double*)pBeg)[u] == rFillD);
 
@@ -355,18 +355,18 @@ static das_errcode writeAndClear(Context* pCtx, int iPktId, DasDs* pDsIn)
 				continue;
 			}
 
-			/* Keep TT2000 integer-exact: int64 straight into das_time, never via
+			/* Keep TT2000 integer-exact: int64 straight into DasTime, never via
 			   a double.  Other epochs are doubles already. */
-			if((vt == vtLong) && (pC->epoch == UNIT_TT2000))
-				dt_from_tt2k(&dt, ((const int64_t*)pBeg)[u]);
-			else if(vt == vtDouble)
-				Units_convertToDt(&dt, ((const double*)pBeg)[u], pC->epoch);
-			else if(vt == vtLong)
-				Units_convertToDt(&dt, (double)(((const int64_t*)pBeg)[u]), pC->epoch);
+			if((vt == DASVT_LONG) && (pC->epoch == DASUNITS_TT2000))
+				DasTime_fromTt2k(&dt, ((const int64_t*)pBeg)[u]);
+			else if(vt == DASVT_DOUBLE)
+				DasTime_fromPoint(&dt, ((const double*)pBeg)[u], pC->epoch);
+			else if(vt == DASVT_LONG)
+				DasTime_fromPoint(&dt, (double)(((const int64_t*)pBeg)[u]), pC->epoch);
 			else
-				return das_error(PERR, "Unexpected epoch storage type %s", das_vt_toStr(vt));
+				return daserrf(PERR, "Unexpected epoch storage type %s", dasvt_name(vt));
 
-			if(DasAry_append(pC->pTime, (const ubyte*)&dt, 1) == NULL)
+			if(DasAry_append(pC->pTime, (const uint8_t*)&dt, 1) == NULL)
 				return PERR;
 		}
 	}
@@ -374,9 +374,9 @@ static das_errcode writeAndClear(Context* pCtx, int iPktId, DasDs* pDsIn)
 	das_errcode nRet = DasIO_writeData(pCtx->pOut, (DasDesc*)pDsOut, iPktId);
 	if(nRet != DAS_OKAY) return nRet;
 
-	/* Clears the shared + das_time arrays.  DasIO clears the input's
+	/* Clears the shared + DasTime arrays.  DasIO clears the input's
 	   shared + epoch arrays itself before decoding the next packet. */
-	DasDs_clearRagged0(pDsOut);
+	DasDs_clearIdx0(pDsOut);
 	return DAS_OKAY;
 }
 
@@ -404,12 +404,12 @@ das_errcode onClose(DasStream* pSdIn, const DasExcept* pExcept, void* pUser)
 	Context* pCtx = (Context*)pUser;
 
 	DasDesc* pDesc = NULL;
-	ptrdiff_t aShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
+	ptrdiff_t aShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
 
-	while((pSdIn != NULL)&&((pDesc = DasStream_nextDesc(pSdIn, pDesc, DASDESC_DS)) != NULL)){
+	while((pSdIn != NULL)&&((pDesc = DasStream_nextDesc(pSdIn, pDesc, DASDESCTYPE_DS)) != NULL)){
 		DasDs* pDsIn = (DasDs*)pDesc;
-		if(DasDesc_getUser((DasDesc*)pDsIn) == NULL) continue;
-		int nPktId = DasStream_getPktId(pSdIn, pDesc);
+		if(DasDesc_user((DasDesc*)pDsIn) == NULL) continue;
+		int nPktId = DasStream_pktId(pSdIn, pDesc);
 
 		DasDs_shape(pDsIn, aShape);
 		if(aShape[0] > 0){
@@ -417,8 +417,8 @@ das_errcode onClose(DasStream* pSdIn, const DasExcept* pExcept, void* pUser)
 			if(nRet != DAS_OKAY) return nRet;
 		}
 
-		DasDs* pDsOut = (DasDs*)DasDesc_getUser((DasDesc*)pDsIn);
-		if(DasDesc_getUser((DasDesc*)pDsOut) != NULL){ free(DasDesc_getUser((DasDesc*)pDsOut)); DasDesc_setUser((DasDesc*)pDsOut, NULL); }
+		DasDs* pDsOut = (DasDs*)DasDesc_user((DasDesc*)pDsIn);
+		if(DasDesc_user((DasDesc*)pDsOut) != NULL){ free(DasDesc_user((DasDesc*)pDsOut)); DasDesc_setUser((DasDesc*)pDsOut, NULL); }
 	}
 
 	if((pExcept != NULL)&&(pCtx->bAnnotations))
@@ -426,7 +426,7 @@ das_errcode onClose(DasStream* pSdIn, const DasExcept* pExcept, void* pUser)
 	else
 		DasIO_close(pCtx->pOut);
 
-	if((pExcept == NULL)||(DasExcept_type(pExcept) == DAS_EX_NO_DATA))
+	if((pExcept == NULL)||(DasExcept_type(pExcept) == DASEXCEPTTYPE_NO_DATA))
 		return DAS_OKAY;
 	return PERR;
 }
@@ -503,7 +503,7 @@ void prnHelp()
 
 int main(int argc, char** argv)
 {
-	das_init(argv[0], DASERR_DIS_EXIT, DASLOG_INFO, NULL);
+	daslib_init(argv[0], DASERRDISP_EXIT, DASLOG_INFO, NULL);
 
 	Context ctx;
 	memset(&ctx, 0, sizeof(Context));
@@ -558,17 +558,17 @@ int main(int argc, char** argv)
 		pIn = new_DasIO(PROG, new_DasXport_file(sInFile, "r"), NULL);
 
 	DasIO_setModel(pIn, 3);   /* read das2 or das3 into the das3 model */
-	DasIO_embedAsBytes(pIn, ctx.bEmbedBytes);  /* -f: flatten undecodable embedded formats */
+	DasIO_setEmbedAsBytes(pIn, ctx.bEmbedBytes);  /* -f: flatten undecodable embedded formats */
 
-	das_stream_proc handler;
-	das_stream_proc_init(&handler, &ctx);
-	handler.onStreamDesc = onStream;
-	handler.onDsDesc     = onDataSet;
+	DasIOProc handler;
+	init_DasIOProc(&handler, &ctx);
+	handler.onStream = onStream;
+	handler.onDs     = onDataSet;
 	handler.onDsData     = onData;
 	handler.onComment    = onComment;
 	handler.onClose      = onClose;
 
-	DasIO_addProcessor(pIn, &handler);
+	DasIO_addProc(pIn, &handler);
 
 	int nRet = DasIO_readAll(pIn);
 

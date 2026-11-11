@@ -34,7 +34,7 @@
 extern "C" {
 #endif
 
-#ifdef HOST_IS_LSB_FIRST
+#ifdef DASHOST_LSB_FIRST
 
 /** Macro to byte swap buffers in place on little endian computers only */
 #define swapBufIfHostLE(p, s, n) das_swap_buf(p, s, n)
@@ -64,8 +64,8 @@ DAS_API void das_swap_u4(uint32_t* pIn);
 
 #define D1ERR     10
 
-/* The das1 time functions, wrappers around libdas3's das_time functions,
-   dt_parsetime(), dt_ttime(), dt_emitt() and dt_tnorm() */
+/* The das1 time functions, wrappers around libdas3's DasTime functions,
+   DasTime_fromStr(), DasTime_toSec1958(), DasTime_fromSec1958() and DasTime_normalize() */
 
 /** Convert most human-parseable time strings to numeric components 
  * returns 0 on success and non-zero on failure 
@@ -168,7 +168,7 @@ void fail (const char *message);
  * @param max number of bytes to read
  * @returns number of bytes read 
  */
-int getpkt(char *ph, ubyte *data, int max);
+int getpkt(char *ph, uint8_t *data, int max);
 
 /** Read a Tagged Das 1 packet from a file object 
  *
@@ -178,7 +178,7 @@ int getpkt(char *ph, ubyte *data, int max);
  * @param [in] max number of bytes to read
  * @returns number of bytes read 
  */
-int fgetpkt(FILE* fin, char* ph, ubyte* data, int max);
+int fgetpkt(FILE* fin, char* ph, uint8_t* data, int max);
 
 
 /** Write das packet to stdout
@@ -188,7 +188,7 @@ int fgetpkt(FILE* fin, char* ph, ubyte* data, int max);
  *        header I don't know)
  * @returns 1 on success and 0 on failure 
  */
-int putpkt (const char *ph, const ubyte *data, const int bytes);
+int putpkt (const char *ph, const uint8_t *data, const int bytes);
 
 #ifdef __cplusplus
 }

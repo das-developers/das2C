@@ -56,7 +56,7 @@ extern "C" {
 /* Room for the longest PlotType, "cartesian3d:movie", update if schema changes. */
 #define DASDS_PLOT_SZ 24
 
-struct dataset {
+struct das_ds_t {
 	DasDesc base;        /* This would be equivalent to the properties for 
 	                        a packet descriptor.  Typically in das 2.2 packets
 	                        don't have a descriptor, only streams and planes
@@ -72,13 +72,13 @@ struct dataset {
 	/* The dataset's name, written in das3 headers.  (sGroupId, sId)
 	 * is the dataset key and should be unique in a stream, which nothing
 	 * here enforces, see DasDs_name() in datset.h. */
-	char sId[DAS_MAX_ID_BUFSZ];
+	char sId[DASID_SZ];
 	
 	/* The join group for this dataset.  Datasets with the same group should
 	 * be joined automatically by display clients.  Empty is the null group,
 	 * which joins nothing.  Written as group= in das3 headers, and is what
 	 * das2 calls a plane or packet name. */
-	char sGroupId[DAS_MAX_ID_BUFSZ];
+	char sGroupId[DASID_SZ];
 
 	/* Overall plotting hint for dataset consumers, same idea as DasDim.axis.
        See schema for legal values */
@@ -98,7 +98,7 @@ struct dataset {
 
 	DasAry* aArrays[DASDS_LOC_ARY_SZ];  /* small vector memory */
 	
-	ptrdiff_t _shape[VARIDX_MAX];  /* cache shape calls for speed */
+	ptrdiff_t _shape[DASIDX_MAX];  /* cache shape calls for speed */
 	
 	bool _dynamic;      /* If true, the dataset may still be changing and all
 	                       bulk properties such as the iteration shape should be

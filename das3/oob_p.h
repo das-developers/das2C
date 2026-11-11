@@ -37,14 +37,14 @@ typedef struct out_of_band {
 	das_oob_type_e pkttype;
 } OutOfBand;
 
-struct das_except {
+struct das_except_t {
 	OutOfBand base;
-	das_except_e nType;
+	das_excepttype nType;
 	char* sMsg;         /* never NULL after init, "" when empty */
 	size_t uMsgLen;     /* allocated size of sMsg */
 };
 
-struct das_comment {
+struct das_comment_t {
 	OutOfBand base;
 	char* sType;   size_t uTypeLen;   /* each never NULL after init, */
 	char* sSrc;    size_t uSrcLen;    /* "" when unset; u*Len is the */

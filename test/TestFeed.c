@@ -64,7 +64,7 @@ static void tallyInit(void){ g_nData = g_nComment = g_nClose = 0; g_nExType = -1
 static das_errcode onStream(DasStream* pSd, void* pUser)
 {
 	char sBuf[16000] = {'\0'};
-	DasStream_info(pSd, sBuf, 15999);
+	DasStream_toInfoStr(pSd, sBuf, 15999);
 	hashStr(sBuf);
 	return DAS_OKAY;
 }
@@ -80,7 +80,7 @@ static das_errcode onDataset(DasDs* pDs, int iPktId, void* pUser)
 
 static das_errcode onData(DasDs* pDs, int iPktId, void* pUser)
 {
-	ptrdiff_t aShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
+	ptrdiff_t aShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
 	int nRank = DasDs_shape(pDs, aShape);
 
 	++g_nData;
@@ -100,35 +100,35 @@ static das_errcode onComment(DasStream* pSd, const DasComment* pCmt, void* pUser
 }
 
 /* Fold the complete contents of one array into the digest.  Pure numeric
- * elements hash as raw bytes.  das_time elements hash through dt_ttime and
+ * elements hash as raw bytes.  DasTime elements hash through DasTime_toSec1958 and
  * strings hash by content, since both have representations (struct padding,
  * heap pointers) that legitimately differ between two parses of the same
  * input.  Anything else contributes its type and count only. */
 static void hashAry(DasAry* pAry)
 {
 	size_t uVals = 0;
-	das_val_type vt = DasAry_valType(pAry);
+	das_vt vt = DasAry_vt(pAry);
 
 	hashStr(DasAry_id(pAry));
-	hashStr(das_vt_toStr(vt));
+	hashStr(dasvt_name(vt));
 	hashLong((int64_t)DasAry_size(pAry));
 
-	if((vt >= vtUByte)&&(vt <= vtDouble)){
-		const ubyte* pRaw = DasAry_getIn(pAry, vt, DIM0, &uVals);
+	if((vt >= DASVT_UBYTE)&&(vt <= DASVT_DOUBLE)){
+		const uint8_t* pRaw = DasAry_valsIn(pAry, vt, DAS_ADDR0, &uVals);
 		if(pRaw != NULL)
 			hashBytes(pRaw, uVals * DasAry_valSize(pAry));
 		return;
 	}
 
-	if(vt == vtTime){
-		const das_time* pT = DasAry_getTimesIn(pAry, DIM0, &uVals);
+	if(vt == DASVT_TIME){
+		const DasTime* pT = DasAry_timesIn(pAry, DAS_ADDR0, &uVals);
 		for(size_t u = 0; pT != NULL && u < uVals; ++u)
-			hashDouble(dt_ttime(pT + u));
+			hashDouble(DasTime_toSec1958(pT + u));
 		return;
 	}
 
-	if(vt == vtText){
-		char** pS = (char**)DasAry_getIn(pAry, vtText, DIM0, &uVals);
+	if(vt == DASVT_TEXT){
+		char** pS = (char**)DasAry_valsIn(pAry, DASVT_TEXT, DAS_ADDR0, &uVals);
 		for(size_t u = 0; pS != NULL && u < uVals; ++u)
 			hashStr(pS[u]);
 		return;
@@ -145,9 +145,9 @@ static das_errcode onClose(DasStream* pSd, const DasExcept* pEx, void* pUser)
 		hashStr(DasExcept_msg(pEx));
 	}
 
-	for(int iPktId = 1; (pSd != NULL)&&(iPktId < DAS2_MAX_PKTIDS); ++iPktId){
-		DasDesc* pDesc = DasStream_getDesc(pSd, iPktId);
-		if((pDesc == NULL)||(DasDesc_type(pDesc) != DASDESC_DS))
+	for(int iPktId = 1; (pSd != NULL)&&(iPktId < DASSTREAM_V2_ENDPKTID); ++iPktId){
+		DasDesc* pDesc = DasStream_desc(pSd, iPktId);
+		if((pDesc == NULL)||(DasDesc_type(pDesc) != DASDESCTYPE_DS))
 			continue;
 
 		DasDs* pDs = (DasDs*)pDesc;
@@ -156,21 +156,21 @@ static das_errcode onClose(DasStream* pSd, const DasExcept* pEx, void* pUser)
 		hashLong(iPktId);
 		hashStr(sBuf);
 
-		for(size_t u = 0; u < DasDs_numAry(pDs); ++u)
-			hashAry(DasDs_getAry(pDs, u));
+		for(size_t u = 0; u < DasDs_numArys(pDs); ++u)
+			hashAry(DasDs_aryAt(pDs, u));
 	}
 	return DAS_OKAY;
 }
 
-static void addHandlers(DasIO* pIo, das_stream_proc* pHndlr)
+static void addHandlers(DasIO* pIo, DasIOProc* pHndlr)
 {
-	das_stream_proc_init(pHndlr, NULL);
-	pHndlr->onStreamDesc = onStream;
-	pHndlr->onDsDesc = onDataset;
+	init_DasIOProc(pHndlr, NULL);
+	pHndlr->onStream = onStream;
+	pHndlr->onDs = onDataset;
 	pHndlr->onDsData = onData;
 	pHndlr->onComment = onComment;
 	pHndlr->onClose = onClose;
-	DasIO_addProcessor(pIo, pHndlr);
+	DasIO_addProc(pIo, pHndlr);
 }
 
 static das_errcode onMonComment(DasStream* pSd, const DasComment* pCmt, void* pUser){ return DAS_OKAY; }
@@ -180,11 +180,11 @@ static das_errcode onMonComment(DasStream* pSd, const DasComment* pCmt, void* pU
    clearing off which processors had data handlers, and a data-less one wiped
    the records its siblings were accumulating -- identically in pull and feed
    mode, so only a with-vs-without comparison catches a regression. */
-static void addMonitor(DasIO* pIo, das_stream_proc* pHndlr)
+static void addMonitor(DasIO* pIo, DasIOProc* pHndlr)
 {
-	das_stream_proc_init(pHndlr, NULL);
+	init_DasIOProc(pHndlr, NULL);
 	pHndlr->onComment = onMonComment;
-	DasIO_addProcessor(pIo, pHndlr);
+	DasIO_addProc(pIo, pHndlr);
 }
 
 /* ************************************************************************* */
@@ -220,10 +220,10 @@ static const struct {
 	const char* sBase;
 	int nData;       /* data packets before the exception */
 	int nComment;    /* comments before the exception */
-	das_except_e nType;
+	das_excepttype nType;
 } g_aStop[] = {
-	{"das2_except_mid.d2t", 2, 1, DAS_EX_SERVER_ERR},
-	{"das3_except_mid.d3t", 3, 1, DAS_EX_SERVER_ERR},
+	{"das2_except_mid.d2t", 2, 1, DASEXCEPTTYPE_SERVER_ERR},
+	{"das3_except_mid.d3t", 3, 1, DASEXCEPTTYPE_SERVER_ERR},
 };
 static const int g_nStop = sizeof(g_aStop)/sizeof(g_aStop[0]);
 
@@ -248,14 +248,14 @@ static bool stopOkay(const char* sPath, const char* sHow)
 
 /* ************************************************************************* */
 
-static ubyte* slurp(const char* sPath, size_t* pLen)
+static uint8_t* slurp(const char* sPath, size_t* pLen)
 {
 	FILE* pFile = fopen(sPath, "rb");
 	if(pFile == NULL) return NULL;
 	fseek(pFile, 0, SEEK_END);
 	long nLen = ftell(pFile);
 	fseek(pFile, 0, SEEK_SET);
-	ubyte* pData = (ubyte*)malloc((nLen > 0) ? nLen : 1);
+	uint8_t* pData = (uint8_t*)malloc((nLen > 0) ? nLen : 1);
 	if(fread(pData, 1, nLen, pFile) != (size_t)nLen){
 		free(pData);
 		fclose(pFile);
@@ -275,7 +275,7 @@ static das_errcode pullParse(const char* sPath, bool bMonitor)
 	DasIO_setModel(pIo, 3);   /* up-convert das2 so one handler set covers all */
 	DasIO_setAccum(pIo, true);  /* hash the growing shapes, not just one packet */
 
-	das_stream_proc handler, monitor;
+	DasIOProc handler, monitor;
 	addHandlers(pIo, &handler);
 	if(bMonitor)
 		addMonitor(pIo, &monitor);
@@ -290,13 +290,13 @@ static das_errcode pullParse(const char* sPath, bool bMonitor)
 
 /* Parse via DasIO_feed in uChunk sized pieces.  Returns the parser result
  * and leaves the digest in g_uHash. */
-static das_errcode feedParse(const ubyte* pData, size_t uLen, size_t uChunk)
+static das_errcode feedParse(const uint8_t* pData, size_t uLen, size_t uChunk)
 {
 	DasIO* pIo = new_DasIO_feed("TestFeed", "r");
 	DasIO_setModel(pIo, 3);
 	DasIO_setAccum(pIo, true);
 
-	das_stream_proc handler, monitor;
+	DasIOProc handler, monitor;
 	addHandlers(pIo, &handler);
 	addMonitor(pIo, &monitor);
 
@@ -321,7 +321,7 @@ static int selfChecks(void)
 	   das-basic-doc parsing lands this check inverts. */
 	const char* sDoc = "<stream version=\"3.0\"><properties/></stream>";
 	DasIO* pIo = new_DasIO_feed("TestFeed", "r");
-	if(DasIO_feed(pIo, (const ubyte*)sDoc, strlen(sDoc)) != DAS_OKAY){
+	if(DasIO_feed(pIo, (const uint8_t*)sDoc, strlen(sDoc)) != DAS_OKAY){
 		printf("ERROR: document bytes refused by the framing layer\n");
 		return 1;
 	}
@@ -334,7 +334,7 @@ static int selfChecks(void)
 	/* Abandon a parse mid-packet, del_DasIO has to clean up alone */
 	const char* sFrag = "|Sx||100|<stream";
 	pIo = new_DasIO_feed("TestFeed", "r");
-	if(DasIO_feed(pIo, (const ubyte*)sFrag, strlen(sFrag)) != DAS_OKAY){
+	if(DasIO_feed(pIo, (const uint8_t*)sFrag, strlen(sFrag)) != DAS_OKAY){
 		printf("ERROR: partial packet refused before end of input\n");
 		return 1;
 	}
@@ -342,12 +342,12 @@ static int selfChecks(void)
 
 	/* Garbage latches an error that repeats on every later call */
 	pIo = new_DasIO_feed("TestFeed", "r");
-	das_errcode nRet = DasIO_feed(pIo, (const ubyte*)"garbage!", 8);
+	das_errcode nRet = DasIO_feed(pIo, (const uint8_t*)"garbage!", 8);
 	if(nRet == DAS_OKAY){
 		printf("ERROR: garbage input accepted\n");
 		return 1;
 	}
-	if(DasIO_feed(pIo, (const ubyte*)"more", 4) != nRet){
+	if(DasIO_feed(pIo, (const uint8_t*)"more", 4) != nRet){
 		printf("ERROR: feed error did not latch\n");
 		return 1;
 	}
@@ -379,7 +379,7 @@ static das_errcode onBigStream(DasStream* pSd, void* pUser)
 	g_uBigLen = 0;
 	for(int i = 0; i < BIG_MAX_PROPS; ++i){
 		snprintf(sName, sizeof(sName), "big%d", i);
-		const char* s = DasDesc_getStr((DasDesc*)pSd, sName);
+		const char* s = DasDesc_val((DasDesc*)pSd, sName);
 		if(s != NULL) g_uBigLen += strlen(s);
 	}
 	return DAS_OKAY;
@@ -420,7 +420,7 @@ static das_errcode writeBig(
 		char cSave = sProp[uDone + uPiece];
 		sProp[uDone + uPiece] = '\0';
 		snprintf(sName, sizeof(sName), "big%d", i);
-		DasDesc_setStr((DasDesc*)pSd, sName, sProp + uDone);
+		DasDesc_setVal((DasDesc*)pSd, sName, sProp + uDone);
 		sProp[uDone + uPiece] = cSave;
 		uDone += uPiece;
 	}
@@ -451,11 +451,11 @@ static das_errcode readBig(const char* pData, size_t uLen, size_t uChunk)
 		new_DasIO_feed("TestFeed", "r");
 	DasIO_setModel(pIo, 3);   /* das3 headers, and das2 ones up-converted */
 
-	das_stream_proc handler;
-	das_stream_proc_init(&handler, NULL);
-	handler.onStreamDesc = onBigStream;
+	DasIOProc handler;
+	init_DasIOProc(&handler, NULL);
+	handler.onStream = onBigStream;
 	handler.onComment = onBigComment;
-	DasIO_addProcessor(pIo, &handler);
+	DasIO_addProc(pIo, &handler);
 
 	g_uBigLen = g_uCmtLen = 0;
 	das_errcode nRet = DAS_OKAY;
@@ -464,7 +464,7 @@ static das_errcode readBig(const char* pData, size_t uLen, size_t uChunk)
 	else{
 		for(size_t u = 0; u < uLen && nRet == DAS_OKAY; u += uChunk){
 			size_t uThis = (uLen - u < uChunk) ? uLen - u : uChunk;
-			nRet = DasIO_feed(pIo, (const ubyte*)pData + u, uThis);
+			nRet = DasIO_feed(pIo, (const uint8_t*)pData + u, uThis);
 		}
 		das_errcode nEndRet = DasIO_feedEnd(pIo);
 		if(nRet == DAS_OKAY) nRet = nEndRet;
@@ -582,14 +582,14 @@ static int bigPacketChecks(void)
 	nBad += refuseBoth("a negative length", "|Sx||-49|");
 	nBad += refuseBoth("a space in the length", "|Sx|| 49|");
 	/* The published limits are the ones the parsers enforce */
-	const das_limit* pPktMax = daslimit_get("max_packet_bytes");
-	const das_limit* pIdMax  = daslimit_get("das3_max_packet_id");
+	const DasLimit* pPktMax = DasLimit_lookup("max_packet_bytes");
+	const DasLimit* pIdMax  = DasLimit_lookup("das3_max_packet_id");
 	if((pPktMax == NULL)||(pIdMax == NULL)){
-		printf("ERROR: packet size or ID limit missing from daslimit_get()\n");
+		printf("ERROR: packet size or ID limit missing from DasLimit_lookup()\n");
 		return nBad + 1;
 	}
 	char sTag[64];
-	snprintf(sTag, sizeof(sTag), "|Sx||%d|", (int)pPktMax->nLimit + 1);
+	snprintf(sTag, sizeof(sTag), "|Sx||%d|", (int)pPktMax->value + 1);
 	nBad += refuseBoth("a length one past max_packet_bytes", sTag);
 	nBad += refuseBoth("a 10 digit length past the limit", "|Sx||9999999999|");
 
@@ -610,7 +610,7 @@ static int bigPacketChecks(void)
 		nBad += refuseBoth(aBadTags[i][0], sStream);
 	}
 	snprintf(sStream, sizeof(sStream), "|Sx||%zu|%s|Hx|%d|5|<xx/>", strlen(sHdr),
-	         sHdr, (int)pIdMax->nLimit + 1);
+	         sHdr, (int)pIdMax->value + 1);
 	nBad += refuseBoth("a header ID one past das3_max_packet_id", sStream);
 
 	if(nBad == 0)
@@ -656,12 +656,12 @@ fail:
 }
 
 /* Pull parse from memory, digest in g_uHash, same handlers as pullParse() */
-static das_errcode pullMemParse(const ubyte* pData, size_t uLen)
+static das_errcode pullMemParse(const uint8_t* pData, size_t uLen)
 {
 	DasIO* pIo = new_DasIO("TestFeed", new_DasXport_mem((void*)pData, uLen, "r"), NULL);
 	DasIO_setModel(pIo, 3);
 	DasIO_setAccum(pIo, true);
-	das_stream_proc handler;
+	DasIOProc handler;
 	addHandlers(pIo, &handler);
 	hashInit();
 	tallyInit();
@@ -675,7 +675,7 @@ static das_errcode pullMemParse(const ubyte* pData, size_t uLen)
 static int paddedTagChecks(const char* sPath)
 {
 	size_t uLen = 0, uPad = 0;
-	ubyte* pData = slurp(sPath, &uLen);
+	uint8_t* pData = slurp(sPath, &uLen);
 	if(pData == NULL){ printf("ERROR: Couldn't read %s\n", sPath); return 1; }
 	char* pPad = padTags((const char*)pData, uLen, &uPad);
 	if(pPad == NULL){
@@ -689,13 +689,13 @@ static int paddedTagChecks(const char* sPath)
 		printf("ERROR: %s did not parse\n", sPath); ++nBad;
 	}
 	uint64_t uWant = g_uHash;
-	if((pullMemParse((const ubyte*)pPad, uPad) != DAS_OKAY)||(g_uHash != uWant)){
+	if((pullMemParse((const uint8_t*)pPad, uPad) != DAS_OKAY)||(g_uHash != uWant)){
 		printf("ERROR: %s with padded tags, pull parse differs\n", sPath); ++nBad;
 	}
 	const size_t aChunks[] = {1, 7, 4096, 0};
 	for(size_t i = 0; i < sizeof(aChunks)/sizeof(aChunks[0]); ++i){
 		size_t uChunk = aChunks[i] ? aChunks[i] : uPad;
-		if((feedParse((const ubyte*)pPad, uPad, uChunk) != DAS_OKAY)||(g_uHash != uWant)){
+		if((feedParse((const uint8_t*)pPad, uPad, uChunk) != DAS_OKAY)||(g_uHash != uWant)){
 			printf("ERROR: %s with padded tags, feed parse differs at chunk %zu\n",
 			       sPath, uChunk);
 			++nBad;
@@ -715,7 +715,7 @@ int main(int argc, char** argv)
 
 	/* Log errors and return codes, many fixtures are fed at hostile chunk
 	   sizes and the failures have to flow back up to this harness */
-	das_init(argv[0], DASERR_DIS_RET, DASLOG_ERROR, NULL);
+	daslib_init(argv[0], DASERRDISP_RET, DASLOG_ERROR, NULL);
 
 	if(argc < 2){
 		fprintf(stderr, "Usage: %s STREAM_FILE [STREAM_FILE ...]\n", argv[0]);
@@ -740,7 +740,7 @@ int main(int argc, char** argv)
 		}
 
 		size_t uLen = 0;
-		ubyte* pData = slurp(argv[i], &uLen);
+		uint8_t* pData = slurp(argv[i], &uLen);
 		if(pData == NULL){
 			printf("ERROR: Couldn't read %s\n", argv[i]);
 			return 64;

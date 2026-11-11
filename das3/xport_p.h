@@ -36,9 +36,9 @@
  * here.  Caller supplied read/write callbacks, a public kind, are additive
  * and can follow.
  *
- * Failure policy: the sub classes never call das_error() for I/O failures.  
+ * Failure policy: the sub classes never call daserrf() for I/O failures.  
  * They return -1 and leave a message in the base, the caller decides whether
- * a dropped connection is fatal.  Constructors do call das_error() for bad
+ * a dropped connection is fatal.  Constructors do call daserrf() for bad
  * arguments and allocation failures, like every other constructor. */
 
 #ifndef _das_xport_p_h_
@@ -83,7 +83,7 @@ typedef struct das_xport_vt {
 } das_xport_vt;
 
 /* The base, first member of every kind */
-struct das_xport {
+struct das_xport_t {
 	const das_xport_vt* pVt;
 	unsigned int uFlags;     /* DASXPORT_RD and/or DASXPORT_WR */
 	bool     bClosed;
@@ -95,7 +95,7 @@ struct das_xport {
 	   next read.  http.c reads past the end of the headers and hands the
 	   start of the body back here; DasIO does the same before swapping in an
 	   inflate filter.  Allocated on first use. */
-	ubyte*   pBack;
+	uint8_t*   pBack;
 	size_t   uBackLen;
 	size_t   uBackPos;
 
@@ -118,7 +118,7 @@ das_errcode _DasXport_unread(DasXport* pThis, const void* pIn, size_t uLen);
 /* Read uLen bytes straight into a DasBuf, via DasBuf_prepare() and
  * DasBuf_commit().  Loops like _DasXport_readFull(), since DasIO reads
  * exact lengths; the count is short only at the end of input.  uLen larger
- * than the free space is reported through das_error(), it is a caller bug,
+ * than the free space is reported through daserrf(), it is a caller bug,
  * not an I/O error.  Returns the count or -1. */
 ptrdiff_t _DasXport_fill(DasXport* pThis, DasBuf* pBuf, size_t uLen);
 
@@ -140,7 +140,7 @@ ptrdiff_t _DasXport_fail(DasXport* pBase, const char* sFmt, ...);
 /* ************************************************************************* */
 /* Kinds.  sMode is "r" or "w", and "rw" for the two network kinds, which
  * carry a request out and the reply back on one connection.  All return
- * NULL after das_error() on bad arguments or no memory; I/O failures come
+ * NULL after daserrf() on bad arguments or no memory; I/O failures come
  * later, through read and write. */
 
 /* The owning forms of two public kinds.  bOwn decides whether close is
@@ -151,7 +151,7 @@ ptrdiff_t _DasXport_fail(DasXport* pBase, const char* sFmt, ...);
  * always borrowed. */
 DasXport* _new_DasXport_cfile(FILE* pFile, const char* sMode, bool bOwn);
 
-#ifndef DAS_NO_NETWORK
+#ifndef DASCONF_NO_NET
 
 /* OpenSSL's own tag for SSL, so this header needs no OpenSSL includes */
 struct ssl_st;

@@ -387,10 +387,10 @@ return;
 int rajParseTime(char *string,rajTime *t)
 {
 int nIsoT;
-das_time dt = {0};  /* an unparsable string reads as all zeros */
+DasTime dt = {0};  /* an unparsable string reads as all zeros */
 
   if((nIsoT=rajParseIsoTFormat(string,t))==0){  /* NOT IS0-D Format */
-    dt_parsetime(&dt,string);
+    DasTime_fromStr(&dt,string);
     if(dt.yday>0)   dt.yday-=1;
     if(dt.month>0)  dt.month-=1;
     if(dt.mday>0)   dt.mday-=1;

@@ -28,10 +28,10 @@
 /* The four bulk-read entry points, exercised against streams rather than
  * synthetic arrays.
  *
- *     DasVar_subset()           natural shape, may lend
- *     DasVar_materialize()      natural shape, owns
- *     DasVar_subsetQube()       squared off,   may lend
- *     DasVar_materializeQube()  squared off,   owns
+ *     new_DasAry_subset()           natural shape, may lend
+ *     new_DasAry_materialize()      natural shape, owns
+ *     new_DasAry_subsetQube()       squared off,   may lend
+ *     new_DasAry_materializeQube()  squared off,   owns
  *
  * Split from TestVar.c on purpose, and not only for size.  TestVar builds its
  * own generators, which is right when the subject is a constructor or a
@@ -69,30 +69,30 @@ const char* g_sProg = "TestVarSubset";
 /* Several cases below assert that a call REFUSES, and das2C refuses loudly --
    which would leave a fully passing run printing ERROR lines that mean the
    opposite of what a reader assumes.  For exactly the length of the expected
-   refusal a hook drops das_error() messages; anything else still prints.  A
+   refusal a hook drops daserrf() messages; anything else still prints.  A
    genuine break still lands as a failed CHECK. */
-static void _dropErrors(const das_logmsg* pMsg, void* pUser)
+static void _dropErrors(const DasLogMsg* pMsg, void* pUser)
 {
 	(void)pUser;
-	if(pMsg->nErr == DAS_OKAY) daslog_stderr(pMsg, NULL);
+	if(pMsg->errCode == DAS_OKAY) daslog_stderr(pMsg, NULL);
 }
 
 #define REFUSES(expr) do{ \
-	das_loghook _hook = {_dropErrors, NULL}; \
-	das_loghook _prev = daslog_sethook(&_hook); \
+	DasLogHook _hook = {_dropErrors, NULL}; \
+	DasLogHook _prev = daslog_setHook(&_hook); \
 	CHECK(expr); \
-	daslog_sethook(&_prev); \
+	daslog_setHook(&_prev); \
 }while(0)
 
 /* Fixtures live beside the source tree, so these run from the repo root the
    way every other stream test does. */
 static DasStream* _open(const char* sFile, int nPktId, DasDs** ppDs)
 {
-	DasStream* pSd = new_DasStream_path(g_sProg, sFile);
+	DasStream* pSd = new_DasStream_file(g_sProg, sFile);
 	if(pSd == NULL){ printf("ERROR: couldn't read %s\n", sFile); return NULL; }
 
-	DasDesc* pDesc = DasStream_getDesc(pSd, nPktId);
-	if((pDesc == NULL)||(DasDesc_type(pDesc) != DASDESC_DS)){
+	DasDesc* pDesc = DasStream_desc(pSd, nPktId);
+	if((pDesc == NULL)||(DasDesc_type(pDesc) != DASDESCTYPE_DS)){
 		printf("ERROR: %s packet %d is not a dataset\n", sFile, nPktId);
 		del_DasDesc((DasDesc*)pSd);
 		return NULL;
@@ -103,9 +103,9 @@ static DasStream* _open(const char* sFile, int nPktId, DasDs** ppDs)
 
 static DasVar* _pointVar(DasDs* pDs, const char* sDim)
 {
-	DasDim* pDim = DasDs_getDimByName(pDs, sDim);
+	DasDim* pDim = DasDs_dim(pDs, sDim);
 	if(pDim == NULL) return NULL;
-	return DasDim_getPointVar(pDim);
+	return DasDim_pointVar(pDim);
 }
 
 /* ************************************************************************* */
@@ -126,21 +126,21 @@ static int test_ex35_both_axes(void)
 	DasVar* pV = _pointVar(pDs, "status");
 	MUST(pV != NULL);
 
-	ptrdiff_t aShape[VARIDX_MAX];
+	ptrdiff_t aShape[DASIDX_MAX];
 	CHECK(DasVar_shape(pV, aShape) == 2);
 
 	/* -- squared off -- */
-	DasAry* pQ = DasVar_materializeQube(pV, 2, NULL, NULL, NULL);
+	DasAry* pQ = new_DasAry_materializeQube(pV, 2, NULL, NULL, NULL);
 	MUST(pQ != NULL);
 	CHECK(DasAry_shape(pQ, aShape) == 3);
 	CHECK((aShape[0] == 4)&&(aShape[1] == 4)&&(aShape[2] == 10));
 	CHECK(DasAry_size(pQ) == 160);
-	CHECK(DasAry_ownsElements(pQ));
+	CHECK(DasAry_ownsData(pQ));
 
 	/* Contents, not just shape.  A right-shaped array of wrong bytes is the
 	   classic way a padding walk passes its own test. */
 	size_t uElSz = 0, uEls = 0;
-	const ubyte* pAll = DasAry_getAllVals(pQ, &uElSz, &uEls);
+	const uint8_t* pAll = DasAry_data(pQ, &uElSz, &uEls);
 	MUST(pAll != NULL);
 	CHECK(uEls == 160);
 	CHECK(strcmp((const char*)(pAll +  0*10), "NOMINAL")   == 0);
@@ -156,32 +156,32 @@ static int test_ex35_both_axes(void)
 	dec_DasAry(pQ);
 
 	/* -- natural: the same data with nothing invented -- */
-	DasAry* pN = DasVar_materialize(pV, 2, NULL, NULL, NULL);
+	DasAry* pN = new_DasAry_materialize(pV, 2, NULL, NULL, NULL);
 	MUST(pN != NULL);
 	CHECK(DasAry_shape(pN, aShape) == 3);
 	CHECK(aShape[0] == 4);
-	CHECK(aShape[1] == VARIDX_RAGGED);
-	CHECK(aShape[2] == VARIDX_RAGGED);
+	CHECK(aShape[1] == DASIDX_RAGGED);
+	CHECK(aShape[2] == DASIDX_RAGGED);
 	CHECK(DasAry_size(pN) == 89);          /* 25 + 18 + 10 + 36 */
-	CHECK(DasAry_ownsElements(pN));
+	CHECK(DasAry_ownsData(pN));
 
 	const int aRunCt[4] = {3, 3, 1, 4};
 	const int aLen0[3]  = {8, 8, 9};
-	ptrdiff_t aLoc[VARIDX_MAX] = VARIDX_INIT_BEGIN;
+	ptrdiff_t aAddr[DASIDX_MAX] = DASIDX_INIT_BEGIN;
 	for(int i = 0; i < 4; ++i){
-		aLoc[0] = i;
-		CHECK((int)DasAry_lengthIn(pN, 1, aLoc) == aRunCt[i]);
+		aAddr[0] = i;
+		CHECK((int)DasAry_lengthIn(pN, 1, aAddr) == aRunCt[i]);
 	}
-	aLoc[0] = 0;
+	aAddr[0] = 0;
 	for(int j = 0; j < 3; ++j){
-		aLoc[1] = j;
-		CHECK((int)DasAry_lengthIn(pN, 2, aLoc) == aLen0[j]);
+		aAddr[1] = j;
+		CHECK((int)DasAry_lengthIn(pN, 2, aAddr) == aLen0[j]);
 	}
 
 	/* the empty string in record 1 slot 2 is one byte, its NUL -- it survived
 	   the decoder and it has to survive the copy */
-	aLoc[0] = 1; aLoc[1] = 2;
-	CHECK((int)DasAry_lengthIn(pN, 2, aLoc) == 1);
+	aAddr[0] = 1; aAddr[1] = 2;
+	CHECK((int)DasAry_lengthIn(pN, 2, aAddr) == 1);
 	dec_DasAry(pN);
 
 	del_DasDesc((DasDesc*)pSd);
@@ -205,17 +205,17 @@ static int test_ex36_multilevel(void)
 	DasVar* pV = _pointVar(pDs, "msgs");
 	MUST(pV != NULL);
 
-	ptrdiff_t aShape[VARIDX_MAX];
+	ptrdiff_t aShape[DASIDX_MAX];
 	CHECK(DasVar_shape(pV, aShape) == 3);
 
-	DasAry* pQ = DasVar_materializeQube(pV, 3, NULL, NULL, NULL);
+	DasAry* pQ = new_DasAry_materializeQube(pV, 3, NULL, NULL, NULL);
 	MUST(pQ != NULL);
 	CHECK(DasAry_shape(pQ, aShape) == 4);
 	CHECK((aShape[0]==4)&&(aShape[1]==2)&&(aShape[2]==2)&&(aShape[3]==8));
 	CHECK(DasAry_size(pQ) == 128);
 
 	size_t uElSz = 0, uEls = 0;
-	const ubyte* pAll = DasAry_getAllVals(pQ, &uElSz, &uEls);
+	const uint8_t* pAll = DasAry_data(pQ, &uElSz, &uEls);
 	MUST(pAll != NULL);
 	CHECK(strcmp((const char*)(pAll + 0*8), "NOMINAL") == 0);
 	CHECK(strcmp((const char*)(pAll + 1*8), "LOW PWR") == 0);
@@ -225,24 +225,24 @@ static int test_ex36_multilevel(void)
 	CHECK(strcmp((const char*)(pAll + 7*8), "OK")      == 0);
 	dec_DasAry(pQ);
 
-	DasAry* pN = DasVar_materialize(pV, 3, NULL, NULL, NULL);
+	DasAry* pN = new_DasAry_materialize(pV, 3, NULL, NULL, NULL);
 	MUST(pN != NULL);
 	CHECK(DasAry_shape(pN, aShape) == 4);
 	CHECK(DasAry_size(pN) == 57);
-	CHECK(aShape[1] == VARIDX_RAGGED);
-	CHECK(aShape[2] == VARIDX_RAGGED);
-	CHECK(aShape[3] == VARIDX_RAGGED);
+	CHECK(aShape[1] == DASIDX_RAGGED);
+	CHECK(aShape[2] == DASIDX_RAGGED);
+	CHECK(aShape[3] == DASIDX_RAGGED);
 
 	const int aGrpCt[4] = {2, 2, 1, 2};
-	ptrdiff_t aLoc[VARIDX_MAX] = VARIDX_INIT_BEGIN;
+	ptrdiff_t aAddr[DASIDX_MAX] = DASIDX_INIT_BEGIN;
 	for(int i = 0; i < 4; ++i){
-		aLoc[0] = i;
-		CHECK((int)DasAry_lengthIn(pN, 1, aLoc) == aGrpCt[i]);
+		aAddr[0] = i;
+		CHECK((int)DasAry_lengthIn(pN, 1, aAddr) == aGrpCt[i]);
 	}
-	aLoc[0] = 0; aLoc[1] = 0;
-	CHECK((int)DasAry_lengthIn(pN, 2, aLoc) == 2);
-	aLoc[1] = 1;
-	CHECK((int)DasAry_lengthIn(pN, 2, aLoc) == 1);
+	aAddr[0] = 0; aAddr[1] = 0;
+	CHECK((int)DasAry_lengthIn(pN, 2, aAddr) == 2);
+	aAddr[1] = 1;
+	CHECK((int)DasAry_lengthIn(pN, 2, aAddr) == 1);
 	dec_DasAry(pN);
 
 	del_DasDesc((DasDesc*)pSd);
@@ -270,30 +270,30 @@ static int test_ex27_blob_refuses_qube(void)
 	DasVar* pV = _pointVar(pDs, "FAI_image");
 	MUST(pV != NULL);
 
-	daserr_setdisp(DASERR_DIS_RET);
+	daserr_setDisp(DASERRDISP_RET);
 
-	REFUSES(DasVar_subsetQube(pV, 1, NULL, NULL, NULL) == NULL);
-	REFUSES(DasVar_materializeQube(pV, 1, NULL, NULL, NULL) == NULL);
+	REFUSES(new_DasAry_subsetQube(pV, 1, NULL, NULL, NULL) == NULL);
+	REFUSES(new_DasAry_materializeQube(pV, 1, NULL, NULL, NULL) == NULL);
 
-	DasAry* pN = DasVar_materialize(pV, 1, NULL, NULL, NULL);
+	DasAry* pN = new_DasAry_materialize(pV, 1, NULL, NULL, NULL);
 	MUST(pN != NULL);
 
-	ptrdiff_t aShape[VARIDX_MAX];
+	ptrdiff_t aShape[DASIDX_MAX];
 	CHECK(DasAry_shape(pN, aShape) == 2);
 	CHECK(aShape[0] == 7);
-	CHECK(aShape[1] == VARIDX_RAGGED);
+	CHECK(aShape[1] == DASIDX_RAGGED);
 
 	/* real PNG sizes, unpadded, with the magic intact */
 	const int aBytes[7] = {29233, 28777, 27840, 27264, 26584, 26387, 26038};
-	ptrdiff_t aLoc[VARIDX_MAX] = VARIDX_INIT_BEGIN;
+	ptrdiff_t aAddr[DASIDX_MAX] = DASIDX_INIT_BEGIN;
 	size_t uTotal = 0;
 	for(int i = 0; i < 7; ++i){
-		aLoc[0] = i;
-		CHECK((int)DasAry_lengthIn(pN, 1, aLoc) == aBytes[i]);
+		aAddr[0] = i;
+		CHECK((int)DasAry_lengthIn(pN, 1, aAddr) == aBytes[i]);
 		uTotal += (size_t)aBytes[i];
 
 		size_t uCt = 0;
-		const ubyte* pRun = DasAry_getIn(pN, vtUByte, 1, aLoc, &uCt);
+		const uint8_t* pRun = DasAry_valsIn(pN, DASVT_UBYTE, 1, aAddr, &uCt);
 		MUST(pRun != NULL);
 		CHECK(memcmp(pRun, "\x89PNG", 4) == 0);
 	}
@@ -331,16 +331,16 @@ static int test_qube_measures_whole_extent(void)
 	   is in record 1.  A walk that stops early reports 2, 4 or 3.  The result
 	   is dataset shaped, so sample repeats along the two indices it does not
 	   vary on; the number under test is the LAST extent. */
-	DasAry* pA = DasVar_subsetQube(pSample, 3, NULL, NULL, pAmp);
+	DasAry* pA = new_DasAry_subsetQube(pSample, 3, NULL, NULL, pAmp);
 	MUST(pA != NULL);
 
-	ptrdiff_t aShape[VARIDX_MAX];
+	ptrdiff_t aShape[DASIDX_MAX];
 	CHECK(DasAry_shape(pA, aShape) == 3);
 	CHECK((aShape[0] == 4)&&(aShape[1] == 3));
 	CHECK(aShape[2] == 5);                       /* not 2, which record 0 alone gives */
 
 	size_t uLen = 0;
-	const float* pVals = DasAry_getFloatsIn(pA, DIM0, &uLen);
+	const float* pVals = DasAry_floatsIn(pA, DAS_ADDR0, &uLen);
 	MUST(pVals != NULL);
 	CHECK(uLen == 60);
 	for(int i = 0; i < 4; ++i)
@@ -350,7 +350,7 @@ static int test_qube_measures_whole_extent(void)
 	dec_DasAry(pA);
 
 	/* the data variable itself squares off to the same maximum */
-	DasAry* pQ = DasVar_subsetQube(pAmp, 3, NULL, NULL, NULL);
+	DasAry* pQ = new_DasAry_subsetQube(pAmp, 3, NULL, NULL, NULL);
 	MUST(pQ != NULL);
 	CHECK(DasAry_shape(pQ, aShape) == 3);
 	CHECK((aShape[0]==4)&&(aShape[1]==3)&&(aShape[2]==5));
@@ -383,16 +383,16 @@ static int test_ex39_borrow_hard_rail(void)
 	DasVar* pSample = _pointVar(pDs, "sample");
 	MUST((pSensor != NULL)&&(pSample != NULL));
 
-	ptrdiff_t aShape[VARIDX_MAX];
+	ptrdiff_t aShape[DASIDX_MAX];
 	CHECK(DasVar_shape(pSensor, aShape) == 3);
-	CHECK(aShape[1] == 3);                  /* resolved, not VARIDX_BORROW */
+	CHECK(aShape[1] == 3);                  /* resolved, not DASIDX_BORROW */
 	CHECK(DasVar_shape(pSample, aShape) == 3);
-	CHECK(aShape[2] == VARIDX_BORROW);      /* dataset is ragged there */
+	CHECK(aShape[2] == DASIDX_BORROW);      /* dataset is ragged there */
 
-	daserr_setdisp(DASERR_DIS_RET);
+	daserr_setDisp(DASERRDISP_RET);
 
 	/* the unresolvable one says so rather than guessing */
-	REFUSES(DasVar_subsetQube(pSample, 3, NULL, NULL, NULL) == NULL);
+	REFUSES(new_DasAry_subsetQube(pSample, 3, NULL, NULL, NULL) == NULL);
 
 	del_DasDesc((DasDesc*)pSd);
 	return nErrs;
@@ -404,7 +404,7 @@ static int test_ex39_borrow_hard_rail(void)
  * das3/var.md, "Degeneracy alters the step size": a degenerate index gets
  * a step size of zero and reading out all the values for the overall dataset
  * iterates it at full extent.  Collapsing is something the CALLER asks for by
- * slicing, which is what das3_cdf does after DasVar_degenerate().
+ * slicing, which is what das3_cdf does after DasVar_isDegenerate().
  *
  * The whole-extent call and the explicit dataset-range call must agree
  * exactly; a period where they did not was a regression introduced by the
@@ -418,22 +418,22 @@ static int test_degeneracy_repeats(void)
 
 	DasVar* pSensor = _pointVar(pDs, "sensor");
 	MUST(pSensor != NULL);
-	CHECK(DasVar_degenerate(pSensor, 0));
-	CHECK(!DasVar_degenerate(pSensor, 1));
-	CHECK(DasVar_degenerate(pSensor, 2));
+	CHECK(DasVar_isDegenerate(pSensor, 0));
+	CHECK(!DasVar_isDegenerate(pSensor, 1));
+	CHECK(DasVar_isDegenerate(pSensor, 2));
 
-	ptrdiff_t aShape[VARIDX_MAX];
+	ptrdiff_t aShape[DASIDX_MAX];
 
 	/* no bounds: the variable reaches up to its dataset for the extents it
 	   does not have itself */
-	DasAry* pAll = DasVar_materializeQube(pSensor, 3, NULL, NULL, NULL);
+	DasAry* pAll = new_DasAry_materializeQube(pSensor, 3, NULL, NULL, NULL);
 	MUST(pAll != NULL);
 	CHECK(DasAry_shape(pAll, aShape) == 3);
 	CHECK((aShape[0]==4)&&(aShape[1]==3)&&(aShape[2]==5));
 	CHECK(DasAry_size(pAll) == 60);
 
 	size_t uLen = 0;
-	const float* pVals = DasAry_getFloatsIn(pAll, DIM0, &uLen);
+	const float* pVals = DasAry_floatsIn(pAll, DAS_ADDR0, &uLen);
 	MUST(pVals != NULL);
 	CHECK(uLen == 60);
 	/* value depends on index 1 only: 5 copies of 0, then 1, then 2, per record */
@@ -444,10 +444,10 @@ static int test_degeneracy_repeats(void)
 
 	/* naming the same range explicitly must give the identical answer */
 	ptrdiff_t aMin[3] = {0,0,0}, aMax[3] = {4,3,5};
-	DasAry* pSame = DasVar_materializeQube(pSensor, 3, aMin, aMax, NULL);
+	DasAry* pSame = new_DasAry_materializeQube(pSensor, 3, aMin, aMax, NULL);
 	MUST(pSame != NULL);
 	size_t uLen2 = 0;
-	const float* pV2 = DasAry_getFloatsIn(pSame, DIM0, &uLen2);
+	const float* pV2 = DasAry_floatsIn(pSame, DAS_ADDR0, &uLen2);
 	MUST(pV2 != NULL);
 	CHECK(uLen2 == uLen);
 	CHECK(memcmp(pVals, pV2, uLen*sizeof(float)) == 0);
@@ -456,7 +456,7 @@ static int test_degeneracy_repeats(void)
 
 	/* and the compact form is one restricted range away */
 	aMax[0] = 1; aMax[2] = 1;
-	DasAry* pPin = DasVar_materializeQube(pSensor, 3, aMin, aMax, NULL);
+	DasAry* pPin = new_DasAry_materializeQube(pSensor, 3, aMin, aMax, NULL);
 	MUST(pPin != NULL);
 	CHECK(DasAry_shape(pPin, aShape) == 1);
 	CHECK(aShape[0] == 3);
@@ -473,9 +473,9 @@ static int test_degeneracy_repeats(void)
  * spans the dataset, so it names it, and a reference-plus-offset time
  * materializes over it:
  *
- *     pAmpV    = DasDim_getVar(DasDs_getDim(pDs, "amplitude"), "center");
+ *     pAmpV    = DasDim_var(DasDs_physDim(pDs, "amplitude"), "center");
  *     pTimeV   = new_DasVarBin(ref, '+', offset);
- *     pAryTime = DasVar_materialize(pTimeV, DasDs_rank(pDs), NULL, NULL, pAmpV);
+ *     pAryTime = new_DasAry_materialize(pTimeV, DasDs_rank(pDs), NULL, NULL, pAmpV);
  *
  * The rule that makes it work: bounds come from the model, values from this
  * variable.  A ref+offset time has no extent of its own along the sample
@@ -487,49 +487,49 @@ static int test_cassini_model_driven(void)
 	DasStream* pSd = _open("examples/ex19_cassini_ragged_wfrm.d3t", 2, &pDs);
 	MUST(pSd != NULL);
 
-	DasDim* pTimeD = DasDs_getDimByName(pDs, "time");
+	DasDim* pTimeD = DasDs_dim(pDs, "time");
 	MUST(pTimeD != NULL);
 	DasVar* pAmpV = _pointVar(pDs, "Ex");
 	MUST(pAmpV != NULL);
 
 	DasVar* pBin = new_DasVarBin(
-		DasDim_getVar(pTimeD, DASVAR_REF), '+',
-		DasDim_getVar(pTimeD, DASVAR_OFFSET)
+		DasDim_var(pTimeD, DASDIM_ROLE_REF), '+',
+		DasDim_var(pTimeD, DASDIM_ROLE_OFFSET)
 	);
 	MUST(pBin != NULL);
 	DasVar* pTimeV = pBin;
 
 	const ptrdiff_t aRows[3] = {2048, 1536, 2048};
-	ptrdiff_t aShape[VARIDX_MAX];
+	ptrdiff_t aShape[DASIDX_MAX];
 
-	DasAry* pAryTime = DasVar_materialize(
+	DasAry* pAryTime = new_DasAry_materialize(
 		pTimeV, DasDs_rank(pDs), NULL, NULL, pAmpV
 	);
 	MUST(pAryTime != NULL);
 	CHECK(DasAry_shape(pAryTime, aShape) == 2);
 	CHECK(aShape[0] == 3);
-	CHECK(aShape[1] == VARIDX_RAGGED);
+	CHECK(aShape[1] == DASIDX_RAGGED);
 	CHECK(DasAry_size(pAryTime) == 5632);      /* 2048 + 1536 + 2048, no fill */
-	CHECK(DasAry_ownsElements(pAryTime));
+	CHECK(DasAry_ownsData(pAryTime));
 
-	ptrdiff_t aLoc[VARIDX_MAX] = VARIDX_INIT_BEGIN;
+	ptrdiff_t aAddr[DASIDX_MAX] = DASIDX_INIT_BEGIN;
 	for(int i = 0; i < 3; ++i){
-		aLoc[0] = i;
-		CHECK(DasAry_lengthIn(pAryTime, 1, aLoc) == (size_t)aRows[i]);
+		aAddr[0] = i;
+		CHECK(DasAry_lengthIn(pAryTime, 1, aAddr) == (size_t)aRows[i]);
 	}
 
 	/* the offset really was added: last sample of row 0 is 2047 * 0.01 s past
 	   the reference, which lands on 03:03:34.668 */
-	ptrdiff_t aLast[VARIDX_MAX] = {0, 2047, 0,0,0,0,0,0};
-	const ubyte* pT = DasAry_getAt(pAryTime, vtTime, 2, aLast);
+	ptrdiff_t aLast[DASIDX_MAX] = {0, 2047, 0,0,0,0,0,0};
+	const uint8_t* pT = DasAry_valAt(pAryTime, DASVT_TIME, 2, aLast);
 	MUST(pT != NULL);
 	char sBuf[64];
-	dt_isoc((const das_time*)pT, 3, sBuf, sizeof(sBuf));
+	DasTime_toIsoC((const DasTime*)pT, 3, sBuf, sizeof(sBuf));
 	CHECK(strcmp(sBuf, "2004-03-28T03:03:34.668") == 0);
 	dec_DasAry(pAryTime);
 
 	/* the same call squared off pads row 1 out to the widest */
-	DasAry* pQ = DasVar_materializeQube(
+	DasAry* pQ = new_DasAry_materializeQube(
 		pTimeV, DasDs_rank(pDs), NULL, NULL, pAmpV
 	);
 	MUST(pQ != NULL);
@@ -561,25 +561,25 @@ static int test_lend_vs_own(void)
 	MUST(pV != NULL);
 
 	/* whole extent, natural shape: nothing to build, so the store is lent */
-	DasAry* pLent = DasVar_allVals(pV, 2);
+	DasAry* pLent = new_DasAry_allVals(pV, 2);
 	MUST(pLent != NULL);
-	CHECK(!DasAry_ownsElements(pLent));
+	CHECK(!DasAry_ownsData(pLent));
 	dec_DasAry(pLent);
 
-	DasAry* pOwn = DasVar_materialize(pV, 2, NULL, NULL, NULL);
+	DasAry* pOwn = new_DasAry_materialize(pV, 2, NULL, NULL, NULL);
 	MUST(pOwn != NULL);
-	CHECK(DasAry_ownsElements(pOwn));
+	CHECK(DasAry_ownsData(pOwn));
 
 	/* an owned result outlives the stream it came from */
-	ptrdiff_t aShape[VARIDX_MAX];
+	ptrdiff_t aShape[DASIDX_MAX];
 	int nRank = DasAry_shape(pOwn, aShape);
 	del_DasDesc((DasDesc*)pSd);
 
 	CHECK(DasAry_shape(pOwn, aShape) == nRank);
 	CHECK(DasAry_size(pOwn) == 89);
 	size_t uCt = 0;
-	ptrdiff_t aLoc[VARIDX_MAX] = VARIDX_INIT_BEGIN;
-	const ubyte* pRun = DasAry_getIn(pOwn, vtUByte, 2, aLoc, &uCt);
+	ptrdiff_t aAddr[DASIDX_MAX] = DASIDX_INIT_BEGIN;
+	const uint8_t* pRun = DasAry_valsIn(pOwn, DASVT_UBYTE, 2, aAddr, &uCt);
 	MUST(pRun != NULL);
 	CHECK(strcmp((const char*)pRun, "NOMINAL") == 0);
 	dec_DasAry(pOwn);
@@ -594,7 +594,7 @@ int main(int argc, char** argv)
 	(void)argc;
 	setvbuf(stdout, NULL, _IONBF, 0);
 
-	das_init(argv[0], DASERR_DIS_RET, DASLOG_ERROR, NULL);
+	daslib_init(argv[0], DASERRDISP_RET, DASLOG_ERROR, NULL);
 
 	struct { const char* sName; int (*pFn)(void); } aCase[] = {
 		{"test_ex35_both_axes",             test_ex35_both_axes},

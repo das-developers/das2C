@@ -21,7 +21,7 @@
  * .gitattributes marks this file export-subst, so git archive (and GitHub's
  * release tarballs) replace the $Format...$ below with the output of
  * git describe --tags.  In a checkout it stays a literal starting with '$',
- * and the makefile's -DDAS_GIT_DESC takes over.  See das_lib_version(). */
+ * and the makefile's -DDAS_GIT_DESC takes over.  See daslib_version(). */
 
 #ifndef _das_ver_p_h_
 #define _das_ver_p_h_

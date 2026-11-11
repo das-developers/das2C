@@ -64,21 +64,21 @@
 
 #define DASPROP_SEP_SHIFT   32
 
-/* DASPROP_NMAX_SZ and DASPROP_VMAX_SZ are in prop_p.h, daslimit_get()
+/* DASPROP_NMAX_SZ and DASPROP_VMAX_SZ are in prop_p.h, DasLimit_lookup()
    reports them */
 
 /* init_DasProp floors the stored total at the struct's buffer[16], so
    DasProp_size() never reports less than sizeof(DasProp).  Slots must be at
    least that big or copies by DasProp_size() read past them. */
 #define DASPROP_MIN_MALLOC  (sizeof(DasProp))
-/* flags + units + the largest total; das_units is a pointer, 4 bytes on wasm32 */
-#define DASPROP_MAX_MALLOC  (sizeof(uint64_t) + sizeof(das_units) + 131071)
+/* flags + units + the largest total; DasUnits is a pointer, 4 bytes on wasm32 */
+#define DASPROP_MAX_MALLOC  (sizeof(uint64_t) + sizeof(DasUnits) + 131071)
 
 /* Memory requirements ***************************************************** */
 
 size_t dasprop_memsz(const char* sName, const char* sValue)
 {
-	size_t sz = sizeof(uint64_t) + sizeof(das_units);
+	size_t sz = sizeof(uint64_t) + sizeof(DasUnits);
 	if(sName)  sz += strlen(sName) + 1;
 	if(sValue) sz += strlen(sValue) + 1;
 	if(sz < DASPROP_MIN_MALLOC) 
@@ -129,25 +129,25 @@ static size_t _collapseItems(char* dst, const char* src, char cSep)
 }
 
 das_errcode dasprop_plan(
-	das_propplan* pPlan, const char* sType, ubyte uType, const char* sName,
-	const char* sValue, char cSep, das_units units, int nStandard
+	das_propplan* pPlan, const char* sType, uint8_t uType, const char* sName,
+	const char* sValue, char cSep, DasUnits units, int nStandard
 ){
-	if(sName == NULL) return das_error(DASERR_PROP, "Null value for property name");
+	if(sName == NULL) return daserrf(DASERR_PROP, "Null value for property name");
 	/* Both schemas forbid it and every reader treats the name as the key */
-	if(sName[0] == '\0') return das_error(DASERR_PROP, "Empty property name");
+	if(sName[0] == '\0') return daserrf(DASERR_PROP, "Empty property name");
 
 	if(nStandard > 1){
 		// Some stuff from das1 doesn't fly later on
 		for(int j = 0; j < strlen(sName); j++) 
 			if(!isalnum(sName[j]) && (sName[j] != '_') && (sName[j] != ':'))
-				return das_error(DASERR_DESC, "Invalid das2/3 property name '%s'", sName);
+				return daserrf(DASERR_DESC, "Invalid das2/3 property name '%s'", sName);
 	}
 
 	size_t uNameSz = strlen(sName);
 	if(uNameSz > DASPROP_NMAX_SZ) 
-		return das_error(DASERR_PROP, "Name too large (%d bytes) for property", DASPROP_NMAX_SZ);
+		return daserrf(DASERR_PROP, "Name too large (%d bytes) for property", DASPROP_NMAX_SZ);
 	if((uType == 0)&&(sType == NULL))
-		return das_error(DASERR_PROP, "Null value for property type");
+		return daserrf(DASERR_PROP, "Null value for property type");
 
 	if(sValue == NULL )
 		sValue = "";
@@ -155,7 +155,7 @@ das_errcode dasprop_plan(
 	/* Save off the value size */
 	size_t uValSz = strlen(sValue);
 	if(uValSz > DASPROP_VMAX_SZ) 
-		return das_error(DASERR_PROP, "Value too large (%d bytes) for property %s",
+		return daserrf(DASERR_PROP, "Value too large (%d bytes) for property %s",
 			DASPROP_VMAX_SZ, sName
 		);
 
@@ -192,8 +192,8 @@ das_errcode dasprop_plan(
 				/* das2 had some things as units that were actually data display
 				   preferences. (I'm looking at you log10Ratio) If some of these
 				   poor choices show up, let them pass through as just string
-				   types.  Units_fromStr() only warns on text it can't parse. */
-				units = Units_fromStr(pRead);
+				   types.  DasUnits_fromStr() only warns on text it can't parse. */
+				units = DasUnits_fromStr(pRead);
 
 				if(units == NULL){
 					sType = "string";
@@ -208,7 +208,7 @@ das_errcode dasprop_plan(
 	}
 	
 	if(units == NULL)
-		units = UNIT_DIMENSIONLESS;
+		units = DASUNITS_DIMENSIONLESS;
 
 	uint64_t uFlags = 0ull;
 
@@ -217,10 +217,10 @@ das_errcode dasprop_plan(
 	if(sType == NULL){
 		/* Explicit type and multiplicity supplied (hurray!) */
 		if((uType & DASPROP_MULTI_MASK) == 0)
-			return das_error(DASERR_PROP, "Invalid muliplicity flag");
-		ubyte uTmp = (uType & DASPROP_TYPE_MASK) >> 4;
+			return daserrf(DASERR_PROP, "Invalid muliplicity flag");
+		uint8_t uTmp = (uType & DASPROP_TYPE_MASK) >> 4;
 		if((uTmp < 1)||(uTmp > 5))
-			return das_error(DASERR_PROP, "Invalid type setting");
+			return daserrf(DASERR_PROP, "Invalid type setting");
 
 		uFlags = uType & (DASPROP_TYPE_MASK | DASPROP_MULTI_MASK);
 	}
@@ -261,13 +261,13 @@ das_errcode dasprop_plan(
 		else if((strcasecmp(sType, "datumrange") == 0) && (sValue[0] != '\0')){
 			/* Some time ranges have been listed as datum ranges, if you 
 			 * see units of 'UTC', make this a time range instead */
-			if(Units_haveCalRep(units))
+			if(DasUnits_isTimePoint(units))
 				uFlags |= (DASPROP_DATETIME | DASPROP_RANGE);
 			else
 				uFlags |= (DASPROP_REAL | DASPROP_RANGE);
 		}
 		else
-			return das_error(DASERR_PROP, 
+			return daserrf(DASERR_PROP, 
 				"Invalid property type '%s' for value '%s'", sType, sName
 			);
 
@@ -280,7 +280,7 @@ das_errcode dasprop_plan(
 				s2ndVal = NULL;
 
 			if(!s2ndVal)
-				return das_error(DASERR_PROP, "Range types require two values separated by ' to '. ");
+				return daserrf(DASERR_PROP, "Range types require two values separated by ' to '. ");
 		}
 	}
 
@@ -343,15 +343,15 @@ das_errcode dasprop_plan(
 	return DAS_OKAY;
 }
 
-void dasprop_write(const das_propplan* pPlan, ubyte* pBuf)
+void dasprop_write(const das_propplan* pPlan, uint8_t* pBuf)
 {
-	ubyte* pWrite = pBuf;
+	uint8_t* pWrite = pBuf;
 	memcpy(pWrite, &(pPlan->uFlags), sizeof(uint64_t));
 	pWrite += sizeof(uint64_t);
 
 	/* Copy in the units */
-	memcpy(pWrite, &(pPlan->units), sizeof(das_units));
-	pWrite += sizeof(das_units);
+	memcpy(pWrite, &(pPlan->units), sizeof(DasUnits));
+	pWrite += sizeof(DasUnits);
 
 	/* Copy in the name, depend in null termination */
 	memcpy(pWrite, pPlan->sName, pPlan->uNameSz + 1);
@@ -367,11 +367,11 @@ void dasprop_write(const das_propplan* pPlan, ubyte* pBuf)
 }
 
 das_errcode init_DasProp(
-	ubyte* pBuf, size_t uBufSz, const char* sType, ubyte uType, const char* sName,
-	const char* sValue, char cSep, das_units units, int nStandard
+	uint8_t* pBuf, size_t uBufSz, const char* sType, uint8_t uType, const char* sName,
+	const char* sValue, char cSep, DasUnits units, int nStandard
 ){
 	if((pBuf == NULL)||(uBufSz < dasprop_memsz(sName, sValue)))
-		return das_error(DASERR_PROP, "Property buffer is too small, %zu bytes", uBufSz);
+		return daserrf(DASERR_PROP, "Property buffer is too small, %zu bytes", uBufSz);
 
 	das_propplan plan;
 	das_errcode nRet = dasprop_plan(
@@ -403,12 +403,12 @@ const char* DasProp_name(const DasProp* pProp)
 	return pProp->buffer;
 }
 
-das_units DasProp_units(const DasProp* pProp)
+DasUnits DasProp_units(const DasProp* pProp)
 {
 	return pProp->units;
 }
 
-bool DasProp_isType(const DasProp* pProp, ubyte uType)
+bool DasProp_isType(const DasProp* pProp, uint8_t uType)
 {
 	return ((pProp->flags & DASPROP_TYPE_MASK) == uType);
 }
@@ -483,7 +483,7 @@ const char* DasProp_xmlValue(const DasProp* pProp, char* sBuf, size_t uLen)
 
 	// Okay, needs translation
 	if(sBuf == NULL){
-		das_error(DASERR_PROP, "XML translation needed but supplied buffer is NULL");
+		daserrf(DASERR_PROP, "XML translation needed but supplied buffer is NULL");
 		return NULL;
 	}
 
@@ -493,7 +493,7 @@ const char* DasProp_xmlValue(const DasProp* pProp, char* sBuf, size_t uLen)
 	while(*p != '\0'){
 		size_t uNeed = _DasProp_escLen(*p);
 		if(uNeed + 1 > uLen){
-			das_error(DASERR_PROP, "Buffer too small for the XML escaped property value, "
+			daserrf(DASERR_PROP, "Buffer too small for the XML escaped property value, "
 				"size it with DasProp_escapeSize()");
 			return NULL;
 		}
@@ -520,7 +520,7 @@ size_t DasProp_size(const DasProp* pProp)
 	uint64_t sz = (pProp->flags & DASPROP_TLEN_MASK) >> DASPROP_TLEN_SHIFT;
 	assert(sz <= DASPROP_NMAX_SZ + DASPROP_VMAX_SZ + 2);
 	sz += sizeof(uint64_t);
-	sz += sizeof(das_units);
+	sz += sizeof(DasUnits);
 	return sz;
 }
 
@@ -537,7 +537,7 @@ const char* DasProp_typeStr2(const DasProp* pProp)
 	switch(pProp->flags & DASPROP_TYPE_MASK){
 	case DASPROP_BOOL:   return "boolean";
 	case DASPROP_REAL: 
-		if(pProp->units == UNIT_DIMENSIONLESS){
+		if(pProp->units == DASUNITS_DIMENSIONLESS){
 			if(uMulti == DASPROP_SET)
 				return "doubleArray";
 			else
@@ -580,12 +580,12 @@ const char* DasProp_typeStr3(const DasProp* pProp)
 	}
 }   
 
-ubyte DasProp_type(const DasProp* pProp)
+uint8_t DasProp_type(const DasProp* pProp)
 {
-	return (ubyte)(pProp->flags & (DASPROP_TYPE_MASK|DASPROP_MULTI_MASK));
+	return (uint8_t)(pProp->flags & (DASPROP_TYPE_MASK|DASPROP_MULTI_MASK));
 }
 
-bool DasProp_equal(const DasProp* pOne, const DasProp* pTwo)
+bool DasProp_isEqual(const DasProp* pOne, const DasProp* pTwo)
 {
 	if((pOne == NULL)||(pTwo == NULL))
 		return false;
@@ -623,7 +623,7 @@ char dasprop_unescapeSep(const char* sSep)
 	}
 }
 
-int DasProp_items(const DasProp* pProp)
+int DasProp_numItems(const DasProp* pProp)
 {
 	if((DASPROP_MULTI_MASK & pProp->flags) == DASPROP_SINGLE)
 		return 1;
@@ -699,13 +699,13 @@ static bool _DasProp_next(const DasProp* pProp, const char** ppRead, char* sBuf,
 		return false;
 
 	if(uLen < 2){
-		das_error(DASERR_PROP, "Output buffer too short, less then 2 bytes");
+		daserrf(DASERR_PROP, "Output buffer too short, less then 2 bytes");
 		return false;
 	}
 
 	const char* sValue = DasProp_value(pProp);
 
-	/* A single value is one item even when it is empty. DasProp_items() 
+	/* A single value is one item even when it is empty. DasProp_numItems() 
 	   returns 1 in that case, so extractors have to agree.  Only the
 	   multi-item cases can read an exhausted pointer as "done". */
 	if(((pProp->flags & DASPROP_MULTI_MASK) != DASPROP_SINGLE) && (*(*ppRead) == '\0'))
@@ -749,7 +749,7 @@ static bool _DasProp_next(const DasProp* pProp, const char** ppRead, char* sBuf,
 	case DASPROP_SET:
 		cSep = DasProp_sep(pProp);
 		if((cSep == '\0') || isspace((unsigned char)cSep)){
-			/* Whitespace class, see DasProp_items(): skip blanks of any kind,
+			/* Whitespace class, see DasProp_numItems(): skip blanks of any kind,
 			   take the run up to the next blank or the end.  Leaving the read
 			   pointer on the terminating blank (or '\0') is what ends the
 			   iteration on the following call. */
@@ -796,7 +796,7 @@ static bool _DasProp_next(const DasProp* pProp, const char** ppRead, char* sBuf,
 }
 
 /* Similar to the items below, but doesn't do any conversions */
-int DasProp_extractItems(const DasProp* pProp, char** psBuf, size_t uNumStrs, size_t uLenEa)
+int DasProp_toStrs(const DasProp* pProp, char** psBuf, size_t uNumStrs, size_t uLenEa)
 {
 	const char* pRead = DasProp_value(pProp);
 	size_t uRead = 0;
@@ -813,7 +813,7 @@ int DasProp_extractItems(const DasProp* pProp, char** psBuf, size_t uNumStrs, si
  * 
  * Returns the number of conversions, or a negative error value
  */
-int DasProp_convertInt(const DasProp* pProp, int64_t* pBuf, size_t uBufLen)
+int DasProp_toInts(const DasProp* pProp, int64_t* pBuf, size_t uBufLen)
 {
 	char sConv[32] = {'\0'};
 	const char* pRead = DasProp_value(pProp);
@@ -824,7 +824,7 @@ int DasProp_convertInt(const DasProp* pProp, int64_t* pBuf, size_t uBufLen)
 		   %ld wrote half of each int64_t and das3_cdf's CDF_INT8 attributes
 		   came out garbled */
 		if(sscanf(sConv, "%" SCNd64, pBuf) != 1)
-			return -1 * das_error(DASERR_PROP, "Error converting '%s' to an integer", DasProp_value(pProp));
+			return -1 * daserrf(DASERR_PROP, "Error converting '%s' to an integer", DasProp_value(pProp));
 		++pBuf;
 		++uRead;
 		memset(sConv, 0, 32);
@@ -836,7 +836,7 @@ int DasProp_convertInt(const DasProp* pProp, int64_t* pBuf, size_t uBufLen)
  * 
  * Returns the number of conversions, or a negative error value
  */
-int DasProp_convertReal(const DasProp* pProp, double* pBuf, size_t uBufLen)
+int DasProp_toDoubles(const DasProp* pProp, double* pBuf, size_t uBufLen)
 {
 	char sConv[32] = {'\0'};
 	const char* pRead = DasProp_value(pProp);
@@ -844,7 +844,7 @@ int DasProp_convertReal(const DasProp* pProp, double* pBuf, size_t uBufLen)
 	
 	while( _DasProp_next(pProp, &pRead, sConv, 31) && (uRead < uBufLen)){
 		if(sscanf(sConv, "%lf", pBuf) != 1)
-			return -1 * das_error(DASERR_PROP, "Error converting '%s' to a double", DasProp_value(pProp));
+			return -1 * daserrf(DASERR_PROP, "Error converting '%s' to a double", DasProp_value(pProp));
 		++pBuf;
 		++uRead;
 		memset(sConv, 0, 32);
@@ -856,18 +856,18 @@ int DasProp_convertReal(const DasProp* pProp, double* pBuf, size_t uBufLen)
  *
  * Returns the number of conversions, or a negative error value
  */
-int DasProp_convertBool(const DasProp* pProp, uint8_t* pBuf, size_t uBufLen)
+int DasProp_toBools(const DasProp* pProp, uint8_t* pBuf, size_t uBufLen)
 {
 	char sConv[32] = {'\0'};
 	const char* pRead = DasProp_value(pProp);
 	size_t uRead = 0;
 
 	/* Properties are always concrete (no fill); each item runs through the same
-	   liberal das_str2bool the value codec uses, stored as 1 or 0. */
+	   liberal dasstr_toBool the value codec uses, stored as 1 or 0. */
 	while( _DasProp_next(pProp, &pRead, sConv, 31) && (uRead < uBufLen)){
 		bool b;
-		if(!das_str2bool(sConv, &b))
-			return -1 * das_error(DASERR_PROP, "Error converting '%s' to a boolean", DasProp_value(pProp));
+		if(!dasstr_toBool(sConv, &b))
+			return -1 * daserrf(DASERR_PROP, "Error converting '%s' to a boolean", DasProp_value(pProp));
 		*pBuf = b ? 1 : 0;
 		++pBuf;
 		++uRead;
@@ -877,17 +877,17 @@ int DasProp_convertBool(const DasProp* pProp, uint8_t* pBuf, size_t uBufLen)
 }
 
 /** Convert datatime properties TT2K long integers */
-int DasProp_convertTt2k(const DasProp* pProp, int64_t* pBuf, size_t uBufLen)
+int DasProp_toTt2ks(const DasProp* pProp, int64_t* pBuf, size_t uBufLen)
 {
 	char sConv[32] = {'\0'};
 	const char* pRead = DasProp_value(pProp);
 	size_t uRead = 0;
-	das_time dt;
+	DasTime dt;
 
 	while( _DasProp_next(pProp, &pRead, sConv, 31) && (uRead < uBufLen)){
-		if(!dt_parsetime(&dt, sConv))
-			return -1 * das_error(DASERR_TIME, "Could not convert %s to a datetime", DasProp_value(pProp));
-		*pBuf = dt_to_tt2k(&dt);
+		if(!DasTime_fromStr(&dt, sConv))
+			return -1 * daserrf(DASERR_TIME, "Could not convert %s to a datetime", DasProp_value(pProp));
+		*pBuf = DasTime_toTt2k(&dt);
 		++pBuf;
 		++uRead;
 		memset(sConv, 0, 32);
@@ -896,6 +896,6 @@ int DasProp_convertTt2k(const DasProp* pProp, int64_t* pBuf, size_t uBufLen)
 }
 
 /** Convert datetime properties to a double based value of units */
-int DasProp_convertTime(const DasProp* pProp, uint64_t* pBuf, size_t uBufLen){
-	return -1 * das_error(DASERR_NOTIMP, "Time property conversion not yet implemented");
+int DasProp_toTimes(const DasProp* pProp, uint64_t* pBuf, size_t uBufLen){
+	return -1 * daserrf(DASERR_NOTIMP, "Time property conversion not yet implemented");
 }

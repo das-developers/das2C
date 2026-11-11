@@ -41,7 +41,7 @@
 #include "form_lin.h"
 #include "form_pt.h"
 
-#define REFUSE(...) (das_error(DASERR_FORM, __VA_ARGS__), dbsRefuse)
+#define REFUSE(...) (daserrf(DASERR_FORM, __VA_ARGS__), dbsRefuse)
 
 /* ************************************************************************* */
 /* The formalism.  No state; the affine rule needs no parameters.            */
@@ -53,7 +53,7 @@ typedef struct das_form_pt {
 static DasForm* _new_DasFormPt_empty(void)
 {
 	DasFormPt* pThis = (DasFormPt*)calloc(1, sizeof(DasFormPt));
-	pThis->base.pVTbl = &das_form_pt_vtbl;
+	pThis->base.pVTbl = &DasFormPt_vtable;
 	return &(pThis->base);
 }
 
@@ -62,7 +62,7 @@ DasForm* new_DasFormPt(void){ return _new_DasFormPt_empty(); }
 static das_errcode _DasFormPt_setParam(
 	DasForm* pBase, const char* sName, const char* sVal
 ){
-	return das_error(DASERR_FORM,
+	return daserrf(DASERR_FORM,
 		"<ops kind=\"point\"> takes no parameters, got '%s'", sName
 	);
 }
@@ -76,30 +76,30 @@ static das_errcode _DasFormPt_encode(
 /* A point's origin rides in units (TT2000, US2000), not in a parameter, so
    like linear it has nothing to hand back. */
 static const char* _DasFormPt_getParam(
-	const DasForm* pBase, const char* sName, ubyte* pType
+	const DasForm* pBase, const char* sName, uint8_t* pType
 )
 {
 	return NULL;
 }
 
 static bool _DasFormPt_pack(
-	const DasForm* pBase, const das_operand* pOp, const ubyte* pRun,
-	das_datum* pOut
+	const DasForm* pBase, const das_operand* pOp, const uint8_t* pRun,
+	DasDatum* pOut
 ){
 	/* A run of positions boxes as a plain composite, same as a linear run:
 	   the affine rule changes what may be DONE with the elements, not how
 	   they read. The scalar case is just the element itself. */
 	if(pOp->nIntRank > 0)
-		return das_datum_box(
+		return DasDatum_wrapElems(
 			pOut, pBase, pRun, pOp->nIntRank, pOp->aIntShape, pOp->vtElem,
 			pOp->units
 		);
 
-	das_datum_init(pOut, pRun, pOp->vtElem, 0, pOp->units);
+	DasDatum_set(pOut, pRun, pOp->vtElem, 0, pOp->units);
 	return true;
 }
 
-static das_val_type _DasFormPt_datumType(const DasForm* pBase){ return vtUnknown; }
+static das_vt _DasFormPt_datumType(const DasForm* pBase){ return DASVT_UNK; }
 
 static DasForm* _DasFormPt_copy(const DasForm* pBase){ return _new_DasFormPt_empty(); }
 
@@ -112,8 +112,8 @@ static void _DasFormPt_release(DasForm* pBase){ free(pBase); }
 typedef struct das_binop_affine {
 	DasBinOp base;
 
-	das_val_type vtL, vtR;
-	int    nOp;             /* D2BOP_ADD or D2BOP_SUB, as WRITTEN */
+	das_vt vtL, vtR;
+	int    nOp;             /* DASOP_ADD or DASOP_SUB, as WRITTEN */
 
 	/* Which side carries the point.  Needed because neither hook ever
 	   reorders operands: apply() receives them in the order the caller wrote
@@ -136,72 +136,72 @@ typedef struct das_binop_affine {
 } DasBinOpAffine;
 
 /* Read one value as a double, through the library's range checked cast. */
-static bool _toDbl(das_val_type vt, const ubyte* p, double* pOut)
+static bool _toDbl(das_vt vt, const uint8_t* p, double* pOut)
 {
-	return das_value_binXform(
-		vt, p, NULL, vtDouble, (ubyte*)pOut, NULL, 0
+	return dasval_convert(
+		vt, p, NULL, DASVT_DOUBLE, (uint8_t*)pOut, NULL, 0
 	) == DAS_OKAY;
 }
 
 static bool _DasBinOpAffine_apply(
-	const DasBinOp* pOp, const ubyte* pLRun, const ubyte* pRRun, ubyte* pOutRun
+	const DasBinOp* pOp, const uint8_t* pLRun, const uint8_t* pRRun, uint8_t* pOutRun
 ){
 	const DasBinOpAffine* pThis = (const DasBinOpAffine*)pOp;
 
-	das_val_type vtPoint = pThis->bPointLeft ? pThis->vtL : pThis->vtR;
-	das_val_type vtOther = pThis->bPointLeft ? pThis->vtR : pThis->vtL;
+	das_vt vtPoint = pThis->bPointLeft ? pThis->vtL : pThis->vtR;
+	das_vt vtOther = pThis->bPointLeft ? pThis->vtR : pThis->vtL;
 
-	size_t uL   = das_vt_size(pThis->vtL);
-	size_t uR   = das_vt_size(pThis->vtR);
-	size_t uOut = das_vt_size(pOp->vtOut);
+	size_t uL   = dasvt_size(pThis->vtL);
+	size_t uR   = dasvt_size(pThis->vtR);
+	size_t uOut = dasvt_size(pOp->vtOut);
 
 	/* Element i with element i.  A scalar position is just nElems == 1, so
 	   there is one loop and no special case for the common shape. */
 	for(size_t u = 0; u < pThis->nElems; ++u){
 
-		const ubyte* pL   = pLRun   + u*uL;
-		const ubyte* pR   = pRRun   + u*uR;
-		ubyte*       pOut = pOutRun + u*uOut;
+		const uint8_t* pL   = pLRun   + u*uL;
+		const uint8_t* pR   = pRRun   + u*uR;
+		uint8_t*       pOut = pOutRun + u*uOut;
 
-		const ubyte* pPoint = pThis->bPointLeft ? pL : pR;
-		const ubyte* pOther = pThis->bPointLeft ? pR : pL;
+		const uint8_t* pPoint = pThis->bPointLeft ? pL : pR;
+		const uint8_t* pOther = pThis->bPointLeft ? pR : pL;
 
 		/* --- point - point, the difference of two positions ------------ */
 		if(pThis->bTwoPoints){
-			if(pThis->vtL == vtTime){
-				/* dt_diff is the only thing that knows how to walk a calendar
+			if(pThis->vtL == DASVT_TIME){
+				/* DasTime_diff is the only thing that knows how to walk a calendar
 				   to get a span, and it answers in seconds. */
-				*((double*)pOut) = dt_diff(
-					(const das_time*)pL, (const das_time*)pR
+				*((double*)pOut) = DasTime_diff(
+					(const DasTime*)pL, (const DasTime*)pR
 				);
 			}
-			else if(das_value_binop(
-				D2BOP_SUB, pThis->vtL, pL, pThis->vtR, pR, pOp->vtOut, pOut
+			else if(dasval_binOp(
+				DASOP_SUB, pThis->vtL, pL, pThis->vtR, pR, pOp->vtOut, pOut
 			) != DAS_OKAY)
 				return false;
 			continue;
 		}
 
 		/* --- a broken-down time moved by a span ------------------------ */
-		if(vtPoint == vtTime){
+		if(vtPoint == DASVT_TIME){
 			double rSpan;
 			if(!_toDbl(vtOther, pOther, &rSpan)) return false;
 			rSpan *= pThis->rIntervalScale;
 
 			/* point - interval moves backward.  interval - point never gets
 			   here; resolve refused it. */
-			if(pThis->nOp == D2BOP_SUB) rSpan = -rSpan;
+			if(pThis->nOp == DASOP_SUB) rSpan = -rSpan;
 
-			das_time dt = *((const das_time*)pPoint);
+			DasTime dt = *((const DasTime*)pPoint);
 			dt.second += rSpan;
-			dt_tnorm(&dt);
-			memcpy(pOut, &dt, sizeof(das_time));
+			DasTime_normalize(&dt);
+			memcpy(pOut, &dt, sizeof(DasTime));
 			continue;
 		}
 
 		/* --- ordinary arithmetic on the ticks -------------------------- */
 		if(pThis->rIntervalScale == 1.0){
-			if(das_value_binop(
+			if(dasval_binOp(
 				pThis->nOp, pThis->vtL, pL, pThis->vtR, pR, pOp->vtOut, pOut
 			) != DAS_OKAY)
 				return false;
@@ -215,9 +215,9 @@ static bool _DasBinOpAffine_apply(
 		/* Operand ORDER is preserved: the scaled interval goes back on the
 		   side it came in on, because no hook ever reorders operands. */
 		das_errcode nRet = pThis->bPointLeft
-			? das_value_binop(pThis->nOp, vtPoint, pPoint,
-			                  vtDouble, (const ubyte*)&rScaled, pOp->vtOut, pOut)
-			: das_value_binop(pThis->nOp, vtDouble, (const ubyte*)&rScaled,
+			? dasval_binOp(pThis->nOp, vtPoint, pPoint,
+			                  DASVT_DOUBLE, (const uint8_t*)&rScaled, pOp->vtOut, pOut)
+			: dasval_binOp(pThis->nOp, DASVT_DOUBLE, (const uint8_t*)&rScaled,
 			                  vtPoint, pPoint, pOp->vtOut, pOut);
 		if(nRet != DAS_OKAY) return false;
 	}
@@ -234,8 +234,8 @@ static const DasBinOp_VTbl g_vtblAffine = { _DasBinOpAffine_apply, _DasBinOpAffi
 
 static DasBinOpAffine* _new_DasBinOpAffine(
 	const das_operand* pL, const das_operand* pR, int nOp, bool bPointLeft,
-	bool bTwoPoints, double rScale, das_units unitsOut, DasForm* pFormOut,
-	das_val_type vtOut
+	bool bTwoPoints, double rScale, DasUnits unitsOut, DasForm* pFormOut,
+	das_vt vtOut
 ){
 	DasBinOpAffine* pRes = (DasBinOpAffine*)calloc(1, sizeof(DasBinOpAffine));
 	pRes->base.pVTbl = &g_vtblAffine;
@@ -263,11 +263,11 @@ static DasBinOpAffine* _new_DasBinOpAffine(
 }
 
 /* A span between two points is a double when a calendar struct is involved
-   (dt_diff answers in seconds) and otherwise promotes like ordinary math. */
-static das_val_type _span_type(das_val_type vtL, das_val_type vtR)
+   (DasTime_diff answers in seconds) and otherwise promotes like ordinary math. */
+static das_vt _span_type(das_vt vtL, das_vt vtR)
 {
-	if((vtL == vtTime)||(vtR == vtTime)) return vtDouble;
-	return das_vt_merge(vtL, D2BOP_SUB, vtR);
+	if((vtL == DASVT_TIME)||(vtR == DASVT_TIME)) return DASVT_DOUBLE;
+	return dasvt_merge(vtL, DASOP_SUB, vtR);
 }
 
 /* ************************************************************************* */
@@ -305,20 +305,20 @@ static das_binop_stat _DasFormPt_binOpLeft(
 	const DasForm* pBase, const das_operand* pL, int nOp,
 	const das_operand* pR, DasBinOp** ppOut
 ){
-	bool bRightIsPoint = DasForm_isKind(pR->pForm, DAS_FORM_PT);
+	bool bRightIsPoint = DasForm_isKind(pR->pForm, DASFORM_PT);
 
 	/* Not our partner at all: only linear and point pair with a point. */
-	if(!bRightIsPoint && !DasForm_isKind(pR->pForm, DAS_FORM_LIN))
+	if(!bRightIsPoint && !DasForm_isKind(pR->pForm, DASFORM_LIN))
 		return dbsDecline;
 
 	if(_point_sameShape(pL, pR) != dbsOkay) return dbsRefuse;
 
 	/* --- point OP point ------------------------------------------------- */
 	if(bRightIsPoint){
-		if(nOp != D2BOP_SUB)
+		if(nOp != DASOP_SUB)
 			return REFUSE("Two absolute positions can only be subtracted; "
 			              "'%s' of two of them has no meaning",
-			              das_op_toStr(nOp, NULL));
+			              dasop_name(nOp, NULL));
 
 		/* Strict identity on the epoch.  Two positions measured from
 		   DIFFERENT origins have no difference until one is re-referenced,
@@ -326,11 +326,11 @@ static das_binop_stat _DasFormPt_binOpLeft(
 		if(pL->units != pR->units)
 			return REFUSE("Subtracting positions needs one origin on both "
 			              "sides, have %s and %s (convert first)",
-			              Units_toStr(pL->units), Units_toStr(pR->units));
+			              DasUnits_toStr(pL->units), DasUnits_toStr(pR->units));
 
 		*ppOut = &(_new_DasBinOpAffine(
-			pL, pR, D2BOP_SUB, true, true, 1.0,
-			Units_interval(pL->units),        /* the difference is a span */
+			pL, pR, DASOP_SUB, true, true, 1.0,
+			DasUnits_toInterval(pL->units),        /* the difference is a span */
 			new_DasFormLin(),              /* and a span is plain math */
 			_span_type(pL->vtElem, pR->vtElem)
 		)->base);
@@ -338,19 +338,19 @@ static das_binop_stat _DasFormPt_binOpLeft(
 	}
 
 	/* --- point OP interval ---------------------------------------------- */
-	if((nOp != D2BOP_ADD)&&(nOp != D2BOP_SUB))
+	if((nOp != DASOP_ADD)&&(nOp != DASOP_SUB))
 		return REFUSE("An absolute position can only be moved by an interval, "
-		              "'%s' is not defined on one", das_op_toStr(nOp, NULL));
+		              "'%s' is not defined on one", dasop_name(nOp, NULL));
 
-	das_units uNeed = Units_interval(pL->units);
+	DasUnits uNeed = DasUnits_toInterval(pL->units);
 	double rScale = 1.0;
 	if(pR->units != uNeed){
-		if(!Units_canConvert(pR->units, uNeed))
+		if(!DasUnits_canConvert(pR->units, uNeed))
 			return REFUSE("Moving a position on epoch %s needs %s (or "
 			              "convertible) on the right, have %s",
-			              Units_toStr(pL->units), Units_toStr(uNeed),
-			              Units_toStr(pR->units));
-		rScale = Units_convertTo(1.0, pR->units, uNeed);
+			              DasUnits_toStr(pL->units), DasUnits_toStr(uNeed),
+			              DasUnits_toStr(pR->units));
+		rScale = DasUnits_convert(1.0, pR->units, uNeed);
 	}
 
 	*ppOut = &(_new_DasBinOpAffine(
@@ -370,37 +370,37 @@ static das_binop_stat _DasFormPt_binOpRight(
 	const DasForm* pBase, const das_operand* pL, int nOp,
 	const das_operand* pR, DasBinOp** ppOut
 ){
-	if(!DasForm_isKind(pL->pForm, DAS_FORM_LIN)) return dbsDecline;
+	if(!DasForm_isKind(pL->pForm, DASFORM_LIN)) return dbsDecline;
 
 	if(_point_sameShape(pL, pR) != dbsOkay) return dbsRefuse;
 
-	if(nOp == D2BOP_SUB)
+	if(nOp == DASOP_SUB)
 		return REFUSE("An interval minus a position is meaningless; write "
 		              "position - interval to move it backward");
 
-	if(nOp != D2BOP_ADD)
+	if(nOp != DASOP_ADD)
 		return REFUSE("An interval and a position can only be added, not "
-		              "'%s'", das_op_toStr(nOp, NULL));
+		              "'%s'", dasop_name(nOp, NULL));
 
-	das_units uNeed = Units_interval(pR->units);
+	DasUnits uNeed = DasUnits_toInterval(pR->units);
 	double rScale = 1.0;
 	if(pL->units != uNeed){
-		if(!Units_canConvert(pL->units, uNeed))
+		if(!DasUnits_canConvert(pL->units, uNeed))
 			return REFUSE("Moving a position on epoch %s needs %s (or "
 			              "convertible) on the left, have %s",
-			              Units_toStr(pR->units), Units_toStr(uNeed),
-			              Units_toStr(pL->units));
-		rScale = Units_convertTo(1.0, pL->units, uNeed);
+			              DasUnits_toStr(pR->units), DasUnits_toStr(uNeed),
+			              DasUnits_toStr(pL->units));
+		rScale = DasUnits_convert(1.0, pL->units, uNeed);
 	}
 
 	*ppOut = &(_new_DasBinOpAffine(
-		pL, pR, D2BOP_ADD, false, false, rScale,
+		pL, pR, DASOP_ADD, false, false, rScale,
 		pR->units, _new_DasFormPt_empty(), pR->vtElem
 	)->base);
 	return dbsOkay;
 }
 
-const DasForm_VTbl das_form_pt_vtbl = {
+const DasFormVTable DasFormPt_vtable = {
 	"point",
 	_new_DasFormPt_empty,
 	_DasFormPt_setParam,

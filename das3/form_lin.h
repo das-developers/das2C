@@ -38,13 +38,13 @@ extern "C" {
 #endif
 
 /* Exported so that its address can be compared.  Client code uses the
-   DAS_FORM_LIN macro below and has no reason to name this directly. */
-DAS_API extern const DasForm_VTbl das_form_lin_vtbl;
+   DASFORM_LIN macro below and has no reason to name this directly. */
+DAS_API extern const DasFormVTable DasFormLin_vtable;
 
 /** Plain numbers, which add, subtract, multiply and divide as expected.  This
  * is what a numeric variable gets when its stream says nothing about the math.
- * @see DasForm_isKind(), DasVar_formIs().  @relates DasForm */
-#define DAS_FORM_LIN (&das_form_lin_vtbl)
+ * @see DasForm_isKind(), DasVar_hasForm().  @relates DasForm */
+#define DASFORM_LIN (&DasFormLin_vtable)
 
 /** Build a linear formalism.
  *

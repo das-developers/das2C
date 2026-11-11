@@ -39,15 +39,15 @@ long    ibin[100] = {0};
 
 /* Sum accumulation array, one for each plane of each packet type, fill values
  * aren't added to the count */
-double* sum[100][MAXPLANES] = {{NULL}};
+double* sum[100][DASPKT_MAX_PLANES] = {{NULL}};
 
 /* Counting array, one for each plane of each packet type, fill values aren't
    added to the count. */
-double* count[100][MAXPLANES] = {{NULL}};
+double* count[100][DASPKT_MAX_PLANES] = {{NULL}};
 
 /* Values outside this range are left out of the averages, same as fill */
-double validMin[100][MAXPLANES];
-double validMax[100][MAXPLANES];
+double validMin[100][DASPKT_MAX_PLANES];
+double validMax[100][DASPKT_MAX_PLANES];
 
 
 /* The following two globals keep track of data bins */
@@ -58,7 +58,7 @@ double bin0min= -1e31;  /* Place holder value with be replaced with starting
 
 das_errcode sendData(DasIO* pOut, DasStream* pSd, int iPktId)
 {
-	DasPkt*   pPkt = DasStream_getPkt(pSd, iPktId);
+	DasPkt*   pPkt = DasStream_pkt(pSd, iPktId);
 	DasPlane* pPlane = NULL;
 	int i = 0, iPlane = 0;
 	double value = 0.0; 
@@ -66,22 +66,22 @@ das_errcode sendData(DasIO* pOut, DasStream* pSd, int iPktId)
 	/* Don't flush a packet that hasn't seen any data */
 	if(ibin[iPktId] == -99999) return DAS_OKAY;
 	
-	for(iPlane = 0; iPlane < DasPkt_getNPlanes(pPkt); iPlane++){
-		pPlane = DasPkt_getPlane(pPkt, iPlane);
+	for(iPlane = 0; iPlane < DasPkt_numPlanes(pPkt); iPlane++){
+		pPlane = DasPkt_planeAt(pPkt, iPlane);
 
-		for(i = 0; i < DasPlane_getNItems(pPlane); i++){
+		for(i = 0; i < DasPlane_numItems(pPlane); i++){
 				
-			if(DasPlane_getType(pPlane) == DASPLANE_X){
+			if(DasPlane_type(pPlane) == DASPLANETYPE_X){
 				value = binSize*(ibin[iPktId]+0.5) + bin0min;
 			}
 			else{
 				if(count[iPktId][iPlane][i] == 0.0)
-					value = DasPlane_getFill(pPlane);
+					value = DasPlane_fill(pPlane);
 				else
 					value = sum[iPktId][iPlane][i] / count[iPktId][iPlane][i];
 			}	
 				
-			DasPlane_setValue(pPlane, i, value);
+			DasPlane_setValAt(pPlane, i, value);
 			sum[iPktId][iPlane][i] = 0.0;
 			count[iPktId][iPlane][i] = 0.0;
 		}
@@ -94,7 +94,7 @@ das_errcode onStreamHdr( DasStream* sd, void* ud) {
     DasIO* pOut = (DasIO*)ud;
 	 int i;
 	 
-	 g_pOutSd = DasStream_copy(sd);
+	 g_pOutSd = new_DasStream_copy(sd);
 	 
 	 for(i=0; i<100; i++)
         ibin[i]= -99999;
@@ -109,22 +109,22 @@ das_errcode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, int nPktId, void* vpOut)
 
 	/* Get rid of the existing packet definition if a new definition comes in
 	 * with the same id */
-	DasDesc* pOld = DasStream_getDesc(g_pOutSd, nPktId);
+	DasDesc* pOld = DasStream_desc(g_pOutSd, nPktId);
 	if(pOld != NULL){
 		sendData(pOut, g_pOutSd, nPktId);
 		DasStream_freeDesc(g_pOutSd, pOld);
 	}
 	
 	/* Deep copy the input pkt */
-	DasPkt* pPdOut = DasStream_clonePktById(g_pOutSd, pSdIn, nPktId);
+	DasPkt* pPdOut = DasStream_clonePkt(g_pOutSd, pSdIn, nPktId);
 	if(pPdOut == NULL) return 100;
 	
 	/* Initialize the plane arrays we'll use to store sums and counts */
 	DasPlane* pPlIn = NULL;
 	int iPlane = 0, nItems = 0;
-	for(iPlane = 0; iPlane < DasPkt_getNPlanes(pPdIn); iPlane++){
-		pPlIn = DasPkt_getPlane(pPdIn, iPlane);
-		nItems = DasPlane_getNItems(pPlIn); 
+	for(iPlane = 0; iPlane < DasPkt_numPlanes(pPdIn); iPlane++){
+		pPlIn = DasPkt_planeAt(pPdIn, iPlane);
+		nItems = DasPlane_numItems(pPlIn); 
 		if(sum[nPktId][iPlane] != NULL) free(sum[nPktId][iPlane]);
 		if(count[nPktId][iPlane] != NULL) free(count[nPktId][iPlane]);
 		sum[nPktId][iPlane] = (double*)calloc(nItems, sizeof(double));
@@ -148,8 +148,8 @@ das_errcode onPktData(DasPkt* pPdIn, int packetId, void* vpOut) {
 	const double* pVals = NULL;
 
 	
-	pX = DasPkt_getXPlane(pPdIn);
-	xTag = DasPlane_getValue(pX, 0);
+	pX = DasPkt_xPlane(pPdIn);
+	xTag = DasPlane_valAt(pX, 0);
     if ( bin0min==-1e31 ) {
         bin0min= xTag;
     }
@@ -161,13 +161,13 @@ das_errcode onPktData(DasPkt* pPdIn, int packetId, void* vpOut) {
         ibin[packetId]= ibinThis;
     }
 	 
-	for(iPlane = 0; iPlane < DasPkt_getNPlanes(pPdIn); iPlane++){
-		pPlane = DasPkt_getPlane(pPdIn, iPlane);
+	for(iPlane = 0; iPlane < DasPkt_numPlanes(pPdIn); iPlane++){
+		pPlane = DasPkt_planeAt(pPdIn, iPlane);
 		
-		if(DasPlane_getType(pPlane) == DASPLANE_X) continue;
+		if(DasPlane_type(pPlane) == DASPLANETYPE_X) continue;
 		
-		pVals = DasPlane_getValues(pPlane);
-		for(i = 0; i < DasPlane_getNItems(pPlane); i++){
+		pVals = DasPlane_vals(pPlane);
+		for(i = 0; i < DasPlane_numItems(pPlane); i++){
 			if(!DasPlane_isFill(pPlane, pVals[i]) && das2_inRange(
 				pVals[i], validMin[packetId][iPlane], validMax[packetId][iPlane]
 			)){
@@ -185,14 +185,14 @@ das_errcode onClose( DasStream* pSdIn, const DasExcept* pExcept, void* vpOut ) {
 	
 	int i;
     for ( i=1; (g_pOutSd != NULL) && (i<100); i++ ) {
-        if (DasStream_getDesc(g_pOutSd, i) != NULL) {
+        if (DasStream_desc(g_pOutSd, i) != NULL) {
            sendData(pOut, g_pOutSd, i);
         }
     }
 
 	if(pExcept == NULL) return DAS_OKAY;
 	DasIO_exception(pOut, pExcept);
-	return (DasExcept_type(pExcept) == DAS_EX_NO_DATA) ? DAS_OKAY : DASERR_OOB;
+	return (DasExcept_type(pExcept) == DASEXCEPTTYPE_NO_DATA) ? DAS_OKAY : DASERR_OOB;
 }
 
 /* ************************************************************************* */
@@ -248,7 +248,7 @@ int main( int argc, char *argv[]) {
 	int status;
 	
 	/* Exit on errors, log info messages and above */
-	das_init(argv[0], DASERR_DIS_EXIT, DASLOG_INFO, NULL);
+	daslib_init(argv[0], DASERRDISP_EXIT, DASLOG_INFO, NULL);
     
 	if(argc!=2){
 		fprintf(stderr, "Usage: das2_bin_avg BIN_WIDTH \n"
@@ -269,16 +269,16 @@ int main( int argc, char *argv[]) {
 		functions will have access to the output writer without consulting a 
 		global variable.  This done as a demonstration since it's overkill
 		for a small single-threaded program */
-	das_stream_proc proc;
-	das_stream_proc_init(&proc, pOut);
+	DasIOProc proc;
+	init_DasIOProc(&proc, pOut);
 	
 	proc.onClose = onClose;
-	proc.onStreamDesc = onStreamHdr;
-	proc.onPktDesc = onPktHdr;
+	proc.onStream = onStreamHdr;
+	proc.onPkt = onPktHdr;
 	proc.onPktData = onPktData;
    
 	DasIO* pIn = new_DasIO("Standard Input", new_DasXport_stdin(), NULL);
-	DasIO_addProcessor(pIn, &proc);
+	DasIO_addProc(pIn, &proc);
 	 
 	status = DasIO_readAll(pIn);
 	return status;

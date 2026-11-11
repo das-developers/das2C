@@ -43,13 +43,13 @@ static bool _dasreq_strieq(const char* a, const char* b)
 	return (*a == '\0') && (*b == '\0');
 }
 
-/* das_strdup() returns NULL for NULL and for "", and here "" is a value:
+/* dasstr_new() returns NULL for NULL and for "", and here "" is a value:
    an empty stamp, an unfilled entry.  Every string in a requisition goes
    through this so accessors can hand them straight back. */
 static char* _dasreq_dupz(const char* s)
 {
 	if((s == NULL)||(s[0] == '\0')) return (char*)calloc(1, 1);
-	return das_strdup(s);
+	return dasstr_new(s);
 }
 
 static bool _dasreq_setStr(char** ps, const char* s)
@@ -65,21 +65,21 @@ bool _das_json_scalar(const DasJdo* p, char* sBuf, size_t uLen)
 {
 	if((p == NULL)||(uLen == 0)) return false;
 	switch(p->type){
-	case das_json_type_str:{
-		const char* s = ((const das_json_str*)p->value)->string;
+	case DASJSONTYPE_STR:{
+		const char* s = ((const DasJsonStr*)p->value)->string;
 		strncpy(sBuf, s, uLen - 1);
 		sBuf[uLen - 1] = '\0';
 		return true;
 	}
-	case das_json_type_num:{
-		const das_json_num* pNum = (const das_json_num*)p->value;
-		size_t u = (pNum->number_size < uLen - 1) ? pNum->number_size : uLen - 1;
+	case DASJSONTYPE_NUM:{
+		const DasJsonNum* pNum = (const DasJsonNum*)p->value;
+		size_t u = (pNum->numberSize < uLen - 1) ? pNum->numberSize : uLen - 1;
 		memcpy(sBuf, pNum->number, u);
 		sBuf[u] = '\0';
 		return true;
 	}
-	case das_json_type_true:  strncpy(sBuf, "true", uLen);  sBuf[uLen-1] = '\0'; return true;
-	case das_json_type_false: strncpy(sBuf, "false", uLen); sBuf[uLen-1] = '\0'; return true;
+	case DASJSONTYPE_TRUE:  strncpy(sBuf, "true", uLen);  sBuf[uLen-1] = '\0'; return true;
+	case DASJSONTYPE_FALSE: strncpy(sBuf, "false", uLen); sBuf[uLen-1] = '\0'; return true;
 	default: return false;
 	}
 }
@@ -115,7 +115,7 @@ void del_DasReq(DasReq* pThis)
 	free(pThis);
 }
 
-DasReq* DasReq_copy(const DasReq* pThis)
+DasReq* new_DasReq_copy(const DasReq* pThis)
 {
 	DasReq* pNew = new_DasReq();
 	if(pNew == NULL) return NULL;
@@ -147,7 +147,7 @@ void DasReq_setSrc(DasReq* pThis, const char* sPath, const char* sUrl, const cha
 
 const char* DasReq_srcPath(const DasReq* pThis){ return pThis->sPath; }
 const char* DasReq_srcUrl(const DasReq* pThis){ return pThis->sUrl; }
-const char* DasReq_srcVersion(const DasReq* pThis){ return pThis->sVersion; }
+const char* DasReq_srcVer(const DasReq* pThis){ return pThis->sVersion; }
 const char* DasReq_label(const DasReq* pThis){ return pThis->sLabel; }
 void DasReq_setLabel(DasReq* pThis, const char* sLabel){ _dasreq_setStr(&pThis->sLabel, sLabel); }
 
@@ -195,19 +195,19 @@ void _DasReq_dropDerived(DasReq* pThis)
 	pThis->uEntry = uKeep;
 }
 
-void _DasReq_setVerdict(DasReq* pThis, size_t uIdx, das_req_verdict_e verdict, const char* sWhy)
+void _DasReq_setVerdict(DasReq* pThis, size_t uIdx, das_reqverdict verdict, const char* sWhy)
 {
 	if(uIdx >= pThis->uEntry) return;
 	struct das_req_entry* pE = pThis->aEntry + uIdx;
 	pE->verdict = verdict;
 	free(pE->sWhy);
-	pE->sWhy = (verdict == das_req_bad) ? _dasreq_dupz(sWhy) : NULL;
+	pE->sWhy = (verdict == DASREQVERDICT_BAD) ? _dasreq_dupz(sWhy) : NULL;
 }
 
 void _DasReq_clearVerdicts(DasReq* pThis)
 {
 	for(size_t u = 0; u < pThis->uEntry; ++u){
-		pThis->aEntry[u].verdict = das_req_unchecked;
+		pThis->aEntry[u].verdict = DASREQVERDICT_UNCHECKED;
 		pThis->aEntry[u].nProp = -1;
 		free(pThis->aEntry[u].sWhy);
 		pThis->aEntry[u].sWhy = NULL;
@@ -238,7 +238,7 @@ das_errcode DasReq_set(DasReq* pThis, const char* sKey, const char* sVal)
 		if(sNew == NULL) return DASERR_SRC;
 		free(pE->sVal);
 		pE->sVal = sNew;
-		pE->verdict = das_req_unchecked;
+		pE->verdict = DASREQVERDICT_UNCHECKED;
 		free(pE->sWhy);
 		pE->sWhy = NULL;
 		return DAS_OKAY;
@@ -246,13 +246,13 @@ das_errcode DasReq_set(DasReq* pThis, const char* sKey, const char* sVal)
 	return (_DasReq_add(pThis, sKey, sVal, false) < 0) ? DASERR_SRC : DAS_OKAY;
 }
 
-const char* DasReq_value(const DasReq* pThis, const char* sKey)
+const char* DasReq_val(const DasReq* pThis, const char* sKey)
 {
 	int n = DasReq_find(pThis, sKey);
 	return (n < 0) ? NULL : pThis->aEntry[n].sVal;
 }
 
-bool DasReq_remove(DasReq* pThis, const char* sKey)
+bool DasReq_rmKey(DasReq* pThis, const char* sKey)
 {
 	int n = DasReq_find(pThis, sKey);
 	if(n < 0) return false;
@@ -275,30 +275,30 @@ void DasReq_clear(DasReq* pThis)
 	pThis->uRaw = 0;
 }
 
-size_t DasReq_count(const DasReq* pThis){ return pThis->uEntry; }
+size_t DasReq_numKeys(const DasReq* pThis){ return pThis->uEntry; }
 
-const char* DasReq_key(const DasReq* pThis, size_t u)
+const char* DasReq_keyAt(const DasReq* pThis, size_t u)
 {
 	return (u < pThis->uEntry) ? pThis->aEntry[u].sKey : NULL;
 }
 
-const char* DasReq_val(const DasReq* pThis, size_t u)
+const char* DasReq_valAt(const DasReq* pThis, size_t u)
 {
 	return (u < pThis->uEntry) ? pThis->aEntry[u].sVal : NULL;
 }
 
-das_req_verdict_e DasReq_verdict(const DasReq* pThis, size_t u)
+das_reqverdict DasReq_verdictAt(const DasReq* pThis, size_t u)
 {
-	return (u < pThis->uEntry) ? pThis->aEntry[u].verdict : das_req_unchecked;
+	return (u < pThis->uEntry) ? pThis->aEntry[u].verdict : DASREQVERDICT_UNCHECKED;
 }
 
-const char* DasReq_why(const DasReq* pThis, size_t u)
+const char* DasReq_whyAt(const DasReq* pThis, size_t u)
 {
 	if((u >= pThis->uEntry)||(pThis->aEntry[u].sWhy == NULL)) return "";
 	return pThis->aEntry[u].sWhy;
 }
 
-bool DasReq_derived(const DasReq* pThis, size_t u)
+bool DasReq_isDerivedAt(const DasReq* pThis, size_t u)
 {
 	return (u < pThis->uEntry) ? pThis->aEntry[u].bDerived : false;
 }
@@ -336,9 +336,9 @@ das_errcode DasReq_setRaw(DasReq* pThis, const char* sName, const char* sVal)
 	return DAS_OKAY;
 }
 
-size_t DasReq_rawCount(const DasReq* pThis){ return pThis->uRaw; }
+size_t DasReq_numRaw(const DasReq* pThis){ return pThis->uRaw; }
 
-const char* DasReq_raw(const DasReq* pThis, size_t u, const char** psVal)
+const char* DasReq_rawAt(const DasReq* pThis, size_t u, const char** psVal)
 {
 	if(u >= pThis->uRaw) return NULL;
 	if(psVal) *psVal = pThis->aRaw[u].sVal;
@@ -394,7 +394,7 @@ static void _dasreq_putPair(_out_t* pO, const char* sKey, const char* sVal, bool
 	_dasreq_putStr(pO, sVal);
 }
 
-char* DasReq_text(const DasReq* pThis)
+char* DasReq_newJsonStr(const DasReq* pThis)
 {
 	_out_t o = {NULL, 0, 0, false};
 	_dasreq_put(&o, "{\n  \"source\": {\n");
@@ -420,14 +420,14 @@ char* DasReq_text(const DasReq* pThis)
 
 das_errcode DasReq_write(const DasReq* pThis, const char* sPath)
 {
-	char* sText = DasReq_text(pThis);
+	char* sText = DasReq_newJsonStr(pThis);
 	if(sText == NULL){
 		daslog_error("Couldn't allocate the requisition text");
 		return DASERR_SRC;
 	}
 	FILE* pOut = fopen(sPath, "wb");
 	if(pOut == NULL){
-		daslog_error_v("Couldn't open %s for writing", sPath);
+		daslog_errorf("Couldn't open %s for writing", sPath);
 		free(sText);
 		return DASERR_SRC;
 	}
@@ -435,7 +435,7 @@ das_errcode DasReq_write(const DasReq* pThis, const char* sPath)
 	fclose(pOut);
 	free(sText);
 	if(!bOk){
-		daslog_error_v("Couldn't write %s", sPath);
+		daslog_errorf("Couldn't write %s", sPath);
 		return DASERR_SRC;
 	}
 	return DAS_OKAY;
@@ -468,14 +468,14 @@ static void _dasreq_pathToKey(const char* sPath, char* sKey, size_t uLen)
 
 static const char* _dasreq_jstr(const DasJdo* p, const char* sPath)
 {
-	const DasJdo* pSub = p ? DasJdo_get(p, sPath) : NULL;
-	return ((pSub != NULL)&&(pSub->type == das_json_type_str)) ? DasJdo_string(pSub) : NULL;
+	const DasJdo* pSub = p ? DasJdo_subtree(p, sPath) : NULL;
+	return ((pSub != NULL)&&(pSub->type == DASJSONTYPE_STR)) ? DasJdo_str(pSub) : NULL;
 }
 
 DasReq* new_DasReq_text(const char* sJson, size_t uLen)
 {
-	DasJdo* pDoc = das_json_parse(sJson, uLen);
-	if((pDoc == NULL)||(pDoc->type != das_json_type_dict)){
+	DasJdo* pDoc = new_DasJdo_parse(sJson, uLen);
+	if((pDoc == NULL)||(pDoc->type != DASJSONTYPE_DICT)){
 		daslog_error("Requisition text is not a JSON object");
 		free(pDoc);
 		return NULL;
@@ -483,21 +483,21 @@ DasReq* new_DasReq_text(const char* sJson, size_t uLen)
 	DasReq* pThis = new_DasReq();
 	if(pThis == NULL){ free(pDoc); return NULL; }
 
-	const DasJdo* pSrc = DasJdo_get(pDoc, "source");
+	const DasJdo* pSrc = DasJdo_subtree(pDoc, "source");
 	DasReq_setSrc(pThis, _dasreq_jstr(pSrc, "path"), _dasreq_jstr(pSrc, "url"), _dasreq_jstr(pSrc, "version"));
 	DasReq_setLabel(pThis, _dasreq_jstr(pDoc, "label"));
 
 	char sKey[256], sVal[1024];
 	bool bOk = true;
-	const DasJdo* pSet = DasJdo_get(pDoc, "settings");
-	for(const das_json_dict_el* pEl = DasJdo_dictFirst(pSet); bOk && pEl; pEl = pEl->next){
+	const DasJdo* pSet = DasJdo_subtree(pDoc, "settings");
+	for(const DasJsonDictEl* pEl = DasJdo_dictFirst(pSet); bOk && pEl; pEl = pEl->next){
 		if(strchr(pEl->name->string, '/')) _dasreq_pathToKey(pEl->name->string, sKey, sizeof(sKey));
 		else{ strncpy(sKey, pEl->name->string, sizeof(sKey) - 1); sKey[sizeof(sKey)-1] = '\0'; }
 		if(!_das_json_scalar(pEl->value, sVal, sizeof(sVal))) sVal[0] = '\0';
 		bOk = (DasReq_set(pThis, sKey, sVal) == DAS_OKAY);
 	}
-	const DasJdo* pRaw = DasJdo_get(pDoc, "params");
-	for(const das_json_dict_el* pEl = DasJdo_dictFirst(pRaw); bOk && pEl; pEl = pEl->next){
+	const DasJdo* pRaw = DasJdo_subtree(pDoc, "params");
+	for(const DasJsonDictEl* pEl = DasJdo_dictFirst(pRaw); bOk && pEl; pEl = pEl->next){
 		if(!_das_json_scalar(pEl->value, sVal, sizeof(sVal))) sVal[0] = '\0';
 		bOk = (DasReq_setRaw(pThis, pEl->name->string, sVal) == DAS_OKAY);
 	}
@@ -510,13 +510,13 @@ DasReq* new_DasReq_file(const char* sPath)
 {
 	FILE* pIn = fopen(sPath, "rb");
 	if(pIn == NULL){
-		daslog_error_v("Couldn't open requisition file %s", sPath);
+		daslog_errorf("Couldn't open requisition file %s", sPath);
 		return NULL;
 	}
 	fseek(pIn, 0, SEEK_END);
 	long nLen = ftell(pIn);
 	fseek(pIn, 0, SEEK_SET);
-	if(nLen < 0){ fclose(pIn); daslog_error_v("Couldn't size %s", sPath); return NULL; }
+	if(nLen < 0){ fclose(pIn); daslog_errorf("Couldn't size %s", sPath); return NULL; }
 	char* sBuf = (char*)malloc((size_t)nLen + 1);
 	if(sBuf == NULL){ fclose(pIn); return NULL; }
 	size_t uRead = fread(sBuf, 1, (size_t)nLen, pIn);

@@ -68,22 +68,22 @@ static int test_form_table(void)
 {
 	int nErrs = 0;
 
-	const DasForm_VTbl* pPoint = das_form_lookup("point");
+	const DasFormVTable* pPoint = DasForm_lookup("point");
 	MUST(pPoint != NULL);
 	CHECK(strcmp(pPoint->sKind, "point") == 0);
 
-	CHECK(das_form_lookup("linear")   != NULL);
-	CHECK(das_form_lookup("vector")   != NULL);
-	CHECK(das_form_lookup("position") != NULL);
-	CHECK(das_form_lookup("rotation") != NULL);
+	CHECK(DasForm_lookup("linear")   != NULL);
+	CHECK(DasForm_lookup("vector")   != NULL);
+	CHECK(DasForm_lookup("position") != NULL);
+	CHECK(DasForm_lookup("rotation") != NULL);
 
 	/* Retired tokens must not resolve, there are no shims: geovec was SPLIT
 	   into vector and position, and geoloc was renamed to position. */
-	CHECK(das_form_lookup("geovec") == NULL);
-	CHECK(das_form_lookup("geoloc") == NULL);
-	CHECK(das_form_lookup("no_such_kind") == NULL);
-	CHECK(das_form_lookup("") == NULL);
-	CHECK(das_form_lookup(NULL) == NULL);
+	CHECK(DasForm_lookup("geovec") == NULL);
+	CHECK(DasForm_lookup("geoloc") == NULL);
+	CHECK(DasForm_lookup("no_such_kind") == NULL);
+	CHECK(DasForm_lookup("") == NULL);
+	CHECK(DasForm_lookup(NULL) == NULL);
 
 	/* An unrecognized kind is NOT an error: it comes back generic, carrying
 	   its parameters for re-emit, which lets a stream still saying geovec
@@ -91,10 +91,10 @@ static int test_form_table(void)
 	const char* aGeovec[] = {"kind","geovec", "frame","TSCS", NULL};
 	DasForm* pGen = new_DasForm_pairs(aGeovec);
 	MUST(pGen != NULL);
-	CHECK(DasForm_isKind(pGen, DAS_FORM_EXT));
+	CHECK(DasForm_isKind(pGen, DASFORM_EXT));
 	/* The token that arrived, not the shared generic vtable's empty one */
 	CHECK(strcmp(DasForm_kind(pGen), "geovec") == 0);
-	const char* sFrame = DasForm_getParam(pGen, "frame", NULL);
+	const char* sFrame = DasForm_param(pGen, "frame", NULL);
 	MUST(sFrame != NULL);
 	CHECK(strcmp(sFrame, "TSCS") == 0);
 	del_DasForm(pGen);
@@ -106,7 +106,7 @@ static int test_form_table(void)
 	const char* aKindLast[] = {"system","spherical", "kind","vector", NULL};
 	DasForm* pLast = new_DasForm_pairs(aKindLast);
 	MUST(pLast != NULL);
-	const char* sSys = DasForm_getParam(pLast, "system", NULL);
+	const char* sSys = DasForm_param(pLast, "system", NULL);
 	MUST(sSys != NULL);
 	CHECK(strcmp(sSys, "spherical") == 0);
 	del_DasForm(pLast);
@@ -119,7 +119,7 @@ static int test_form_table(void)
 	   not the wire factory's. */
 	DasForm* pLin = new_DasFormLin();
 	MUST(pLin != NULL);
-	CHECK(!DasForm_isKind(pLin, DAS_FORM_EXT));
+	CHECK(!DasForm_isKind(pLin, DASFORM_EXT));
 	CHECK(strcmp(DasForm_kind(pLin), "linear") == 0);
 	del_DasForm(pLin);
 
@@ -139,13 +139,13 @@ static int test_form_params(void)
 	DasForm* pVec = new_DasForm_pairs(aVec);
 	MUST(pVec != NULL);
 
-	ubyte uType = 0;
-	const char* sVal = DasForm_getParam(pVec, "frame", &uType);
+	uint8_t uType = 0;
+	const char* sVal = DasForm_param(pVec, "frame", &uType);
 	MUST(sVal != NULL);
 	CHECK(strcmp(sVal, "TSCS") == 0);
 	CHECK(uType == (DASPROP_STRING | DASPROP_SINGLE));
 
-	sVal = DasForm_getParam(pVec, "system", &uType);
+	sVal = DasForm_param(pVec, "system", &uType);
 	CHECK((sVal != NULL) && (strcmp(sVal, "spherical") == 0));
 
 	/* A decoded parameter still reads back in its WIRE spelling */
@@ -154,14 +154,14 @@ static int test_form_params(void)
 	};
 	DasForm* pPos = new_DasForm_pairs(aPos);
 	MUST(pPos != NULL);
-	sVal = DasForm_getParam(pPos, "fixed", &uType);
+	sVal = DasForm_param(pPos, "fixed", &uType);
 	CHECK((sVal != NULL) && (strcmp(sVal, "true") == 0));
 	CHECK(uType == (DASPROP_BOOL | DASPROP_SINGLE));
 	del_DasForm(pPos);
 
 	/* A miss is an answer, not an error: this is how a caller finds out
 	   whether a formalism carries a frame at all. */
-	CHECK(DasForm_getParam(pVec, "body", &uType) == NULL);
+	CHECK(DasForm_param(pVec, "body", &uType) == NULL);
 
 	/* An ellipsoidal system on a FREE vector is refused */
 	const char* aDetic[] = {"kind","vector", "system","detic", NULL};
@@ -213,7 +213,7 @@ static int test_form_rotation(void)
 	DasForm* pBare = new_DasForm_pairs(aBare);
 	MUST(pBare != NULL);
 	CHECK(DasForm_validate(pBare, 1, aFour) != DAS_OKAY);
-	CHECK(strcmp(DasForm_getParam(pBare, "system", NULL), "matrix") == 0);
+	CHECK(strcmp(DasForm_param(pBare, "system", NULL), "matrix") == 0);
 	CHECK(strcmp(DasForm_compSym(pBare, 0), "xx") == 0);
 	CHECK(strcmp(DasForm_compSym(pBare, 5), "yz") == 0);
 	CHECK(DasForm_compSym(pBare, 9) == NULL);
@@ -233,7 +233,7 @@ static int test_form_rotation(void)
 	CHECK(strcmp(DasForm_compSym(pXyzw, 0), "x") == 0);
 	CHECK(strcmp(DasForm_compSym(pXyzw, 3), "w") == 0);
 	CHECK(DasForm_compSym(pXyzw, 4) == NULL);
-	CHECK(strcmp(DasForm_getParam(pXyzw, "sysorder", NULL), "1;2;3;0") == 0);
+	CHECK(strcmp(DasForm_param(pXyzw, "sysorder", NULL), "1;2;3;0") == 0);
 
 	DasBuf* pBuf = new_DasBuf(256);
 	MUST(pBuf != NULL);
@@ -304,38 +304,38 @@ static int test_form_systems(void)
 {
 	int nErrs = 0;
 
-	CHECK(das_vsys_fromStr("detic") == DAS_VSYS_DETIC);
-	CHECK(das_vsys_fromStr("graphic") == DAS_VSYS_GRAPHIC);
-	CHECK(das_vsys_fromStr("cart") == DAS_VSYS_CART);
-	CHECK(das_vsys_fromStr("no_such_system") == DAS_VSYS_UNKNOWN);
+	CHECK(dasvecsys_id("detic") == DASVECSYS_DETIC);
+	CHECK(dasvecsys_id("graphic") == DASVECSYS_GRAPHIC);
+	CHECK(dasvecsys_id("cart") == DASVECSYS_CART);
+	CHECK(dasvecsys_id("no_such_system") == DASVECSYS_UNKNOWN);
 
-	CHECK(strcmp(das_vsys_toStr(DAS_VSYS_GRAPHIC), "graphic") == 0);
-	CHECK(das_vsys_toStr(DAS_VSYS_MAX + 1) == NULL);   /* complex's codes */
-	CHECK(das_vsys_desc(DAS_VSYS_DETIC) != NULL);
+	CHECK(strcmp(dasvecsys_name(DASVECSYS_GRAPHIC), "graphic") == 0);
+	CHECK(dasvecsys_name(DASVECSYS_MAX + 1) == NULL);   /* complex's codes */
+	CHECK(dasvecsys_info(DASVECSYS_DETIC) != NULL);
 
 	/* Graphic is latitude first, see form_vec.c for why */
-	CHECK(strcmp(das_vsys_symbol(DAS_VSYS_GRAPHIC, 0), "φ") == 0);
-	CHECK(strcmp(das_vsys_symbol(DAS_VSYS_DETIC, 2), "h") == 0);
-	CHECK(das_vsys_symbol(DAS_VSYS_MAX + 1, 0) == NULL);
-	CHECK(das_vsys_index(DAS_VSYS_DETIC, "h") == 2);
+	CHECK(strcmp(dasvecsys_dirSym(DASVECSYS_GRAPHIC, 0), "φ") == 0);
+	CHECK(strcmp(dasvecsys_dirSym(DASVECSYS_DETIC, 2), "h") == 0);
+	CHECK(dasvecsys_dirSym(DASVECSYS_MAX + 1, 0) == NULL);
+	CHECK(dasvecsys_symToDir(DASVECSYS_DETIC, "h") == 2);
 
-	CHECK(strcmp(das_vsys_name(DAS_VSYS_GRAPHIC, 1), "lambda") == 0);
-	CHECK(das_vsys_nameIndex(DAS_VSYS_SPH, "theta") == 1);
-	CHECK(das_vsys_nameIndex(DAS_VSYS_SPH, "θ") == 1);
+	CHECK(strcmp(dasvecsys_dirName(DASVECSYS_GRAPHIC, 1), "lambda") == 0);
+	CHECK(dasvecsys_nameToDir(DASVECSYS_SPH, "theta") == 1);
+	CHECK(dasvecsys_nameToDir(DASVECSYS_SPH, "θ") == 1);
 
-	CHECK(das_vsys_isEllipsoidal(DAS_VSYS_DETIC));
-	CHECK(!das_vsys_isEllipsoidal(DAS_VSYS_CENTRIC));
+	CHECK(dasvecsys_isEllipsoidal(DASVECSYS_DETIC));
+	CHECK(!dasvecsys_isEllipsoidal(DASVECSYS_CENTRIC));
 
 	/* No radius in the ellipsoidal systems, so no slot defaults to 1 */
-	CHECK(das_vsys_default(DAS_VSYS_SPH, 0) == 1.0);
-	CHECK(das_vsys_default(DAS_VSYS_DETIC, 0) == 0.0);
+	CHECK(dasvecsys_dirDefault(DASVECSYS_SPH, 0) == 1.0);
+	CHECK(dasvecsys_dirDefault(DASVECSYS_DETIC, 0) == 0.0);
 
 	/* The constructor path; the wire path is in case 2 */
-	CHECK(new_DasFormVec(NULL, DAS_VSYS_DETIC, NULL) == NULL);
+	CHECK(new_DasFormVec(NULL, DASVECSYS_DETIC, NULL) == NULL);
 	DasForm* pPos = new_DasFormPos("EARTH", "IAU_EARTH", "WGS84", true,
-	                               DAS_VSYS_GRAPHIC, NULL);
+	                               DASVECSYS_GRAPHIC, NULL);
 	MUST(pPos != NULL);
-	CHECK(DasFormPos_sysType(pPos) == DAS_VSYS_GRAPHIC);
+	CHECK(DasFormPos_sysId(pPos) == DASVECSYS_GRAPHIC);
 	del_DasForm(pPos);
 
 	return nErrs;
@@ -355,7 +355,7 @@ static bool _paramEq(const DasProp* pA, const DasProp* pB)
 static int test_form_paramAt(void)
 {
 	int nErrs = 0;
-	das_form_param_buf buf;
+	DasFormParamBuf buf;
 	const DasProp* pProp = NULL;
 
 	/* Defaults are reported: nothing but a frame on the wire, three answers */
@@ -381,7 +381,7 @@ static int test_form_paramAt(void)
 	CHECK(strcmp(DasProp_name(pProp), "sysorder") == 0);
 	CHECK(DasProp_type(pProp) == (DASPROP_INT | DASPROP_SET));
 	int64_t aOrd[9] = {0};
-	CHECK(DasProp_convertInt(pProp, aOrd, 9) == 2);
+	CHECK(DasProp_toInts(pProp, aOrd, 9) == 2);
 	CHECK((aOrd[0] == 0) && (aOrd[1] == 1));
 
 	CHECK(DasForm_paramAt(pVec, 3, &buf) == NULL);
@@ -400,12 +400,12 @@ static int test_form_paramAt(void)
 
 	/* A permuted order given to the constructor, not the wire.  Only the wire
 	   path used to write the spelling, so this one reported 0;1;2. */
-	ubyte aDirs[3] = {1, 0, 2};
-	DasForm* pCon = new_DasFormVec("TSCS", DAS_VSYS_CART, aDirs);
+	uint8_t aDirs[3] = {1, 0, 2};
+	DasForm* pCon = new_DasFormVec("TSCS", DASVECSYS_CART, aDirs);
 	MUST(pCon != NULL);
-	CHECK(strcmp(DasForm_getParam(pCon, "sysorder", NULL), "1;0;2") == 0);
+	CHECK(strcmp(DasForm_param(pCon, "sysorder", NULL), "1;0;2") == 0);
 	MUST(DasForm_validate(pCon, 1, aTwo) == DAS_OKAY);
-	CHECK(strcmp(DasForm_getParam(pCon, "sysorder", NULL), "1;0") == 0);
+	CHECK(strcmp(DasForm_param(pCon, "sysorder", NULL), "1;0") == 0);
 	del_DasForm(pCon);
 
 	/* fixed= is always answered and is a real boolean */
@@ -418,7 +418,7 @@ static int test_form_paramAt(void)
 		bSawFixed = true;
 		CHECK(DasProp_type(pProp) == (DASPROP_BOOL | DASPROP_SINGLE));
 		uint8_t uFixed = 1;
-		CHECK(DasProp_convertBool(pProp, &uFixed, 1) == 1);
+		CHECK(DasProp_toBools(pProp, &uFixed, 1) == 1);
 		CHECK(uFixed == 0);
 	}
 	CHECK(bSawFixed);
@@ -430,7 +430,7 @@ static int test_form_paramAt(void)
 	MUST(pRot != NULL);
 	CHECK(DasForm_numParams(pRot) == 4);
 	MUST((pProp = DasForm_paramAt(pRot, 3, &buf)) != NULL);
-	CHECK(DasProp_convertInt(pProp, aOrd, 9) == 9);
+	CHECK(DasProp_toInts(pProp, aOrd, 9) == 9);
 	CHECK(aOrd[8] == 8);
 	del_DasForm(pRot);
 
@@ -533,7 +533,7 @@ static int test_form_paramTrip(void)
 				aCase[c].aAttr[1], nIn, DasForm_numParams(pOut));
 			++nErrs;
 		}
-		das_form_param_buf bufIn, bufOut;
+		DasFormParamBuf bufIn, bufOut;
 		for(int i = 0; i < nIn; ++i){
 			const DasProp* pA = DasForm_paramAt(pIn, i, &bufIn);
 			const DasProp* pB = DasForm_paramAt(pOut, i, &bufOut);
@@ -559,7 +559,7 @@ int main(int argc, char** argv)
 	   See the same note in TestVar.c. */
 	setvbuf(stdout, NULL, _IONBF, 0);
 
-	das_init(argv[0], DASERR_DIS_RET, DASLOG_ERROR, NULL);
+	daslib_init(argv[0], DASERRDISP_RET, DASLOG_ERROR, NULL);
 
 	struct { const char* sName; int (*pFn)(void); } aCase[] = {
 		{"test_form_table",    test_form_table},
@@ -595,7 +595,7 @@ int main(int argc, char** argv)
 
 /* Still to write:
  *
- * 1. pack() per formalism.  Vector and position pack a vtComposite datum,
+ * 1. pack() per formalism.  Vector and position pack a DASVT_COMP datum,
  *    linear refuses at nIntRank > 0, and each answers datumType() for
  *    itself.  TestVar reaches vector pack through a composite variable;
  *    nothing reaches position or rotation at all.

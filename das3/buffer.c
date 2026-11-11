@@ -30,13 +30,13 @@ DasBuf* new_DasBuf(size_t uLen)
 {
 	DasBuf* pThis = (DasBuf*)calloc(1, sizeof(DasBuf));
 	if(pThis == NULL){
-		das_error(DASERR_BUF, "Error allocating a buffer object");
+		daserrf(DASERR_BUF, "Error allocating a buffer object");
 		return NULL;
 	}
 	pThis->sBuf = (char*)calloc(uLen, sizeof(char));
 	if(pThis->sBuf == NULL){
 		free(pThis);
-		das_error(DASERR_BUF, "Error allocating a %zu byte buffer", uLen);
+		daserrf(DASERR_BUF, "Error allocating a %zu byte buffer", uLen);
 		return NULL;
 	}
 	pThis->uLen = uLen;
@@ -50,7 +50,7 @@ DasBuf* new_DasBuf(size_t uLen)
 DasBuf* new_DasBuf_elastic(size_t uLen, size_t uMax)
 {
 	if((uLen == 0)||(uMax < uLen)){
-		das_error(DASERR_BUF, "Elastic buffer needs 0 < initial size <= limit, "
+		daserrf(DASERR_BUF, "Elastic buffer needs 0 < initial size <= limit, "
 		          "got %zu and %zu", uLen, uMax);
 		return NULL;
 	}
@@ -66,7 +66,7 @@ DasBuf* new_DasBuf_elastic(size_t uLen, size_t uMax)
  *   0            when the room exists 
  *  -1            for fixed buffers or an attempt to grow past the 
  *                limit.
- *   DASERR_BUF   and and a call to das_error when allocation fails.
+ *   DASERR_BUF   and and a call to daserrf when allocation fails.
  *
  * Doubles logarithmically for less malloc churn. New space is zeroed
  * to assist with C string storage.
@@ -88,7 +88,7 @@ static int _DasBuf_ensure(DasBuf* pThis, size_t uFree)
 
 	char* sNew = (char*)realloc(pThis->sBuf, uNew);
 	if(sNew == NULL)
-		return das_error(DASERR_BUF, "Couldn't grow a %zu byte buffer to %zu bytes",
+		return daserrf(DASERR_BUF, "Couldn't grow a %zu byte buffer to %zu bytes",
 		                 pThis->uLen, uNew);
 	memset(sNew + pThis->uLen, 0, uNew - pThis->uLen);
 
@@ -107,9 +107,9 @@ static int _DasBuf_ensure(DasBuf* pThis, size_t uFree)
 static das_errcode _DasBuf_fullErr(const DasBuf* pThis, size_t uWant)
 {
 	if(pThis->uMax != 0)
-		return das_error(DASERR_BUF, "Can't write %zu more bytes, the buffer would "
+		return daserrf(DASERR_BUF, "Can't write %zu more bytes, the buffer would "
 		                 "pass its %zu byte limit", uWant, pThis->uMax);
-	return das_error(DASERR_BUF, "Buffer has %zu bytes of space left, can't write "
+	return daserrf(DASERR_BUF, "Buffer has %zu bytes of space left, can't write "
 	                 "%zu bytes", DasBuf_writeSpace(pThis), uWant);
 }
 
@@ -120,10 +120,10 @@ static das_errcode _DasBuf_fullErr(const DasBuf* pThis, size_t uWant)
 das_errcode _init_DasBuf_wrap(DasBuf* pThis, void* pData, size_t uLen, const char* sMode)
 {
 	if((sMode == NULL)||(sMode[1] != '\0')||((sMode[0] != 'r')&&(sMode[0] != 'w')))
-		return das_error(DASERR_BUF, "Buffer mode must be \"r\" or \"w\", not \"%s\"",
+		return daserrf(DASERR_BUF, "Buffer mode must be \"r\" or \"w\", not \"%s\"",
 		                 sMode ? sMode : "(null)");
 	if((pData == NULL)&&(uLen > 0))
-		return das_error(DASERR_BUF, "No memory given for a %zu byte buffer", uLen);
+		return daserrf(DASERR_BUF, "No memory given for a %zu byte buffer", uLen);
 
 	pThis->sBuf = (char*)pData;
 	pThis->uLen = uLen;
@@ -146,7 +146,7 @@ DasBuf* new_DasBuf_wrap(void* pData, size_t uLen, const char* sMode)
 {
 	DasBuf* pThis = (DasBuf*)calloc(1, sizeof(DasBuf));
 	if(pThis == NULL){
-		das_error(DASERR_BUF, "Error allocating a buffer object");
+		daserrf(DASERR_BUF, "Error allocating a buffer object");
 		return NULL;
 	}
 	if(_init_DasBuf_wrap(pThis, pData, uLen, sMode) != DAS_OKAY){
@@ -156,7 +156,7 @@ DasBuf* new_DasBuf_wrap(void* pData, size_t uLen, const char* sMode)
 	return pThis;
 }
 
-void DasBuf_reinit(DasBuf* pThis)
+void DasBuf_reset(DasBuf* pThis)
 {
 	if(pThis->pWrite != NULL){
 		if(pThis->pWrite > pThis->sBuf)
@@ -179,7 +179,7 @@ void DasBuf_reinit(DasBuf* pThis)
 das_errcode DasBuf_zero(DasBuf* pThis)
 {
 	if(pThis->pWrite == NULL)
-		return das_error(DASERR_BUF, "Attempted to zero a read only buffer");
+		return daserrf(DASERR_BUF, "Attempted to zero a read only buffer");
 	if(pThis->uLen > 0) memset(pThis->sBuf, 0, pThis->uLen);
 	pThis->pWrite = pThis->sBuf;
 	pThis->pReadBeg = pThis->sBuf;
@@ -209,13 +209,13 @@ size_t DasBuf_written(const DasBuf* pThis){
 das_errcode DasBuf_printf(DasBuf* pThis, const char* sFmt, ...)
 {
 	if(pThis->pWrite == NULL) 
-		return das_error(DASERR_BUF, "Attempted write to a read only buffer");
+		return daserrf(DASERR_BUF, "Attempted write to a read only buffer");
 	
 	size_t uLeft = DasBuf_writeSpace(pThis);
 	
 	/* Don't let a size_t object roll-around*/
 	if((uLeft == 0)&&(pThis->uMax == 0))
-		return das_error(DASERR_BUF, "%zu byte buffer full", pThis->uLen);
+		return daserrf(DASERR_BUF, "%zu byte buffer full", pThis->uLen);
 	
 	/* The first pass doubles as the measurement, so that an elastic buffer
 	   that came up short grows up to the measured size and formats again
@@ -241,7 +241,7 @@ das_errcode DasBuf_printf(DasBuf* pThis, const char* sFmt, ...)
 	
 	/* If an error occurred, don't increment anything, just bail */
 	if(nRet < 0)
-		return das_error(DASERR_BUF, "Error in vsnprintf");
+		return daserrf(DASERR_BUF, "Error in vsnprintf");
 	
 	if((size_t)nRet >= uLeft)
 		return _DasBuf_fullErr(pThis, (size_t)nRet + 1);
@@ -254,7 +254,7 @@ das_errcode DasBuf_printf(DasBuf* pThis, const char* sFmt, ...)
 das_errcode DasBuf_write(DasBuf* pThis, const void* pData, size_t uLen)
 {
 	if(pThis->pWrite == NULL) 
-		return das_error(DASERR_BUF, "Attempted write to a read only buffer");
+		return daserrf(DASERR_BUF, "Attempted write to a read only buffer");
 		
 	if(uLen == 0) return 0;  /* successfully did nothing */
 	int nGrow = _DasBuf_ensure(pThis, uLen);
@@ -275,13 +275,13 @@ das_errcode DasBuf_puts(DasBuf* pThis, const char* sStr){
 /* Quiet on "no room": Caller should report as it sees fit. 
    Only an allocation failure or trying to write to read-only 
    buffer triggers a "throw" */
-ubyte* DasBuf_prepare(DasBuf* pThis, size_t uWant, size_t* pSpace)
+uint8_t* DasBuf_prepare(DasBuf* pThis, size_t uWant, size_t* pSpace)
 {
 	*pSpace = 0;
 	/* Read-only is permanent, so asking is a caller bug and says so.  No room
 	   is quiet, a caller may have another way to cope. */
 	if(pThis->pWrite == NULL){
-		das_error(DASERR_BUF, "Attempted write to a read only buffer");
+		daserrf(DASERR_BUF, "Attempted write to a read only buffer");
 		return NULL;
 	}
 
@@ -291,7 +291,7 @@ ubyte* DasBuf_prepare(DasBuf* pThis, size_t uWant, size_t* pSpace)
 
 	*pSpace = DasBuf_writeSpace(pThis);
 	if(*pSpace == 0) return NULL;
-	return (ubyte*)pThis->pWrite;
+	return (uint8_t*)pThis->pWrite;
 }
 
 das_errcode DasBuf_commit(DasBuf* pThis, size_t uLen)
@@ -299,7 +299,7 @@ das_errcode DasBuf_commit(DasBuf* pThis, size_t uLen)
 	if(uLen == 0) return DAS_OKAY;
 	size_t uLeft = DasBuf_writeSpace(pThis);
 	if(uLen > uLeft)
-		return das_error(DASERR_BUF, "Commit of %zu bytes, only %zu were prepared",
+		return daserrf(DASERR_BUF, "Commit of %zu bytes, only %zu were prepared",
 		                 uLen, uLeft);
 	pThis->pWrite += uLen;
 	pThis->pReadEnd = pThis->pWrite;
@@ -323,7 +323,7 @@ das_errcode DasBuf_wrapWrite(
 	/* nWidth is signed, test it alone first so a negative one can't pass the
 	   unsigned comparison */
 	if((nWidth < 20) || ((size_t)nWidth < uTmp + 20))
-		return das_error(DASERR_BUF, "Wrap width was %d, must be at least 20 + size of "
+		return daserrf(DASERR_BUF, "Wrap width was %d, must be at least 20 + size of "
 				            "indent string ", nWidth);
 	
 	/* Indents past 80 bytes are cut to fit, the first line uses the same cut */
@@ -468,12 +468,12 @@ das_errcode DasBuf_setReadOffset(DasBuf* pThis, size_t uPos)
 {
 	if(pThis->pWrite == NULL){
 		if(uPos > pThis->uLen)
-			return das_error(DASERR_BUF, "Attempt to set read point %zu for a %zu "
+			return daserrf(DASERR_BUF, "Attempt to set read point %zu for a %zu "
 			                  "byte buffer", uPos, pThis->uLen);
 	}
 	else{
 		if(uPos > pThis->pWrite - pThis->sBuf)
-			return das_error(DASERR_BUF, "Attempt to set read point %zu but only %zu "
+			return daserrf(DASERR_BUF, "Attempt to set read point %zu but only %zu "
 			                  "bytes are in the buffer", uPos, 
 			                  pThis->pWrite - pThis->sBuf);
 	}
@@ -488,19 +488,19 @@ size_t DasBuf_unread(const DasBuf* pThis){
 		return pThis->pReadEnd - pThis->pReadBeg;
 }
 
-const ubyte* DasBuf_data(const DasBuf* pThis, size_t* pLen)
+const uint8_t* DasBuf_data(const DasBuf* pThis, size_t* pLen)
 {
 	/* Set on the empty path too, so a caller may test the length alone */
 	*pLen = DasBuf_unread(pThis);
 	if(*pLen == 0) return NULL;
-	return (const ubyte*) pThis->pReadBeg;
+	return (const uint8_t*) pThis->pReadBeg;
 }
 
 das_errcode DasBuf_consume(DasBuf* pThis, size_t uLen)
 {
 	size_t uLeft = DasBuf_unread(pThis);
 	if(uLen > uLeft)
-		return das_error(DASERR_BUF, "Consume of %zu bytes, only %zu are unread",
+		return daserrf(DASERR_BUF, "Consume of %zu bytes, only %zu are unread",
 		                 uLen, uLeft);
 	pThis->pReadBeg += uLen;
 	return DAS_OKAY;

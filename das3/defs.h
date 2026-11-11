@@ -17,7 +17,7 @@
 
 
 /** @file defs.h Minimal definitions for das2 utilities that can safely be
- * run without calling das_init().  
+ * run without calling daslib_init().  
  *
  * This is mostly useful for old das1 programs.
  */
@@ -35,7 +35,7 @@
  * runtime checks.  For some newer chips this may not work as the
  * processor can be switched from big endian to little endian at runtime.
  *
- * At the end of the day either HOST_IS_LSB_FIRST will be defined, or it won't.
+ * At the end of the day either DASHOST_LSB_FIRST will be defined, or it won't.
  * If this macro is defined then the host computer stores the least significant
  * byte of a word in the lowest address, i.e. it's a little endian machine.  If
  * this macro is not defined then the host computer stores the list significant
@@ -50,13 +50,13 @@
 #endif
 
 #if __BYTE_ORDER == __LITTLE_ENDIAN
-#define HOST_IS_LSB_FIRST
+#define DASHOST_LSB_FIRST
 #else
-#undef HOST_IS_LSB_FIRST
+#undef DASHOST_LSB_FIRST
 #endif
 
 #if defined __LP64__
-#define HOST_IS_64_BIT
+#define DASHOST_64BIT
 #endif
 
 #else /* End Linux Section */
@@ -65,9 +65,9 @@
 
 #include <sys/isa_defs.h>
 #ifdef _LITTLE_ENDIAN
-#define HOST_IS_LSB_FIRST
+#define DASHOST_LSB_FIRST
 #else
-#undef HOST_IS_LSB_FIRST
+#undef DASHOST_LSB_FIRST
 #endif
 
 #else
@@ -77,10 +77,10 @@
 /** This computer is a little endian machine, macro is not present on big
  * endian machines. 
  */
-#define HOST_IS_LSB_FIRST
+#define DASHOST_LSB_FIRST
 
 #ifdef _WIN64
-#define HOST_IS_64_BIT
+#define DASHOST_64BIT
 #endif
 
 #else
@@ -88,7 +88,7 @@
 
 #ifdef __EMSCRIPTEN__
 /* Web assembly environment is defined as little endian */
-#define HOST_IS_LSB_FIRST
+#define DASHOST_LSB_FIRST
 #include <emscripten.h>
 #else
 
@@ -101,7 +101,7 @@
 
 /* disable code that needs sockets for wasm targets */
 #ifdef __EMSCRIPTEN__
-#define DAS_NO_NETWORK
+#define DASCONF_NO_NET
 #endif
 
 /* Export only DAS_API names from shared libraies on all platforms */
@@ -132,18 +132,18 @@
 
 #ifdef _WIN32
 /** The directory separator for this OS as a character */
-#define DAS_DSEPC  '\\'
+#define DASFS_SEPC  '\\'
 
 /** The directory separator for this OS as a string */
-#define DAS_DSEPS "\\"
+#define DASFS_SEPS "\\"
 
 #else
 
 /** The directory separator for this OS as a character */
-#define DAS_DSEPC  '/'
+#define DASFS_SEPC  '/'
 
 /** The directory separator for this OS as a string */ 
-#define DAS_DSEPS "/"
+#define DASFS_SEPS "/"
 #endif
 
 /** Returns the size of a structure field at compile time */
@@ -171,24 +171,24 @@ extern "C" {
  * For packetized output this also fixes the packet tag style.  Values are
  * major*10 + minor so that ordering comparisons work.
  */
-typedef enum das_stream_ver {
-	STREAM_VER_UNK = 0,  /* No header seen yet, or a version this library doesn't know */
-	STREAM_VER_1_0     = 10, /* das1, original big-endian fixed records no hdrs*/
-	STREAM_VER_1_1     = 11, /* tagged das1, an interum step */
-	STREAM_VER_2_2     = 22, /* das2 the decades long workhorse */
-	STREAM_VER_3_0     = 30  /* das3 the new-ish kid on the block */
-} das_stream_ver;
+typedef enum das_streamver_e {
+	DASSTREAMVER_UNK = 0,  /* No header seen yet, or a version this library doesn't know */
+	DASSTREAMVER_1_0     = 10, /* das1, original big-endian fixed records no hdrs*/
+	DASSTREAMVER_1_1     = 11, /* tagged das1, an interum step */
+	DASSTREAMVER_2_2     = 22, /* das2 the decades long workhorse */
+	DASSTREAMVER_3_0     = 30  /* das3 the new-ish kid on the block */
+} das_streamver;
 
 /** The type="" attribute of a stream header: container and serialization.
  *
  * Independent of the version.  das 2.2 headers omit the attribute and are
  * always basic streams.
  */
-typedef enum das_stream_type {
-	STREAM_TYPE_UNK = 0,
-	STREAM_TYPE_BASIC,       /* "das-basic-stream": header then tagged packets */
-	STREAM_TYPE_DOC          /* "das-basic-doc": one self-contained XML document */
-} das_stream_type;
+typedef enum das_streamtype_e {
+	DASSTREAMTYPE_UNK = 0,
+	DASSTREAMTYPE_BASIC,       /* "das-basic-stream": header then tagged packets */
+	DASSTREAMTYPE_DOC          /* "das-basic-doc": one self-contained XML document */
+} das_streamtype;
 
 /* On Solaris systems NAME_MAX is not defined because pathconf() is supposed
  * to be used to get the exact limit by filesystem.  Since all the filesystems
@@ -200,9 +200,6 @@ typedef enum das_stream_type {
 #define NAME_MAX 255
 #endif
 #endif
-
-/* Make it obvious when we are just moving data as opposed to characters */
-typedef uint8_t ubyte;
 
 /** return code type
  * 0 indicates success, negative integer indicates failure

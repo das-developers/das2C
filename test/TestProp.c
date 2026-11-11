@@ -41,13 +41,13 @@ das_errcode onStream(DasStream* pSd, void* pUser){
 	DasIO* pOut = (DasIO*)pUser;
 	/* Re-emit in the same version we read (output defaults to das2): set
 	   both the wire version and the internal model. */
-	das_stream_ver nVer = DasStream_getVer(pSd);
-	if(nVer == STREAM_VER_UNK)
-		return das_error(DASERR_IO, "Unknown stream version");
+	das_streamver nVer = DasStream_ver(pSd);
+	if(nVer == DASSTREAMVER_UNK)
+		return daserrf(DASERR_IO, "Unknown stream version");
 	das_errcode nRet;
 	if((nRet = DasIO_setOutVer(pOut, nVer)) != DAS_OKAY) return nRet;
 	nRet = DasIO_setModel(
-		pOut, (nVer == STREAM_VER_3_0) ? STREAM_MODEL_V3 : STREAM_MODEL_V2
+		pOut, (nVer == DASSTREAMVER_3_0) ? DASIOMODEL_V3 : DASIOMODEL_V2
 	);
 	if(nRet != DAS_OKAY) return nRet;
 	return DasIO_writeStreamDesc(pOut, pSd);
@@ -63,7 +63,7 @@ das_errcode onData(DasDs* pDs, int iPktId, void* pUser){
 
 int main(int argc, char** argv)
 {
-	das_init(argv[0], DASERR_DIS_EXIT, DASLOG_WARN, NULL);
+	daslib_init(argv[0], DASERRDISP_EXIT, DASLOG_WARN, NULL);
 
 	if(argc < 2){
 		fprintf(stderr, "Usage: %s STREAM_FILE  (re-emits the stream on stdout)\n", argv[0]);
@@ -77,16 +77,16 @@ int main(int argc, char** argv)
 	}
 
 	DasIO* pIn = new_DasIO("TestProp", new_DasXport_cfile(pFile, "r"), NULL);
-	DasIO_setModel(pIn, STREAM_MODEL_MIXED);
+	DasIO_setModel(pIn, DASIOMODEL_MIXED);
 
 	DasIO* pOut = new_DasIO("TestProp", new_DasXport_stdout(), NULL);
 
-	das_stream_proc handler;
-	das_stream_proc_init(&handler, pOut);
-	handler.onStreamDesc = onStream;
-	handler.onDsDesc = onDataset;
+	DasIOProc handler;
+	init_DasIOProc(&handler, pOut);
+	handler.onStream = onStream;
+	handler.onDs = onDataset;
 	handler.onDsData = onData;
-	DasIO_addProcessor(pIn, &handler);
+	DasIO_addProc(pIn, &handler);
 
 	if(DasIO_readAll(pIn) != 0){
 		fprintf(stderr, "ERROR: Couldn't parse %s\n", argv[1]);

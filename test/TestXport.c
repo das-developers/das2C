@@ -162,9 +162,9 @@ static void testBuf(void)
 /* ************************************************************************* */
 /* Elastic buffers grow on write up to a limit; DasIO's packet buffer is one */
 /* Counts DasBuf errors, to tell a reported refusal from a quiet one */
-static void _countBufErr(const das_logmsg* pMsg, void* pUser)
+static void _countBufErr(const DasLogMsg* pMsg, void* pUser)
 {
-	if(pMsg->nErr == DASERR_BUF) ++(*(int*)pUser);
+	if(pMsg->errCode == DASERR_BUF) ++(*(int*)pUser);
 }
 
 static void testElastic(void)
@@ -188,7 +188,7 @@ static void testElastic(void)
 	      DasBuf_write(pBuf, g_sText, 17) == DAS_OKAY, "writes past the start size");
 	CHECK(DasBuf_capacity(pBuf) == 64, "grew by doubling to %zu", DasBuf_capacity(pBuf));
 	size_t uLen = 0;
-	const ubyte* pData = DasBuf_data(pBuf, &uLen);
+	const uint8_t* pData = DasBuf_data(pBuf, &uLen);
 	CHECK(uLen == 39 && memcmp(pData, "bc", 2) == 0 && memcmp(pData + 2, g_sText, 20) == 0,
 	      "contents and read point survive growth");
 	CHECK(pData[uLen] == 0, "space past the data is zeroed after growth");
@@ -215,7 +215,7 @@ static void testElastic(void)
 	/* prepare asks for room up front, and commit can't move anything */
 	size_t uSpace = 0;
 	pBuf = new_DasBuf_elastic(16, 128);
-	ubyte* pDest = DasBuf_prepare(pBuf, 100, &uSpace);
+	uint8_t* pDest = DasBuf_prepare(pBuf, 100, &uSpace);
 	CHECK(pDest != NULL && uSpace >= 100 && DasBuf_capacity(pBuf) == 128,
 	      "prepare grows to fit, %zu bytes of space", uSpace);
 	memset(pDest, 'x', 100);
@@ -228,8 +228,8 @@ static void testElastic(void)
 
 	/* Read-only is a caller bug and is reported once, "no room" is quiet */
 	int nErrs = 0;
-	das_loghook count = {_countBufErr, &nErrs};
-	das_loghook prev = daslog_sethook(&count);
+	DasLogHook count = {_countBufErr, &nErrs};
+	DasLogHook prev = daslog_setHook(&count);
 
 	DasBuf* pRo = new_DasBuf_wrap((void*)g_sText, 20, "r");
 	CHECK(DasBuf_isReadOnly(pRo) && !DasBuf_isReadOnly(pFix), "read-only flag");
@@ -245,7 +245,7 @@ static void testElastic(void)
 	nErrs = 0;
 	CHECK(DasBuf_prepare(pFix, 17, &uSpace) == NULL && nErrs == 0,
 	      "no room is quiet, %d errors", nErrs);
-	daslog_sethook(&prev);
+	daslog_setHook(&prev);
 
 	CHECK(DasBuf_prepare(pFix, 17, &uSpace) == NULL && uSpace == 0,
 	      "pinned buffer can't prepare more than it has");
@@ -295,11 +295,11 @@ static void testFile(const char* sDir)
 /* Catches the sub-command exit warning, the one transport message above
    debug level */
 static char g_sLastWarn[256] = {'\0'};
-static void _catchLog(const das_logmsg* pMsg, void* pUser)
+static void _catchLog(const DasLogMsg* pMsg, void* pUser)
 {
 	(void)pUser;
-	if(pMsg->nLevel == DASLOG_WARN)
-		snprintf(g_sLastWarn, sizeof(g_sLastWarn), "%s", pMsg->sMsg);
+	if(pMsg->level == DASLOG_WARN)
+		snprintf(g_sLastWarn, sizeof(g_sLastWarn), "%s", pMsg->msg);
 }
 
 static void testCmd(void)
@@ -314,16 +314,16 @@ static void testCmd(void)
 
 	/* A failing command is not a transport failure, but it is logged */
 	int nLevel = daslog_level();
-	daslog_setlevel(DASLOG_WARN);
-	das_loghook hook = {_catchLog, NULL};
-	das_loghook prev = daslog_sethook(&hook);
+	daslog_setLevel(DASLOG_WARN);
+	DasLogHook hook = {_catchLog, NULL};
+	DasLogHook prev = daslog_setHook(&hook);
 	pX = new_DasXport_cmd("printf partial; exit 3");
 	CHECK(_DasXport_readFull(pX, aBuf, 31) == 7, "output before the failure is read");
 	CHECK(DasXport_close(pX) == DAS_OKAY, "non-zero exit still closes clean");
 	CHECK(strstr(g_sLastWarn, "status 3") != NULL, "exit status logged: '%s'", g_sLastWarn);
 	del_DasXport(pX);
-	daslog_sethook(&prev);
-	daslog_setlevel(nLevel);
+	daslog_setHook(&prev);
+	daslog_setLevel(nLevel);
 }
 
 static void testSock(void)
@@ -359,12 +359,12 @@ static void testIoMode(void)
 
 	char aOut[64];
 	pIo = new_DasIO("TestXport", new_DasXport_mem(aOut, sizeof(aOut), "w"), "3");
-	CHECK(pIo != NULL && DasIO_getOutVer(pIo) == STREAM_VER_3_0,
+	CHECK(pIo != NULL && DasIO_outVer(pIo) == DASSTREAMVER_3_0,
 	      "writer inferred, version from the mode");
 	del_DasIO(pIo);
 
 	pIo = new_DasIO("TestXport", new_DasXport_mem(aOut, sizeof(aOut), "w"), NULL);
-	CHECK(pIo != NULL && DasIO_getOutVer(pIo) == STREAM_VER_2_2, "writer default is das2.2");
+	CHECK(pIo != NULL && DasIO_outVer(pIo) == DASSTREAMVER_2_2, "writer default is das2.2");
 	del_DasIO(pIo);
 
 	CHECK(new_DasIO("TestXport", new_DasXport_mem((void*)g_sText, 20, "r"), "w") == NULL,
@@ -399,7 +399,7 @@ static void testZlib(void)
 	for(size_t u = 0; u < uIn; ++u) pIn[u] = g_sText[(u * 7) % 20];
 
 	size_t uRoom = uIn + 64;
-	ubyte* pZip = (ubyte*)calloc(uRoom, 1);
+	uint8_t* pZip = (uint8_t*)calloc(uRoom, 1);
 	DasXport* pMem = new_DasXport_mem(pZip, uRoom, "w");
 	DasXport* pDef = _new_DasXport_deflate(pMem);
 	for(size_t u = 0; u < uIn; u += 777){
@@ -443,7 +443,7 @@ static void testZlib(void)
 /* ************************************************************************* */
 int main(int argc, char** argv)
 {
-	das_init(argv[0], DASERR_DIS_RET, DASLOG_ERROR, NULL);
+	daslib_init(argv[0], DASERRDISP_RET, DASLOG_ERROR, NULL);
 
 	if(argc < 2){
 		fprintf(stderr, "Usage: %s SCRATCH_DIR\n", argv[0]);

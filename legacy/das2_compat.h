@@ -89,7 +89,7 @@
 
 /* Only ubyte is left.  Both are uint8_t, so the old byte* signatures of
    DasAry_*, getpkt() and friends take a ubyte* unchanged. */
-typedef ubyte byte;
+typedef uint8_t byte;
 
 /* The error code type is snake case now, as every integer type is */
 typedef das_errcode DasErrCode;
@@ -112,7 +112,7 @@ typedef das_errcode DasErrCode;
 /* das_shape_prnRng() returned the end of the written text, for appending.
    B is evaluated twice. */
 #define das_shape_prnRng(S, E, L, B, N) \
-	(das_shape_info((S), (E), (L), (B), (size_t)(N)), (B) + strlen(B))
+	(dasshape_info((S), (E), (L), (B), (size_t)(N)), (B) + strlen(B))
 
 /* DasEnc_toStr() returned 0 on success, an error code otherwise */
 #define DasEnc_toStr(P, B, N) \
@@ -130,8 +130,8 @@ typedef das_errcode DasErrCode;
    (pValues, nValues, pBuf, uBufSz).  No macro, there is no honest default;
    the compiler's "too few arguments" marks each call. */
 
-#define das_datum_toStr(P, S, N, F)        das_datum_toStr((P), (F), (S), (N))
-#define das_datum_toStrValOnly(P, S, N, F) das_datum_toStrValOnly((P), (F), (S), (N))
+#define das_datum_toStr(P, S, N, F)        DasDatum_toStr((P), (F), (S), (N))
+#define das_datum_toStrValOnly(P, S, N, F) DasDatum_toValStr((P), (F), (S), (N))
 
 /* das_idx_prn() was declared in array.h but never exported, it is private */
 #define das_idx_prn(...) das_idx_prn_is_private__see_das2_compat_h
@@ -140,22 +140,22 @@ typedef das_errcode DasErrCode;
 /* Time functions, 2026-10: das_time* first, as if it were "this".
    2026-11: then inputs, then the output buffer and its size last. */
 
-#define dt_isoc(B, N, T, F)     dt_isoc((T), (F), (B), (size_t)(N))
-#define dt_isod(B, N, T, F)     dt_isod((T), (F), (B), (size_t)(N))
-#define dt_dual_str(B, N, T, F) dt_dual_str((T), (F), (B), (size_t)(N))
+#define dt_isoc(B, N, T, F)     DasTime_toIsoC((T), (F), (B), (size_t)(N))
+#define dt_isod(B, N, T, F)     DasTime_toIsoD((T), (F), (B), (size_t)(N))
+#define dt_dual_str(B, N, T, F) DasTime_toIsoDual((T), (F), (B), (size_t)(N))
 
 /* All three are das_time*, so an old order call would compile and test the
    wrong time.  v2.3.0 was (begin, end, test). */
-#define dt_in_range(B, E, T)    dt_in_range((T), (B), (E))
+#define dt_in_range(B, E, T)    DasTime_isInRange((T), (B), (E))
 
 /* Inputs first: the value, then its units, then the units wanted */
-#define Units_convertTo(TO, V, FROM) Units_convertTo((V), (FROM), (TO))
-#define Units_convertFromDt(U, T)    Units_convertFromDt((T), (U))
-#define dt_parsetime(S, T)      dt_parsetime((T), (S))
-#define dt_emitt(TT, T)         dt_emitt((T), (TT))
-#define dt_from_1958(D, MS, T)  dt_from_1958((T), (D), (MS))
+#define Units_convertTo(TO, V, FROM) DasUnits_convert((V), (FROM), (TO))
+#define Units_convertFromDt(U, T)    DasTime_toPoint((T), (U))
+#define dt_parsetime(S, T)      DasTime_fromStr((T), (S))
+#define dt_emitt(TT, T)         DasTime_fromSec1958((T), (TT))
+#define dt_from_1958(D, MS, T)  DasTime_fromDays1958((T), (D), (MS))
 
-#define dt_cmp                  dt_compare
+#define dt_cmp                  DasTime_compare
 
 /* dt_copy() is gone: das_time is a plain value, copy it with = */
 #define dt_copy(D, S)           ((void)(*(D) = *(S)))
@@ -163,8 +163,8 @@ typedef das_errcode DasErrCode;
 /* ************************************************************************* */
 /* Code to name lookups, 2026-10: _toStr / _fromStr pairs */
 
-#define PlaneType_toStr   das_plane_type_toStr
-#define str2PlaneType     das_plane_type_fromStr
+#define PlaneType_toStr   dasplanetype_name
+#define str2PlaneType     dasplanetype_id
 #define LogLvl_string(...) LogLvl_string_removed__log_levels_are_comment_types_like_log_info
 
 /* ************************************************************************* */
@@ -175,28 +175,28 @@ typedef das_errcode DasErrCode;
    enum tags can only be renamed by macro, so any other identifier spelled
    dim_type, plane_type, ytag_spec or DescriptorType is renamed with them;
    harmless, since every use is renamed the same way. */
-#define DescriptorType das_desc_type   /* enum tag */
-typedef das_desc_type_e desc_type_t;
+#define DescriptorType das_desctype_e   /* enum tag */
+typedef das_desctype desc_type_t;
 enum {
-	UNK_DESC = DASDESC_UNK, STREAM = DASDESC_STREAM, PLANE = DASDESC_PLANE,
-	PACKET = DASDESC_PKT, DATASET = DASDESC_DS, VARIABLE = DASDESC_VAR
+	UNK_DESC = DASDESCTYPE_UNK, STREAM = DASDESCTYPE_STREAM, PLANE = DASDESCTYPE_PLANE,
+	PACKET = DASDESCTYPE_PKT, DATASET = DASDESCTYPE_DS, VARIABLE = DASDESCTYPE_VAR
 };
 
-#define plane_type das_plane_type      /* enum tag */
-typedef das_plane_type_e plane_type_t;
+#define plane_type das_planetype_e      /* enum tag */
+typedef das_planetype plane_type_t;
 enum {
-	Invalid = DASPLANE_INV, X = DASPLANE_X, Y = DASPLANE_Y, Z = DASPLANE_Z,
-	YScan = DASPLANE_YSCAN
+	Invalid = DASPLANETYPE_INV, X = DASPLANETYPE_X, Y = DASPLANETYPE_Y, Z = DASPLANETYPE_Z,
+	YScan = DASPLANETYPE_YSCAN
 };
 
-#define ytag_spec das_ytag_type        /* enum tag */
-typedef das_ytag_type_e ytag_spec_t;
+#define ytag_spec das_ytagtype_e        /* enum tag */
+typedef das_ytagtype ytag_spec_t;
 enum {
-	ytags_none = DASPLANE_YTAGS_NONE, ytags_list = DASPLANE_YTAGS_LIST,
-	ytags_series = DASPLANE_YTAGS_SEQ
+	ytags_none = DASYTAGTYPE_NONE, ytags_list = DASYTAGTYPE_LIST,
+	ytags_series = DASYTAGTYPE_SEQ
 };
 
-#define dim_type das_dim_type          /* enum tag, as in enum dim_type */
+#define dim_type das_dimtype_e          /* enum tag, as in enum dim_type */
 
 /* DasAry usage flags, the D2 prefix went with the das2 name */
 #define D2ARY_AS_SUBSEQ  DASARY_AS_SUBSEQ
@@ -207,18 +207,18 @@ enum {
    internal now; the value is fixed, so it is restated rather than aliased. */
 #define EPOCH 2436205
 
-#define jday das_julian_day
+#define jday DasTime_utcToJdn
 
 /* das2 and das3 packet ID limits differ; the old name was the das2 one */
-#define MAX_PKTIDS DAS2_MAX_PKTIDS
+#define MAX_PKTIDS DASSTREAM_V2_ENDPKTID
 
 /* Catalog node types (v2.3.0 had no source set; the values moved) */
-#define das_node_type_enum das_node_type   /* enum tag */
+#define das_node_type_enum das_nodetype_e   /* enum tag */
 enum {
-	d2node_inv = DASNODE_INV, d2node_catalog = DASNODE_CATALOG,
-	d2node_collection = DASNODE_COLLECTION, d2node_stream_src = DASNODE_STREAM_SRC,
-	d2node_file_agg = DASNODE_FILE_AGG, d2node_spdf_cat = DASNODE_SPDF_CAT,
-	d2node_spase_cat = DASNODE_SPASE_CAT
+	d2node_inv = DASNODETYPE_INV, d2node_catalog = DASNODETYPE_CATALOG,
+	d2node_collection = DASNODETYPE_COLLECTION, d2node_stream_src = DASNODETYPE_STREAM_SRC,
+	d2node_file_agg = DASNODETYPE_FILE_AGG, d2node_spdf_cat = DASNODETYPE_SPDF_CAT,
+	d2node_spase_cat = DASNODETYPE_SPASE_CAT
 };
 
 /* Catalog document keys and type strings, the D2 prefix went too */
@@ -246,67 +246,67 @@ enum {
    PktDesc became DasPkt and PlaneDesc became DasPlane, methods too. */
 #define PktDesc                    DasPkt
 #define PlaneDesc                  DasPlane
-#define packet_descriptor          das_pkt   /* struct tag */
-#define plane_descriptor           das_plane   /* struct tag */
+#define packet_descriptor          das_pkt_t   /* struct tag */
+#define plane_descriptor           das_plane_t   /* struct tag */
 #define PktDesc_addPlane           DasPkt_addPlane
-#define PktDesc_copyPlanes(...)    PktDesc_copyPlanes_is_private__use_DasStream_clonePktById
+#define PktDesc_copyPlanes(...)    PktDesc_copyPlanes_is_private__use_DasStream_clonePkt
 #define PktDesc_decodeData(...)    PktDesc_decodeData_is_private__streams_are_read_and_written_by_DasIO
-#define PktDesc_encode             DasPkt_encode
+#define PktDesc_encode             DasPkt_encodeHdr
 #define PktDesc_encodeData         DasPkt_encodeData
-#define PktDesc_equalFormat        DasPkt_equalFormat
+#define PktDesc_equalFormat        DasPkt_isSameFmt
 /* A packet no longer keeps its ID, its stream does.  The v2.3.0 calls that
    relied on a packet knowing its own ID ask the packet's parent stream. */
 static inline int _das2_compat_pktId(const DasPkt* pPkt)
 {
 	const DasDesc* pSd = DasDesc_parent((const DasDesc*)pPkt);
 	if(pSd == NULL) return -1;
-	return DasStream_getPktId((const DasStream*)pSd, (const DasDesc*)pPkt);
+	return DasStream_pktId((const DasStream*)pSd, (const DasDesc*)pPkt);
 }
 #define PktDesc_getId(P)           _das2_compat_pktId(P)
-#define PktDesc_getNPlanes         DasPkt_getNPlanes
-#define PktDesc_getNPlanesOfType   DasPkt_getNPlanesOfType
-#define PktDesc_getPlane           DasPkt_getPlane
-#define PktDesc_getPlaneByName     DasPkt_getPlaneByName
-#define PktDesc_getPlaneByType     DasPkt_getPlaneByType
-#define PktDesc_getPlaneIdx        DasPkt_getPlaneIdx
-#define PktDesc_getPlaneIdxByName  DasPkt_getPlaneIdxByName
-#define PktDesc_getPlaneIdxByType  DasPkt_getPlaneIdxByType
-#define PktDesc_getPlaneType       DasPkt_getPlaneType
-#define PktDesc_getXPlane          DasPkt_getXPlane
+#define PktDesc_getNPlanes         DasPkt_numPlanes
+#define PktDesc_getNPlanesOfType   DasPkt_numPlanesOfType
+#define PktDesc_getPlane           DasPkt_planeAt
+#define PktDesc_getPlaneByName     DasPkt_planeByName
+#define PktDesc_getPlaneByType     DasPkt_planeOfType
+#define PktDesc_getPlaneIdx        DasPkt_planeIdx
+#define PktDesc_getPlaneIdxByName  DasPkt_planeIdxByName
+#define PktDesc_getPlaneIdxByType  DasPkt_planeIdxOfType
+#define PktDesc_getPlaneType       DasPkt_planeTypeAt
+#define PktDesc_getXPlane          DasPkt_xPlane
 #define PktDesc_recBytes           DasPkt_recBytes
-#define PktDesc_setValue           DasPkt_setValue
-#define PktDesc_setValues          DasPkt_setValues
+#define PktDesc_setValue           DasPkt_setValAt
+#define PktDesc_setValues          DasPkt_setVals
 #define PktDesc_validate(...)      PktDesc_validate_is_private__streams_are_read_and_written_by_DasIO
-#define PlaneDesc_copy             DasPlane_copy
+#define PlaneDesc_copy             new_DasPlane_copy
 #define PlaneDesc_decode           DasPlane_decode
 #define PlaneDesc_decodeData(...)  PlaneDesc_decodeData_is_private__streams_are_read_and_written_by_DasIO
 #define PlaneDesc_encode(...)      PlaneDesc_encode_is_private__streams_are_read_and_written_by_DasIO
 #define PlaneDesc_encodeData(...)  PlaneDesc_encodeData_is_private__streams_are_read_and_written_by_DasIO
-#define PlaneDesc_equivalent       DasPlane_equivalent
-#define PlaneDesc_getDatum         DasPlane_getDatum
-#define PlaneDesc_getFill          DasPlane_getFill
-#define PlaneDesc_getNItems        DasPlane_getNItems
-#define PlaneDesc_getName          DasPlane_getName
-#define PlaneDesc_getOrMakeYTags   DasPlane_getOrMakeYTags
-#define PlaneDesc_getType          DasPlane_getType
-#define PlaneDesc_getUnits         DasPlane_getUnits
-#define PlaneDesc_getValEncoder    DasPlane_getValEncoder
-#define PlaneDesc_getValue         DasPlane_getValue
-#define PlaneDesc_getValues        DasPlane_getValues
-#define PlaneDesc_getYTagInterval  DasPlane_getYTagInterval
-#define PlaneDesc_getYTagSeries    DasPlane_getYTagSeq
-#define PlaneDesc_getYTagSpec      DasPlane_getYTagType
-#define PlaneDesc_getYTagUnits     DasPlane_getYTagUnits
-#define PlaneDesc_getYTags         DasPlane_getYTags
+#define PlaneDesc_equivalent       DasPlane_isEquivalent
+#define PlaneDesc_getDatum         DasPlane_datumAt
+#define PlaneDesc_getFill          DasPlane_fill
+#define PlaneDesc_getNItems        DasPlane_numItems
+#define PlaneDesc_getName          DasPlane_name
+#define PlaneDesc_getOrMakeYTags   DasPlane_makeYTags
+#define PlaneDesc_getType          DasPlane_type
+#define PlaneDesc_getUnits         DasPlane_units
+#define PlaneDesc_getValEncoder    DasPlane_valEnc
+#define PlaneDesc_getValue         DasPlane_valAt
+#define PlaneDesc_getValues        DasPlane_vals
+#define PlaneDesc_getYTagInterval  DasPlane_yTagInter
+#define PlaneDesc_getYTagSeries    DasPlane_yTagSeq
+#define PlaneDesc_getYTagSpec      DasPlane_yTagType
+#define PlaneDesc_getYTagUnits     DasPlane_yTagUnits
+#define PlaneDesc_getYTags         DasPlane_yTags
 #define PlaneDesc_isFill           DasPlane_isFill
 #define PlaneDesc_setFill          DasPlane_setFill
-#define PlaneDesc_setNItems        DasPlane_setNItems
+#define PlaneDesc_setNItems        DasPlane_setNumItems
 #define PlaneDesc_setName          DasPlane_setName
-#define PlaneDesc_setTimeValue     DasPlane_setTimeValue
+#define PlaneDesc_setTimeValue     DasPlane_setTimeAt
 #define PlaneDesc_setUnits         DasPlane_setUnits
-#define PlaneDesc_setValEncoder    DasPlane_setValEncoder
-#define PlaneDesc_setValue         DasPlane_setValue
-#define PlaneDesc_setValues        DasPlane_setValues
+#define PlaneDesc_setValEncoder    DasPlane_setValEnc
+#define PlaneDesc_setValue         DasPlane_setValAt
+#define PlaneDesc_setValues        DasPlane_setVals
 #define PlaneDesc_setYTagSeries    DasPlane_setYTagSeq
 #define PlaneDesc_setYTagUnits     DasPlane_setYTagUnits
 #define PlaneDesc_setYTags         DasPlane_setYTags
@@ -316,7 +316,7 @@ static inline int _das2_compat_pktId(const DasPkt* pPkt)
 #define new_PlaneDesc_empty(...)   new_PlaneDesc_empty_is_private__use_new_DasPlane
 #define new_PlaneDesc_pairs(...)   new_PlaneDesc_pairs_is_private__streams_are_read_and_written_by_DasIO
 #define new_PlaneDesc_yscan        new_DasPlane_yscan
-#define new_PlaneDesc_yscan_series new_DasPlane_yscan_seq
+#define new_PlaneDesc_yscan_series new_DasPlane_yscanSeq
 
 /* ************************************************************************* */
 /* Streams */
@@ -325,11 +325,12 @@ static inline int _das2_compat_pktId(const DasPkt* pPkt)
    DasDesc a stream holds (datasets are the other), so the *PktDesc names
    that work on either kind lost the "Pkt". */
 /* The stream version got its own setter (DasIO_setOutVer) and the model setter
-   took the "set" prefix to match.  The version string macros became
-   das_stream_ver_toStr() so the one list of versions lives in stream.h. */
-#define DasIO_model                 DasIO_setModel
-#define DAS_22_STREAM_VER           das_stream_ver_toStr(STREAM_VER_2_2)
-#define DAS_30_STREAM_VER           das_stream_ver_toStr(STREAM_VER_3_0)
+   took the "set" prefix to match.  DasIO_model() is the model GETTER now, so
+   a v2.3.0 call that set the model no longer compiles: use DasIO_setModel().
+   The version string macros became DasStream_verToStr() so the one list of
+   versions lives in stream.h. */
+#define DAS_22_STREAM_VER           DasStream_verToStr(DASSTREAMVER_2_2)
+#define DAS_30_STREAM_VER           DasStream_verToStr(DASSTREAMVER_3_0)
 
 /* The packet-only writers merged into the ones that take any top-level
    descriptor, and the caller now names the ID; these use the one the
@@ -341,34 +342,34 @@ static inline int _das2_compat_pktId(const DasPkt* pPkt)
    quiet false, as the old isValidId gave */
 static inline bool _das2_compat_isValidId(const DasStream* pSd, int nPktId)
 {
-	if((nPktId < 1)||(nPktId >= DAS3_MAX_PKTIDS)) return false;
-	return DasStream_getDesc(pSd, nPktId) != NULL;
+	if((nPktId < 1)||(nPktId >= DASSTREAM_V3_ENDPKTID)) return false;
+	return DasStream_desc(pSd, nPktId) != NULL;
 }
 static inline das_errcode _das2_compat_freePktDesc(DasStream* pSd, int nPktId)
 {
-	DasDesc* pDesc = _das2_compat_isValidId(pSd, nPktId) ? DasStream_getDesc(pSd, nPktId) : NULL;
+	DasDesc* pDesc = _das2_compat_isValidId(pSd, nPktId) ? DasStream_desc(pSd, nPktId) : NULL;
 	if(pDesc == NULL)
-		return das_error(DASERR_STREAM, "No descriptor for packet ID %d", nPktId);
+		return daserrf(DASERR_STREAM, "No descriptor for packet ID %d", nPktId);
 	return DasStream_freeDesc(pSd, pDesc);
 }
 
-#define stream_descriptor           das_stream   /* struct tag */
+#define stream_descriptor           das_stream_t   /* struct tag */
 #define StreamDesc                  DasStream
-#define StreamDescHandler           das_stream_desc_f
+#define StreamDescHandler           dasfn_onStream
 #define new_StreamDesc              new_DasStream
 #define new_StreamDesc_str(...)     new_StreamDesc_str_is_private__streams_are_read_and_written_by_DasIO
-#define StreamDesc_copy             DasStream_copy
-#define StreamDesc_getNPktDesc(S)   DasStream_numDesc((S), DASDESC_UNK)
+#define StreamDesc_copy             new_DasStream_copy
+#define StreamDesc_getNPktDesc(S)   DasStream_numDesc((S), DASDESCTYPE_UNK)
 #define StreamDesc_addPktDesc       DasStream_addDesc
 #define StreamDesc_freePktDesc(S, ID) _das2_compat_freePktDesc((S), (ID))
 #define StreamDesc_setMonotonic     DasStream_setMonotonic
 #define StreamDesc_addStdProps      DasStream_addStdProps
-#define StreamDesc_addCmdLineProp   DasStream_addCmdLineProp
+#define StreamDesc_addCmdLineProp   DasStream_addArgvProp
 #define StreamDesc_createPktDesc    DasStream_createPkt
-#define StreamDesc_clonePktDesc(...) StreamDesc_clonePktDesc_is_private__use_DasStream_clonePktById
-#define StreamDesc_clonePktDescById DasStream_clonePktById
+#define StreamDesc_clonePktDesc(...) StreamDesc_clonePktDesc_is_private__use_DasStream_clonePkt
+#define StreamDesc_clonePktDescById DasStream_clonePkt
 #define StreamDesc_isValidId(S, ID)  _das2_compat_isValidId((S), (ID))
-#define StreamDesc_getPktDesc       DasStream_getPkt
+#define StreamDesc_getPktDesc       DasStream_pkt
 
 /* DasStream is opaque, its version and type strings are set by enumeration */
 #define STREAMDESC_CMP_SZ  STREAMDESC_CMP_SZ_removed__DasStream_is_opaque
@@ -404,14 +405,14 @@ static inline das_errcode _das2_compat_freePktDesc(DasStream* pSd, int nPktId)
 #define PktDesc_setGroup(...)  PktDesc_setGroup_removed__see_DasDs_group
 
 /* Packet IDs belong to a stream, so copies are made through it */
-#define copy_PktDesc(...)  copy_PktDesc_removed__use_DasStream_clonePktById
+#define copy_PktDesc(...)  copy_PktDesc_removed__use_DasStream_clonePkt
 
 /* Properties are no longer a fixed size table, DasDesc_length() counts them */
-#define DAS_XML_MAXPROPS  DAS_XML_MAXPROPS_removed__use_DasDesc_length
-#define DasDesc_hasAnyProps(...) DasDesc_hasAnyProps_removed__use_DasDesc_length
+#define DAS_XML_MAXPROPS  DAS_XML_MAXPROPS_removed__use_DasDesc_numProps
+#define DasDesc_hasAnyProps(...) DasDesc_hasAnyProps_removed__use_DasDesc_numProps
 
 /* DasDesc_get() was the same call as DasDesc_getStr() */
-#define DasDesc_get             DasDesc_getStr
+#define DasDesc_get             DasDesc_val
 
 /* ************************************************************************* */
 /* Datasets, dimensions and the builder */
@@ -422,7 +423,7 @@ static inline das_errcode _das2_compat_freePktDesc(DasStream* pSd, int nPktId)
 
 /* DasDs_getDim() now looks dimensions up by name, the index lookup kept its
    behavior under a new name */
-#define DasDs_getDim  DasDs_getDimByIdx
+#define DasDs_getDim  DasDs_dimAt
 
 /* Dimensions gained a name within their kind, so several can share a kind
    ("Search_Coil" and "DC_MAG" are both "magnetic_field").  NULL makes the
@@ -434,7 +435,7 @@ static inline das_errcode _das2_compat_freePktDesc(DasStream* pSd, int nPktId)
    that.  "id" was easy to take for the packet ID. */
 #define DasDs_id   DasDs_name
 #define DasDim_id  DasDim_name
-#define DasDs_getDimById  DasDs_getDimByName
+#define DasDs_getDimById  DasDs_dim
 
 /* "Mutable" only ever switched a shape cache, nothing was locked, and the
    cache is the library's own business now. */
@@ -456,11 +457,11 @@ static inline das_errcode _das2_compat_freePktDesc(DasStream* pSd, int nPktId)
 #define DasDim_copyInProps(...)  DasDim_copyInProps_removed__use_DasDesc_copyIn
 
 /* Declared under these names, defined only under the new ones */
-#define DASVAR_MAXERR  DASVAR_MAX_ERR
-#define DASVAR_MINERR  DASVAR_MIN_ERR
+#define DASVAR_MAXERR  DASDIM_ROLE_MAX_ERR
+#define DASVAR_MINERR  DASDIM_ROLE_MIN_ERR
 
 /* "uncertainty" named no defined quantity */
-#define DASVAR_UNCERT  DASVAR_UNCERT_removed__use_DASVAR_STD_DEV_or_MIN_ERR_MAX_ERR
+#define DASVAR_UNCERT  DASVAR_UNCERT_removed__use_DASDIM_ROLE_STD_DEV_or_MIN_ERR_MAX_ERR
 #define DASVAR_SPREAD  DASVAR_SPREAD_withheld__no_point_spread_formalism_yet
 
 /* The dataset builder is gone.  A reader keeps the stream it builds until
@@ -483,13 +484,13 @@ static inline das_errcode _das2_compat_freePktDesc(DasStream* pSd, int nPktId)
 
 /* The one-call readers are DasStream constructors */
 #define stream_from_stdin   new_DasStream_stdin
-#define stream_from_path    new_DasStream_path
+#define stream_from_path    new_DasStream_file
 
 /* An array of pointers is a plain DasAry of unknown type, pointer sized,
    with a NULL fill (the compound literal is that fill value) */
 #define new_DasPtrAry(T, R, S) \
-	new_DasAry((T), vtUnknown, sizeof(void*), (const ubyte*)&(void*){NULL}, \
-	           (R), (S), UNIT_DIMENSIONLESS)
+	new_DasAry((T), DASVT_UNK, sizeof(void*), (const uint8_t*)&(void*){NULL}, \
+	           (R), (S), DASUNITS_DIMENSIONLESS)
 
 /* Declared in v2.3.0, never implemented, any use was already a link error */
 #define DasAry_cmp(...)     DasAry_cmp_never_existed
@@ -499,39 +500,35 @@ static inline das_errcode _das2_compat_freePktDesc(DasStream* pSd, int nPktId)
 #define DasAry_setSrc(...)  DasAry_setSrc_removed__no_replacement
 
 /* ************************************************************************* */
-/* Index vocabulary: array extents are ARYIDX_*, dataset index space is
-   VARIDX_*.  Same values, EXCEPT the maximum rank: DASIDX_MAX was 16 in
-   v2.3.0 and is 8 now, and the _INIT_ lists shrank to match.  Arrays sized
-   DASIDX_MAX and filled from DASIDX_INIT_* still agree with each other. */
+/* Index vocabulary: the DASIDX_* names are v2.3.0's and keep their values,
+   EXCEPT the maximum rank: DASIDX_MAX was 16 in v2.3.0 and is 8 now, and
+   the _INIT_ lists shrank to match.  Arrays sized DASIDX_MAX and filled
+   from DASIDX_INIT_* still agree with each other. */
 
-#define DASIDX_MAX          ARYIDX_MAX
-#define DASIDX_RAGGED       VARIDX_RAGGED
-#define DASIDX_FUNC         VARIDX_BORROW   /* renamed DASIDX_BORROW, then this */
-#define DASIDX_UNUSED       VARIDX_UNUSED
-#define DASIDX_INIT_UNUSED  VARIDX_INIT_UNUSED
-#define DASIDX_INIT_BEGIN   VARIDX_INIT_BEGIN
-#define DEGEN               VARIDX_UNUSED
+#define DASIDX_FUNC         DASIDX_BORROW   /* renamed DASIDX_BORROW, then this */
+#define DEGEN               DASIDX_UNUSED
 
 /* The globals are gone, these compound literals still work as memcpy()
    sources and in sizeof */
-#define g_aShapeUnused ((const ptrdiff_t[ARYIDX_MAX])VARIDX_INIT_UNUSED)
-#define g_aShapeZeros  ((const ptrdiff_t[ARYIDX_MAX])VARIDX_INIT_BEGIN)
+#define g_aShapeUnused ((const ptrdiff_t[DASIDX_MAX])DASIDX_INIT_UNUSED)
+#define g_aShapeZeros  ((const ptrdiff_t[DASIDX_MAX])DASIDX_INIT_BEGIN)
 
 /* ************************************************************************* */
 /* Values and datums */
 
-#define das_byteseq_t  das_const_byte_seq_t
-#define das_byteseq    das_cbyte_seq
+/* v2.3.0's const byte sequence struct tag, das_byteseq_t, is the non-const
+   tag now (same layout).  Name it das_cbyteseq_t, or use DasCByteSeq. */
+#define das_byteseq    DasCByteSeq
 
 /* das_datum_toDbl() returned the value, DAS_FILL_VALUE on failure */
-static inline double _das2_compat_datum_toDbl(const das_datum* pDm)
+static inline double _das2_compat_datum_toDbl(const DasDatum* pDm)
 {
 	double rVal;
-	return das_datum_toDbl(pDm, &rVal) ? rVal : DAS_FILL_VALUE;
+	return DasDatum_toDouble(pDm, &rVal) ? rVal : DASVAL_FILL;
 }
 #define das_datum_toDbl(P) _das2_compat_datum_toDbl(P)
 
-#define das_vt_cmpAny  das_value_cmpAny
+#define das_vt_cmpAny  dasval_cmpAny
 
 /* A placeholder operator token, never produced by any parser */
 #define D2OP_PLUS      D2OP_PLUS_removed__no_replacement
@@ -563,7 +560,7 @@ static inline double _das2_compat_datum_toDbl(const das_datum* pDm)
 #define MAP_6(I,J,K,L,M,N)     6, (int8_t[6]){I,J,K,L,M,N}
 #define MAP_7(I,J,K,L,M,N,O)   7, (int8_t[7]){I,J,K,L,M,N,O}
 
-#define das_variable        das_var   /* struct tag, the fields all changed */
+#define das_variable        das_var_t   /* struct tag, the fields all changed */
 
 /* The value source kinds are library internal now, so the old enum is
    answered from the variable alone.  Values differ from v2.3, D2V_DATUM was
@@ -583,12 +580,12 @@ typedef enum var_type {
    what "composite" means now. */
 #define DasVar_isComposite(P)  DasVar_isBin(P)
 
-#define DasVarAry_getArray  DasVar_getAry
+#define DasVarAry_getArray  DasVar_ary
 
 /* Returned true on success.  A variable that needs caller scratch
    (DasVar_getNeedsBuf) fails here, call DasVar_get() directly for those. */
 #define DasVar_getDatum(P, L, D) \
-	(DasVar_get((P), (L), (das_byte_seq){NULL, 0}, (D)) == 0)
+	(DasVar_datumAt((P), (L), (DasByteSeq){NULL, 0}, (D)) == 0)
 
 /* DasVar_subset() took a fifth argument, pShapeFrom; old calls add NULL to
    wear the variable's own extents.  No macro, DasVar_allVals() expands to
@@ -614,14 +611,14 @@ typedef enum var_type {
 	new_DasVarBinary_removed__use_new_DasVarBin
 
 #define DasVar_valSize(...) \
-	DasVar_valSize_removed__use_das_vt_size_of_elemType
+	DasVar_valSize_removed__use_dasvt_size_of_elemType
 #define DasVar_isFill(...) \
-	DasVar_isFill_removed__compare_with_DasAry_getFill_of_DasVar_getAry
+	DasVar_isFill_removed__compare_with_DasAry_fill_of_DasVar_ary
 
 /* Declared but never implemented, any use was already a link error */
 #define DasVar_id(...)          DasVar_id_never_existed
-#define DasVar_orthoginal(...)  DasVar_orthoginal_never_existed__use_DasVar_degenerate
-#define new_DasVarEval(...)     new_DasVarEval_never_existed__use_DasVar_materialize
+#define DasVar_orthoginal(...)  DasVar_orthoginal_never_existed__use_DasVar_isDegenerate
+#define new_DasVarEval(...)     new_DasVarEval_never_existed__use_new_DasAry_materialize
 
 /* ************************************************************************* */
 /* Fourier transforms and power spectra: the classes follow the object naming
@@ -629,7 +626,7 @@ typedef enum var_type {
    DasPsd_length(), not a struct member. */
 
 #define DftPlan             DasDftPlan
-#define dft_plan            das_dft_plan   /* struct tag */
+#define dft_plan            das_dftplan_t   /* struct tag */
 #define new_DftPlan         new_DasDftPlan
 #define del_DftPlan         del_DasDftPlan
 
@@ -637,17 +634,17 @@ typedef enum var_type {
 #define new_Dft             new_DasDft
 #define del_Dft             del_DasDft
 #define Dft_calculate       DasDft_calculate
-#define Dft_getReal         DasDft_getReal
-#define Dft_getImg          DasDft_getImg
-#define Dft_getMagnitude    DasDft_getMagnitude
+#define Dft_getReal         DasDft_real
+#define Dft_getImg          DasDft_imag
+#define Dft_getMagnitude    DasDft_amplitude
 
 #define Das2Psd             DasPsd
 #define new_Psd             new_DasPsd
 #define del_Das2Psd         del_DasPsd
 #define Psd_calculate       DasPsd_calculate
-#define Psd_calculate_f     DasPsd_calculate_f
+#define Psd_calculate_f     DasPsd_calcFloat
 #define Psd_powerRatio      DasPsd_powerRatio
-#define Psd_get             DasPsd_get
+#define Psd_get             DasPsd_power
 
 /* ************************************************************************* */
 /* Credentials */
@@ -655,22 +652,22 @@ typedef enum var_type {
 /* The credentials manager was redone for 3.0: records and secrets are set
    separately, lookups copy into caller buffers, and stores are configured
    rather than named on each save.  The old calls are retired, not aliased. */
-#define new_CredMngr(...)          new_CredMngr_removed__use_new_DasCredMngr_then_DasCredMngr_setFileStore
-#define del_CredMngr(...)          del_CredMngr_removed__use_del_DasCredMngr
-#define CredMngr_addCred(...)      CredMngr_addCred_removed__use_DasCredMngr_addCred_and_DasCredMngr_setSecret
-#define CredMngr_getCred(...)      CredMngr_getCred_removed__use_DasCredMngr_getCred_and_DasCredMngr_getSecret
-#define CredMngr_addUserPass(...)  CredMngr_addUserPass_removed__use_DasCredMngr_addCred_and_DasCredMngr_setUserPass
+#define new_CredMngr(...)          new_CredMngr_removed__use_new_DasCredMgr_then_DasCredMgr_setStore
+#define del_CredMngr(...)          del_CredMngr_removed__use_del_DasCredMgr
+#define CredMngr_addCred(...)      CredMngr_addCred_removed__use_DasCredMgr_addCred_and_DasCredMgr_setSecret
+#define CredMngr_getCred(...)      CredMngr_getCred_removed__use_DasCredMgr_findCred_and_DasCredMgr_secret
+#define CredMngr_addUserPass(...)  CredMngr_addUserPass_removed__use_DasCredMgr_addCred_and_DasCredMgr_setUserPass
 #define CredMngr_getHttpAuth(...)  CredMngr_getHttpAuth_is_private__the_http_functions_call_it
 #define CredMngr_authFailed(...)   CredMngr_authFailed_is_private__the_http_functions_call_it
-#define CredMngr_setPrompt(...)    CredMngr_setPrompt_removed__use_DasCredMngr_setPrompt
-#define CredMngr_load(...)         CredMngr_load_removed__use_DasCredMngr_setFileStore_and_DasCredMngr_load
-#define CredMngr_save(...)         CredMngr_save_removed__use_DasCredMngr_setFileStore_and_DasCredMngr_save
+#define CredMngr_setPrompt(...)    CredMngr_setPrompt_removed__use_DasCredMgr_setPrompt
+#define CredMngr_load(...)         CredMngr_load_removed__use_DasCredMgr_setStore_and_DasCredMgr_load
+#define CredMngr_save(...)         CredMngr_save_removed__use_DasCredMgr_setStore_and_DasCredMgr_save
 
-#define DasCredMngr_addUserPass(...)  DasCredMngr_addUserPass_removed__use_DasCredMngr_addCred_and_DasCredMngr_setUserPass
+#define DasCredMngr_addUserPass(...)  DasCredMngr_addUserPass_removed__use_DasCredMgr_addCred_and_DasCredMgr_setUserPass
 #define DasCredMngr_getHttpAuth(...)  DasCredMngr_getHttpAuth_is_private__the_http_functions_call_it
 #define DasCredMngr_authFailed(...)   DasCredMngr_authFailed_is_private__the_http_functions_call_it
 
-#define das_credential    das_credential_removed__use_das_cred_which_holds_no_secret
+#define das_credential    das_credential_removed__use_DasCred_which_holds_no_secret
 #define DASCRED_HASH_SZ   DASCRED_HASH_SZ_removed__secrets_vary_in_length_see_DASCRED_SECRET_SZ
 #define DASCMGR_FILE_SZ   DASCMGR_FILE_SZ_removed__see_DASCRED_STORE_SZ
 #define DASCMGR_MSG_SZ    DASCMGR_MSG_SZ_removed__no_longer_public
@@ -713,16 +710,16 @@ typedef enum var_type {
 /* ************************************************************************* */
 /* HTTP: the response is an object, made by the request */
 
-#define das_http_getBody(...)        das_http_getBody_removed__use_new_DasHttpResp_get_and_DasHttpResp_ok
+#define das_http_getBody(...)        das_http_getBody_removed__use_new_DasHttpResp_get_and_DasHttpResp_isOk
 #define DasHttpResp_clear(...)       DasHttpResp_clear_removed__responses_come_from_new_DasHttpResp_get
 #define DasHttpResp_freeFields(...)  DasHttpResp_freeFields_removed__use_del_DasHttpResp
-#define DasHttpResp_init(...)        DasHttpResp_init_removed__use_das_url_parse
+#define DasHttpResp_init(...)        DasHttpResp_init_removed__use_DasUrlParts_fromStr
 #define DasHttpResp_useSsl(...)      DasHttpResp_useSsl_removed__take_the_body_with_DasHttpResp_takeBody
 #define das_url_toStr(...)           das_url_toStr_removed__use_DasHttpResp_url
 #define das_ssl_getErr(...)          das_ssl_getErr_is_private__TLS_stays_inside_the_library
 
 /* URLs have no fixed size parts now, das_url_parse() splits one in place */
-#define das_url            das_url_removed__see_das_url_parse
+#define das_url            das_url_removed__see_DasUrlParts_fromStr
 #define DASURL_SZ_SCHEME   DASURL_SZ_SCHEME_removed__urls_have_no_part_limits
 #define DASURL_SZ_HOST     DASURL_SZ_HOST_removed__urls_have_no_part_limits
 #define DASURL_SZ_PATH     DASURL_SZ_PATH_removed__urls_have_no_part_limits
@@ -747,8 +744,8 @@ typedef enum var_type {
 #define del_DasEncoding      del_DasEnc
 
 /* The fill helpers: DAS_FILL_VALUE is the value, das_isfill() the test */
-#define getDas2Fill()        DAS_FILL_VALUE
-#define isDas2Fill           das_isfill
+#define getDas2Fill()        DASVAL_FILL
+#define isDas2Fill           dasval_isFill
 
 /* ************************************************************************* */
 /* Das1 output */
@@ -763,7 +760,7 @@ typedef enum var_type {
 
 /* das_xml_escape() takes its source first now.  A const char* source in the
    old place would only warn, so the adapter is required, not a courtesy. */
-#define das_xml_escape(D, S, L)  das_xml_escape((S), (D), (L))
+#define das_xml_escape(D, S, L)  dasxml_escape((S), (D), (L))
 
 /* Was a second copy of das_xml_escape() with the arguments in another order.
    Written in v2.3.0 order, the adapter above puts it right. */
@@ -773,7 +770,7 @@ typedef enum var_type {
 /* JSON */
 
 /* The json.h names all carry das_ now, this one was missed */
-#define json_parse_error_info das_json_parse_error_info
+#define json_parse_error_info DasJparseResult_info
 
 /* utf8.h's character class helpers were generic names, now static in utf8.c */
 #define octal_digit(...) octal_digit_is_private__use_isdigit
@@ -791,11 +788,11 @@ static inline long long _das2_compat_utc_to_tt2K(
 	double yr, double mt, double dy, double hr, double mn, double sc,
 	double ms, double us, double ns
 ){
-	das_time dt = {0};
+	DasTime dt = {0};
 	dt.year = (int)yr;  dt.month = (int)mt;  dt.mday = (int)dy;
 	dt.hour = (int)hr;  dt.minute = (int)mn;
 	dt.second = sc + ms*1.0e-3 + us*1.0e-6 + ns*1.0e-9;
-	return dt_to_tt2k(&dt);
+	return DasTime_toTt2k(&dt);
 }
 #define das_utc_to_tt2K(Y, M, D, h, m, s, ms, us, ns) \
 	_das2_compat_utc_to_tt2K((Y), (M), (D), (h), (m), (s), (ms), (us), (ns))
@@ -806,15 +803,15 @@ static inline void _das2_compat_tt2K_to_utc(
 ){
 	int y, m, d, h, n, s;
 	int32_t nNano;
-	tt2k_to_parts(tt, &y, &m, &d, &h, &n, &s, &nNano);
+	DasTime_tt2kToUtc(tt, &y, &m, &d, &h, &n, &s, &nNano);
 	*yr = y;  *mt = m;  *dy = d;  *hr = h;  *mn = n;  *sc = s;
 	*ms = nNano / 1000000;  *us = (nNano / 1000) % 1000;  *ns = nNano % 1000;
 }
 #define das_tt2K_to_utc(T, Y, M, D, h, m, s, ms, us, ns) \
 	_das2_compat_tt2K_to_utc((T), (Y), (M), (D), (h), (m), (s), (ms), (us), (ns))
 
-#define das_tt2K_to_us2K(T) Units_convertTo(UNIT_US2000, (T), UNIT_TT2000)
-#define das_us2K_to_tt2K(U) Units_convertTo(UNIT_TT2000, (U), UNIT_US2000)
+#define das_tt2K_to_us2K(T) Units_convertTo(DASUNITS_US2000, (T), DASUNITS_TT2000)
+#define das_us2K_to_tt2K(U) Units_convertTo(DASUNITS_TT2000, (U), DASUNITS_US2000)
 
 #define das_tt2k_reinit(...) das_tt2k_reinit_is_private__see_das2_compat_h
 
@@ -864,13 +861,13 @@ static inline void _das2_compat_tt2K_to_utc(
    the stream, DasIO_exception does.  Exception handlers are gone: the close
    handler gets the exception, see das_close_f in io.h. */
 #define DasIO_throwException(IO, S, T, M) \
-	((void)(S), DasIO_exception_v((IO), das_except_fromStr(T), "%s", (M)), del_DasIO(IO))
+	((void)(S), DasIO_exceptionf((IO), dasexcepttype_id(T), "%s", (M)), del_DasIO(IO))
 #define DasIO_serverExcept(IO, ...) \
-	(DasIO_exception_v((IO), DAS_EX_SERVER_ERR, __VA_ARGS__), 11)
+	(DasIO_exceptionf((IO), DASEXCEPTTYPE_SERVER_ERR, __VA_ARGS__), 11)
 #define DasIO_queryExcept(IO, ...) \
-	(DasIO_exception_v((IO), DAS_EX_QUERY_ERR, __VA_ARGS__), 11)
+	(DasIO_exceptionf((IO), DASEXCEPTTYPE_QUERY_ERR, __VA_ARGS__), 11)
 #define DasIO_closeNoData(IO, ...) \
-	(DasIO_exception_v((IO), DAS_EX_NO_DATA, __VA_ARGS__), 0)
+	(DasIO_exceptionf((IO), DASEXCEPTTYPE_NO_DATA, __VA_ARGS__), 0)
 #define DasIO_writeException DasIO_exception
 #define DasIO_writeComment   DasIO_comment
 
@@ -882,40 +879,479 @@ static inline void _das2_compat_tt2K_to_utc(
 #define das_error_free(...)   das_error_free_removed__the_library_keeps_no_error_copies
 #define das_save_error(...)   das_save_error_removed__save_errors_in_your_log_hook
 #define das_print_error(...)  das_print_error_removed__the_default_log_hook_prints
-#define das_error_msg         das_error_msg_removed__see_das_logmsg_in_log_h
-#define das_abort_on_error(...)  das_abort_on_error_removed__break_on_daserr_func_in_a_debugger
-#define das_exit_on_error(...)   das_exit_on_error_removed__use_daserr_setdisp_DASERR_DIS_EXIT
-#define das_return_on_error(...) das_return_on_error_removed__use_daserr_setdisp_DASERR_DIS_RET
-#define DASERR_DIS_ABORT      DASERR_DIS_ABORT_removed__break_on_daserr_func_in_a_debugger
+#define das_error_msg         das_error_msg_removed__see_DasLogMsg_in_log_h
+#define das_abort_on_error(...)  das_abort_on_error_removed__break_on_daserr_funcf_in_a_debugger
+#define das_exit_on_error(...)   das_exit_on_error_removed__use_daserr_setDisp_DASERRDISP_EXIT
+#define das_return_on_error(...) das_return_on_error_removed__use_daserr_setDisp_DASERRDISP_RET
+#define DASERR_DIS_ABORT      DASERR_DIS_ABORT_removed__break_on_daserr_funcf_in_a_debugger
 #define das_error_disposition daserr_disp
-#define das_error_func        daserr_func
-#define das_error_func_fixed  daserr_func_fixed
+#define das_error_func        daserr_funcf
+#define das_error_func_fixed  daserr_func
 
 /* Log handlers take a das_logmsg and a pUser pointer, set as a pair */
-#define daslog_sethandler(...) daslog_sethandler_removed__use_daslog_sethook
-#define das_log_handler_t     das_log_handler_t_removed__use_das_loghandler_f
-#define daslog_set_showline(...) daslog_set_showline_removed__use_daslog_showline_bool
-#define DASLOG_NOTHING        DASLOG_NOTHING_removed__DASLOG_CRIT_is_the_top_level
+#define daslog_sethandler(...) daslog_sethandler_removed__use_daslog_setHook
+#define das_log_handler_t     das_log_handler_t_removed__use_dasfn_onLog
+#define daslog_set_showline(...) daslog_set_showline_removed__use_daslog_showLine_bool
+#define DASLOG_NOTHING        DASLOG_NOTHING_removed__DASLOG_CRITICAL_is_the_top_level
 
 /* To-stream logging: a log line is a comment whose type names the level,
    DasIO_comment_v(pOut, "log:info", ...).  Readers filter, not writers. */
-#define DasIO_sendLog(...)    DasIO_sendLog_removed__use_DasIO_comment_v
+#define DasIO_sendLog(...)    DasIO_sendLog_removed__use_DasIO_commentf
 #define DasIO_setLogLvl(...)  DasIO_setLogLvl_removed__readers_filter_by_comment_type
 #define DasIO_getLogLvl(...)  DasIO_getLogLvl_never_existed
-#define LOGLVL_FINEST   LOGLVL_FINEST_removed__use_DasIO_comment_v
-#define LOGLVL_FINER    LOGLVL_FINER_removed__use_DasIO_comment_v
-#define LOGLVL_FINE     LOGLVL_FINE_removed__use_DasIO_comment_v
-#define LOGLVL_CONFIG   LOGLVL_CONFIG_removed__use_DasIO_comment_v
-#define LOGLVL_INFO     LOGLVL_INFO_removed__use_DasIO_comment_v
-#define LOGLVL_WARNING  LOGLVL_WARNING_removed__use_DasIO_comment_v
-#define LOGLVL_ERROR    LOGLVL_ERROR_removed__use_DasIO_comment_v
+#define LOGLVL_FINEST   LOGLVL_FINEST_removed__use_DasIO_commentf
+#define LOGLVL_FINER    LOGLVL_FINER_removed__use_DasIO_commentf
+#define LOGLVL_FINE     LOGLVL_FINE_removed__use_DasIO_commentf
+#define LOGLVL_CONFIG   LOGLVL_CONFIG_removed__use_DasIO_commentf
+#define LOGLVL_INFO     LOGLVL_INFO_removed__use_DasIO_commentf
+#define LOGLVL_WARNING  LOGLVL_WARNING_removed__use_DasIO_commentf
+#define LOGLVL_ERROR    LOGLVL_ERROR_removed__use_DasIO_commentf
+
+/* ************************************************************************* */
+/* The v3.0 names, 2026-11 (co_notes/api_rename.csv)
+ *
+ * Every public name settled into one shape: classes are CamelCase with
+ * Class_method() calls, plain types and integer types are lower case, and
+ * each constant carries its owner's name as its prefix.  Old names that
+ * kept their meaning map straight across.  A few are not mapped, the old
+ * call fails to compile instead:
+ *
+ *   - Renamed struct members.  A macro can't alias a member, the compiler
+ *     names the member it no longer finds.
+ *   - dataset, the old struct tag of DasDs.  A #define of an ordinary word
+ *     would rename every variable spelled that way.  Write DasDs.
+ *   - Names v3.0 reuses with another meaning, DasIO_model and
+ *     das_byteseq_t, see their notes above.
+ */
+
+/* units.h */
+#define das_units                DasUnits
+#define UNIT_US2000              DASUNITS_US2000
+#define UNIT_MJ1958              DASUNITS_MJ1958
+#define UNIT_T2000               DASUNITS_T2000
+#define UNIT_T1970               DASUNITS_T1970
+#define UNIT_NS1970              DASUNITS_NS1970
+#define UNIT_UTC                 DASUNITS_UTC
+#define UNIT_TT2000              DASUNITS_TT2000
+#define UNIT_SECONDS             DASUNITS_SECONDS
+#define UNIT_HOURS               DASUNITS_HOURS
+#define UNIT_DAYS                DASUNITS_DAYS
+#define UNIT_MILLISECONDS        DASUNITS_MILLISECONDS
+#define UNIT_MICROSECONDS        DASUNITS_MICROSECONDS
+#define UNIT_NANOSECONDS         DASUNITS_NANOSECONDS
+#define UNIT_HERTZ               DASUNITS_HERTZ
+#define UNIT_KILO_HERTZ          DASUNITS_KILO_HERTZ
+#define UNIT_MEGA_HERTZ          DASUNITS_MEGA_HERTZ
+#define UNIT_E_SPECDENS          DASUNITS_E_SPECDENS
+#define UNIT_B_SPECDENS          DASUNITS_B_SPECDENS
+#define UNIT_NT                  DASUNITS_NT
+#define UNIT_NUMBER_DENS         DASUNITS_NUMBER_DENS
+#define UNIT_DB                  DASUNITS_DB
+#define UNIT_KM                  DASUNITS_KM
+#define UNIT_EV                  DASUNITS_EV
+#define UNIT_DEGREES             DASUNITS_DEGREES
+#define UNIT_DIMENSIONLESS       DASUNITS_DIMENSIONLESS
+#define Units_fromStr            DasUnits_fromStr
+#define Units_toStr              DasUnits_toStr
+#define Units_toLabel            DasUnits_toLbl
+#define Units_invert             DasUnits_invert
+#define Units_multiply           DasUnits_mul
+#define Units_divide             DasUnits_div
+#define Units_power              DasUnits_pow
+#define Units_root               DasUnits_root
+#define Units_interval           DasUnits_toInterval
+#define Units_reduce             DasUnits_reduce
+#define Units_canConvert         DasUnits_canConvert
+#define Units_canMerge           DasUnits_canMerge
+#define Units_haveCalRep         DasUnits_isTimePoint
+
+/* time.h */
+#define Units_convertToDt        DasTime_fromPoint
+#define Units_secondsSinceMidnight DasTime_pointToSod
+#define Units_getJulianDay       DasTime_pointToJdn
+#define das_time                 DasTime
+#define DAS_TIME_NULL            DASTIME_NULL
+#define dt_null                  DasTime_clear
+#define dt_now                   DasTime_now
+#define dt_nano_1970             DasTime_toNs1970
+#define dt_ttime                 DasTime_toSec1958
+#define dt_set                   DasTime_set
+#define dt_compare               DasTime_compare
+#define dt_diff                  DasTime_diff
+#define dt_tnorm                 DasTime_normalize
+
+/* datum.h */
+#define das_datum                DasDatum
+#define datum_t                  das_datum_t
+#define das_datum_valid          DasDatum_isValid
+#define das_datum_fromStr        DasDatum_fromStr
+#define das_datum_fromDbl        DasDatum_fromDouble
+#define das_datum_wrapStr        DasDatum_wrapStr
+#define das_datum_byteSeq        DasDatum_wrapBytes
+#define das_datum_toEpoch        DasDatum_toPoint
+
+/* value.h */
+#define DAS_FILL_VALUE           DASVAL_FILL
+#define DAS_INT64_FILL           DASVAL_FILL_INT64
+#define DAS_INT32_FILL           DASVAL_FILL_INT32
+#define das_val_type             das_vt
+#define das_val_type_e           das_vt_e
+#define vtByte                   DASVT_BYTE
+#define vtUShort                 DASVT_USHORT
+#define vtShort                  DASVT_SHORT
+#define vtInt                    DASVT_INT
+#define vtLong                   DASVT_LONG
+#define vtFloat                  DASVT_FLOAT
+#define vtDouble                 DASVT_DOUBLE
+#define vtTime                   DASVT_TIME
+#define vtIndex                  DASVT_INDEX
+#define vtText                   DASVT_TEXT
+#define vtByteSeq                DASVT_BYTESEQ
+#define vtUnknown                DASVT_UNK
+#define das_vt_toStr             dasvt_name
+#define das_vt_size              dasvt_size
+#define das_vt_fill              dasvt_fill
+#define das_valcmp_func          dasfn_valCmp
+#define das_vt_getcmp            dasvt_cmpFunc
+#define das_vt_merge             dasvt_merge
+#define das_within               dasval_within
+
+/* str.h */
+#define das_str2double           dasstr_toDouble
+#define das_str2int              dasstr_toInt
+#define das_str2bool             dasstr_toBool
+#define das_str2baseint          dasstr_toBaseInt
+#define das_strn2baseint         dasstr_toBaseIntN
+#define das_csv2doubles          dascsv_newDoubles
+#define das_doubles2csv          dascsv_fromDoubles
+#define das_string               dasstr_newf
+#define das_vstring              dasstr_newvf
+#define das_strdup               dasstr_new
+#define das_strtod_c             dasstr_toDoubleCLocale
+
+/* defs.h */
+#define HOST_IS_LSB_FIRST        DASHOST_LSB_FIRST
+
+/* log.h */
+#define DASLOG_CRIT              DASLOG_CRITICAL
+#define daslog_setlevel          daslog_setLevel
+#define daslog_strlevel          daslog_levelFromStr
+/* v2.3.0 had no function name argument */
+#define daslog(L, F, N, ...) daslog_funcf((L), (F), NULL, (N), __VA_ARGS__)
+#define daslog_trace_v           daslog_tracef
+#define daslog_debug_v           daslog_debugf
+#define daslog_info_v            daslog_infof
+#define daslog_warn_v            daslog_warnf
+#define daslog_error_v           daslog_errorf
+#define daslog_critical_v        daslog_criticalf
+
+/* util.h */
+#define DASERR_DIS_EXIT          DASERRDISP_EXIT
+#define DASERR_DIS_RET           DASERRDISP_RET
+#define das_init                 daslib_init
+#define das_lib_version          daslib_version
+#define das_finish               daslib_finish
+#define das_error                daserrf
+#define DAS_XML_BUF_LEN          DASXML_BUF_LEN
+#define DAS_XML_NODE_NAME_LEN    DASXML_NAME_LEN
+#define das_isdir                dasfs_isDir
+#define das_isfile               dasfs_isFile
+#define das_copyfile             dasfs_copyFile
+#define das_dirlist              dasfs_listDir
+
+/* array.h */
+#define DAS_MAX_ID_BUFSZ         DASID_SZ
+#define das_assert_valid_id      dasid_check
+#define RANK_1                   DAS_SHAPE1
+#define RANK_2                   DAS_SHAPE2
+#define RANK_3                   DAS_SHAPE3
+#define RANK_4                   DAS_SHAPE4
+#define RANK_5                   DAS_SHAPE5
+#define RANK_6                   DAS_SHAPE6
+#define RANK_7                   DAS_SHAPE7
+#define RANK_8                   DAS_SHAPE8
+#define DIM0                     DAS_ADDR0
+#define DIM1_AT                  DAS_ADDR1
+#define DIM2_AT                  DAS_ADDR2
+#define DIM3_AT                  DAS_ADDR3
+#define DIM4_AT                  DAS_ADDR4
+#define DIM5_AT                  DAS_ADDR5
+#define DIM6_AT                  DAS_ADDR6
+#define DIM7_AT                  DAS_ADDR7
+#define DIM1                     DAS_IDX1
+#define DIM2                     DAS_IDX2
+#define DIM3                     DAS_IDX3
+#define DIM4                     DAS_IDX4
+#define DIM5                     DAS_IDX5
+#define DIM6                     DAS_IDX6
+#define DIM7                     DAS_IDX7
+#define das_array                das_ary_t
+#define DasAry_disownElements    DasAry_disownData
+#define DasAry_ownsElements      DasAry_ownsData
+#define DasAry_getUsage          DasAry_usage
+#define DasAry_valType           DasAry_vt
+#define DasAry_valTypeStr        DasAry_vtName
+#define DasAry_getFill           DasAry_fill
+#define DasAry_validAt           DasAry_isValidAt
+#define DasAry_getAt             DasAry_valAt
+#define DasAry_putAt             DasAry_setValsAt
+#define DasAry_getIn             DasAry_valsIn
+#define DasAry_getBuf            DasAry_dataIn
+#define DasAry_subSetIn          new_DasAry_slice
+#define DasAry_getFloatAt        DasAry_floatAt
+#define DasAry_getDoubleAt       DasAry_doubleAt
+#define DasAry_getByteAt         DasAry_byteAt
+#define DasAry_getUShortAt       DasAry_ushortAt
+#define DasAry_getShortAt        DasAry_shortAt
+#define DasAry_getIntAt          DasAry_intAt
+#define DasAry_getLongAt         DasAry_longAt
+#define DasAry_getTimeAt         DasAry_timeAt
+#define DasAry_getTextAt         DasAry_textAt
+#define DasAry_getPtrAt          DasAry_ptrAt
+#define DasAry_getFloatsIn       DasAry_floatsIn
+#define DasAry_getDoublesIn      DasAry_doublesIn
+#define DasAry_getCharsIn        DasAry_charsIn
+#define DasAry_getBytesIn        DasAry_bytesIn
+#define DasAry_getUShortsIn      DasAry_ushortsIn
+#define DasAry_getShortsIn       DasAry_shortsIn
+#define DasAry_getIntsIn         DasAry_intsIn
+#define DasAry_getLongsIn        DasAry_longsIn
+#define DasAry_getTimesIn        DasAry_timesIn
+#define DasAry_getTextIn         DasAry_textIn
+
+/* io.h */
+#define das_io_struct            das_io_t
+#define DasIO_addProcessor       DasIO_addProc
+#define DasIO_setTaskSize        DasIO_setProgressMax
+#define DasIO_setTaskProgress    DasIO_setProgress
+
+/* iter.h */
+#define dasds_iterator_t         das_dsiter_t
+
+/* oper.h */
+#define D2OP_INVALID             DASOP_INVALID
+#define D2UOP_SIGN               DASOP_SIGN
+#define D2UOP_SQRT               DASOP_SQRT
+#define D2UOP_CURT               DASOP_CURT
+#define D2UOP_LOG10              DASOP_LOG10
+#define D2UOP_LN                 DASOP_LN
+#define D2UOP_COS                DASOP_COS
+#define D2UOP_SIN                DASOP_SIN
+#define D2UOP_TAN                DASOP_TAN
+#define D2UOP_SQUARE             DASOP_SQUARE
+#define D2UOP_CUBE               DASOP_CUBE
+#define D2UOP_INV                DASOP_INV
+#define D2UOP_INVSQ              DASOP_INVSQ
+#define D2UOP_INVCUBE            DASOP_INVCUBE
+#define D2BOP_ADD                DASOP_ADD
+#define D2BOP_SUB                DASOP_SUB
+#define D2BOP_MUL                DASOP_MUL
+#define D2BOP_DIV                DASOP_DIV
+#define D2BOP_POW                DASOP_POW
+#define D2OP_BEFORE              DASOP_POS_BEFORE
+#define D2OP_BETWEEN             DASOP_POS_BETWEEN
+#define D2OP_AFTER               DASOP_POS_AFTER
+#define das_op_unary             dasop_unary
+#define das_op_binary            dasop_binary
+#define das_op_toStr             dasop_name
+#define das_op_isBinary          dasop_isBinary
+#define das_op_isUnary           dasop_isUnary
+
+/* dsdf.h */
+#define dsdf_parse               new_DasDesc_dsdf
+#define dsdf_valToArray          dasdsdf_newDoubles
+#define dsdf_setIdlBin           dasdsdf_setIdlBin
+#define dsdf_valToNormParam      dasdsdf_normParam
+
+/* http.h */
+#define DASHTTP_TO_MIN           DASHTTP_TIMEOUT_MIN
+#define DASHTTP_TO_MULTI         DASHTTP_TIMEOUT_MULTI
+#define DASHTTP_TO_MAX           DASHTTP_TIMEOUT_MAX
+#define das_http_readUrl         new_DasAry_http
+
+/* json.h */
+#define das_json_obj_s           das_jdo_t
+#define das_json_parse           new_DasJdo_parse
+#define das_json_parse_ex        new_DasJdo_parseEx
+#define DasJdo_get               DasJdo_subtree
+#define DasJdo_string            DasJdo_str
+#define DasJdo_writeMinified     DasJdo_newMiniStr
+#define DasJdo_writePretty       DasJdo_newPrettyStr
+#define das_json_type_e          das_jsontype_e
+#define das_json_type_str        DASJSONTYPE_STR
+#define das_json_type_num        DASJSONTYPE_NUM
+#define das_json_type_dict       DASJSONTYPE_DICT
+#define das_json_type_ary        DASJSONTYPE_ARY
+#define das_json_type_true       DASJSONTYPE_TRUE
+#define das_json_type_false      DASJSONTYPE_FALSE
+#define das_json_type_null       DASJSONTYPE_NULL
+#define das_json_parse_flags_e   das_jparse_e
+#define das_jparse_flags_default DASJPARSE_DEFAULT
+#define das_jparse_flags_allow_trailing_comma DASJPARSE_ALLOW_TRAILING_COMMA
+#define das_jparse_flags_allow_unquoted_keys DASJPARSE_ALLOW_UNQUOTED_KEYS
+#define das_jparse_flags_allow_global_object DASJPARSE_ALLOW_GLOBAL_OBJECT
+#define das_jparse_flags_allow_equals_in_object DASJPARSE_ALLOW_EQUALS_IN_OBJECT
+#define das_jparse_flags_allow_no_commas DASJPARSE_ALLOW_NO_COMMAS
+#define das_jparse_flags_allow_c_style_comments DASJPARSE_ALLOW_C_STYLE_COMMENTS
+#define das_jparse_flags_deprecated DASJPARSE_DEPRECATED
+#define das_jparse_flags_allow_location_information DASJPARSE_ALLOW_LOCATION_INFORMATION
+#define das_jparse_flags_allow_single_quoted_strings DASJPARSE_ALLOW_SINGLE_QUOTED_STRINGS
+#define das_jparse_flags_allow_hexadecimal_numbers DASJPARSE_ALLOW_HEXADECIMAL_NUMBERS
+#define das_jparse_flags_allow_leading_plus_sign DASJPARSE_ALLOW_LEADING_PLUS_SIGN
+#define das_jparse_flags_allow_leading_or_trailing_decimal_point DASJPARSE_ALLOW_LEADING_OR_TRAILING_DECIMAL_POINT
+#define das_jparse_flags_allow_inf_and_nan DASJPARSE_ALLOW_INF_AND_NAN
+#define das_jparse_flags_allow_multi_line_strings DASJPARSE_ALLOW_MULTI_LINE_STRINGS
+#define das_jparse_flags_allow_simplified_json DASJPARSE_ALLOW_SIMPLIFIED_JSON
+#define das_jparse_flags_allow_json5 DASJPARSE_ALLOW_JSON5
+#define das_jparse_error_e       das_jparseerr_e
+#define das_jparse_error_none    DASJPARSEERR_NONE
+#define das_jparse_error_expected_comma_or_closing_bracket DASJPARSEERR_EXPECTED_COMMA_OR_CLOSING_BRACKET
+#define das_jparse_error_expected_colon DASJPARSEERR_EXPECTED_COLON
+#define das_jparse_error_expected_opening_quote DASJPARSEERR_EXPECTED_OPENING_QUOTE
+#define das_jparse_error_invalid_string_escape_sequence DASJPARSEERR_INVALID_STRING_ESCAPE_SEQUENCE
+#define das_jparse_error_invalid_number_format DASJPARSEERR_INVALID_NUMBER_FORMAT
+#define das_jparse_error_invalid_value DASJPARSEERR_INVALID_VALUE
+#define das_jparse_error_premature_end_of_buffer DASJPARSEERR_PREMATURE_END_OF_BUFFER
+#define das_jparse_error_invalid_string DASJPARSEERR_INVALID_STRING
+#define das_jparse_error_allocator_failed DASJPARSEERR_ALLOCATOR_FAILED
+#define das_jparse_error_unexpected_trailing_characters DASJPARSEERR_UNEXPECTED_TRAILING_CHARACTERS
+#define das_jparse_error_unknown DASJPARSEERR_UNKNOWN
+#define das_json_parse_result_s  das_jparseresult_t
+#define das_json_str             DasJsonStr
+#define das_json_str_s           das_jsonstr_t
+#define das_json_str_ex          DasJsonStrEx
+#define das_json_str_ex_s        das_jsonstrex_t
+#define das_json_num             DasJsonNum
+#define das_json_num_s           das_jsonnum_t
+#define das_json_dict_el         DasJsonDictEl
+#define das_json_dict_el_s       das_jsondictel_t
+#define das_json_dict            DasJsonDict
+#define das_json_dict_s          das_jsondict_t
+#define das_json_ary_el          DasJsonAryEl
+#define das_json_ary_el_s        das_jsonaryel_t
+#define das_json_ary             DasJsonAry
+#define das_json_ary_s           das_jsonary_t
+#define das_json_val_ex          DasJsonValEx
+#define das_json_val_ex_s        das_jsonvalex_t
+
+/* buffer.h */
+#define das_buffer               das_buf_t
+#define DasBuf_reinit            DasBuf_reset
+
+/* enc.h */
+#define das_encoding             das_enc_t
+#define DASENC_FMT_LEN           DASENC_FMT_SZ
+#define DASENC_TYPE_LEN          DASENC_TYPE_SZ
+#define DasEnc_copy              new_DasEnc_copy
+#define DasEnc_setAsciiFormat    DasEnc_setAsciiFmt
+#define DasEnc_setTimeFormat     DasEnc_setTimeFmt
+
+/* desc.h */
+#define das_descriptor           das_desc_t
+#define DasDesc_equals           DasDesc_isEqual
+#define DasDesc_length           DasDesc_numProps
+#define DasDesc_getNameByIdx     DasDesc_propNameAt
+#define DasDesc_getValByIdx      DasDesc_valAt
+#define DasDesc_getTypeByIdx     DasDesc_propTypeAt
+#define DasDesc_getType          DasDesc_propType
+#define DasDesc_remove           DasDesc_rmProp
+#define DasDesc_set              DasDesc_setProp
+#define DasDesc_getStr           DasDesc_val
+#define DasDesc_setStr           DasDesc_setVal
+#define DasDesc_vSetStr          DasDesc_setValf
+#define DasDesc_getInt           DasDesc_valInt
+#define DasDesc_setInt           DasDesc_setValInt
+#define DasDesc_getBool          DasDesc_valBool
+#define DasDesc_setBool          DasDesc_setValBool
+#define DasDesc_getDouble        DasDesc_valDouble
+#define DasDesc_setDouble        DasDesc_setValDouble
+#define DasDesc_getDatum         DasDesc_valDatum
+#define DasDesc_setDatum         DasDesc_setValDatum
+#define DasDesc_getDoubleAry     DasDesc_newValDoubles
+#define DasDesc_setDoubleArray   DasDesc_setValDoubles
+#define DasDesc_setFloatAry      DasDesc_setValFloats
+#define DasDesc_getStrAry        DasDesc_valStrs
+#define DasDesc_getArray         DasDesc_valStrsSep
+#define DasDesc_setDatumRng      DasDesc_setValDatumRng
+#define DasDesc_getStrRng        DasDesc_valRng
+
+/* dim.h */
+#define DASDIM_UNK               DASDIMTYPE_UNK
+#define DASDIM_COORD             DASDIMTYPE_COORD
+#define DASDIM_DATA              DASDIMTYPE_DATA
+#define DASVAR_CENTER            DASDIM_ROLE_CENTER
+#define DASVAR_MIN               DASDIM_ROLE_MIN
+#define DASVAR_MAX               DASDIM_ROLE_MAX
+#define DASVAR_WIDTH             DASDIM_ROLE_WIDTH
+#define DASVAR_MEAN              DASDIM_ROLE_MEAN
+#define DASVAR_MEDIAN            DASDIM_ROLE_MEDIAN
+#define DASVAR_MODE              DASDIM_ROLE_MODE
+#define DASVAR_REF               DASDIM_ROLE_REF
+#define DASVAR_OFFSET            DASDIM_ROLE_OFFSET
+#define DASVAR_STD_DEV           DASDIM_ROLE_STD_DEV
+#define DASVAR_WEIGHT            DASDIM_ROLE_WEIGHT
+#define das_dim                  das_dim_t
+#define DasDim_getVar            DasDim_var
+#define DasDim_getPointVar       DasDim_pointVar
+
+/* packet.h */
+#define MAXPLANES                DASPKT_MAX_PLANES
+
+/* var.h */
+#define DasVar_valType           DasVar_vt
+#define DasVar_subset            new_DasAry_subset
+#define das_varindex_merge       dasshape_merge
+#define das_varlength_merge      dasshape_mergeLen
+#define das_varindex_prndir      dasshape_setPrnDir
+#define das_rng2shape            dasshape_fromRng
+
+/* creds.h */
+#define das_cred_init            init_DasCred
+#define das_prompt               dasfn_prompt
+#define DasCredMngr              DasCredMgr
+#define das_credmngr             das_credmgr_t
+
+/* node.h */
+#define das_node_type_e          das_nodetype
+#define das_node                 das_node_t
+#define DasNode_getJdo           DasNode_jdo
+
+/* spice.h */
+#define das_spice_err_setup      dasspice_catchErrors
+#define das_print_spice_error    dasspice_prnError
+
+/* IDXn(...) built a bare index list.  The At calls take a count and a list
+   now, both from DAS_ADDRn(...), and THE DIGIT SHIFTS UP ONE: the old digit
+   named the last index reached, the new one counts the values, so
+   IDX1(9, 151) becomes DAS_ADDR2(9, 151). */
+#define IDX0(...) IDX0_removed__use_DAS_ADDR1
+#define IDX1(...) IDX1_removed__use_DAS_ADDR2
+#define IDX2(...) IDX2_removed__use_DAS_ADDR3
+#define IDX3(...) IDX3_removed__use_DAS_ADDR4
+#define IDX4(...) IDX4_removed__use_DAS_ADDR5
+#define IDX5(...) IDX5_removed__use_DAS_ADDR6
+#define IDX6(...) IDX6_removed__use_DAS_ADDR7
+#define IDX7(...) IDX7_removed__use_DAS_ADDR8
+
+/* Index name strings, used only by the library's own messages */
+#define g_sIdxLower  g_sIdxLower_is_private
+#define g_sIdxUpper  g_sIdxUpper_is_private
+
+/* RNG_n(...) were never used, no replacement */
+#define RNG_1(...) RNG_1_removed__no_replacement
+#define RNG_2(...) RNG_2_removed__no_replacement
+#define RNG_3(...) RNG_3_removed__no_replacement
+#define RNG_4(...) RNG_4_removed__no_replacement
+#define RNG_5(...) RNG_5_removed__no_replacement
+#define RNG_6(...) RNG_6_removed__no_replacement
+#define RNG_7(...) RNG_7_removed__no_replacement
 
 /* das_send_spice_err() took the type string too.  This header can't include
    <das3/spice.h>, which needs the CSPICE headers, and a function-like macro
    would mangle that file's prototype if it came second, so the adapter is
    only defined when spice.h was included FIRST. */
 #ifdef _das2_spice_H_
-#define das_send_spice_err(V, T) das_send_spice_err((V), das_except_fromStr(T))
+#define das_send_spice_err(V, T) das_send_spice_err((V), dasexcepttype_id(T))
 #endif
 
 #endif /* _das2_compat_h_ */

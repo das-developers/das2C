@@ -83,7 +83,7 @@ typedef struct seen {
 	int nClose;
 	bool bHadSd;          /* the close handler got a stream */
 	int nExcept;
-	das_except_e aExcept[MAX_SEEN];
+	das_excepttype aExcept[MAX_SEEN];
 	char aExceptMsg[MAX_SEEN][64];
 	int nComment;
 	bool bCmtSd;          /* every comment came with a stream */
@@ -127,13 +127,13 @@ static das_errcode _read(const char* sFile, seen_t* pSeen)
 
 	DasIO* pIn = new_DasIO("TestSend", new_DasXport_file(sFile, "r"), NULL);
 	if(pIn == NULL){ FAIL("can't open %s", sFile); return 15; }
-	DasIO_setModel(pIn, STREAM_MODEL_MIXED);  /* das3 headers carry <p> */
+	DasIO_setModel(pIn, DASIOMODEL_MIXED);  /* das3 headers carry <p> */
 
-	das_stream_proc handler;
-	das_stream_proc_init(&handler, pSeen);
+	DasIOProc handler;
+	init_DasIOProc(&handler, pSeen);
 	handler.onClose = onClose;
 	handler.onComment = onComment;
-	DasIO_addProcessor(pIn, &handler);
+	DasIO_addProc(pIn, &handler);
 
 	das_errcode nRet = DasIO_readAll(pIn);
 	del_DasIO(pIn);
@@ -157,8 +157,8 @@ static int read_stream(const char* sFile)
 	if(seen.nClose != 1) FAIL("%s: close handler ran %d times", sFile, seen.nClose);
 	if(seen.nExcept != 1) FAIL("%s: %d exceptions, expected the first only", sFile, seen.nExcept);
 	if(seen.nExcept > 0){
-		if(seen.aExcept[0] != DAS_EX_QUERY_ERR)
-			FAIL("%s: exception is type %d, expected %d", sFile, seen.aExcept[0], DAS_EX_QUERY_ERR);
+		if(seen.aExcept[0] != DASEXCEPTTYPE_QUERY_ERR)
+			FAIL("%s: exception is type %d, expected %d", sFile, seen.aExcept[0], DASEXCEPTTYPE_QUERY_ERR);
 		if(!_sameText(seen.aExceptMsg[0], MSG_QUERY))
 			FAIL("%s: exception message '%s'", sFile, seen.aExceptMsg[0]);
 	}
@@ -181,21 +181,21 @@ static int read_stream(const char* sFile)
 	return 0;
 }
 
-/* The refusals tested here are deliberate, so their das_error() messages
+/* The refusals tested here are deliberate, so their daserrf() messages
    are dropped; everything else prints as usual.  The return codes are what
    the checks look at. */
-static void _dropErrors(const das_logmsg* pMsg, void* pUser)
+static void _dropErrors(const DasLogMsg* pMsg, void* pUser)
 {
 	(void)pUser;
-	if(pMsg->nErr == DAS_OKAY) daslog_stderr(pMsg, NULL);
+	if(pMsg->errCode == DAS_OKAY) daslog_stderr(pMsg, NULL);
 }
 
 /* ************************************************************************* */
 
 int main(int argc, char** argv)
 {
-	das_loghook hook = {_dropErrors, NULL};
-	das_init(argv[0], DASERR_DIS_RET, DASLOG_INFO, &hook);
+	DasLogHook hook = {_dropErrors, NULL};
+	daslib_init(argv[0], DASERRDISP_RET, DASLOG_INFO, &hook);
 
 	if((argc == 3)&&(strcmp(argv[1], "send") == 0))
 		return write_stream(atoi(argv[2]));

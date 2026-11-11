@@ -26,7 +26,7 @@
 #define _das_codec_p_h_
 
 #include <das3/codec.h>
-#include <das3/enc.h>   /* DASENC_FMT_LEN */
+#include <das3/enc.h>   /* DASENC_FMT_SZ */
 
 #ifdef __cplusplus
 extern "C" {
@@ -34,7 +34,7 @@ extern "C" {
 
 #define DASENC_VALID    0x0001
 
-struct das_codec {
+struct das_codec_t {
 
 	bool bResLossWarn; /* If true, the resolution loss warning has already been emitted */
 
@@ -46,16 +46,16 @@ struct das_codec {
 
 	int16_t nBufValSz;  /* Width of a single value in the external buffer, -1 is  */
 
-	das_val_type vtBuf; /* The value type in the external buffer */
+	das_vt vtBuf; /* The value type in the external buffer */
 
 	const char* sSemantic; /* Intended meaning: a canonical DAS_SEM_* global, or NULL */
 
 	DasAry* pAry;  /* The array for which values are encoded/decoded */
 
-	ubyte nSep;
-	char sSepSet[VARIDX_MAX];  /* Split strings on these chars by rank */
+	uint8_t nSep;
+	char sSepSet[DASIDX_MAX];  /* Split strings on these chars by rank */
 
-	ubyte nExtRagged;  /* Number of the variable's EXTERNAL ragged indices inside a packet
+	uint8_t nExtRagged;  /* Number of the variable's EXTERNAL ragged indices inside a packet
 	                      (excludes the packet-framed streaming index and any internal axis
 	                      such as a string's chars).  This is the count of idxTerm run
 	                      terminators the var needs; set from the index= shape at creation. */
@@ -64,11 +64,11 @@ struct das_codec {
 
 	uint32_t uMaxString; /* If we are storing fixed strings, this is set */
 
-	das_units timeUnits; /* If ascii times are to be stored as an integral type
+	DasUnits timeUnits; /* If ascii times are to be stored as an integral type
 									this is needed */
 
 	/* For output, the sprintf string (if UTF8) or the stream encode type */
-	char sOutFmt[DASENC_FMT_LEN];
+	char sOutFmt[DASENC_FMT_SZ];
 
 	char* pOverflow;   /* If the size of a variable length value breaks the */
 	size_t uOverflow;  /* small vector assumption, extra space is here */
@@ -90,13 +90,13 @@ struct das_codec {
  * id against the codec's own dataset. */
 das_errcode DasCodec_update(
 	bool bRead, DasCodec* pThis, DasAry* pAry, const char* sEncType,
-	int16_t nSzEach, ubyte cSep, das_units epoch, const char* sOutFmt
+	int16_t nSzEach, uint8_t cSep, DasUnits epoch, const char* sOutFmt
 );
 
 /** Initialize a serial buffer decoder/encoder
  * 
- * @param bRead if set to DASENC_READ, perform checks for value reading codecs
- *              if set to DASENC_WRITE, perform checks for value writing codecs
+ * @param bRead if set to DASCODEC_READ, perform checks for value reading codecs
+ *              if set to DASCODEC_WRITE, perform checks for value writing codecs
  *
  * @param pThis Storage for a codec that holds nothing: zeroed or never
  *        initialized.  init does not release earlier state, re-initialize a
@@ -126,7 +126,7 @@ das_errcode DasCodec_update(
  * 
  * @param nSzEach the number of bytes in an item.  For variable length
  *        items (which is common with the utf8 encoding) use DASENC_ITEM_SEP,
- *        or DASENC_ITEM_LEN.
+ *        or DASCODEC_ITEM_LEN.
  * 
  * @param cSep A single byte used to mark the end of a byte sequence for
  *        string data.  By default any space character marks the end of
@@ -157,7 +157,7 @@ das_errcode DasCodec_update(
  */
 das_errcode init_DasCodec(
 	bool bRead, DasCodec* pThis, DasAry* pAry, const char* sSemantic, 
-	const char* sEncType, int16_t uSzEach, ubyte cSep, das_units epoch, 
+	const char* sEncType, int16_t uSzEach, uint8_t cSep, DasUnits epoch, 
 	const char* sOutFmt
 );
 
@@ -226,7 +226,7 @@ void DasCodec_postBlit(DasCodec* pThis, DasAry* pAry);
  * @memberof DasCodec 
  */
 int DasCodec_decode(
-	DasCodec* pThis, const ubyte* pBuf, int nBufLen, int nExpect, int* pValsRead
+	DasCodec* pThis, const uint8_t* pBuf, int nBufLen, int nExpect, int* pValsRead
 );
 
 /** Read terminator-bounded (idxTerm) ragged runs from a buffer.
@@ -251,7 +251,7 @@ int DasCodec_decode(
  * @memberof DasCodec
  */
 int DasCodec_decodeRuns(
-	DasCodec* pThis, const ubyte* pBuf, int nBufLen, bool bLastVar, int* pValsRead
+	DasCodec* pThis, const uint8_t* pBuf, int nBufLen, bool bLastVar, int* pValsRead
 );
 
 #define DASENC_PKT_LAST 0x02
@@ -262,15 +262,15 @@ int DasCodec_decodeRuns(
  * The goal of this function is to emitt all data from continuous range of
  * indexes starting at a given point.  Examples of setting the start location:
  *
- * nDim=0, pLoc=NULL  as DIM0 => Emitt the entire array
+ * nDim=0, pAddr=NULL  as DAS_ADDR0 => Emitt the entire array
  *
- * nDim=1, pLoc={I}   as DIM1_AT(I) => Emit all data for one increment of the 
+ * nDim=1, pAddr={I}   as DAS_ADDR1(I) => Emit all data for one increment of the 
  *                                     highest index
  *
- * nDim=2, pLoc={I,J} as DIM2_AT(I,J) => Emit all data for one increment of the
+ * nDim=2, pAddr={I,J} as DAS_ADDR2(I,J) => Emit all data for one increment of the
  *                                     the next highest index.
  *
- * To write all data for an array set: nDim = 0, pLoc = NULL (aka use DIM0 )
+ * To write all data for an array set: nDim = 0, pAddr = NULL (aka use DAS_ADDR0 )
  * 
  * @param pThis The codec structure
  * 
@@ -278,7 +278,7 @@ int DasCodec_decodeRuns(
  * 
  * @param nDim Part of the start location specification, see description above
  * 
- * @param pLoc Part of the start location specification, see description above
+ * @param pAddr Part of the start location specification, see description above
  * 
  * @param nExpect The number of items expected to be written.  If -1 then
  *        the output is variable length.  In the case of text items this is
@@ -297,7 +297,7 @@ int DasCodec_decodeRuns(
  *          conversion error occurred.
  */
 int DasCodec_encode(
-	DasCodec* pThis, DasBuf* pBuf, int nDim, ptrdiff_t* pLoc, int nExpect,
+	DasCodec* pThis, DasBuf* pBuf, int nDim, ptrdiff_t* pAddr, int nExpect,
 	uint32_t uFlags
 );
 

@@ -55,7 +55,7 @@ extern "C" {
  *    i=0..10, j=0..20, k=0..30
  *
  * then for every legal triple (i,j,k), every variable in the dataset will
- * hand back a value through DasVar_get().
+ * hand back a value through DasVar_datumAt().
  *
  * The value at a position may be a single number, such as a length, or a
  * set of numbers, such as the components of a vector.  Multi-component
@@ -96,14 +96,14 @@ extern "C" {
  * variable is "degenerate" in i.  Its storage is only a 40 element array, and
  * nothing that reads through the DasVar abstraction has to know that.  In
  * Python terms, variables are broadcast over the whole index space of the
- * dataset for free.  If needed, DasVar_degenerate() says which indices a
+ * dataset for free.  If needed, DasVar_isDegenerate() says which indices a
  * variable ignores.
  *
  * @par Ragged Indices
  *
  * Not every index has one fixed extent.  A radar sounder may return 1400
  * samples in one record and 1380 in the next, so the extent along j
- * depends on i.  DasVar_shape() reports such an index as VARIDX_RAGGED, and
+ * depends on i.  DasVar_shape() reports such an index as DASIDX_RAGGED, and
  * DasVar_lengthIn() gives the real extent at any given position.  The
  * VARIDX_* tokens are defined in array.h.
  *
@@ -135,32 +135,32 @@ extern "C" {
  *
  * new_DasVarBin() serves both columns since the operands decide the shape
  * of the result.  new_DasVarBytesAry() makes variables of text strings or
- * binary blobs, which have no math rules at all, and new_DasVarFrom() makes
+ * binary blobs, which have no math rules at all, and new_DasVar_over() makes
  * a second variable over the values of a first with other units or another
  * formalism.
  *
  * das2C goes to some trouble to use as little RAM as it can for a
  * variable's values, which is why the bulk read calls may hand back a view
- * onto existing storage rather than a copy.  See DasVar_subset().
+ * onto existing storage rather than a copy.  See new_DasAry_subset().
  *
  * @par Reading Values
  *
- * DasVar_get() reads one value at one position into a das_datum.  It works
+ * DasVar_datumAt() reads one value at one position into a DasDatum.  It works
  * for every variable, ragged or computed, but it is not fast.  The
- * DasVar_subset() family reads a whole range of positions into a new DasAry,
+ * new_DasAry_subset() family reads a whole range of positions into a new DasAry,
  * and is how bulk readers and language bindings get their data:
  *
  * @code
- DasAry* pAry = DasVar_allVals(pVar, DasDs_rank(pDs));
+ DasAry* pAry = new_DasAry_allVals(pVar, DasDs_rank(pDs));
  if(pAry == NULL) handle_error();
  ...
  dec_DasAry(pAry);
  @endcode
  *
- * You need not take everything.  Give DasVar_subset() a range and it
+ * You need not take everything.  Give new_DasAry_subset() a range and it
  * returns a slice, say the counts from one anode of a particle detector out
  * of a time by energy by anode variable.  There is a worked example on
- * DasVar_subset().
+ * new_DasAry_subset().
  *
  * @par Ownership
  *
@@ -171,15 +171,15 @@ extern "C" {
  *
  * @extends DasDesc
  */
-typedef struct das_var DasVar;
+typedef struct das_var_t DasVar;
 
 /** The element this variable is written as: "scalar", "composite" or "bytes"
  * @memberof DasVar */
-DAS_API const char* DasVar_serialType(const DasVar* pThis);
+DAS_API const char* DasVar_serializeAs(const DasVar* pThis);
 
 /** The variable's units
  * @memberof DasVar */
-DAS_API das_units DasVar_units(const DasVar* pThis);
+DAS_API DasUnits DasVar_units(const DasVar* pThis);
 
 /** Is this variable an operation on two others, see new_DasVarBin()
  *
@@ -192,7 +192,7 @@ DAS_API bool DasVar_isBin(const DasVar* pThis);
  *
  * Every numeric variable has one.  A variable whose stream said nothing
  * about math has the linear form, and one whose kind das2C does not know
- * has DAS_FORM_EXT.
+ * has DASFORM_EXT.
  *
  * @returns the formalism, owned by the variable, or NULL for a string or
  *          blob variable
@@ -202,17 +202,17 @@ DAS_API DasForm* DasVar_form(const DasVar* pThis);
 /** Is this variable's formalism of the given kind?
  *
  * @code
- *     if(DasVar_formIs(pVar, DAS_FORM_POS)) ...
+ *     if(DasVar_hasForm(pVar, DASFORM_POS)) ...
  * @endcode
  *
- * The kind tokens, DAS_FORM_VEC, DAS_FORM_POS and so on, are in the
+ * The kind tokens, DASFORM_VEC, DASFORM_POS and so on, are in the
  * form_*.h headers.
  *
  * @returns true if the kinds match, false for NULL and for strings and
  *          blobs, which have no formalism
  * @relates DasVar
  */
-#define DasVar_formIs(P,VT) (((P) != NULL)&&DasForm_isKind(DasVar_form(P), VT))
+#define DasVar_hasForm(P,VT) (((P) != NULL)&&DasForm_isKind(DasVar_form(P), VT))
 
 /** The symbol for one component of a multi-component value
  *
@@ -252,14 +252,14 @@ DAS_API const char* DasVar_compSym(const DasVar* pThis, int iComp);
  * @returns the number of labels written, or a negative das error code
  * @memberof DasVar
  */
-DAS_API int DasVar_compLabels(
+DAS_API int DasVar_compLbls(
 	const DasVar* pThis, char** psBuf, int nMax, size_t uLenEa
 );
 
-/** The storage type of a single number in this variable, or etUByte for a
+/** The storage type of a single number in this variable, or DASET_UBYTE for a
  * string or blob
  * @memberof DasVar */
-DAS_API das_elem_type DasVar_elemType(const DasVar* pThis);
+DAS_API das_et DasVar_et(const DasVar* pThis);
 
 
 /** Add a reference to a variable
@@ -284,7 +284,7 @@ DAS_API int ref_DasVar(const DasVar* pThis);
  *
  * This works for every variable: ragged arrays, equations, operations over
  * other variables.  A re-gridder that walks a pixel or voxel raster lives on
- * this call.  For a range of values at once use DasVar_subset().
+ * this call.  For a range of values at once use new_DasAry_subset().
  *
  * @par Where the value lives
  *
@@ -309,21 +309,21 @@ DAS_API int ref_DasVar(const DasVar* pThis);
  * of the walk:
  *
  * @code
- ubyte        aStack[128];
- das_byte_seq work   = { aStack, sizeof(aStack) };
- ubyte*       pGrown = NULL;
- das_datum    dm;
+ uint8_t        aStack[128];
+ DasByteSeq work   = { aStack, sizeof(aStack) };
+ uint8_t*       pGrown = NULL;
+ DasDatum    dm;
  DasDsIter    it;
 
  for(init_DasDsIter(&it, pDs); !it.done; DasDsIter_next(&it)){
 
-    int nRet = DasVar_get(pVar, it.index, work, &dm);
+    int nRet = DasVar_datumAt(pVar, it.addr, work, &dm);
 
     if(nRet > 0){                        // this value wants nRet bytes
-       ubyte* pNew = realloc(pGrown, (size_t)nRet);
+       uint8_t* pNew = realloc(pGrown, (size_t)nRet);
        if(pNew == NULL) break;
-       pGrown = pNew;  work.ptr = pGrown;  work.sz = (size_t)nRet;
-       nRet = DasVar_get(pVar, it.index, work, &dm);   // fits now
+       pGrown = pNew;  work.data = pGrown;  work.size = (size_t)nRet;
+       nRet = DasVar_datumAt(pVar, it.addr, work, &dm);   // fits now
     }
     if(nRet != 0) break;                 // < 0 was already logged
     ...
@@ -332,11 +332,11 @@ DAS_API int ref_DasVar(const DasVar* pThis);
  @endcode
  *
  * If you only read scalars, or only array backed data, pass an empty work
- * buffer and skip all of that.  DasVar_getNeedsBuf() tells you which case
+ * buffer and skip all of that.  DasVar_needsBuf() tells you which case
  * you are in.
  *
  * @param pThis the variable to read
- * @param pLoc the position, one entry per external index.  Entries for
+ * @param pAddr the position, one entry per external index.  Entries for
  *        indices the variable ignores are not read.
  * @param work scratch space, used only when the value has no storage to
  *        point at.  Pass @c {NULL,0} when you know you do not need it.
@@ -345,32 +345,32 @@ DAS_API int ref_DasVar(const DasVar* pThis);
  * @returns 0 on success, the number of scratch BYTES needed when @a work is
  *          too small, or a negative das error code after logging why not.
  * @memberof DasVar */
-DAS_API int DasVar_get(
-	const DasVar* pThis, const ptrdiff_t* pLoc, das_byte_seq work, das_datum* pOut
+DAS_API int DasVar_datumAt(
+	const DasVar* pThis, const ptrdiff_t* pAddr, DasByteSeq work, DasDatum* pOut
 );
 
-/** Will DasVar_get() ever need a scratch buffer for this variable?
+/** Will DasVar_datumAt() ever need a scratch buffer for this variable?
  *
  * True only for a multi-component variable with no storage behind it, such
  * as a vector computed from an equation.  Most stream readers never see a
  * true here and can skip the buffer handling.
  * @memberof DasVar */
-DAS_API bool DasVar_getNeedsBuf(const DasVar* pThis);
+DAS_API bool DasVar_needsBuf(const DasVar* pThis);
 
 /** The variable's extent along each external index
  *
  * @param pThis the variable
- * @param pShape receives VARIDX_MAX entries, so there is no need to
+ * @param pShape receives DASIDX_MAX entries, so there is no need to
  *        pre-fill the buffer.  Each is one of:
  *
  *        - a count, 0 or more: the valid index range
- *        - VARIDX_UNUSED: the variable ignores this index
- *        - VARIDX_RAGGED: the count depends on the other indices, ask
+ *        - DASIDX_UNUSED: the variable ignores this index
+ *        - DASIDX_RAGGED: the count depends on the other indices, ask
  *          DasVar_lengthIn()
- *        - VARIDX_BORROW: the variable takes whatever extent its dataset
+ *        - DASIDX_BORROW: the variable takes whatever extent its dataset
  *          settles on, which a sequence may do
  *
- * @returns the external rank.  Entries past it are VARIDX_UNUSED.
+ * @returns the external rank.  Entries past it are DASIDX_UNUSED.
  * @memberof DasVar */
 DAS_API int DasVar_shape(const DasVar* pThis, ptrdiff_t* pShape);
 
@@ -381,8 +381,8 @@ DAS_API int DasVar_shape(const DasVar* pThis, ptrdiff_t* pShape);
  *
  * @param pThis the variable
  * @param pShape receives one entry per internal index: a count, or
- *        VARIDX_RAGGED when the extent varies with position, as it does for
- *        most strings.  Make room for VARIDX_MAX - 1 entries.
+ *        DASIDX_RAGGED when the extent varies with position, as it does for
+ *        most strings.  Make room for DASIDX_MAX - 1 entries.
  * @returns the internal rank, 0 for a scalar, in which case pShape is left
  *          alone
  * @memberof DasVar */
@@ -396,24 +396,24 @@ DAS_API int DasVar_intrShape(const DasVar* pThis, ptrdiff_t* pShape);
  *
  * @param pThis the variable
  * @param nIdx the index whose extent is wanted
- * @param pLoc the position of the indices before it, nIdx entries
- * @returns the number of positions along index nIdx there, VARIDX_UNUSED if
- *          the variable ignores that index, or VARIDX_BORROW for a sequence
+ * @param pAddr the position of the indices before it, nIdx entries
+ * @returns the number of positions along index nIdx there, DASIDX_UNUSED if
+ *          the variable ignores that index, or DASIDX_BORROW for a sequence
  *          with no extent of its own
  * @see DasAry_lengthIn()
  * @memberof DasVar */
-DAS_API ptrdiff_t DasVar_lengthIn(const DasVar* pThis, int nIdx, ptrdiff_t* pLoc);
+DAS_API ptrdiff_t DasVar_lengthIn(const DasVar* pThis, int nIdx, ptrdiff_t* pAddr);
 
 /** Does this variable ignore the given external index?
  *
  * See "Index Degeneracy" in the DasVar description.
  *
  * @param pThis the variable
- * @param iIndex the index, from 0 to VARIDX_MAX - 1
+ * @param iIndex the index, from 0 to DASIDX_MAX - 1
  * @returns true if changing this index cannot change the value.  Any index
  *          past the variable's rank is degenerate too.
  * @memberof DasVar */
-DAS_API bool DasVar_degenerate(const DasVar* pThis, int iIndex);
+DAS_API bool DasVar_isDegenerate(const DasVar* pThis, int iIndex);
 
 /** The role this variable plays in its dimension
  *
@@ -432,23 +432,23 @@ DAS_API const char* DasVar_role(const DasVar* pThis);
  * may be handed back as a VIEW onto that array rather than a copy, which is
  * cheap but comes with strings attached: the memory belongs to the variable,
  * is good only while the variable lives, and must not be written to.
- * DasAry_ownsElements() on the result tells you whether you got a view.
- * DasVar_materialize() is the same call with a copy guaranteed.
+ * DasAry_ownsData() on the result tells you whether you got a view.
+ * new_DasAry_materialize() is the same call with a copy guaranteed.
  *
  * Ragged storage stays ragged.  If a sounder sent 1400 samples in one
  * record and 1380 in the next, the result says so, and DasAry_shape() on it
- * reports VARIDX_RAGGED.  If you need a rectangle, as a CDF writer or a
- * NumPy binding does, use DasVar_subsetQube() instead.  For storage that is
+ * reports DASIDX_RAGGED.  If you need a rectangle, as a CDF writer or a
+ * NumPy binding does, use new_DasAry_subsetQube() instead.  For storage that is
  * already rectangular the two calls return the same thing.
  *
  * The result holds single numbers, not assembled values.  The components of
  * a vector are a trailing array index, and so are the bytes of a string.
- * DasVar_get() is the call that returns one whole value.
+ * DasVar_datumAt() is the call that returns one whole value.
  *
  * A variable is dataset shaped, so an index it ignores is still present in
  * the result, with the dataset's extent and the value repeated along it.
  * To get just the distinct values, pin that index to a single element with
- * pMin and pMax.  DasVar_degenerate() says which indices to pin.
+ * pMin and pMax.  DasVar_isDegenerate() says which indices to pin.
  *
  * @par Taking a slice
  *
@@ -457,13 +457,13 @@ DAS_API const char* DasVar_role(const DasVar* pThis);
  * everything anode 5 saw, pin k to [5, 6) and leave i and j alone:
  *
  * @code
- ptrdiff_t aShape[VARIDX_MAX];
+ ptrdiff_t aShape[DASIDX_MAX];
  DasVar_shape(pCounts, aShape);                 // {1000, 50, 16}
 
  ptrdiff_t aMin[3] = { 0,         0,         5 };
  ptrdiff_t aMax[3] = { aShape[0], aShape[1], 6 };   // upper bounds exclusive
 
- DasAry* pAnode5 = DasVar_subset(pCounts, 3, aMin, aMax, NULL);
+ DasAry* pAnode5 = new_DasAry_subset(pCounts, 3, aMin, aMax, NULL);
  if(pAnode5 == NULL) handle_error();
  ...
  dec_DasAry(pAnode5);
@@ -471,7 +471,7 @@ DAS_API const char* DasVar_role(const DasVar* pThis);
  *
  * An index pinned to one element drops out of the result, so pAnode5 is a
  * 1000 x 50 array of counts over time and energy.  To walk the result one
- * value at a time use DasAry_getAt() or the iterators in iter.h.
+ * value at a time use DasAry_valAt() or the iterators in iter.h.
  *
  * @param pThis the variable to read
  * @param nRank the number of entries in pMin and pMax, which must equal the
@@ -480,36 +480,36 @@ DAS_API const char* DasVar_role(const DasVar* pThis);
  *        pMax, means the whole extent.
  * @param pMax the exclusive upper bound of each index, or NULL with pMin
  * @param pShapeFrom usually NULL.  A sequence may have no extent of its
- *        own along an index (VARIDX_BORROW), so asking it for "everything"
+ *        own along an index (DASIDX_BORROW), so asking it for "everything"
  *        has no answer.  Name a variable here that does know its extent,
  *        typically the one the sequence is paired with, and its shape is
  *        used instead.
  * @returns a new array, to release with dec_DasAry(), or NULL after logging
  *          why not.  A range of one value is refused since that is a rank 0
- *          array; use DasVar_get() for single values.
+ *          array; use DasVar_datumAt() for single values.
  * @memberof DasVar */
-DAS_API DasAry* DasVar_subset(
+DAS_API DasAry* new_DasAry_subset(
 	const DasVar* pThis, int nRank, const ptrdiff_t* pMin, const ptrdiff_t* pMax,
 	const DasVar* pShapeFrom
 );
 
-/** The same values as DasVar_subset(), in memory you own outright
+/** The same values as new_DasAry_subset(), in memory you own outright
  *
  * Never a view.  The result may be written to and outlives the variable
  * and its arrays, so this is the call for data you mean to modify, keep
  * after freeing the dataset, or hand to another thread.  Same arguments as
- * DasVar_subset().
+ * new_DasAry_subset().
  *
  * @returns a new array owning its memory, or NULL after logging why not
  * @memberof DasVar */
-DAS_API DasAry* DasVar_materialize(
+DAS_API DasAry* new_DasAry_materialize(
 	const DasVar* pThis, int nRank, const ptrdiff_t* pMin, const ptrdiff_t* pMax,
 	const DasVar* pShapeFrom
 );
 
-/** The same values as DasVar_subset(), squared off into a rectangle
+/** The same values as new_DasAry_subset(), squared off into a rectangle
  *
- * Same arguments as DasVar_subset(), and the same result when the storage
+ * Same arguments as new_DasAry_subset(), and the same result when the storage
  * is already rectangular.  Where it is ragged, the longest run along each
  * ragged index within the requested range is found and every shorter run is
  * padded out to it with the array's fill value.  So the shape you get
@@ -518,34 +518,34 @@ DAS_API DasAry* DasVar_materialize(
  *
  * Variable length blobs are refused.  No byte value means "not data" in a
  * blob, so padding would destroy each item's length.  Read those with
- * DasVar_subset() or one at a time with DasVar_get().
+ * new_DasAry_subset() or one at a time with DasVar_datumAt().
  *
  * @returns a new rectangular array, or NULL after logging why not.  May or
- *          may not own its memory, see DasAry_ownsElements().
+ *          may not own its memory, see DasAry_ownsData().
  * @memberof DasVar */
-DAS_API DasAry* DasVar_subsetQube(
+DAS_API DasAry* new_DasAry_subsetQube(
 	const DasVar* pThis, int nRank, const ptrdiff_t* pMin, const ptrdiff_t* pMax,
 	const DasVar* pShapeFrom
 );
 
 /** A rectangle, in memory you own outright
  *
- * DasVar_subsetQube() and DasVar_materialize() at once: something
+ * new_DasAry_subsetQube() and new_DasAry_materialize() at once: something
  * rectangular that a language binding can hand to its runtime and forget
- * about.  Same arguments as DasVar_subset().
+ * about.  Same arguments as new_DasAry_subset().
  *
  * @returns a new rectangular array owning its memory, or NULL after logging
  *          why not
  * @memberof DasVar */
-DAS_API DasAry* DasVar_materializeQube(
+DAS_API DasAry* new_DasAry_materializeQube(
 	const DasVar* pThis, int nRank, const ptrdiff_t* pMin, const ptrdiff_t* pMax,
 	const DasVar* pShapeFrom
 );
 
 /** Every value of a variable, in its own shape.  R is the variable's
- * external rank.  See DasVar_subset().
+ * external rank.  See new_DasAry_subset().
  * @relates DasVar */
-#define DasVar_allVals(P, R)  DasVar_subset((P), (R), NULL, NULL, NULL)
+#define new_DasAry_allVals(P, R)  new_DasAry_subset((P), (R), NULL, NULL, NULL)
 
 
 /** Can the values be converted to doubles?  True for numbers and times,
@@ -583,15 +583,15 @@ DAS_API char* DasVar_toStr(const DasVar* pThis, char* sBuf, size_t uLen);
  *
  * @returns a new variable with one reference
  * @memberof DasVar */
-DAS_API DasVar* DasVar_copy(const DasVar* pThis);
+DAS_API DasVar* new_DasVar_copy(const DasVar* pThis);
 
-/** The type of datum DasVar_get() produces
+/** The type of datum DasVar_datumAt() produces
  *
- * vtComposite for any multi-component variable, vtText or vtByteSeq for a
+ * DASVT_COMP for any multi-component variable, DASVT_TEXT or DASVT_BYTESEQ for a
  * string or blob, otherwise the element type.  The components of a
- * composite datum are read with das_datum_toDoubles().
+ * composite datum are read with DasDatum_toDoubles().
  * @memberof DasVar */
-DAS_API das_val_type DasVar_valType(const DasVar* pThis);
+DAS_API das_vt DasVar_vt(const DasVar* pThis);
 
 /** The array holding this variable's values, if there is one
  *
@@ -599,18 +599,18 @@ DAS_API das_val_type DasVar_valType(const DasVar* pThis);
  *          computes its values from an equation or an operation.  NULL is
  *          not an error.
  * @memberof DasVar */
-DAS_API DasAry* DasVar_getAry(const DasVar* pThis);
+DAS_API DasAry* DasVar_ary(const DasVar* pThis);
 
 /** Does an array hold this variable's values?
  * @relates DasVar */
-#define DasVar_hasAry(P)  (DasVar_getAry(P) != NULL)
+#define DasVar_hasAry(P)  (DasVar_ary(P) != NULL)
 
 /** How an array backed variable's external indices map to array indices
  *
  * @param pThis an array backed variable, see DasVar_hasAry()
- * @param pMap receives VARIDX_MAX entries.  Each is the array index that
- *        external index reads, or VARIDX_UNUSED for an index the variable
- *        ignores.  Entries past the external rank are VARIDX_UNUSED too.
+ * @param pMap receives DASIDX_MAX entries.  Each is the array index that
+ *        external index reads, or DASIDX_UNUSED for an index the variable
+ *        ignores.  Entries past the external rank are DASIDX_UNUSED too.
  * @returns the external rank, or -1 for a variable with no backing array,
  *          leaving pMap alone
  * @memberof DasVar */
@@ -621,7 +621,7 @@ DAS_API int DasVar_idxMap(const DasVar* pThis, int8_t* pMap);
  * The old array is released and the new one referenced.  The index map is
  * kept, so the new array must have the same rank as the old.  The element
  * type and units are taken from the new array.  This is a stream filter's
- * tool: a binary to text converter hands in a das_time array in place of a
+ * tool: a binary to text converter hands in a DasTime array in place of a
  * TT2000 integer array and the variable becomes UTC, ready to print.
  *
  * Codecs that read or write the old array are not touched.  Re-initialize
@@ -643,7 +643,7 @@ DAS_API bool DasVar_setAry(DasVar* pThis, DasAry* pNew);
  * @param pAry the array; a reference is added
  * @param nExtRank the external rank, normally the dataset's rank
  * @param pIdxMap nExtRank entries, each the array index that external index
- *        reads, or VARIDX_UNUSED for an index the variable ignores.  For a
+ *        reads, or DASIDX_UNUSED for an index the variable ignores.  For a
  *        scalar the map has to account for every array index.  Array
  *        indices left over are components, see new_DasVarCompAry().
  * @param units the variable's units.  A ';' separated list of per component
@@ -654,7 +654,7 @@ DAS_API bool DasVar_setAry(DasVar* pThis, DasAry* pNew);
  * @returns a new variable with one reference, or NULL after logging why not
  * @memberof DasVar */
 DAS_API DasVar* new_DasVarAry(
-	DasAry* pAry, int nExtRank, const int8_t* pIdxMap, das_units units,
+	DasAry* pAry, int nExtRank, const int8_t* pIdxMap, DasUnits units,
 	DasForm* pForm
 );
 
@@ -664,15 +664,15 @@ DAS_API DasVar* new_DasVarAry(
  *
  *    pMinVal + i * pInterVal[0] + j * pInterVal[1] + ...
  *
- * @param et the element type: etLong, etFloat, etDouble or etTime
+ * @param et the element type: DASET_LONG, DASET_FLOAT, DASET_DOUBLE or DASET_TIME
  * @param pMinVal one element of type et, the value at position zero
  * @param nExtRank the external rank
  * @param pInterVal nExtRank intervals, zero for an index the value does not
- *        change along.  For etTime each is a double in seconds; otherwise
+ *        change along.  For DASET_TIME each is a double in seconds; otherwise
  *        each has type et.
  * @param pExtShape nExtRank extents.  A count bounds the sequence and
- *        positions outside it are errors.  VARIDX_RAGGED or VARIDX_BORROW
- *        leave the extent to the dataset, and VARIDX_UNUSED marks an index
+ *        positions outside it are errors.  DASIDX_RAGGED or DASIDX_BORROW
+ *        leave the extent to the dataset, and DASIDX_UNUSED marks an index
  *        the value ignores.
  * @param units the variable's units
  * @param pForm the formalism, copied.  NULL means new_DasFormLin(), the
@@ -680,14 +680,14 @@ DAS_API DasVar* new_DasVarAry(
  * @returns a new variable with one reference, or NULL after logging why not
  * @memberof DasVar */
 DAS_API DasVar* new_DasVarSeq(
-	das_elem_type et, const ubyte* pMinVal, int nExtRank,
-	const ubyte* pInterVal, const ptrdiff_t* pExtShape, das_units units,
+	das_et et, const uint8_t* pMinVal, int nExtRank,
+	const uint8_t* pInterVal, const ptrdiff_t* pExtShape, DasUnits units,
 	DasForm* pForm
 );
 
 /** Create a scalar variable holding one value everywhere
  *
- * @param et the element type: etLong, etFloat or etDouble
+ * @param et the element type: DASET_LONG, DASET_FLOAT or DASET_DOUBLE
  * @param pVal one element of type et
  * @param nExtRank the external rank
  * @param pExtShape nExtRank extents, as for new_DasVarSeq()
@@ -696,8 +696,8 @@ DAS_API DasVar* new_DasVarSeq(
  * @returns a new variable with one reference, or NULL after logging why not
  * @memberof DasVar */
 DAS_API DasVar* new_DasVarConst(
-	das_elem_type et, const ubyte* pVal, int nExtRank, const ptrdiff_t* pExtShape,
-	das_units units, DasForm* pForm
+	das_et et, const uint8_t* pVal, int nExtRank, const ptrdiff_t* pExtShape,
+	DasUnits units, DasForm* pForm
 );
 
 /** Create a variable whose values are an operation on two others
@@ -726,8 +726,8 @@ DAS_API DasVar* new_DasVarBin(DasVar* pLeft, char cOp, DasVar* pRight);
 /** The operator of an operation variable
  *
  * @param pThis a variable made by new_DasVarBin(), see DasVar_isBin()
- * @returns a D2BOP_* code from oper.h, which das_op_toStr() names, or
- *          D2OP_INVALID after logging an error if pThis is not an operation
+ * @returns a D2BOP_* code from oper.h, which dasop_name() names, or
+ *          DASOP_INVALID after logging an error if pThis is not an operation
  * @memberof DasVar */
 DAS_API int DasVarBin_op(const DasVar* pThis);
 
@@ -761,17 +761,17 @@ DAS_API DasVar* DasVarBin_right(const DasVar* pThis);
  * form accepts any shape.
  *
  * @param pAry the array; a reference is added.  Its elements must be plain
- *        numbers, a composite of das_time values is refused.
+ *        numbers, a composite of DasTime values is refused.
  * @param nExtRank the external rank
  * @param pIdxMap the external to array index map, see new_DasVarAry()
  * @param units the variable's units, see new_DasVarAry()
  * @param pForm the formalism, copied, never NULL
  * @param nIntRank the internal rank, 1 for a vector, 2 for a matrix
- * @param pIntShape nIntRank extents, VARIDX_RAGGED for one that varies
+ * @param pIntShape nIntRank extents, DASIDX_RAGGED for one that varies
  * @returns a new variable with one reference, or NULL after logging why not
  * @memberof DasVar */
 DAS_API DasVar* new_DasVarCompAry(
-	DasAry* pAry, int nExtRank, const int8_t* pIdxMap, das_units units,
+	DasAry* pAry, int nExtRank, const int8_t* pIdxMap, DasUnits units,
 	DasForm* pForm, int nIntRank, const ptrdiff_t* pIntShape
 );
 
@@ -780,7 +780,7 @@ DAS_API DasVar* new_DasVarCompAry(
  * Each component is its own linear equation, see new_DasVarSeq().  The
  * internal shape is {nComps}.
  *
- * @param et the element type: etLong, etFloat or etDouble
+ * @param et the element type: DASET_LONG, DASET_FLOAT or DASET_DOUBLE
  * @param nComps the number of components
  * @param pMinVals nComps elements of type et, one intercept per component
  * @param nExtRank the external rank
@@ -792,8 +792,8 @@ DAS_API DasVar* new_DasVarCompAry(
  * @returns a new variable with one reference, or NULL after logging why not
  * @memberof DasVar */
 DAS_API DasVar* new_DasVarCompSeq(
-	das_elem_type et, int nComps, const ubyte* pMinVals, int nExtRank,
-	const ubyte* pInterVals, const ptrdiff_t* pExtShape, das_units units,
+	das_et et, int nComps, const uint8_t* pMinVals, int nExtRank,
+	const uint8_t* pInterVals, const ptrdiff_t* pExtShape, DasUnits units,
 	DasForm* pForm
 );
 
@@ -803,19 +803,19 @@ DAS_API DasVar* new_DasVarCompSeq(
  * The array holds the bytes.  The one array index the map leaves out is the
  * byte number within a value.
  *
- * @param pAry the array, element type etUByte; a reference is added
+ * @param pAry the array, element type DASET_UBYTE; a reference is added
  * @param nExtRank the external rank
  * @param pIdxMap the external to array index map, see new_DasVarAry()
  * @param units the variable's units, usually NULL
  * @param bSentinel true for strings, which end in a NUL in storage so that
  *        a value can be used as a char*; false for blobs, which are handed
  *        out as a pointer and a length
- * @param nExtent the length of one value in bytes, or VARIDX_RAGGED when it
+ * @param nExtent the length of one value in bytes, or DASIDX_RAGGED when it
  *        varies
  * @returns a new variable with one reference, or NULL after logging why not
  * @memberof DasVar */
 DAS_API DasVar* new_DasVarBytesAry(
-	DasAry* pAry, int nExtRank, const int8_t* pIdxMap, das_units units,
+	DasAry* pAry, int nExtRank, const int8_t* pIdxMap, DasUnits units,
 	bool bSentinel, ptrdiff_t nExtent
 );
 
@@ -827,7 +827,7 @@ DAS_API DasVar* new_DasVarBytesAry(
  * relabels, it does not transform.
  *
  * The class, internal shape and properties come from pSrc, as for
- * DasVar_copy().  The formalism is checked against that shape.  The two
+ * new_DasVar_copy().  The formalism is checked against that shape.  The two
  * variables are independent afterwards.
  *
  * @param pSrc the variable whose values are reused.  An operation is
@@ -839,8 +839,8 @@ DAS_API DasVar* new_DasVarBytesAry(
  *        variable.
  * @returns a new variable with one reference, or NULL after logging why not
  * @memberof DasVar */
-DAS_API DasVar* new_DasVarFrom(
-	const DasVar* pSrc, das_units units, const DasForm* pForm
+DAS_API DasVar* new_DasVar_over(
+	const DasVar* pSrc, DasUnits units, const DasForm* pForm
 );
 
 /* ------------------------------------------------------------------------- *
@@ -856,14 +856,14 @@ DAS_API DasVar* new_DasVarFrom(
  * its variables answers in.
  *
  * Shapes from DasAry_shape() are not suitable input.  An array marks an
- * unbounded index with ARYIDX_UNBOUND, which is 0 and reads here as an
+ * unbounded index with DASIDX_UNBOUND, which is 0 and reads here as an
  * extent of zero.
  *
- * @param nRank the number of entries to merge, at most VARIDX_MAX
+ * @param nRank the number of entries to merge, at most DASIDX_MAX
  * @param pDest a shape as DasVar_shape() reports it, updated in place
  * @param pSrc the shape to merge into it
  */
-DAS_API void das_varindex_merge(int nRank, ptrdiff_t* pDest, ptrdiff_t* pSrc);
+DAS_API void dasshape_merge(int nRank, ptrdiff_t* pDest, ptrdiff_t* pSrc);
 
 /** Combine two lengths along one index, as DasVar_lengthIn() reports them
  *
@@ -873,7 +873,7 @@ DAS_API void das_varindex_merge(int nRank, ptrdiff_t* pDest, ptrdiff_t* pSrc);
  * mark, and among the marks ragged wins over borrowed, which wins over
  * unused.
  */
-DAS_API ptrdiff_t das_varlength_merge(ptrdiff_t nLeft, ptrdiff_t nRight);
+DAS_API ptrdiff_t dasshape_mergeLen(ptrdiff_t nLeft, ptrdiff_t nRight);
 
 /** Parse an index= or intern= attribute value
  *
@@ -891,13 +891,13 @@ DAS_API ptrdiff_t das_varlength_merge(ptrdiff_t nLeft, ptrdiff_t nRight);
  * @returns DAS_OKAY, or an error code after logging why not.  The rank is
  *          not checked against anything; that is the caller's job.
  */
-DAS_API das_errcode das_shape_fromStr(
+DAS_API das_errcode dasshape_fromStr(
 	const char* sShape, int nMaxRank, bool bAllowFlags, const char* sWhere,
 	ptrdiff_t* pShape, int* pnRank
 );
 
 /** Write a shape as an index= or intern= attribute value, the inverse of
- * das_shape_fromStr()
+ * dasshape_fromStr()
  *
  * @param pShape the counts and VARIDX_* marks
  * @param nRank how many entries to write
@@ -906,7 +906,7 @@ DAS_API das_errcode das_shape_fromStr(
  * @returns sBuf, or NULL if the text did not fit.  A cut shape does not
  *          parse back, so check before writing a header.
  */
-DAS_API char* das_shape_toStr(
+DAS_API char* dasshape_toStr(
 	const ptrdiff_t* pShape, int nRank, char* sBuf, size_t uLen
 );
 
@@ -915,7 +915,7 @@ DAS_API char* das_shape_toStr(
  * One entry per index in use, for example "i:2442, j:*, I:3".  External
  * indices are lettered i, j, k and internal ones I, J, K.  Every index
  * starts at 0 so only the count is given, and '*' marks a ragged or
- * borrowed extent.  VARIDX_UNUSED entries are skipped.
+ * borrowed extent.  DASIDX_UNUSED entries are skipped.
  *
  * @param pShape the extents, external indices first, then internal
  * @param nExtRank how many leading entries are external
@@ -925,11 +925,11 @@ DAS_API char* das_shape_toStr(
  * @returns the length of the full text, not counting the NUL, as snprintf()
  *          does.  sBuf is NUL terminated whenever uLen > 0.
  */
-DAS_API int das_shape_info(
+DAS_API int dasshape_info(
 	const ptrdiff_t* pShape, int nExtRank, int nShapeLen, char* sBuf, size_t uLen
 );
 
-/** Set which external index das_shape_info() letters "i"
+/** Set which external index dasshape_info() letters "i"
  *
  * By default the first index is i and the fastest moving one is printed
  * last, as C reads an array.  A column major caller (IDL, MATLAB, Fortran)
@@ -938,7 +938,7 @@ DAS_API int das_shape_info(
  *
  * Process global and not thread safe: set it once at startup.
  */
-DAS_API void das_varindex_prndir(bool bFastLast);
+DAS_API void dasshape_setPrnDir(bool bFastLast);
 
 /** Calculate a strided array shape from a min/max range.
  * 
@@ -960,9 +960,9 @@ DAS_API void das_varindex_prndir(bool bFastLast);
  * 
  * @returns The rank of the shape.  This can be 0 if the given range collapses
  *          to a single value.  Returns -1 if pMin or pMax are invalid (also
- *          calls das_error, so the function may not return at all).
+ *          calls daserrf, so the function may not return at all).
  */
-DAS_API int das_rng2shape(
+DAS_API int dasshape_fromRng(
 	int nRngRank, const ptrdiff_t* pMin, const ptrdiff_t* pMax, size_t* pShape
 );
 

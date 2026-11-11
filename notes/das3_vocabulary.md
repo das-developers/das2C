@@ -12,8 +12,8 @@ sees some of them, which is proper layering, not an inconsistency -- but
 each grain needs its own name.
 
 * **element** -- one simple-typed slot in a backing buffer: one float, one
-  int64, one ubyte of a string's run.  Enumerated by `das_elem_type`,
-  reported by `DasVar_elemType()` and `das_datum_elemType()`, sized by
+  int64, one ubyte of a string's run.  Enumerated by `das_et`,
+  reported by `DasVar_et()` and `DasDatum_et()`, sized by
   `DasAry_valSize()`.  Never composite, never variable length.  This is
   also the word foreign bindings expect: a JavaScript TypedArray or a
   MATLAB matrix has "elements" of exactly this kind.
@@ -28,14 +28,14 @@ each grain needs its own name.
 
 * **component** -- one semantic member of a composite value: the "x" of a
   vector, the real part of a complex pair.  Carries a symbol
-  (`DasVar_compSym()`) and a label (`DasVar_compLabels()`).  Storage-wise a
+  (`DasVar_compSym()`) and a label (`DasVar_compLbls()`).  Storage-wise a
   component occupies one element; the word belongs to the dataset model and
   to presentation, not to storage.
 
 * **value** -- the whole externally indexable thing at a dataset index
   (i,j,...): a double, a calendar time, a whole string, or a whole
-  composite.  Classified by `das_val_type` (hence `vtComposite` exists
-  there and NOT in `das_elem_type`) and boxed by `das_datum`.
+  composite.  Classified by `das_vt` (hence `DASVT_COMP` exists
+  there and NOT in `das_et`) and boxed by `DasDatum`.
 
 ## Rules of thumb
 
@@ -47,10 +47,10 @@ each grain needs its own name.
 
 ## Known remaining wrinkles
 
-* `das_val_type` and `das_elem_type` agree numerically on 0..11 and code in
+* `das_vt` and `das_et` agree numerically on 0..11 and code in
   a few places casts between them.  The cast is legal but the two enums
-  answer different questions; see the note on `DasVar_elemType()`.
-* `DasVar_serialType()` (renamed from `DasVar_element()`, which collided
+  answer different questions; see the note on `DasVar_et()`.
+* `DasVar_serializeAs()` (renamed from `DasVar_element()`, which collided
   with the storage meaning of element) answers with the XML element name a
   variable serializes as: "scalar", "composite" or "bytes".  That is a
   structural classification, not a grain size, and is deliberately outside

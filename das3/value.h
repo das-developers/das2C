@@ -20,7 +20,7 @@
 #include <stdint.h>
 
 #include <das3/util.h>
-#include <das3/units.h>   /* das_sem_default needs das_units to read calendar reps */
+#include <das3/units.h>   /* dassem_default needs DasUnits to read calendar reps */
 
 #ifndef _das_value_h_
 #define _das_value_h_
@@ -34,135 +34,135 @@ extern "C" {
  */
 
 /** Canonical fill value, -1e31 */
-#define DAS_FILL_VALUE -1e31
+#define DASVAL_FILL -1e31
 	
 /** Conversion fill value for integer time intervals (-9.223e+18)*/
-#define DAS_INT64_FILL -0x7FFFFFFFFFFFFFFFL
-#define DAS_INT32_FILL -0x7FFFFFFF
+#define DASVAL_FILL_INT64 -0x7FFFFFFFFFFFFFFFL
+#define DASVAL_FILL_INT32 -0x7FFFFFFF
 
 	
 /** @addtogroup values
  * @{
  */
 
-/** Is this value the canonical fill, DAS_FILL_VALUE
+/** Is this value the canonical fill, DASVAL_FILL
  *
  * Matches to a relative tolerance of 1e-5, so a fill that went through a
  * float or an ASCII field still counts.
  */
-DAS_API bool das_isfill(double value);
+DAS_API bool dasval_isFill(double value);
  
-typedef struct das_byte_seq_t{
-	ubyte* ptr;
-	size_t      sz;
-} das_byte_seq;
+typedef struct das_byteseq_t{
+	uint8_t* data;
+	size_t   size;
+} DasByteSeq;
 
-typedef struct das_const_byte_seq_t{
-	const ubyte* ptr;
-	size_t sz;
-} das_cbyte_seq;
+typedef struct das_cbyteseq_t{
+	const uint8_t* data;
+	size_t size;
+} DasCByteSeq;
 
 
-#define VT_MIN_SIMPLE vtUByte
-#define VT_MAX_SIMPLE vtTime
+#define DASVT_MIN_SIMPLE DASVT_UBYTE
+#define DASVT_MAX_SIMPLE DASVT_TIME
 
-/* The types a das_datum stores in its own bytes, as against the ones it can
+/* The types a DasDatum stores in its own bytes, as against the ones it can
    only box a pointer to.  A contiguous range because the enum is ordered that
-   way on purpose: everything from vtText up reaches outside itself.  vtNull
-   is local, it holds nothing at all.  See das_datum_islocal() in datum.h. */
-#define VT_MIN_LOCAL vtNull
-#define VT_MAX_LOCAL vtIndex
+   way on purpose: everything from DASVT_TEXT up reaches outside itself.  DASVT_NULL
+   is local, it holds nothing at all.  See DasDatum_isLocal() in datum.h. */
+#define DASVT_MIN_LOCAL DASVT_NULL
+#define DASVT_MAX_LOCAL DASVT_INDEX
 
 /** Enumeration of value classes: what one whole externally indexable thing
  * is -- a number, a calendar time, a string, or a composite of simple
  * elements.  This is the presentation vocabulary used by datums and
- * variables.  Array STORAGE uses only the simple subset; see das_elem_type
+ * variables.  Array STORAGE uses only the simple subset; see das_et
  * below for the storage-element view of the same numbering.
  *
- * @see value.h for a list of functions for working with the the das_val_type
+ * @see value.h for a list of functions for working with the the das_vt
  * enumeration
  */
-typedef enum das_val_type_e {
+typedef enum das_vt_e {
 
 	/** No value at all, the type of the null datum.  Zero so that zeroed
-	 * memory is null. Not an array element type.  @see das_datum_isNull() */
-	vtNull = 0,
+	 * memory is null. Not an array element type.  @see DasDatum_isNull() */
+	DASVT_NULL = 0,
 
 	/** The basic types */
 
-	/* VT_MIN_SIMPLE = vtUByte */
+	/* DASVT_MIN_SIMPLE = DASVT_UBYTE */
 
 	/** Indicates array values are unsigned 8-bit integers (bytes) */
-	vtUByte = 1,
+	DASVT_UBYTE = 1,
 
 	/** Indicates array values are signed 8-bit integers (signed bytes) */
-	vtByte = 2,
+	DASVT_BYTE = 2,
 	
 	/** Indicates array values are unsigned 16-bit integers (shorts) */
-	vtUShort = 3,
+	DASVT_USHORT = 3,
 	
 	/** Indicates array values are signed 16-bit integers (shorts)*/
-	vtShort = 4,
+	DASVT_SHORT = 4,
 	
 	/** Indicates array values are unsigned 32-bit integers (uints) */
-	vtUInt = 5,
+	DASVT_UINT = 5,
 
 	/** Indicates array values are signed 32-bit integers (ints) */
-	vtInt = 6,
+	DASVT_INT = 6,
 	
 	/** Indicates array values are unsigned 64-bit unsigned integers (ulongs) */
-	vtULong = 7,
+	DASVT_ULONG = 7,
 
 	/** Indicates array values are unsigned 64-bit integers (longs) */
-	vtLong = 8,
+	DASVT_LONG = 8,
 	
 	/** Indicates array values are 32-bit floating point values (floats) */
-	vtFloat = 9,
+	DASVT_FLOAT = 9,
 	
 	/** Indicates array values are 64-bit floating point values (doubles) */
-	vtDouble = 10,
+	DASVT_DOUBLE = 10,
 
 	/** Indicates array values are das_time_t structures */
-	vtTime = 11,
+	DASVT_TIME = 11,
 
-	/* VT_MAX_SIMPLE = vtTime */
+	/* DASVT_MAX_SIMPLE = DASVT_TIME */
 
 	/* The following type is not used by datums, but by array indexing elements 
 	 * that track the size and location of child dimensions */
-	vtIndex = 12,
+	DASVT_INDEX = 12,
 			
 	/* The following two types are only used by variables and datums
 	 * 
 	 * When generating Datums from Arrays: 
 	 * 
-	 *   - If the array element type is vtUnknown then vtByteSeq is used, size
+	 *   - If the array element type is DASVT_UNK then DASVT_BYTESEQ is used, size
 	 *      is element size.
 	 * 
-	 *   - If the array element type is etByte and the DASARY_AS_STRING flag is
-	 *       set then vtText is used.
+	 *   - If the array element type is DASET_BYTE and the DASARY_AS_STRING flag is
+	 *       set then DASVT_TEXT is used.
 	 * 
 	 *   - If the array element type is anything else and DASARY_AS_SUBSEQ is
-	 *     set then vtByteSeq is used, size is element size times the size of
+	 *     set then DASVT_BYTESEQ is used, size is element size times the size of
 	 *     the fastest moving index the location read.
 	 */
 			
 	/** Indicates datum values are const char* pointers to null terminated 
 	 *  UTF-8 strings */
-	vtText = 13,
+	DASVT_TEXT = 13,
 
 	/** Values are a picture element, possibly in multiple planes */
 	/* Include later: vtPixel = 14, */
 
-	/** Indicates values are size_t plus const ubyte* pairs, no more is
+	/** Indicates values are size_t plus const uint8_t* pairs, no more is
 	 * known about the bytes */
-	vtByteSeq = 15,
+	DASVT_BYTESEQ = 15,
 
 	/** These values are run of simple elements plus the DasForm that says what they
 	 * mean: a rotation, a complex pair, a matrix.  
 	 *
 	 * To determine the actual form consult the object itself.
 	 */
-	vtComposite = 16,
+	DASVT_COMP = 16,
 
 	/** For generic storage, designates elements as unknown, you have to cast
 	 * the array return values yourself.  Also the answer of a type query
@@ -170,37 +170,37 @@ typedef enum das_val_type_e {
 	 *
 	 * Fixed well above the last real type so new types slot in below it
 	 * without renumbering. */
-	vtUnknown = 99
+	DASVT_UNK = 99
 
-} das_val_type;
+} das_vt;
 
 /* What one storage element of a composite value holds.
  *
- * This enum is a subset of what das_val_type can describe.
+ * This enum is a subset of what das_vt can describe.
  *
  * Note there is no element for affine time.  A TT2000 point-time is stored as a
- * plain etLong, and the affine rule rides as a formalism in form.h, not as an
+ * plain DASET_LONG, and the affine rule rides as a formalism in form.h, not as an
  * element type.  The bits of a time and a count are identical; only the
  * composition rules differ, and rules are not storage.  The one struct time
- * that IS an element is etTime, the das_time broken-down calendar wart. */
-typedef enum das_elem_type_e {
-	etNull    = 0,   /* == vtNull, no simple element; what zeroed memory reads as */
-	etUByte   = 1,   /* == vtUByte, also the byte-run element of a <bytes> */
-	etByte    = 2,   /* == vtByte  */
-	etUShort  = 3,   /* == vtUShort */
-	etShort   = 4,   /* == vtShort */
-	etUInt    = 5,   /* == vtUInt  */
-	etInt     = 6,   /* == vtInt   */
-	etULong   = 7,   /* == vtULong */
-	etLong    = 8,   /* == vtLong.  a TT2000 point-time is stored here */
-	etFloat   = 9,   /* == vtFloat */
-	etDouble  = 10,  /* == vtDouble */
-	etTime    = 11   /* == vtTime.  das_time struct, broken-down-time wart */
-} das_elem_type;
+ * that IS an element is DASET_TIME, the DasTime broken-down calendar wart. */
+typedef enum das_et_e {
+	DASET_NULL    = 0,   /* == DASVT_NULL, no simple element; what zeroed memory reads as */
+	DASET_UBYTE   = 1,   /* == DASVT_UBYTE, also the byte-run element of a <bytes> */
+	DASET_BYTE    = 2,   /* == DASVT_BYTE  */
+	DASET_USHORT  = 3,   /* == DASVT_USHORT */
+	DASET_SHORT   = 4,   /* == DASVT_SHORT */
+	DASET_UINT    = 5,   /* == DASVT_UINT  */
+	DASET_INT     = 6,   /* == DASVT_INT   */
+	DASET_ULONG   = 7,   /* == DASVT_ULONG */
+	DASET_LONG    = 8,   /* == DASVT_LONG.  a TT2000 point-time is stored here */
+	DASET_FLOAT   = 9,   /* == DASVT_FLOAT */
+	DASET_DOUBLE  = 10,  /* == DASVT_DOUBLE */
+	DASET_TIME    = 11   /* == DASVT_TIME.  DasTime struct, broken-down-time wart */
+} das_et;
 
 /** Promote any plain numeric element to double; false for struct times.
- * @memberof das_elem_type */
-DAS_API bool das_elem_asDouble(das_elem_type et, const ubyte* p, double* pOut);
+ * @memberof das_et */
+DAS_API bool daset_toDouble(das_et et, const uint8_t* p, double* pOut);
 
 
 /** The EncodingType pattern from das-basic-stream-v3.0.xsd namely:
@@ -211,17 +211,17 @@ DAS_API bool das_elem_asDouble(das_elem_type et, const ubyte* p, double* pOut);
  * Each value is a singleton so we can compare pointers.  
  * @see das_enc_fromStr().
  */
-DAS_API extern const char* DAS_ENC_BYTE;
-DAS_API extern const char* DAS_ENC_UBYTE;
-DAS_API extern const char* DAS_ENC_BEINT;
-DAS_API extern const char* DAS_ENC_BEUINT;
-DAS_API extern const char* DAS_ENC_BEREAL;
-DAS_API extern const char* DAS_ENC_LEINT;
-DAS_API extern const char* DAS_ENC_LEUINT;
-DAS_API extern const char* DAS_ENC_LEREAL;
-DAS_API extern const char* DAS_ENC_UTF8;
-DAS_API extern const char* DAS_ENC_BLOB;
-DAS_API extern const char* DAS_ENC_BASE64;
+DAS_API extern const char* DASENC_BYTE;
+DAS_API extern const char* DASENC_UBYTE;
+DAS_API extern const char* DASENC_BEINT;
+DAS_API extern const char* DASENC_BEUINT;
+DAS_API extern const char* DASENC_BEREAL;
+DAS_API extern const char* DASENC_LEINT;
+DAS_API extern const char* DASENC_LEUINT;
+DAS_API extern const char* DASENC_LEREAL;
+DAS_API extern const char* DASENC_UTF8;
+DAS_API extern const char* DASENC_RAW;
+DAS_API extern const char* DASENC_B64;
 
 
 /** Value meanings, which are a higher level concept then the plain storage
@@ -233,11 +233,11 @@ DAS_API extern const char* DAS_ENC_BASE64;
  *
  * Using singleton pointers here again for speed.
  */
-DAS_API extern const char* DAS_SEM_BOOL;
-DAS_API extern const char* DAS_SEM_DATE;
-DAS_API extern const char* DAS_SEM_INT;
-DAS_API extern const char* DAS_SEM_REAL;
-DAS_API extern const char* DAS_SEM_TEXT;
+DAS_API extern const char* DASSEM_BOOL;
+DAS_API extern const char* DASSEM_DATE;
+DAS_API extern const char* DASSEM_INT;
+DAS_API extern const char* DASSEM_REAL;
+DAS_API extern const char* DASSEM_TEXT;
 
 /** Suggest a default semantic for a (value type, units) pair.
  *
@@ -251,74 +251,74 @@ DAS_API extern const char* DAS_SEM_TEXT;
  *
  * @returns the schema semantic (a DAS_SEM_* pointer), or NULL when the value
  *          type has no semantic defined in the *.xsd schema
- *          (vtIndex, vtPixel, ...).
+ *          (DASVT_INDEX, vtPixel, ...).
  */
-DAS_API const char* das_sem_default(das_val_type vt, das_units units);
+DAS_API const char* dassem_default(das_vt vt, DasUnits units);
 
 /** Given a semantic meaning, suggest a default value type */
-DAS_API das_val_type das_vt_default(const char* sSemantic);
+DAS_API das_vt dasvt_default(const char* sSemantic);
 
 
 /** @} */
 
 
 /** Get the serialization type given common packet encodings 
- * @memberof das_val_type
+ * @memberof das_vt
  */
-DAS_API const char* das_vt_serial_type(das_val_type et);
+DAS_API const char* dasvt_serializeAs(das_vt et);
 
 /** Is this value type an integer of some sort 
- * @memberof das_val_type
+ * @memberof das_vt
  */
-#define das_vt_isint(VT) ( VT >= vtUByte && VT <= vtLong )
+#define dasvt_isInt(VT) ( VT >= DASVT_UBYTE && VT <= DASVT_LONG )
 
 /** Is this value type an real value of some sort 
- * @memberof das_val_type
+ * @memberof das_vt
  */
-#define das_vt_isreal(VT) ( VT == vtFloat || VT == vtDouble )
+#define dasvt_isReal(VT) ( VT == DASVT_FLOAT || VT == DASVT_DOUBLE )
 
 /** Get the rank of a value type
  * 
  * Most items are scalars (rank 0), but strings and byte runs are rank 1
- * @memberof das_val_type
+ * @memberof das_vt
  */
-#define das_vt_rank(VT) ( ((VT==vtText)||(VT==vtByteSeq)) ? 1:0)
+#define dasvt_rank(VT) ( ((VT==DASVT_TEXT)||(VT==DASVT_BYTESEQ)) ? 1:0)
 
 
 /** Get the default fill value for a given element type
  * @return a pointer to the default fill value, will have to cast to the
  *          appropriate type.
  * 
- * @memberof das_val_type
+ * @memberof das_vt
  */
-DAS_API const void* das_vt_fill(das_val_type vt);
+DAS_API const void* dasvt_fill(das_vt vt);
 
 /** Get the size in bytes for a given element type 
  * 
- * @memberof das_val_type
+ * @memberof das_vt
  */
-DAS_API size_t das_vt_size(das_val_type vt);
+DAS_API size_t dasvt_size(das_vt vt);
 
 /** Get a text string representation of an element type 
- * @memberof das_val_type
+ * @memberof das_vt
  */
-DAS_API const char* das_vt_toStr(das_val_type vt);
+DAS_API const char* dasvt_name(das_vt vt);
 
 /** Convert a text string representation to a value type enumeration
- * @memberof das_val_type
+ * @memberof das_vt
  */
-DAS_API das_val_type das_vt_fromStr(const char* sType);
+DAS_API das_vt dasvt_id(const char* sType);
 
 
 /* * Given a string and it's expected interpretation, return a suitable storage type
  */
-/* DAS_API das_val_type das_vt_guess_store(const char* sInterp, const char* sValue); */
+/* DAS_API das_vt das_vt_guess_store(const char* sInterp, const char* sValue); */
 
 /** Comparison functions look like this */
-typedef int (*das_valcmp_func)(const ubyte*, const ubyte*);
+typedef int (*dasfn_valCmp)(const uint8_t*, const uint8_t*);
 
 /** Get the comparison function for two values of this type */
-DAS_API das_valcmp_func das_vt_getcmp(das_val_type vt);
+DAS_API dasfn_valCmp dasvt_cmpFunc(das_vt vt);
 
 /** Compare any two value types for equality.
  *
@@ -329,14 +329,14 @@ DAS_API das_valcmp_func das_vt_getcmp(das_val_type vt);
  * 2. Since values have no units, times are not equal to non-times
  * 3. 
  *
- * If either side is a vtByte, vtUShort, vtShort, vtInt, or vtFloat,
- * vtDouble, both sides are promoted to double and compared.
+ * If either side is a DASVT_BYTE, DASVT_USHORT, DASVT_SHORT, DASVT_INT, or DASVT_FLOAT,
+ * DASVT_DOUBLE, both sides are promoted to double and compared.
  *
  * @returns -1 if A is less than B, 0 if equal, +1 if A is greater
  *          than B or -2 if A is not comparable to B.
  */
-DAS_API int das_value_cmpAny(
-	const ubyte* pA, das_val_type vtA, const ubyte* pB, das_val_type vtB
+DAS_API int dasval_cmpAny(
+	const uint8_t* pA, das_vt vtA, const uint8_t* pB, das_vt vtB
 );
 
 
@@ -344,10 +344,10 @@ DAS_API int das_value_cmpAny(
  * type.
  *
  * The operands are in written order, vtLeft op vtRight, as for
- * Units_canMerge().  Order matters only when a time is involved.
+ * DasUnits_canMerge().  Order matters only when a time is involved.
  *
- * vtNull is the answer "no value type": these operands do not combine.
- * vtUnknown is only passed through, an operand whose type the library
+ * DASVT_NULL is the answer "no value type": these operands do not combine.
+ * DASVT_UNK is only passed through, an operand whose type the library
  * cannot name gives a result it cannot name either, though the application
  * may know what it is.
  *
@@ -371,13 +371,13 @@ DAS_API int das_value_cmpAny(
  * @param vtLeft the left operand's type
  * @param op An operation ID, one of the D2BOP_ codes in oper.h
  * @param vtRight the right operand's type
- * @return The resulting type, vtNull if the types cannot be combined by
- *         this operation, or vtUnknown if an operand was vtUnknown
+ * @return The resulting type, DASVT_NULL if the types cannot be combined by
+ *         this operation, or DASVT_UNK if an operand was DASVT_UNK
  */
-DAS_API das_val_type das_vt_merge(das_val_type vtLeft, int op, das_val_type vtRight);
+DAS_API das_vt dasvt_merge(das_vt vtLeft, int op, das_vt vtRight);
 
-#define DAS_VAL_NOERR_RNG   0x1
-#define DAS_VAL_ERR_RESLOSS 0x2
+#define DASVAL_NOERR_RNG   0x1
+#define DASVAL_ERR_RESLOSS 0x2
 /** Convert any integral type to any other with range checking and swapping
  * 
  * @note this function does not trigger on resolution loss unless requested.
@@ -394,15 +394,15 @@ DAS_API das_val_type das_vt_merge(das_val_type vtLeft, int op, das_val_type vtRi
  * @param pFillOut the fill value for the output type, or NULL
  * 
  * @param uFlags   A set of flags or'ed together.  These are: 
- *                 - DAS_VAL_NOERR_RNG no error return on range violations
- *                 - DAS_VAL_ERR_RESLOSS error return or resolution loss
+ *                 - DASVAL_NOERR_RNG no error return on range violations
+ *                 - DASVAL_ERR_RESLOSS error return or resolution loss
  * 
  * @returns DAS_OKAY if the conversion was successful, a positive error
  *        value if a range violation was triggered.
  */
-DAS_API das_errcode das_value_binXform(
-	das_val_type vtIn,  const ubyte* pValIn,  const ubyte* pFillIn,
-	das_val_type vtOut,       ubyte* pValOut, const ubyte* pFillOut,
+DAS_API das_errcode dasval_convert(
+	das_vt vtIn,  const uint8_t* pValIn,  const uint8_t* pFillIn,
+	das_vt vtOut,       uint8_t* pValOut, const uint8_t* pFillOut,
 	uint32_t uFlags
 );
 
@@ -415,7 +415,7 @@ DAS_API das_errcode das_value_binXform(
  * the result units, the result type -- not the arithmetic.
  *
  * Promotion is to the WIDER of the two input types rather than always to
- * double, so (vtLong, vtLong) stays exact.  That matters: TT2000 nanoseconds
+ * double, so (DASVT_LONG, DASVT_LONG) stays exact.  That matters: TT2000 nanoseconds
  * are int64 and sit well above 2^53, where a trip through double loses ticks.
  *
  * @param nOp a D2BOP_* code from oper.h
@@ -429,14 +429,14 @@ DAS_API das_errcode das_value_binXform(
  * @param pOut receives the result
  *
  * @returns DAS_OKAY, or DASERR_VALUE on overflow, an undefined operator, or a
- *          type the primitives do not handle.  vtTime is REFUSED: broken-down
+ *          type the primitives do not handle.  DASVT_TIME is REFUSED: broken-down
  *          calendar math needs two different types and belongs to whichever
  *          formalism understands the calendar.
- * @memberof das_val_type
+ * @memberof das_vt
  */
-DAS_API das_errcode das_value_binop(
-	int nOp, das_val_type vtL, const ubyte* pL, das_val_type vtR,
-	const ubyte* pR, das_val_type vtOut, ubyte* pOut
+DAS_API das_errcode dasval_binOp(
+	int nOp, das_vt vtL, const uint8_t* pL, das_vt vtR,
+	const uint8_t* pR, das_vt vtOut, uint8_t* pOut
 );
 
 /** Multiply-accumulate numeric values
@@ -456,11 +456,11 @@ DAS_API das_errcode das_value_binop(
  * deliberate -- a silently wrapped accumulator is the class of defect that has
  * destroyed launch vehicles.
  *
- * Calendar math needs two different value types (a das_time intercept plus a
- * seconds step), so vtTime and the non-numeric types are rejected.
+ * Calendar math needs two different value types (a DasTime intercept plus a
+ * seconds step), so DASVT_TIME and the non-numeric types are rejected.
  *
  * @param vt     the value type of *pAccum and *pStep, a simple numeric type
- *               in the range vtUByte..vtDouble
+ *               in the range DASVT_UBYTE..DASVT_DOUBLE
  * @param pAccum in/out, the accumulator; updated in place only on success
  * @param pStep  the step value, same type as the accumulator
  * @param nCount the number of steps to add (may be negative for signed types;
@@ -469,10 +469,10 @@ DAS_API das_errcode das_value_binop(
  * @returns DAS_OKAY on success, or DASERR_VALUE on overflow, a negative count
  *          for an unsigned type, or an unsupported value type.  On any error
  *          *pAccum is left unchanged.
- * @memberof das_val_type
+ * @memberof das_vt
  */
-DAS_API das_errcode das_value_accum(
-	das_val_type vt, ubyte* pAccum, const ubyte* pStep, ptrdiff_t nCount
+DAS_API das_errcode dasval_accum(
+	das_vt vt, uint8_t* pAccum, const uint8_t* pStep, ptrdiff_t nCount
 );
 
 /** Generate a printf style format code for a value type, usage and buffer size
@@ -492,8 +492,8 @@ DAS_API das_errcode das_value_accum(
  * @returns DAS_OKAY if a format string could be generated, a positive error
  *             value otherwise.
  */
-DAS_API das_errcode das_value_fmt(
-	das_val_type vt, const char* sSemantic, int nFitTo, char* sBuf, size_t uBufLen
+DAS_API das_errcode dasvt_fmt(
+	das_vt vt, const char* sSemantic, int nFitTo, char* sBuf, size_t uBufLen
 );
 
 /** Get a das value from a null terminated string 
@@ -502,13 +502,13 @@ DAS_API das_errcode das_value_fmt(
  * 
  * @returns DAS_OKAY if parsing was successful, an error return code otherwise.
  */
-DAS_API das_errcode das_value_fromStr(
-	const char* sStr, das_val_type vt, ubyte* pBuf, int uBufLen
+DAS_API das_errcode dasval_fromStr(
+	const char* sStr, das_vt vt, uint8_t* pBuf, int uBufLen
 );
 
 /** Check to see if two floating point values are within an epsilon of each 
  * other. */
-#define das_within(A, B, E) (fabs((A) - (B)) < (E) ? true : false)
+#define dasval_within(A, B, E) (fabs((A) - (B)) < (E) ? true : false)
 
 #ifdef __cplusplus
 }

@@ -32,11 +32,11 @@
  * The model is separate from the stream version.  A das 2.2 stream can be read
  * into das3 datasets (V3) for tools that only speak the newer model.
  */
-typedef enum das_stream_model {
-	STREAM_MODEL_MIXED = -1, /* Readers only: build whatever each header says */
-	STREAM_MODEL_V2    =  2, /* DasPkt / DasPlane, fail on das3 headers */
-	STREAM_MODEL_V3    =  3  /* DasDs / DasDim / DasVar, up-convert das2 headers */
-} das_stream_model;
+typedef enum das_iomodel_e {
+	DASIOMODEL_MIXED = -1, /* Readers only: build whatever each header says */
+	DASIOMODEL_V2    =  2, /* DasPkt / DasPlane, fail on das3 headers */
+	DASIOMODEL_V3    =  3  /* DasDs / DasDim / DasVar, up-convert das2 headers */
+} das_iomodel;
 
 #ifdef __cplusplus
 extern "C" {
@@ -53,20 +53,20 @@ extern "C" {
 /** Definition of the callback function invoked when a stream header is
  * encountered in the input.
  * @param pSd A pointer to the parsed DasStream
- * @param pUser The das_stream_proc::pUser pointer, may be NULL.
- * @see das_stream_proc
+ * @param pUser The DasIOProc::pUser pointer, may be NULL.
+ * @see DasIOProc
  */
-typedef das_errcode (*das_stream_desc_f)(DasStream* pSd, void* pUser);
+typedef das_errcode (*dasfn_onStream)(DasStream* pSd, void* pUser);
 
 /** Definition of the callback function invoked when a packet header is
  * encountered in the input.
  * @param pSd A pointer to the parsed Stream Descriptor
  * @param pPd A pointer to the parsed Packet Descriptor
  * @param nPktId The packet ID the header arrived under, 1 to 99
- * @param pUser The das_stream_proc::pUser pointer, may be NULL.
- * @see das_stream_proc
+ * @param pUser The DasIOProc::pUser pointer, may be NULL.
+ * @see DasIOProc
  */
-typedef das_errcode (*das_pkt_desc_f)(
+typedef das_errcode (*dasfn_onPkt)(
 	DasStream* pSd, DasPkt* pPd, int nPktId, void* pUser
 );
 
@@ -79,21 +79,21 @@ typedef das_errcode (*das_pkt_desc_f)(
  * processor returns from this call.  Write out anything you were holding for
  * it and drop every pointer to it and to its planes.
  *
- * Only das2 model reads make this call, das_pkt_desc_f and das_pkt_data_f
+ * Only das2 model reads make this call, dasfn_onPkt and dasfn_onPktData
  * are its companions.  Dataset reads never do. A DasDs is not deleted
- * before its stream is, @see das_ds_desc_f.
+ * before its stream is, @see dasfn_onDs.
  *
  * @param pSd A pointer to the parsed Stream Descriptor
  * @param pPd The packet descriptor about to be deleted
  * @param nPktId The packet ID it is filed under, 1 to 99
- * @param pUser The das_stream_proc::pUser pointer, may be NULL.
+ * @param pUser The DasIOProc::pUser pointer, may be NULL.
  *
  * @returns DAS_OKAY to carry on.  Any other value stops the read with that
  *        code and the old descriptor is left in place.
  *
- * @see das_stream_proc
+ * @see DasIOProc
  */
-typedef das_errcode (*das_pkt_redef_f)(
+typedef das_errcode (*dasfn_onPktRedef)(
 	DasStream* pSd, DasPkt* pPd, int nPktId, void* pUser
 );
 
@@ -106,10 +106,10 @@ typedef das_errcode (*das_pkt_redef_f)(
  *
  * @param pPd A pointer to the parsed Packet Descriptor
  * @param nPktId The packet ID the data arrived under, 1 to 99
- * @param pUser The das_stream_proc::pUser pointer, may be NULL.
- * @see das_stream_proc
+ * @param pUser The DasIOProc::pUser pointer, may be NULL.
+ * @see DasIOProc
  */
-typedef das_errcode (*das_pkt_data_f)(DasPkt* pPd, int nPktId, void* pUser);
+typedef das_errcode (*dasfn_onPktData)(DasPkt* pPd, int nPktId, void* pUser);
 
 
 /** Callback function invoked when a dataset header is encountered
@@ -120,17 +120,17 @@ typedef das_errcode (*das_pkt_data_f)(DasPkt* pPd, int nPktId, void* pUser);
  * The dataset stays where it is, and stays valid, until its stream is
  * deleted.  So the dataset itself is the thing to key on: hang per-dataset
  * state on it with DasDesc_setUser(), or keep the pointer, and release that
- * state in das_close_f, not before.  Don't keep a table indexed by nPktId
+ * state in dasfn_onClose, not before.  Don't keep a table indexed by nPktId
  * instead.  Consider the ID to be a temporary tag that routes data packets.
  * In odd cases, a stream may hold more than one dataset under the same tag, 
  * see "Several datasets under one ID" in DasStream.
  *
  * @param pDs A pointer to a parsed DasDs (dataset) definition
  * @param nPktId The packet ID the header arrived under, 1 to 0xFEFF
- * @param pUser The das_stream_proc::pUser pointer, may be NULL
- * @see das_stream_proc
+ * @param pUser The DasIOProc::pUser pointer, may be NULL
+ * @see DasIOProc
  */
-typedef das_errcode (*das_ds_desc_f)(DasDs* pDs, int nPktId, void* pUser);
+typedef das_errcode (*dasfn_onDs)(DasDs* pDs, int nPktId, void* pUser);
 
 /** Callback function invoked when new data packets for a dataset are
  * encountered on the stream.
@@ -147,12 +147,12 @@ typedef das_errcode (*das_ds_desc_f)(DasDs* pDs, int nPktId, void* pUser);
  * @see DasIO_setAccum()
  *
  * @param pDs The dataset that received the records, the same pointer that
- *        was given to das_ds_desc_f.  It is what identifies the dataset.
+ *        was given to dasfn_onDs.  It is what identifies the dataset.
  * @param nPktId The packet ID the data arrived under, 1 to 0xFEFF
- * @param pUser The das_stream_proc::pUser pointer, may be NULL
- * @see das_stream_proc
+ * @param pUser The DasIOProc::pUser pointer, may be NULL
+ * @see DasIOProc
  */
-typedef das_errcode (*das_ds_data_f)(DasDs* pDs, int nPktId, void* pUser);
+typedef das_errcode (*dasfn_onDsData)(DasDs* pDs, int nPktId, void* pUser);
 
 /** Callback function invoked with the undecoded bytes of a data packet.
  *
@@ -171,10 +171,10 @@ typedef das_errcode (*das_ds_data_f)(DasDs* pDs, int nPktId, void* pUser);
  *        in a das2 stream.
  * @param pBuf The payload bytes
  * @param nPktId The packet ID the data arrived under
- * @param pUser The das_stream_proc::pUser pointer, may be NULL
- * @see das_stream_proc
+ * @param pUser The DasIOProc::pUser pointer, may be NULL
+ * @see DasIOProc
  */
-typedef das_errcode (*das_raw_data_f)(
+typedef das_errcode (*dasfn_onRawData)(
 	DasDesc* pDesc, const DasBuf* pBuf, int nPktId, void* pUser
 );
 
@@ -195,7 +195,7 @@ typedef das_errcode (*das_raw_data_f)(
  *       flushBins(pUser);
  *       if(pExcept == NULL) return DAS_OKAY;
  *       DasIO_exception(pOut, pExcept);
- *       return (DasExcept_type(pExcept) == DAS_EX_NO_DATA) ? DAS_OKAY : MY_ERR;
+ *       return (DasExcept_type(pExcept) == DASEXCEPTTYPE_NO_DATA) ? DAS_OKAY : MY_ERR;
  *   }
  * @endcode
  *
@@ -208,10 +208,10 @@ typedef das_errcode (*das_raw_data_f)(
  *        an exception before its header arrived.
  * @param pExcept The exception that ended the stream, or NULL.  It belongs
  *        to the DasIO and is good only until the callback returns.
- * @param pUser The das_stream_proc::pUser pointer, may be NULL.
- * @see das_stream_proc
+ * @param pUser The DasIOProc::pUser pointer, may be NULL.
+ * @see DasIOProc
  */
-typedef das_errcode (*das_close_f)(
+typedef das_errcode (*dasfn_onClose)(
 	DasStream* pSd, const DasExcept* pExcept, void* pUser
 );
 
@@ -223,41 +223,41 @@ typedef das_errcode (*das_close_f)(
  * @param pSd The stream the comment arrived on.  NULL if the comment came
  *        before the stream header.
  * @param pCmt The parsed comment
- * @param pUser The das_stream_proc::pUser pointer, may be NULL.
- * @see das_stream_proc
+ * @param pUser The DasIOProc::pUser pointer, may be NULL.
+ * @see DasIOProc
  */
-typedef das_errcode (*das_comment_f)(
+typedef das_errcode (*dasfn_onComment)(
 	DasStream* pSd, const DasComment* pCmt, void* pUser
 );
 
 
-/** The first das_stream_proc layout, das 3.0.
+/** The first DasIOProc layout, das 3.0.
  *
  * Structure versions hold the library major version in the high byte and
  * the minor in the low byte.  A version only changes when the structure or
  * one of its callback signatures does, so it can lag the library version.
  */
-#define DAS_STREAM_PROC_V3_0 ((3 << 8) | 0)
+#define DASIOPROC_V3_0 ((3 << 8) | 0)
 
-/** The das_stream_proc layout described by this header */
-#define DAS_STREAM_PROC_VER DAS_STREAM_PROC_V3_0
+/** The DasIOProc layout described by this header */
+#define DASIOPROC_VER DASIOPROC_V3_0
 
 /** A set of callbacks used for input and output stream processing
  *
- * Start from das_stream_proc_init() and set the callbacks you need.  A
+ * Start from init_DasIOProc() and set the callbacks you need.  A
  * callback left NULL means the processor has no interest in that event.  For
  * most events nothing happens, see onClose for the one that has a library
  * default.
  *
  * @code
- *   das_stream_proc proc;
- *   das_stream_proc_init(&proc, &myState);
+ *   DasIOProc proc;
+ *   init_DasIOProc(&proc, &myState);
  *   proc.onDsData = myDataHandler;
- *   DasIO_addProcessor(pIn, &proc);
+ *   DasIO_addProc(pIn, &proc);
  * @endcode
  *
  * However a stream ends, normally or on an exception, each processor's
- * onClose is its last call, see das_close_f.
+ * onClose is its last call, see dasfn_onClose.
  *
  * The input stream belongs to the DasIO.  Processors read it, and may hang
  * their own data on descriptors with DasDesc_setUser(), but don't add,
@@ -266,45 +266,45 @@ typedef das_errcode (*das_comment_f)(
  *
  * @ingroup streams
  */
-typedef struct das_stream_proc_t {
+typedef struct das_ioproc_t {
 	/** The layout this program was compiled against, set by
-	 * das_stream_proc_init(), leave it alone.
+	 * init_DasIOProc(), leave it alone.
 	 *
 	 * Callback signatures can change between versions without changing the
 	 * structure size, so the library needs the version and not just a size to
 	 * call them correctly.  A zero or unknown version is refused.
 	 */
-	size_t uVersion;
+	size_t uStructVer;
 
 	/** The function to be called when the stream header is read in.
 	 * This is the header with the element \<stream\>\</stream\> in the input
 	 * file.
 	 */
-	das_stream_desc_f onStreamDesc;
+	dasfn_onStream onStream;
 
 	/** Sets the function to be called when each \<packet\\> element
 	 * is read in.
 	 */
-	das_pkt_desc_f onPktDesc;
+	dasfn_onPkt onPkt;
 
 	/** Sets the function to be called before a das2 packet descriptor is
-	 * deleted, see das_pkt_redef_f (legacy das2 streams only) */
-	das_pkt_redef_f onPktRedef;
+	 * deleted, see dasfn_onPktRedef (legacy das2 streams only) */
+	dasfn_onPktRedef onPktRedef;
 
 	/** Sets the function to be called when each data packet is read in. */
-	das_pkt_data_f onPktData;
+	dasfn_onPktData onPktData;
 
 	/** Sets the function to be called when each dataset definition is read
 	 * in (das3) */
-	das_ds_desc_f onDsDesc;
+	dasfn_onDs onDs;
 
 	/** Sets the function to be called when each dataset receives new data
 	 * (das3) */
-	das_ds_data_f onDsData;
+	dasfn_onDsData onDsData;
 
 	/** Sets the function to be called with the raw bytes of each data packet,
 	 * before any decoding.  Works for das2 and das3 input alike. */
-	das_raw_data_f onRawData;
+	dasfn_onRawData onRawData;
 
 	/** Receives stream annotations.
 	 *
@@ -313,10 +313,10 @@ typedef struct das_stream_proc_t {
 	 * discarded.
 	 *
 	 * A filter passing on "taskProgress" comments may want to send them
-	 * with DasIO_setTaskProgress() instead, which rate limits them so they
+	 * with DasIO_setProgress() instead, which rate limits them so they
 	 * don't swamp the output stream.
 	 */
-	das_comment_f onComment;
+	dasfn_onComment onComment;
 
 	/** Sets the function to be called when the stream ends, normally or on
 	 * an exception.
@@ -329,29 +329,29 @@ typedef struct das_stream_proc_t {
 	 * a passive one, like a progress monitor, can't fail a read that another
 	 * handled.  To ignore exceptions, supply a handler that returns DAS_OKAY.
 	 */
-	das_close_f onClose;
+	dasfn_onClose onClose;
 
 	/** An optional User-data pointer that is passed along to all callbacks.
 	 * This value may be NULL.
 	 */
 	void* pUser;
 
-} das_stream_proc;
+} DasIOProc;
 
 /** Initialize a stream processor for the layout given
  *
- * Use das_stream_proc_init() instead, which supplies the version this
+ * Use init_DasIOProc() instead, which supplies the version this
  * program was compiled against.
  *
  * @param pThis The stream processor structure to initialize
- * @param pUser The value for das_stream_proc::pUser, may be NULL
+ * @param pUser The value for DasIOProc::pUser, may be NULL
  * @param uVersion The structure layout pThis has, one of the
  *        DAS_STREAM_PROC_V* values.
  * @returns DAS_OKAY, or an error if uVersion is unknown to this library,
  *        in which case pThis is not touched.
  */
-DAS_API das_errcode das_stream_proc_init_ver(
-	das_stream_proc* pThis, void* pUser, size_t uVersion
+DAS_API das_errcode init_DasIOProc_ver(
+	DasIOProc* pThis, void* pUser, size_t uVersion
 );
 
 /** Initialize a stream processor, all callbacks NULL
@@ -361,12 +361,12 @@ DAS_API das_errcode das_stream_proc_init_ver(
  * later library can then still recognize, and possibly serve, an older
  * program's structure.
  *
- * @param P A pointer to the das_stream_proc to initialize
+ * @param P A pointer to the DasIOProc to initialize
  * @param U A pointer passed to every callback, or NULL
  * @returns DAS_OKAY, or an error if the library is older than the header
  */
-#define das_stream_proc_init(P, U) \
-	das_stream_proc_init_ver((P), (U), DAS_STREAM_PROC_VER)
+#define init_DasIOProc(P, U) \
+	init_DasIOProc_ver((P), (U), DASIOPROC_VER)
 
 
 /** @class DasIO io.h <das3/io.h>
@@ -387,7 +387,7 @@ DAS_API das_errcode das_stream_proc_init_ver(
  *
  * The structure is opaque.
  */
-typedef struct das_io_struct DasIO;
+typedef struct das_io_t DasIO;
 
 /** @} */
 
@@ -407,8 +407,8 @@ typedef struct das_io_struct DasIO;
  *   DasIO* pCmd  = new_DasIO(PROG, new_DasXport_cmd("my_reader 2017-01-01 2017-01-02"), NULL);
  *
  *   // The body of an http or https download
- *   DasHttpResp* pRes = new_DasHttpResp_get(sUrl, PROG, pMgr, DASHTTP_TO_MIN);
- *   if(DasHttpResp_ok(pRes))
+ *   DasHttpResp* pRes = new_DasHttpResp_get(sUrl, PROG, pMgr, DASHTTP_TIMEOUT_MIN);
+ *   if(DasHttpResp_isOk(pRes))
  *       pIn = new_DasIO(PROG, DasHttpResp_takeBody(pRes), NULL);
  *   del_DasHttpResp(pRes);
  * @endcode
@@ -451,42 +451,42 @@ DAS_API DasIO* new_DasIO(const char* sProg, DasXport* pX, const char* mode);
 
 /** Set the in-memory data model.
  * 
- * On a reader this selects what the callbacks receive: STREAM_MODEL_V2 keeps
- * das2 packets as DasPkt and fails on das3 headers, STREAM_MODEL_V3
- * up-converts das2 headers to DasDs, STREAM_MODEL_MIXED hands each header
+ * On a reader this selects what the callbacks receive: DASIOMODEL_V2 keeps
+ * das2 packets as DasPkt and fails on das3 headers, DASIOMODEL_V3
+ * up-converts das2 headers to DasDs, DASIOMODEL_MIXED hands each header
  * over as whatever it was.  On a writer only V2 and V3 are legal since one
  * stream has one header dialect.
  * 
  * @returns DAS_OKAY if successful or an error code if not.
  * @memberof DasIO
  */
-DAS_API das_errcode DasIO_setModel(DasIO* pThis, das_stream_model nModel);
+DAS_API das_errcode DasIO_setModel(DasIO* pThis, das_iomodel nModel);
 
 /** Get the in-memory data model, see DasIO_setModel()
  * @memberof DasIO
  */
-DAS_API das_stream_model DasIO_getModel(const DasIO* pThis);
+DAS_API das_iomodel DasIO_model(const DasIO* pThis);
 
 /** Set the stream version a writer emits.
  *
  * Writers default to the version given in the constructor mode string, or
- * STREAM_VER_2_2 when the mode string names none.  Only STREAM_VER_2_2 and
- * STREAM_VER_3_0 are writable, and the version can't change once the stream
+ * DASSTREAMVER_2_2 when the mode string names none.  Only DASSTREAMVER_2_2 and
+ * DASSTREAMVER_3_0 are writable, and the version can't change once the stream
  * header has gone out.
  *
  * @returns DAS_OKAY, or an error code on a reader, an unwritable version, or
  *          a writer whose header has already been sent.
  * @memberof DasIO
  */
-DAS_API das_errcode DasIO_setOutVer(DasIO* pThis, das_stream_ver nVer);
+DAS_API das_errcode DasIO_setOutVer(DasIO* pThis, das_streamver nVer);
 
 /** Get the stream version a writer will emit, see DasIO_setOutVer()
  *
- * On a reader this is STREAM_VER_UNK unless the constructor mode string
+ * On a reader this is DASSTREAMVER_UNK unless the constructor mode string
  * restricted the input to one version.
  * @memberof DasIO
  */
-DAS_API das_stream_ver DasIO_getOutVer(const DasIO* pThis);
+DAS_API das_streamver DasIO_outVer(const DasIO* pThis);
 
 /** True once a writer has emitted the stream header.
  *
@@ -494,7 +494,7 @@ DAS_API das_stream_ver DasIO_getOutVer(const DasIO* pThis);
  * itself when none went out.
  * @memberof DasIO
  */
-DAS_API bool DasIO_headerSent(const DasIO* pThis);
+DAS_API bool DasIO_hasSentHeader(const DasIO* pThis);
 
 /** Recover undecodable embedded formats as opaque bytes instead of failing.
  *
@@ -511,7 +511,7 @@ DAS_API bool DasIO_headerSent(const DasIO* pThis);
  *
  * @memberof DasIO
  */
-DAS_API void DasIO_embedAsBytes(DasIO* pThis, bool bEnable);
+DAS_API void DasIO_setEmbedAsBytes(DasIO* pThis, bool bEnable);
 
 /** Keep dataset records in memory across packets
  *
@@ -521,13 +521,13 @@ DAS_API void DasIO_embedAsBytes(DasIO* pThis, bool bEnable);
  * pile up for the life of the stream instead.  Turn it on to read a whole
  * stream into memory (see DasIO_takeStream()), or when a handler buffers
  * several packets before flushing, in which case the handler calls
- * DasDs_clearRagged0() itself after each flush.
+ * DasDs_clearIdx0() itself after each flush.
  *
  * Accumulation also counts as a request for values: datasets are decoded
  * even when no processor has an onDsData callback.
  *
  * Only affects das3 datasets (including das2 packets read with the
- * STREAM_MODEL_V3 model).  das2 packet descriptors only ever hold one packet.
+ * DASIOMODEL_V3 model).  das2 packet descriptors only ever hold one packet.
  *
  * @param pThis The DasIO object to configure, must be in read mode
  * @param bAccum true to keep all records, false (default) to clear before
@@ -540,7 +540,7 @@ DAS_API void DasIO_setAccum(DasIO* pThis, bool bAccum);
 /** Is record accumulation on?  See DasIO_setAccum()
  * @memberof DasIO
  */
-DAS_API bool DasIO_getAccum(const DasIO* pThis);
+DAS_API bool DasIO_isAccum(const DasIO* pThis);
 
 
 /** Create a new DasIO object that parses bytes pushed into it
@@ -580,7 +580,7 @@ DAS_API DasIO* new_DasIO_feed(const char* sProg, const char* mode);
  * Bytes may be supplied in chunks of any size, down to a single byte;
  * packet boundaries need not be respected.  Whenever enough bytes have
  * accumulated to complete a packet, the packet is dispatched through the
- * attached das_stream_proc callbacks before the call returns.  Bytes that
+ * attached DasIOProc callbacks before the call returns.  Bytes that
  * do not complete a packet are held internally until the next call.
  *
  * Once any call returns an error the parser is latched in the error
@@ -598,7 +598,7 @@ DAS_API DasIO* new_DasIO_feed(const char* sProg, const char* mode);
  *
  * @memberof DasIO
  */
-DAS_API das_errcode DasIO_feed(DasIO* pThis, const ubyte* pData, size_t uLen);
+DAS_API das_errcode DasIO_feed(DasIO* pThis, const uint8_t* pData, size_t uLen);
 
 /** Signal end-of-input to a feed-mode DasIO
  *
@@ -648,21 +648,21 @@ DAS_API void del_DasIO(DasIO* pThis);
  * read.
  * 
  * @param pThis The DasIO object to receive the processor.
- * @param pProc The processor to add, prepared by das_stream_proc_init().  A
- *        structure with a zero or unknown das_stream_proc::uVersion is
+ * @param pProc The processor to add, prepared by init_DasIOProc().  A
+ *        structure with a zero or unknown DasIOProc::uStructVer is
  *        refused.
  * @return The number of packet processors attached to this DasIO object or
  *         a negative error value if there is a problem.
  * 
  * @memberof DasIO
  */
-DAS_API int DasIO_addProcessor(DasIO* pThis, das_stream_proc* pProc);
+DAS_API int DasIO_addProc(DasIO* pThis, DasIOProc* pProc);
 
 /** Starts the processing of the stream read from FILE* infile.  
  *
  * This function does not return until all input has been read, an
  * exception in the stream ended it, or an error occurred.  If a
- * das_stream_proc has been set with DasIO_addProcessor() then as each header
+ * DasIOProc has been set with DasIO_addProc() then as each header
  * packet read, callbacks specified in stream processors will be 
  * invoked.  Otherwise all data is merely parsed and then discarded.
  * Reading stops at an exception or the end of the input.
@@ -706,7 +706,7 @@ DAS_API DasStream* DasIO_getStream(DasIO* pThis);
  *
  * @code
  * DasIO* pIn = new_DasIO("myprog", new_DasXport_file("input.d3b", "r"), NULL);
- * DasIO_setModel(pIn, STREAM_MODEL_V3);  // das2 packets come up as datasets
+ * DasIO_setModel(pIn, DASIOMODEL_V3);  // das2 packets come up as datasets
  * DasIO_setAccum(pIn, true);
  * DasStream* pSd = NULL;
  * if(DasIO_readAll(pIn) == DAS_OKAY)
@@ -724,7 +724,7 @@ DAS_API DasStream* DasIO_getStream(DasIO* pThis);
  * was parsed before the error.
  *
  * @returns The stream, or NULL if no stream header was read or the stream
- *          was already taken.  Also NULL, with a das_error, on an output
+ *          was already taken.  Also NULL, with a daserrf, on an output
  *          object or while reading is still in progress.
  *
  * @memberof DasIO
@@ -733,7 +733,7 @@ DAS_API DasStream* DasIO_takeStream(DasIO* pThis);
 
 /** Read all of standard input into memory
  *
- * Reads with the STREAM_MODEL_V3 model and accumulation on, so das2
+ * Reads with the DASIOMODEL_V3 model and accumulation on, so das2
  * packets come back as datasets.
  *
  * @param sProgName the name of the program for log writing.
@@ -745,7 +745,7 @@ DAS_API DasStream* new_DasStream_stdin(const char* sProgName);
 
 /** Read all of a file into memory
  *
- * Reads with the STREAM_MODEL_V3 model and accumulation on, so das2
+ * Reads with the DASIOMODEL_V3 model and accumulation on, so das2
  * packets come back as datasets.
  * 
  * @param sProg The name of the program for log writing.
@@ -755,7 +755,7 @@ DAS_API DasStream* new_DasStream_stdin(const char* sProgName);
  * @returns The stream, owned by the caller, or NULL on a read error
  * @memberof DasStream
  */
-DAS_API DasStream* new_DasStream_path(const char* sProg, const char* sFile);
+DAS_API DasStream* new_DasStream_file(const char* sProg, const char* sFile);
 
 
 /** Writes the data describing the stream to the output channel (e.g. File* ).
@@ -785,7 +785,7 @@ DAS_API das_errcode DasIO_writeStreamDesc(DasIO* pThis, DasStream* pSd);
  *        1 to 99 when writing a das2 stream, or 1 to 0xFEFF for das3; 0 is
  *        refused.  The writer chooses: it need not be the ID the descriptor
  *        has in its own stream, though keeping the input IDs is usual for
- *        filters.  For example, in a das_pkt_desc_f handler:
+ *        filters.  For example, in a dasfn_onPkt handler:
  *        @code
  *          return DasIO_writeDesc(pOut, (DasDesc*)pPdOut, iPktId);
  *        @endcode
@@ -830,7 +830,7 @@ DAS_API das_errcode DasIO_writeData(DasIO* pThis, DasDesc* pDesc, int iPktId);
  * @memberof DasIO
  */
 DAS_API das_errcode DasIO_writePktBytes(
-	DasIO* pThis, int iPktId, const ubyte* pData, size_t uLen
+	DasIO* pThis, int iPktId, const uint8_t* pData, size_t uLen
 );
 
 /** End an output stream with an exception
@@ -845,7 +845,7 @@ DAS_API das_errcode DasIO_writePktBytes(
  * "No data" is a stream terminating condition the technically isn't
  * out of the ordinary, but since it's always the last packet anyway
  * the exception handling machinery is used for this purpose.  Exception
- * type DAS_EX_NO_DATA is used for this purpos.
+ * type DASEXCEPTTYPE_NO_DATA is used for this purpos.
  *
  * If no stream header has been sent yet, DasIO sends a stub header 
  * first.  DasIO then closes any input streams, but the object itself
@@ -869,21 +869,21 @@ DAS_API das_errcode DasIO_exception(DasIO* pThis, const DasExcept* pExcept);
  *
  * The same as DasIO_exception() without making a DasExcept:
  * @code
- *   return DasIO_exception_v(pOut, DAS_EX_QUERY_ERR, "Unknown option %s", sOpt);
+ *   return DasIO_exceptionf(pOut, DASEXCEPTTYPE_QUERY_ERR, "Unknown option %s", sOpt);
  * @endcode
  *
  * The message is built in space the DasIO keeps for the purpose.
  *
  * @param pThis An output stream
- * @param nType DAS_EX_NO_DATA, DAS_EX_SERVER_ERR or DAS_EX_QUERY_ERR
+ * @param nType DASEXCEPTTYPE_NO_DATA, DASEXCEPTTYPE_SERVER_ERR or DASEXCEPTTYPE_QUERY_ERR
  * @param sFmt  A printf style format for the message.  To send text that
  *        may hold a '%', pass "%s" and the text.
  * @returns DAS_OKAY, or a positive error code if it could not be written
  *
  * @memberof DasIO
  */
-DAS_API das_errcode DasIO_exception_v(
-	DasIO* pThis, das_except_e nType, const char* sFmt, ...
+DAS_API das_errcode DasIO_exceptionf(
+	DasIO* pThis, das_excepttype nType, const char* sFmt, ...
 );
 
 /** Output a comment
@@ -909,8 +909,8 @@ DAS_API das_errcode DasIO_comment(DasIO* pThis, const DasComment* pCmt);
  * was made.
  *
  * @code
- *   DasIO_comment_v(pOut, "log:info", "Searching file system...");
- *   DasIO_comment_v(pOut, "log:warning", "Skipped %d bad records", nBad);
+ *   DasIO_commentf(pOut, "log:info", "Searching file system...");
+ *   DasIO_commentf(pOut, "log:warning", "Skipped %d bad records", nBad);
  * @endcode
  *
  * The comment is built in DasIO reserved memory so nothing is allocated
@@ -920,7 +920,7 @@ DAS_API das_errcode DasIO_comment(DasIO* pThis, const DasComment* pCmt);
  * @param pThis An output stream
  * @param sType Any token.  Readers know "log:" followed by a level name
  *        ("log:info", "log:warning", "log:error", ...), and the progress
- *        pair "taskSize" and "taskProgress" (see DasIO_setTaskProgress()).
+ *        pair "taskSize" and "taskProgress" (see DasIO_setProgress()).
  * @param sFmt  A printf style format for the comment value.  To send text
  *        that may hold a '%', pass "%s" and the text.
  * @returns DAS_OKAY, or a positive error code if the comment could not be
@@ -928,7 +928,7 @@ DAS_API das_errcode DasIO_comment(DasIO* pThis, const DasComment* pCmt);
  *
  * @memberof DasIO
  */
-DAS_API das_errcode DasIO_comment_v(
+DAS_API das_errcode DasIO_commentf(
 	DasIO* pThis, const char* sType, const char* sFmt, ...
 );
 
@@ -941,7 +941,7 @@ DAS_API das_errcode DasIO_comment_v(
  * 
  * @memberof DasIO
  */
-DAS_API das_errcode DasIO_setTaskSize(DasIO* pThis, int size);
+DAS_API das_errcode DasIO_setProgressMax(DasIO* pThis, int size);
 
 /** Place rate-limited progress comments on an output stream.
  * 
@@ -955,7 +955,7 @@ DAS_API das_errcode DasIO_setTaskSize(DasIO* pThis, int size);
  * 
  * @memberof DasIO
  */
-DAS_API das_errcode DasIO_setTaskProgress( DasIO* pThis, int progress );
+DAS_API das_errcode DasIO_setProgress( DasIO* pThis, int progress );
 
 /** Close a stream
  *

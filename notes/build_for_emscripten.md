@@ -86,7 +86,7 @@ version of this table.
 `spice.h` has no library code behind it, so there's nothing to leave out for
 SPICE.  A program that includes it needs CSPICE, which isn't built for wasm.
 
-Two feature macros compile code out.  `DAS_NO_NETWORK` is defined by
+Two feature macros compile code out.  `DASCONF_NO_NET` is defined by
 `das3/defs.h` whenever `__EMSCRIPTEN__` is, since no wasm build has
 sockets; it removes the socket and SSL stream modes from `io.c` and
 `buffer.c` and the HTTP setup from `util.c`.  `DAS_NO_DFT` is defined by
@@ -116,7 +116,7 @@ it, so a native wisdom file would be of no use here anyway.
 
 ## Platform notes
 
-wasm32 is ILP32: `long` and `ptrdiff_t` are 4 bytes and `HOST_IS_64_BIT`
+wasm32 is ILP32: `long` and `ptrdiff_t` are 4 bytes and `DASHOST_64BIT`
 is undefined, so this is the first platform in years to exercise das2C's
 32-bit paths.  `long double` is a 128-bit software float, which makes
 libc's text-to-double conversion several times slower than on x86_64 (see
@@ -145,7 +145,7 @@ static library, followed by the dependency archives,
 A browser module instead wants `-sMODULARIZE`, an `EXPORTED_FUNCTIONS`
 list naming the C entry points it calls, and no filesystem; das2js is the
 worked example.  The default emscripten stack is 64 KiB, and das2C keeps
-some large automatics (packet buffers, `das_datum` arrays), hence the
+some large automatics (packet buffers, `DasDatum` arrays), hence the
 1 MiB stack above.
 
 To profile, add `--profiling-funcs` to the link so the wasm keeps function

@@ -262,7 +262,7 @@ $(BD)/lib_members: FORCE | $(BD)
 FORCE:
 .PHONY: FORCE
 
-# The source's git description for das_lib_version().  Asked only when this
+# The source's git description for daslib_version().  Asked only when this
 # directory is the top of its own repository, so a copy of the sources inside
 # some other checkout does not report that project's commit.  The stamp file
 # is rewritten only when the description changes: a commit rebuilds util.o,

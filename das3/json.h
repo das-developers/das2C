@@ -69,7 +69,7 @@ extern "C" {
 /** @defgroup json JSON
  * A parser for JSON text and accessors for the resulting document tree.
  *
- * Catalog nodes happen to be JSON documents, so DasNode_getJdo() returns
+ * Catalog nodes happen to be JSON documents, so DasNode_jdo() returns
  * these objects, but nothing here is specific to catalogs.
  */
 
@@ -79,92 +79,92 @@ extern "C" {
 
 
 /** The various types JSON values can be. Used to identify what a value is */
-enum das_json_type_e {
-  das_json_type_str,
-  das_json_type_num,
-  das_json_type_dict,
-  das_json_type_ary,
-  das_json_type_true,
-  das_json_type_false,
-  das_json_type_null
-};
+typedef enum das_jsontype_e {
+  DASJSONTYPE_STR,
+  DASJSONTYPE_NUM,
+  DASJSONTYPE_DICT,
+  DASJSONTYPE_ARY,
+  DASJSONTYPE_TRUE,
+  DASJSONTYPE_FALSE,
+  DASJSONTYPE_NULL
+} das_jsontype;
 
 /** A JSON string value */
-typedef struct das_json_str_s {
+typedef struct das_jsonstr_t {
   /** utf-8 string */
   const char *string;
   /** the size (in bytes) of the string */
-  size_t string_size;
-} das_json_str;
+  size_t stringSize;
+} DasJsonStr;
 
 /** A JSON string value (extended) */
-typedef struct das_json_str_ex_s {
+typedef struct das_jsonstrex_t {
   /** the JSON string this extends. */
-  struct das_json_str_s string;
+  struct das_jsonstr_t string;
 
   /** the character offset for the value in the JSON input */
   size_t offset;
 
   /** the line number for the value in the JSON input */
-  size_t line_no;
+  size_t line;
 
   /** the row number for the value in the JSON input, in bytes */
-  size_t row_no;
-} das_json_str_ex;
+  size_t row;
+} DasJsonStrEx;
 
 /** A JSON number value */
-typedef struct das_json_num_s {
+typedef struct das_jsonnum_t {
   /** ASCII string containing representation of the number */
   const char *number;
   /** the size (in bytes) of the number */
-  size_t number_size;
-} das_json_num;
+  size_t numberSize;
+} DasJsonNum;
 
 /** An element of a JSON dictionary */
-typedef struct das_json_dict_el_s {
+typedef struct das_jsondictel_t {
   /** the name of this element */
-  struct das_json_str_s *name;
+  struct das_jsonstr_t *name;
   /** the value of this element */
-  struct das_json_obj_s *value;
+  struct das_jdo_t *value;
   /** the next object element (can be NULL if the last element in the object) */
-  struct das_json_dict_el_s *next;
-} das_json_dict_el;
+  struct das_jsondictel_t *next;
+} DasJsonDictEl;
 
 /** a JSON dictionary payload */
-typedef struct das_json_dict_s {
+typedef struct das_jsondict_t {
   /** a linked list of the elements in the object */
-  struct das_json_dict_el_s *start;
+  struct das_jsondictel_t *start;
   /** the number of elements in the object */
   size_t length;
-} das_json_dict;
+} DasJsonDict;
 
 /** an element of a JSON array */
-typedef struct das_json_ary_el_s {
+typedef struct das_jsonaryel_t {
   /** the value of this element */
-  struct das_json_obj_s *value;
+  struct das_jdo_t *value;
   /** the next array element (can be NULL if the last element in the array) */
-  struct das_json_ary_el_s *next;
-} das_json_ary_el;
+  struct das_jsonaryel_t *next;
+} DasJsonAryEl;
 
 /** a JSON array value */
-typedef struct das_json_ary_s {
+typedef struct das_jsonary_t {
   /** a linked list of the elements in the array */
-  struct das_json_ary_el_s *start;
+  struct das_jsonaryel_t *start;
   /** the number of elements in the array */
   size_t length;
-} das_json_ary;
+} DasJsonAry;
 
 
 	
 /** JSON Dom Element */
-typedef struct das_json_obj_s {
-  /** a pointer to either a das_json_str, das_json_num, das_json_dict, or
-   * das_json_ary. Should be cast to the appropriate struct type based on what
+typedef struct das_jdo_t {
+  /** a pointer to either a DasJsonStr, DasJsonNum, DasJsonDict, or
+   * DasJsonAry. Should be cast to the appropriate struct type based on what
    * the type parameter
 	*/
   void* value;
   
-  /** must be one of das_json_type_e. If type is dasj_objtype_true, 
+  /** must be one of das_jsontype. If type is dasj_objtype_true, 
 	* dasj_objtype_false, or dasj_objtype_null, payload will be NULL */
   size_t type;
   
@@ -173,7 +173,7 @@ typedef struct das_json_obj_s {
 /** a JSON value (extended) 
  * @extends das_json_val_s
  */
-typedef struct das_json_val_ex_s {
+typedef struct das_jsonvalex_t {
   /** the JSON value this extends. */
   DasJdo value;
 
@@ -181,160 +181,160 @@ typedef struct das_json_val_ex_s {
   size_t offset;
 
   /** the line number for the value in the JSON input */
-  size_t line_no;
+  size_t line;
 
   /** the row number for the value in the JSON input, in bytes */
-  size_t row_no;
-} das_json_val_ex;
+  size_t row;
+} DasJsonValEx;
 
 	
 
 /** Flag used by dasj_parse() and dasj_parse_ex() to alter parsing behavior */
-enum das_json_parse_flags_e {
-  das_jparse_flags_default = 0,
+typedef enum das_jparse_e {
+  DASJPARSE_DEFAULT = 0,
 
   /** allow trailing commas in objects and arrays. For example, both [true,] and
    * {"a" : null,} would be allowed with this option on.
 	*/
-  das_jparse_flags_allow_trailing_comma = 0x1,
+  DASJPARSE_ALLOW_TRAILING_COMMA = 0x1,
 
   /** allow unquoted keys for objects. For example, {a : null} would be allowed
    * with this option on.
 	*/
-  das_jparse_flags_allow_unquoted_keys = 0x2,
+  DASJPARSE_ALLOW_UNQUOTED_KEYS = 0x2,
 
   /** allow a global unbracketed object. For example, a : null, b : true, c : {}
    * would be allowed with this option on.
 	*/
-  das_jparse_flags_allow_global_object = 0x4,
+  DASJPARSE_ALLOW_GLOBAL_OBJECT = 0x4,
 
   /** allow objects to use '=' instead of ':' between key/value pairs. For
    * example, a = null, b : true would be allowed with this option on.
 	*/
-  das_jparse_flags_allow_equals_in_object = 0x8,
+  DASJPARSE_ALLOW_EQUALS_IN_OBJECT = 0x8,
 
   /** allow that objects don't have to have comma separators between key/value
    * pairs.
 	*/
-  das_jparse_flags_allow_no_commas = 0x10,
+  DASJPARSE_ALLOW_NO_COMMAS = 0x10,
 
   /** allow c-style comments (// or /\* *\/) to be ignored in the input JSON
    * file.
    */
-  das_jparse_flags_allow_c_style_comments = 0x20,
+  DASJPARSE_ALLOW_C_STYLE_COMMENTS = 0x20,
 
   // deprecated flag, unused
-  das_jparse_flags_deprecated = 0x40,
+  DASJPARSE_DEPRECATED = 0x40,
 
   /** record location information for each value. */
-  das_jparse_flags_allow_location_information = 0x80,
+  DASJPARSE_ALLOW_LOCATION_INFORMATION = 0x80,
 
   /** allow strings to be 'single quoted' */
-  das_jparse_flags_allow_single_quoted_strings = 0x100,
+  DASJPARSE_ALLOW_SINGLE_QUOTED_STRINGS = 0x100,
 
   /** allow numbers to be hexadecimal */
-  das_jparse_flags_allow_hexadecimal_numbers = 0x200,
+  DASJPARSE_ALLOW_HEXADECIMAL_NUMBERS = 0x200,
 
   /** allow numbers like +123 to be parsed */
-  das_jparse_flags_allow_leading_plus_sign = 0x400,
+  DASJPARSE_ALLOW_LEADING_PLUS_SIGN = 0x400,
 
   /** allow numbers like .0123 or 123. to be parsed */
-  das_jparse_flags_allow_leading_or_trailing_decimal_point = 0x800,
+  DASJPARSE_ALLOW_LEADING_OR_TRAILING_DECIMAL_POINT = 0x800,
 
   /** allow Infinity, -Infinity, NaN, -NaN */
-  das_jparse_flags_allow_inf_and_nan = 0x1000,
+  DASJPARSE_ALLOW_INF_AND_NAN = 0x1000,
 
   /** allow multi line string values */
-  das_jparse_flags_allow_multi_line_strings = 0x2000,
+  DASJPARSE_ALLOW_MULTI_LINE_STRINGS = 0x2000,
 
   /** allow simplified JSON to be parsed. Simplified JSON is an enabling of a set
    * of other parsing options.
 	*/
-  das_jparse_flags_allow_simplified_json =
-      (das_jparse_flags_allow_trailing_comma |
-       das_jparse_flags_allow_unquoted_keys |
-       das_jparse_flags_allow_global_object |
-       das_jparse_flags_allow_equals_in_object |
-       das_jparse_flags_allow_no_commas),
+  DASJPARSE_ALLOW_SIMPLIFIED_JSON =
+      (DASJPARSE_ALLOW_TRAILING_COMMA |
+       DASJPARSE_ALLOW_UNQUOTED_KEYS |
+       DASJPARSE_ALLOW_GLOBAL_OBJECT |
+       DASJPARSE_ALLOW_EQUALS_IN_OBJECT |
+       DASJPARSE_ALLOW_NO_COMMAS),
 
   /** allow JSON5 to be parsed. JSON5 is an enabling of a set of other parsing
    * options.
 	*/
-  das_jparse_flags_allow_json5 =
-      (das_jparse_flags_allow_trailing_comma |
-       das_jparse_flags_allow_unquoted_keys |
-       das_jparse_flags_allow_c_style_comments |
-       das_jparse_flags_allow_single_quoted_strings |
-       das_jparse_flags_allow_hexadecimal_numbers |
-       das_jparse_flags_allow_leading_plus_sign |
-       das_jparse_flags_allow_leading_or_trailing_decimal_point |
-       das_jparse_flags_allow_inf_and_nan |
-       das_jparse_flags_allow_multi_line_strings)
-};
+  DASJPARSE_ALLOW_JSON5 =
+      (DASJPARSE_ALLOW_TRAILING_COMMA |
+       DASJPARSE_ALLOW_UNQUOTED_KEYS |
+       DASJPARSE_ALLOW_C_STYLE_COMMENTS |
+       DASJPARSE_ALLOW_SINGLE_QUOTED_STRINGS |
+       DASJPARSE_ALLOW_HEXADECIMAL_NUMBERS |
+       DASJPARSE_ALLOW_LEADING_PLUS_SIGN |
+       DASJPARSE_ALLOW_LEADING_OR_TRAILING_DECIMAL_POINT |
+       DASJPARSE_ALLOW_INF_AND_NAN |
+       DASJPARSE_ALLOW_MULTI_LINE_STRINGS)
+} das_jparse;
 
 /** JSON parsing error codes */
-enum das_jparse_error_e {
+typedef enum das_jparseerr_e {
   /** no error occurred (huzzah!) */
-  das_jparse_error_none = 0,
+  DASJPARSEERR_NONE = 0,
 
   /** expected either a comma or a closing '}' or ']' to close an object or
    * array!
 	*/
-  das_jparse_error_expected_comma_or_closing_bracket,
+  DASJPARSEERR_EXPECTED_COMMA_OR_CLOSING_BRACKET,
 
   /** colon separating name/value pair was missing! */
-  das_jparse_error_expected_colon,
+  DASJPARSEERR_EXPECTED_COLON,
 
   /** expected string to begin with '"'! */
-  das_jparse_error_expected_opening_quote,
+  DASJPARSEERR_EXPECTED_OPENING_QUOTE,
 
   /** invalid escaped sequence in string! */
-  das_jparse_error_invalid_string_escape_sequence,
+  DASJPARSEERR_INVALID_STRING_ESCAPE_SEQUENCE,
 
   /** invalid number format! */
-  das_jparse_error_invalid_number_format,
+  DASJPARSEERR_INVALID_NUMBER_FORMAT,
 
   /** invalid value! */
-  das_jparse_error_invalid_value,
+  DASJPARSEERR_INVALID_VALUE,
 
   /** reached end of buffer before object/array was complete! */
-  das_jparse_error_premature_end_of_buffer,
+  DASJPARSEERR_PREMATURE_END_OF_BUFFER,
 
   /** string was malformed! */
-  das_jparse_error_invalid_string,
+  DASJPARSEERR_INVALID_STRING,
 
   /** a call to malloc, or a user provider allocator, failed */
-  das_jparse_error_allocator_failed,
+  DASJPARSEERR_ALLOCATOR_FAILED,
 
   /** the JSON input had unexpected trailing characters that weren't part of the
    * JSON value
 	*/
-  das_jparse_error_unexpected_trailing_characters,
+  DASJPARSEERR_UNEXPECTED_TRAILING_CHARACTERS,
 
   /** catch-all error for everything else that exploded (real bad chi!) */
-  das_jparse_error_unknown
-};
+  DASJPARSEERR_UNKNOWN
+} das_jparseerr;
 
 /** error report from json_parse_ex() */
-struct das_json_parse_result_s {
+typedef struct das_jparseresult_t {
   /** the error code (one of json_parse_error_e), use dasj_parse_error_info() 
 	* To convert the value to an error string.
 	*/
   size_t error;
 
   /** the character offset for the error in the JSON input */
-  size_t error_offset;
+  size_t errOffset;
 
   /** the line number for the error in the JSON input */
-  size_t error_line_no;
+  size_t errLine;
 
   /** the row number for the error, in bytes */
-  size_t error_row_no;
-};
+  size_t errRow;
+} DasJparseResult;
 
 /** Provide error string describing a parsing error result */
-DAS_API const char* das_json_parse_error_info(
-	const struct das_json_parse_result_s* pRes, char* sTmp, size_t uLen
+DAS_API const char* DasJparseResult_info(
+	const DasJparseResult* pRes, char* sTmp, size_t uLen
 );
 
 
@@ -346,7 +346,7 @@ DAS_API const char* das_json_parse_error_info(
  * 
  * @param src_size The size in bytes of the document string to parse
  
- * @param flags_bitset values from enum das_jparse_flags_e OR'ed together
+ * @param flags_bitset values from das_jparse OR'ed together
  *           to configure parsing preferences.
  * 
  * @param alloc_func_ptr May be use to allocate memory via some method other
@@ -364,24 +364,24 @@ DAS_API const char* das_json_parse_error_info(
  *          way that allocator expects.  Returns NULL if an error occurred
  *          (malformed JSON input, or malloc failed)
  */
-DAS_API DasJdo* das_json_parse_ex(
+DAS_API DasJdo* new_DasJdo_parseEx(
 	const void *src, size_t src_size, size_t flags_bitset,
 	void *(*alloc_func_ptr)(void *, size_t), void *user_data,
-	struct das_json_parse_result_s *result
+	DasJparseResult *result
 );
 
 
 /** Parse a JSON text file with default options and without detailed error
  * reporting. 
  * 
- * This is just shorthand for das_json_parse_ex(src, size, 0, NULL, NULL, NULL);
+ * This is just shorthand for new_DasJdo_parseEx(src, size, 0, NULL, NULL, NULL);
  */
-DAS_API DasJdo* das_json_parse(const void *src, size_t src_size);
+DAS_API DasJdo* new_DasJdo_parse(const void *src, size_t src_size);
 
 /** Free a parsed JSON document
  *
  * The whole tree is one allocation, so this frees every node at once.  Call
- * it only on the root that das_json_parse() or das_json_parse_ex() returned
+ * it only on the root that new_DasJdo_parse() or new_DasJdo_parseEx() returned
  * with the default allocator, never on a node found inside it.
  *
  * @param pThis the root, NULL is ignored
@@ -408,13 +408,13 @@ DAS_API void del_DasJdo(DasJdo* pThis);
  * 
  * @memberof DasJdo
  */
-DAS_API const DasJdo* DasJdo_get(const DasJdo* pThis, const char* sRelPath);
+DAS_API const DasJdo* DasJdo_subtree(const DasJdo* pThis, const char* sRelPath);
 
 /** Get the first dictionary element from a JSON dictionary */
-DAS_API const das_json_dict_el* DasJdo_dictFirst(const DasJdo* pThis);
+DAS_API const DasJsonDictEl* DasJdo_dictFirst(const DasJdo* pThis);
 
 /** Get the first array element from a JSON array */
-DAS_API const das_json_ary_el* DasJdo_aryFirst(const DasJdo* pThis);
+DAS_API const DasJsonAryEl* DasJdo_aryFirst(const DasJdo* pThis);
 
 
 
@@ -424,24 +424,24 @@ DAS_API const das_json_ary_el* DasJdo_aryFirst(const DasJdo* pThis);
  * @return NULL if the object type is not a string or if pThis is NULL, a null
  *         terminated utf-8 string otherwise
  */
-DAS_API const char* DasJdo_string(const DasJdo* pThis);
+DAS_API const char* DasJdo_str(const DasJdo* pThis);
 
 
-DAS_API const das_json_dict* DasJdo_dict(const DasJdo* pThis);
+DAS_API const DasJsonDict* DasJdo_dict(const DasJdo* pThis);
 
 /** Get an array value from a JSON DOM element
  *
  * @param pThis The element in question
  * @return NULL if the object type is not an array or if pThis is NULL
  */
-DAS_API const das_json_ary* DasJdo_array(const DasJdo* pThis);
+DAS_API const DasJsonAry* DasJdo_ary(const DasJdo* pThis);
 
 
 
 /** Write out a minified JSON utf-8 string. 
  * 
  * This string is an encoding of the minimal string characters required to still
- * encode the same data.  DasJdo_writeMinified performs 1 call to malloc for the
+ * encode the same data.  DasJdo_newMiniStr performs 1 call to malloc for the
  * entire encoding.
  * 
  * @param pThis The top level document object to write, all sub-objects will 
@@ -455,7 +455,7 @@ DAS_API const das_json_ary* DasJdo_array(const DasJdo* pThis);
  *         
  * @memberof DasJdo
  */
-DAS_API void* DasJdo_writeMinified(const DasJdo* pThis, size_t *out_size);
+DAS_API void* DasJdo_newMiniStr(const DasJdo* pThis, size_t *out_size);
 
 
 /** Write out a pretty JSON utf-8 string. 
@@ -467,7 +467,7 @@ DAS_API void* DasJdo_writeMinified(const DasJdo* pThis, size_t *out_size);
  * defaults to two spaces ("  "), and newline defaults to linux newlines ('\\n'
  * as the newline character).
  * 
- * DasJdo_writePretty performs 1 call to malloc for the entire encoding.
+ * DasJdo_newPrettyStr performs 1 call to malloc for the entire encoding.
  * 
  * @param pThis The top level document object to write, all sub-objects
  *        will be written as well.
@@ -479,7 +479,7 @@ DAS_API void* DasJdo_writeMinified(const DasJdo* pThis, size_t *out_size);
  * @return NULL if an error occurred (malformed JSON input, or malloc failed).
  * @memberof DasJdo
  */
-DAS_API void* DasJdo_writePretty(const DasJdo* pThis, const char *indent,
+DAS_API void* DasJdo_newPrettyStr(const DasJdo* pThis, const char *indent,
                         const char *newline, size_t *out_size);
 
 

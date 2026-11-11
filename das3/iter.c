@@ -25,57 +25,57 @@
 /* Array iteration support */
 
 void init_DasAryIter(
-   DasAryIter* pThis, const DasAry* pAry, int iDimMin, int iDimMax, 
-   const ptrdiff_t* pLocBeg, const ptrdiff_t* pLocEnd
+   DasAryIter* pThis, const DasAry* pAry, int iIdxFirst, int iIdxLast, 
+   const ptrdiff_t* pAddrBeg, const ptrdiff_t* pAddrEnd
 )
 {
 	memset(pThis, 0, sizeof(DasAryIter));
 
 	pThis->pAry = pAry;
-	pThis->rank = DasAry_shape(pThis->pAry, pThis->shape);
-	if(pThis->shape[0] == 0){  /* Can't iterate an empty array */
+	pThis->rank = DasAry_shape(pThis->pAry, pThis->aShape);
+	if(pThis->aShape[0] == 0){  /* Can't iterate an empty array */
 		pThis->done = true;
 		return;
 	}
 
-	pThis->ragged = false;
+	pThis->bRagged = false;
 	for(int i = 1; i < pThis->rank; ++i){
-		if(pThis->shape[i] == VARIDX_RAGGED){
-			pThis->ragged = true;
+		if(pThis->aShape[i] == DASIDX_RAGGED){
+			pThis->bRagged = true;
 			break;
 		}
 	}
 
-	pThis->dim_min = iDimMin;
-	if(pThis->dim_min >= pThis->rank){
+	pThis->iIdxFirst = iIdxFirst;
+	if(pThis->iIdxFirst >= pThis->rank){
 		pThis->done = true;
 		return;
 	}
-	pThis->dim_max = iDimMax;
+	pThis->iIdxLast = iIdxLast;
 	/* Python-style negative index from the end: -1 is the last index, -2 the
-	   one before it.  (rank + dim_max), NOT (rank - dim_max). */
-	if(pThis->dim_max < 0) pThis->dim_max = pThis->rank + pThis->dim_max;
-	if((pThis->dim_max < 0)||(pThis->dim_max < pThis->dim_min)){
+	   one before it.  (rank + iIdxLast), NOT (rank - iIdxLast). */
+	if(pThis->iIdxLast < 0) pThis->iIdxLast = pThis->rank + pThis->iIdxLast;
+	if((pThis->iIdxLast < 0)||(pThis->iIdxLast < pThis->iIdxFirst)){
 		pThis->done = true;
 		return;
 	}
 
-	/* .index is treated as the "start" value.  We continually increment
+	/* .addr is treated as the "start" value.  We continually increment
 	   the start value until it is >= the end value */
 
 	/* Start off at all zeros, or at the specified location */
-	if(pLocBeg != NULL)
-		memcpy(pThis->index, pLocBeg, (pThis->dim_max+1)*sizeof(ptrdiff_t));
+	if(pAddrBeg != NULL)
+		memcpy(pThis->addr, pAddrBeg, (pThis->iIdxLast+1)*sizeof(ptrdiff_t));
 
 	/* End at all zeros, or at the end of the array. end is an exclusive upper index */
-	if(pLocEnd != NULL)
-		memcpy(pThis->index, pLocEnd, (pThis->dim_max+1)*sizeof(ptrdiff_t));
+	if(pAddrEnd != NULL)
+		memcpy(pThis->addr, pAddrEnd, (pThis->iIdxLast+1)*sizeof(ptrdiff_t));
 	else
 		pThis->bNaturalEnd = true;
 
 	/* If I'm ragged, get the length in the last dimension I can iterate */
-	if(pThis->ragged){
-		pThis->nLenLast = DasAry_lengthIn(pAry, pThis->dim_max, pThis->index);
+	if(pThis->bRagged){
+		pThis->nLenLast = DasAry_lengthIn(pAry, pThis->iIdxLast, pThis->addr);
 	}
 }
 
@@ -98,12 +98,12 @@ void init_DasAryIter(
 */
 static bool _DasAryIter_beforeEnd(DasAryIter* pThis)
 {
-	for(int iDim = pThis->dim_min; iDim <= pThis->dim_max; ++iDim){
-		if(pThis->index[iDim] > pThis->end_idx[iDim]){
+	for(int iDim = pThis->iIdxFirst; iDim <= pThis->iIdxLast; ++iDim){
+		if(pThis->addr[iDim] > pThis->aAddrEnd[iDim]){
 			pThis->done = true;
 			return false;
 		}
-		if(pThis->index[iDim] < pThis->end_idx[iDim])
+		if(pThis->addr[iDim] < pThis->aAddrEnd[iDim])
 			return true;
 		
 		/* not conclusive, check next lower (left most) index */
@@ -117,16 +117,16 @@ bool DasAryIter_next(DasAryIter* pThis)
 {
 	if(pThis->done) return false;
 
-	if(! pThis->ragged){
+	if(! pThis->bRagged){
 
 		/* Quicker function for CUBIC arrays */
-		for(int iDim = pThis->dim_max; iDim >= pThis->dim_min; --iDim){
-			if(pThis->index[iDim] < (pThis->shape[iDim] - 1)){
-				pThis->index[iDim] += 1;
+		for(int iDim = pThis->iIdxLast; iDim >= pThis->iIdxFirst; --iDim){
+			if(pThis->addr[iDim] < (pThis->aShape[iDim] - 1)){
+				pThis->addr[iDim] += 1;
 				return (pThis->bNaturalEnd ? true : _DasAryIter_beforeEnd(pThis));
 			}
 			else{
-				pThis->index[iDim] = 0; /* and go again, incrementing next index up */
+				pThis->addr[iDim] = 0; /* and go again, incrementing next index up */
 			}
 		}
 
@@ -136,24 +136,24 @@ bool DasAryIter_next(DasAryIter* pThis)
 
 	/* Ahh, ragged dense arrays. Guess someone selected hard mode */
 	ptrdiff_t nLenInIdx = 0;
-	for(int iDim = pThis->dim_max; iDim >= pThis->dim_min; --iDim){
-		if(iDim == pThis->dim_min)
+	for(int iDim = pThis->iIdxLast; iDim >= pThis->iIdxFirst; --iDim){
+		if(iDim == pThis->iIdxFirst)
 			nLenInIdx = pThis->nLenLast;
 		else
-			nLenInIdx = DasAry_lengthIn(pThis->pAry, iDim, pThis->index);
+			nLenInIdx = DasAry_lengthIn(pThis->pAry, iDim, pThis->addr);
 
-		if(pThis->index[iDim] < (nLenInIdx - 1)){
-			pThis->index[iDim] += 1;
+		if(pThis->addr[iDim] < (nLenInIdx - 1)){
+			pThis->addr[iDim] += 1;
 				
 			/* Look ahead.  If bumping an index that's not the last, save off the
 			   length of the last run that we care about */
-			if(iDim < (pThis->dim_max - 1))
-				pThis->nLenLast = DasAry_lengthIn(pThis->pAry, pThis->dim_max, pThis->index);
+			if(iDim < (pThis->iIdxLast - 1))
+				pThis->nLenLast = DasAry_lengthIn(pThis->pAry, pThis->iIdxLast, pThis->addr);
 				
 			return (pThis->bNaturalEnd ? true : _DasAryIter_beforeEnd(pThis));
 		}
 		else{
-			pThis->index[iDim] = 0;
+			pThis->addr[iDim] = 0;
 		}
 	}
 		
@@ -169,19 +169,19 @@ void init_DasDsIter(DasDsIter* pThis, const DasDs* pDs){
 	
 	memset(pThis, 0, sizeof(DasDsIter));
 	
-	pThis->rank = DasDs_shape(pDs, pThis->shape);
+	pThis->rank = DasDs_shape(pDs, pThis->aShape);
 	pThis->pDs = pDs;
 
 	/* If this is an empty dataset, we're already done */
-	if(pThis->shape[0] == 0){
+	if(pThis->aShape[0] == 0){
 		pThis->done = true;
 		return;
 	}
 	
-	pThis->ragged = false; 
+	pThis->bRagged = false; 
 	for(int i = 1; i < pThis->rank; ++i){      /* Ignore ragged on first index */
-		if(pThis->shape[i] == VARIDX_RAGGED){
-			pThis->ragged = true;
+		if(pThis->aShape[i] == DASIDX_RAGGED){
+			pThis->bRagged = true;
 			break;
 		}
 	}
@@ -190,9 +190,9 @@ void init_DasDsIter(DasDsIter* pThis, const DasDs* pDs){
 	
 	/* If I'm ragged I'm going to need the size of the last index at the 
 	 * lowest point of all previous indexes, get that. */
-	if(pThis->ragged){
-		pThis->nLenIn = DasDs_lengthIn(pDs, pThis->rank - 1, pThis->index);
-		if(pThis->nLenIn < 0) pThis->done = true;
+	if(pThis->bRagged){
+		pThis->nLenLast = DasDs_lengthIn(pDs, pThis->rank - 1, pThis->addr);
+		if(pThis->nLenLast < 0) pThis->done = true;
 	}
 }
 
@@ -200,15 +200,15 @@ bool DasDsIter_next(DasDsIter* pThis){
 
 	if(pThis->done) return false;
 	
-	if(! pThis->ragged){
+	if(! pThis->bRagged){
 		/* Quicker function for CUBIC datasets */
 		for(int iDim = pThis->rank - 1; iDim >= 0; --iDim){
-			if(pThis->index[iDim] < (pThis->shape[iDim] - 1)){
-				pThis->index[iDim] += 1;
+			if(pThis->addr[iDim] < (pThis->aShape[iDim] - 1)){
+				pThis->addr[iDim] += 1;
 				return true;
 			}
 			else{
-				pThis->index[iDim] = 0;
+				pThis->addr[iDim] = 0;
 			}
 		}
 	
@@ -223,22 +223,22 @@ bool DasDsIter_next(DasDsIter* pThis){
 	for(int iDim = pThis->rank - 1; iDim >= 0; --iDim){
 			
 		if(iDim == (pThis->rank - 1))
-			nLenInIdx = pThis->nLenIn;
+			nLenInIdx = pThis->nLenLast;
 		else
-			nLenInIdx = DasDs_lengthIn(pThis->pDs, iDim, pThis->index);
+			nLenInIdx = DasDs_lengthIn(pThis->pDs, iDim, pThis->addr);
 				
-		if(pThis->index[iDim] < (nLenInIdx - 1)){
-			pThis->index[iDim] += 1;
+		if(pThis->addr[iDim] < (nLenInIdx - 1)){
+			pThis->addr[iDim] += 1;
 				
 			/* If bumping an index that's not the last, recompute the length
 			 * of the last run */
 			if(iDim < (pThis->rank - 1))
-				pThis->nLenIn = DasDs_lengthIn(pThis->pDs, pThis->rank - 1, pThis->index);
+				pThis->nLenLast = DasDs_lengthIn(pThis->pDs, pThis->rank - 1, pThis->addr);
 				
 			return true;
 		}
 		else{
-			pThis->index[iDim] = 0;
+			pThis->addr[iDim] = 0;
 		}
 	}
 		
@@ -253,38 +253,38 @@ void init_DasDsUniqIter(
 ){
 	memset(pThis, 0, sizeof(DasDsUniqIter));
 	
-	pThis->rank = DasDs_shape(pDs, pThis->shape);
+	pThis->rank = DasDs_shape(pDs, pThis->aShape);
 	pThis->pDs = pDs;
 
 	/* If this is an empty dataset, we're already done */
-	if(pThis->shape[0] == 0){
+	if(pThis->aShape[0] == 0){
 		pThis->done = true;
 		return;
 	}
 
-	ptrdiff_t aVarShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
+	ptrdiff_t aVarShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
 	DasVar_shape(pVar, aVarShape);
 	
 	/* Lock the indexes that are ignored by this variable to 0, and determine
 	 * if I'm ragged in a used index */	
-	pThis->ragged = false;
-	pThis->first = -1;
-	pThis->last  = -1;
+	pThis->bRagged = false;
+	pThis->iIdxFirst = -1;
+	pThis->iIdxLast  = -1;
 	for(int i = 0; i < pThis->rank; ++i){
-		if(aVarShape[i] == VARIDX_UNUSED){
-			pThis->lock[i] = true;
+		if(aVarShape[i] == DASIDX_UNUSED){
+			pThis->aLock[i] = true;
 		}
 		else{
-			pThis->last = i;
-			if(pThis->first == -1) pThis->first = i;
+			pThis->iIdxLast = i;
+			if(pThis->iIdxFirst == -1) pThis->iIdxFirst = i;
 		}
 
-		if((!pThis->lock[i])&&(i > 0)&&(pThis->shape[i] == VARIDX_RAGGED))
-			pThis->ragged = true;
+		if((!pThis->aLock[i])&&(i > 0)&&(pThis->aShape[i] == DASIDX_RAGGED))
+			pThis->bRagged = true;
 	}
 
 	/* In the odd case of a constant, just set done right now */
-	if((pThis->first == -1)||(pThis->first == -1))
+	if((pThis->iIdxFirst == -1)||(pThis->iIdxFirst == -1))
 		pThis->done = true;
 
 	/* Start off index at all zeros, which memset insures above */
@@ -292,9 +292,9 @@ void init_DasDsUniqIter(
 	/* If I'm ragged I'm going to need the size of the last used index
 	 * at the lowest point of all previous indexes, get that. */
 
-	if(pThis->ragged){
-		pThis->nLenIn = DasDs_lengthIn(pDs, pThis->last, pThis->index);
-		if(pThis->nLenIn < 0) pThis->done = true;
+	if(pThis->bRagged){
+		pThis->nLenLast = DasDs_lengthIn(pDs, pThis->iIdxLast, pThis->addr);
+		if(pThis->nLenLast < 0) pThis->done = true;
 	}
 }
 
@@ -302,20 +302,20 @@ bool DasDsUniqIter_next(DasDsUniqIter* pThis){
 
 	if(pThis->done) return false;
 	
-	if(! pThis->ragged){
+	if(! pThis->bRagged){
 		/* Quicker function for CUBIC datasets, as long as you're 
 		   at the last index of an array dimension, keep setting
 		   zero and rolling previous */
 
-		for(int iDim = pThis->last; iDim >= pThis->first; --iDim){
-			if(pThis->lock[iDim]) continue;
+		for(int iDim = pThis->iIdxLast; iDim >= pThis->iIdxFirst; --iDim){
+			if(pThis->aLock[iDim]) continue;
 
-			if(pThis->index[iDim] < (pThis->shape[iDim] - 1)){
-				pThis->index[iDim] += 1;
+			if(pThis->addr[iDim] < (pThis->aShape[iDim] - 1)){
+				pThis->addr[iDim] += 1;
 				return true;
 			}
 			else{
-				pThis->index[iDim] = 0;
+				pThis->addr[iDim] = 0;
 			}
 		}
 	
@@ -327,25 +327,25 @@ bool DasDsUniqIter_next(DasDsUniqIter* pThis){
 	 * at least save off the length of the last index at this point
 	 * and only change it when a roll occurs */
 	ptrdiff_t nLenInIdx = 0;
-	for(int iDim = pThis->last; iDim >= pThis->first; --iDim){
+	for(int iDim = pThis->iIdxLast; iDim >= pThis->iIdxFirst; --iDim){
 			
-		if(iDim == pThis->last)
-			nLenInIdx = pThis->nLenIn;
+		if(iDim == pThis->iIdxLast)
+			nLenInIdx = pThis->nLenLast;
 		else
-			nLenInIdx = DasDs_lengthIn(pThis->pDs, iDim, pThis->index);
+			nLenInIdx = DasDs_lengthIn(pThis->pDs, iDim, pThis->addr);
 				
-		if(pThis->index[iDim] < (nLenInIdx - 1)){
-			pThis->index[iDim] += 1;
+		if(pThis->addr[iDim] < (nLenInIdx - 1)){
+			pThis->addr[iDim] += 1;
 				
 			/* If bumping an index that's not the last, recompute the length
 			 * of the last run that I care about */
-			if(iDim < pThis->last)
-				pThis->nLenIn = DasDs_lengthIn(pThis->pDs, pThis->last, pThis->index);
+			if(iDim < pThis->iIdxLast)
+				pThis->nLenLast = DasDs_lengthIn(pThis->pDs, pThis->iIdxLast, pThis->addr);
 				
 			return true;
 		}
 		else{
-			pThis->index[iDim] = 0;
+			pThis->addr[iDim] = 0;
 		}
 	}
 		
@@ -356,22 +356,23 @@ bool DasDsUniqIter_next(DasDsUniqIter* pThis){
 /* ************************************************************************* */
 
 void init_DasDsCubeIter(
-	DasDsCubeIter* pThis, int nRank, const ptrdiff_t* pMin, const ptrdiff_t* pMax
+	DasDsCubeIter* pThis, int nRank, const ptrdiff_t* pAddrBeg,
+	const ptrdiff_t* pAddrEnd
 ){
 	pThis->done = true;
 
-	if((nRank < 1)||(nRank > VARIDX_MAX))
-		das_error(DASERR_ITER, "Invalid array rank %d", nRank);
+	if((nRank < 1)||(nRank > DASIDX_MAX))
+		daserrf(DASERR_ITER, "Invalid array rank %d", nRank);
 
-	memcpy(pThis->idxmin, pMin, sizeof(ptrdiff_t)*nRank);
-	memcpy(pThis->index, pMin, sizeof(ptrdiff_t)*nRank);
-	memcpy(pThis->idxmax, pMax, sizeof(ptrdiff_t)*nRank);
+	memcpy(pThis->aAddrBeg, pAddrBeg, sizeof(ptrdiff_t)*nRank);
+	memcpy(pThis->addr, pAddrBeg, sizeof(ptrdiff_t)*nRank);
+	memcpy(pThis->aAddrEnd, pAddrEnd, sizeof(ptrdiff_t)*nRank);
 
 	pThis->rank = nRank;
 
-	/* Check to see if any max values are greater then the corresponding min */
+	/* Check to see if any end values are greater then the corresponding begin */
 	for(int i = 0; i < nRank; ++i){
-		if(pMax[i] > pMin[i]){
+		if(pAddrEnd[i] > pAddrBeg[i]){
 			pThis->done = false;
 			return;
 		}
@@ -385,14 +386,14 @@ bool DasDsCubeIter_next(DasDsCubeIter* pThis)
 	for(int i = (pThis->rank - 1); i > -1; --i){
 
 		/* Increment this index, if you can */
-		if((pThis->index[i] + 1) < pThis->idxmax[i]){
-			pThis->index[i] += 1;
+		if((pThis->addr[i] + 1) < pThis->aAddrEnd[i]){
+			pThis->addr[i] += 1;
 			return true;
 		}
 		else{
 			/* Need to bump next lower index, if no lower index, we're done */
 			if(i != 0)
-				pThis->index[i] = pThis->idxmin[i];
+				pThis->addr[i] = pThis->aAddrBeg[i];
 		}
 	}
 	pThis->done = true;  /* no next loop, no need for a break */

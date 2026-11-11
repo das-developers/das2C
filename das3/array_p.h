@@ -33,11 +33,11 @@ extern "C" {
 
 /* Index letters i,j,k,... for printing external index positions, and
    I,J,K,... for internal (item) index positions */
-extern const char g_sIdxLower[ARYIDX_MAX];
-extern const char g_sIdxUpper[ARYIDX_MAX];
+extern const char g_sIdxLower[DASIDX_MAX];
+extern const char g_sIdxUpper[DASIDX_MAX];
 
 /* Higher dimensions are handled by index buffers.  These are the elements for
- * the index buffers, and the storage behind vtIndex. */
+ * the index buffers, and the storage behind DASVT_INDEX. */
 typedef struct child_info_t{
 	ptrdiff_t nOffset;        /* Start of child elements data in child buffer */
 	size_t uCount;            /* The count child elements in child buffer     */
@@ -45,21 +45,21 @@ typedef struct child_info_t{
 
 typedef struct dyna_buf{
 
-	ubyte* pBuf;               /* The beginning a continuous buffer uSize long */
-	ubyte* pHead;              /* The beginning of valid values in the buffer  */
-	/*ubyte* pWrite;*/         /* The beginning of the append point for the buffer */
+	uint8_t* pBuf;               /* The beginning a continuous buffer uSize long */
+	uint8_t* pHead;              /* The beginning of valid values in the buffer  */
+	/*uint8_t* pWrite;*/         /* The beginning of the append point for the buffer */
 	size_t uSize;             /* The amount of space in the backing buffer    */
 	size_t uValid;            /* The number of valid elements in this buffer  */
 	size_t uElemSz;           /* The number of bytes occupied by each element */
 
-	ubyte* pFill;              /* Pointer to fill value buffer */
-	ubyte  fillBuf[sizeof(das_idx_info)];        /* Storage for short fill items */
+	uint8_t* pFill;              /* Pointer to fill value buffer */
+	uint8_t  fillBuf[sizeof(das_idx_info)];        /* Storage for short fill items */
 
 	size_t uChunkSz;           /* Alloc helper, if set, allocate in even chunks
                                * of this size. */
 	size_t uShape;             /* Qube helper, how many items in this array per
 										 * parent item, 0 means ragged */
-	das_val_type etype;       /* The element type */
+	das_vt etype;       /* The element type */
 
 	bool bRollParent;          /* The end mark.  If set, adding data to the array
 										 * will clear the end mark and trigger creation of
@@ -74,8 +74,8 @@ typedef struct dyna_buf{
 
 } DynaBuf;
 
-struct das_array {
-	char        sId[DAS_MAX_ID_BUFSZ];   /* A text identifier of this instance of the array */
+struct das_ary_t {
+	char        sId[DASID_SZ];   /* A text identifier of this instance of the array */
 	int           nRank;   /* The number of index dimensions for the array */
 	das_idx_info*   pIdx0;   /* top lever container, may not point here */
 
@@ -84,14 +84,14 @@ struct das_array {
 
 	/* Pointers to item arrays.  One array is needed for each dimension,
 	 * these may point to internal locations if the array is owned */
-	DynaBuf*  pBufs[ARYIDX_MAX];
+	DynaBuf*  pBufs[DASIDX_MAX];
 
 	/* bool     bOwned[16]; */   /* Same as pBufs[i] == &(bufs[i]) */
-	DynaBuf    bufs[ARYIDX_MAX];    /* Storage for dynamic buffers, if needed */
+	DynaBuf    bufs[DASIDX_MAX];    /* Storage for dynamic buffers, if needed */
 
 	/* Current compare function, set automatically if a known type is used,
 	 * otherwise user needs to supply their own */
-	int (*compare)(const ubyte* vpFirst, const ubyte* vpSecond);
+	int (*compare)(const uint8_t* vpFirst, const uint8_t* vpSecond);
 
 	/* Since so many datasets and functions can reference the same array,
 	 * a reference count is needed to make sure they aren't deleted if
@@ -99,18 +99,18 @@ struct das_array {
 	int refcount;
 
 	/* Used to notify the owner of my memory that I'm not using it anymore. */
-	struct das_array* pMemOwner;
+	struct das_ary_t* pMemOwner;
 
 	unsigned int uFlags;      /* Store flags indicating intended use */
 
-	das_units units;
+	DasUnits units;
 };
 
 /* Same as new_DasAry, but initializes caller storage (an embedded member or a
  * stack object) instead of making a heap object.  Returns true on success. */
 bool init_DasAry(
-   DasAry* pThis, const char* id, das_val_type et, size_t sz_each,
-   const ubyte* fill, int rank, const size_t* shape, das_units units
+   DasAry* pThis, const char* id, das_vt et, size_t sz_each,
+   const uint8_t* fill, int rank, const size_t* shape, DasUnits units
 );
 
 /* Similar to dec_DasAry, but for objects set up by init_DasAry */

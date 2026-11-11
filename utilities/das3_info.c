@@ -38,11 +38,11 @@
 /* Globals */
 
 #define PERR DASERR_MAX + 1
-#define CRED_FILE "servers"   /* under das_userdir() */
+#define CRED_FILE "servers"   /* under dasfs_userDir() */
 #define PROG "das3_info"
 
 #ifndef _WIN32
-#define HELP_USERDIR "$HOME/.das"           /* for help text, das_userdir() does the lookup */
+#define HELP_USERDIR "$HOME/.das"           /* for help text, dasfs_userDir() does the lookup */
 #else
 #define HELP_USERDIR "%%USERPROFILE%%\\.das"
 #endif
@@ -87,13 +87,13 @@ void prnHelp()
 "\n"
 "AUTHENTICATION\n"
 "   URLs that require a login prompt for a username and password.  Saved\n"
-"   credentials in " HELP_USERDIR DAS_DSEPS CRED_FILE " are tried first.  The environment\n"
+"   credentials in " HELP_USERDIR DASFS_SEPS CRED_FILE " are tried first.  The environment\n"
 "   variable DAS_USERDIR replaces " HELP_USERDIR ".\n"
 "\n"
 "EXAMPLES\n"
 "   Describe the Cassini/RPWS waveform example provided with the source:\n"
 "\n"
-"       " PROG " examples" DAS_DSEPS "ex07_cassini_rpws_wbr.d2s\n"
+"       " PROG " examples" DASFS_SEPS "ex07_cassini_rpws_wbr.d2s\n"
 "\n"
 "   Check that a reader's output parses, without looking at it:\n"
 "\n"
@@ -120,45 +120,45 @@ static DasIO* openInput(const char* sInput, float rTimeout)
 
 	/* A URL: the credential manager only matters if the server asks */
 	char sCredFile[256] = {'\0'};
-	snprintf(sCredFile, sizeof(sCredFile), "%s" DAS_DSEPS CRED_FILE, das_userdir());
-	DasCredMngr* pCreds = new_DasCredMngr();
-	DasCredMngr_setFileStore(pCreds, sCredFile);
-	DasCredMngr_load(pCreds);   /* no file yet is fine */
-	DasCredMngr_setPrompt(pCreds, das_term_prompt, NULL);
+	snprintf(sCredFile, sizeof(sCredFile), "%s" DASFS_SEPS CRED_FILE, dasfs_userDir());
+	DasCredMgr* pCreds = new_DasCredMgr();
+	DasCredMgr_setStore(pCreds, sCredFile);
+	DasCredMgr_load(pCreds);   /* no file yet is fine */
+	DasCredMgr_setPrompt(pCreds, DasCredMgr_termPrompt, NULL);
 
 	DasHttpResp* pRes = new_DasHttpResp_get(sInput, PROG, pCreds, rTimeout);
 	DasIO* pIn = NULL;
 	if(pRes == NULL){
-		del_DasCredMngr(pCreds);
+		del_DasCredMgr(pCreds);
 		return NULL;
 	}
 
-	if(!DasHttpResp_ok(pRes)){
+	if(!DasHttpResp_isOk(pRes)){
 		int nCode = DasHttpResp_code(pRes);
 		const char* sErr = DasHttpResp_error(pRes);
 		if((nCode == 401)||(nCode == 403))
-			das_error(DASERR_HTTP, "Authorization failure: %s", sErr);
+			daserrf(DASERR_HTTP, "Authorization failure: %s", sErr);
 		else if((nCode == 400)||(nCode == 404))
-			das_error(DASERR_HTTP, "Query error: %s", sErr);
+			daserrf(DASERR_HTTP, "Query error: %s", sErr);
 		else
-			das_error(DASERR_HTTP, "Uncategorized error: %s", sErr);
+			daserrf(DASERR_HTTP, "Uncategorized error: %s", sErr);
 	}
 	else{
 		if(strcmp(DasHttpResp_url(pRes), sInput) != 0)
-			daslog_info_v("Redirected to %s", DasHttpResp_url(pRes));
+			daslog_infof("Redirected to %s", DasHttpResp_url(pRes));
 		pIn = new_DasIO(PROG, DasHttpResp_takeBody(pRes), NULL);
 	}
 
 	/* Logins are only needed while the request is made */
 	del_DasHttpResp(pRes);
-	del_DasCredMngr(pCreds);
+	del_DasCredMgr(pCreds);
 	return pIn;
 }
 
 /* ************************************************************************* */
 
 /* The quiet mode log handler */
-static void _dropLog(const das_logmsg* pMsg, void* pUser){ (void)pMsg; (void)pUser; }
+static void _dropLog(const DasLogMsg* pMsg, void* pUser){ (void)pMsg; (void)pUser; }
 
 int main(int argc, char** argv)
 {
@@ -181,7 +181,7 @@ int main(int argc, char** argv)
 		}
 		else if(strcmp(argv[i], "-l") == 0){
 			if(++i == argc){ fprintf(stderr, "ERROR: -l needs a value\n"); return PERR; }
-			nLogLvl = daslog_strlevel(argv[i]);
+			nLogLvl = daslog_levelFromStr(argv[i]);
 		}
 		else if((argv[i][0] == '-')&&(argv[i][1] != '\0')){
 			fprintf(stderr, "ERROR: unknown option '%s', use -h for help\n", argv[i]);
@@ -200,11 +200,11 @@ int main(int argc, char** argv)
 	   A hook that drops every message silences the library, and errors are
 	   returned up the stack rather than printed on the way to exit(). */
 	if(bQuiet){
-		das_loghook hook = {_dropLog, NULL};
-		das_init(argv[0], DASERR_DIS_RET, DASLOG_ERROR, &hook);
+		DasLogHook hook = {_dropLog, NULL};
+		daslib_init(argv[0], DASERRDISP_RET, DASLOG_ERROR, &hook);
 	}
 	else
-		das_init(argv[0], DASERR_DIS_EXIT, nLogLvl, NULL);
+		daslib_init(argv[0], DASERRDISP_EXIT, nLogLvl, NULL);
 
 	DasIO* pIn = openInput(sInput, rTimeout);
 	if(pIn == NULL) return PERR;
@@ -217,7 +217,7 @@ int main(int argc, char** argv)
 		DasIO_setAccum(pIn, true);
 
 	if(DasIO_readAll(pIn) != 0)
-		return das_error(PERR, "Couldn't process input %s", sInput ? sInput : "<stdin>");
+		return daserrf(PERR, "Couldn't process input %s", sInput ? sInput : "<stdin>");
 
 	if(bQuiet){
 		del_DasIO(pIn);
@@ -227,25 +227,25 @@ int main(int argc, char** argv)
 	DasStream* pSd = DasIO_takeStream(pIn);
 	del_DasIO(pIn);
 	if(pSd == NULL)
-		return das_error(PERR, "No stream header in %s", sInput ? sInput : "<stdin>");
+		return daserrf(PERR, "No stream header in %s", sInput ? sInput : "<stdin>");
 
 	/* The info printers return the full length, as snprintf does, so grow
 	   the buffer to fit whenever one comes back larger. */
 	size_t uLen = 65536;
 	char* sBuf = (char*)calloc(uLen, 1);
 
-	int nNeed = DasStream_info(pSd, sBuf, uLen);
+	int nNeed = DasStream_toInfoStr(pSd, sBuf, uLen);
 	if((nNeed >= 0)&&((size_t)nNeed >= uLen)){
 		uLen = (size_t)nNeed + 1;
 		sBuf = (char*)realloc(sBuf, uLen);
-		DasStream_info(pSd, sBuf, uLen);
+		DasStream_toInfoStr(pSd, sBuf, uLen);
 	}
 	fputs(sBuf, stdout);
 
 	DasDesc* pDesc = NULL;
-	while((pDesc = DasStream_nextDesc(pSd, pDesc, DASDESC_DS)) != NULL){
+	while((pDesc = DasStream_nextDesc(pSd, pDesc, DASDESCTYPE_DS)) != NULL){
 		DasDs* pDs = (DasDs*)pDesc;
-		int nPktId = DasStream_getPktId(pSd, pDesc);
+		int nPktId = DasStream_pktId(pSd, pDesc);
 
 		nNeed = DasDs_info(pDs, sBuf, uLen);
 		if((nNeed >= 0)&&((size_t)nNeed >= uLen)){

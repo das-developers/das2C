@@ -100,7 +100,7 @@ typedef ptrdiff_t ssize_t;
 /* ************************************************************************* */
 /* The response */
 
-struct das_http_resp {
+struct das_httpresp_t {
 	int   nCode;         /* -1 until a server answers */
 	bool  bOk;
 	char* sError;
@@ -109,7 +109,7 @@ struct das_http_resp {
 	char* sFilename;
 
 	char* sUrl;          /* current URL, the final one after redirects */
-	das_url_parts parts; /* where its pieces are, see das_url_parse() */
+	DasUrlParts parts; /* where its pieces are, see DasUrlParts_fromStr() */
 
 	/* NUL terminated copies for the socket calls, set with sUrl */
 	bool  bHttps;
@@ -126,7 +126,7 @@ static void _http_err(DasHttpResp* pRes, const char* sFmt, ...)
 {
 	va_list argp;
 	va_start(argp, sFmt);
-	char* sMsg = das_vstring(sFmt, argp);
+	char* sMsg = dasstr_newvf(sFmt, argp);
 	va_end(argp);
 	free(pRes->sError);
 	pRes->sError = sMsg;
@@ -144,7 +144,7 @@ DasHttpResp* _new_DasHttpResp(void)
 {
 	DasHttpResp* pThis = (DasHttpResp*)calloc(1, sizeof(DasHttpResp));
 	if(pThis == NULL){
-		das_error(DASERR_HTTP, "Couldn't allocate an HTTP response");
+		daserrf(DASERR_HTTP, "Couldn't allocate an HTTP response");
 		return NULL;
 	}
 	pThis->nCode = -1;
@@ -161,7 +161,7 @@ void del_DasHttpResp(DasHttpResp* pThis)
 	free(pThis);
 }
 
-bool        DasHttpResp_ok(const DasHttpResp* pThis){ return pThis->bOk; }
+bool        DasHttpResp_isOk(const DasHttpResp* pThis){ return pThis->bOk; }
 int         DasHttpResp_code(const DasHttpResp* pThis){ return pThis->nCode; }
 const char* DasHttpResp_error(const DasHttpResp* pThis){ return pThis->sError; }
 const char* DasHttpResp_mime(const DasHttpResp* pThis){ return pThis->sMime; }
@@ -177,11 +177,11 @@ DasXport* DasHttpResp_takeBody(DasHttpResp* pThis)
 
 /* Copy a counted part into a fixed buffer, false if it does not fit */
 static bool _http_partCopy(
-	const char* sUrl, const das_url_parts* pParts, das_url_part_e ePart,
+	const char* sUrl, const DasUrlParts* pParts, das_urlpart ePart,
 	char* sOut, size_t uOut
 ){
 	size_t uLen = 0;
-	const char* p = das_url_part(pParts, sUrl, ePart, &uLen);
+	const char* p = DasUrlParts_get(pParts, sUrl, ePart, &uLen);
 	sOut[0] = '\0';
 	if(p == NULL) return true;
 	if(uLen >= uOut) return false;
@@ -194,7 +194,7 @@ static bool _http_partCopy(
  * client can't request. */
 static bool _http_setUrl(DasHttpResp* pRes, const char* sUrl)
 {
-	char* sCopy = das_strdup(sUrl);
+	char* sCopy = dasstr_new(sUrl);
 	if(sCopy == NULL){
 		_http_err(pRes, "Couldn't copy URL");
 		return false;
@@ -202,13 +202,13 @@ static bool _http_setUrl(DasHttpResp* pRes, const char* sUrl)
 	free(pRes->sUrl);
 	pRes->sUrl = sCopy;
 
-	if(!das_url_parse(&(pRes->parts), pRes->sUrl)){
+	if(!DasUrlParts_fromStr(&(pRes->parts), pRes->sUrl)){
 		_http_err(pRes, "Malformed URL %s", sUrl);
 		return false;
 	}
 
 	size_t uLen = 0;
-	const char* pScheme = das_url_part(&(pRes->parts), pRes->sUrl, DASURL_SCHEME, &uLen);
+	const char* pScheme = DasUrlParts_get(&(pRes->parts), pRes->sUrl, DASURLPART_SCHEME, &uLen);
 	if((uLen == 5) && (strncasecmp(pScheme, "https", 5) == 0))     pRes->bHttps = true;
 	else if((uLen == 4) && (strncasecmp(pScheme, "http", 4) == 0)) pRes->bHttps = false;
 	else{
@@ -216,7 +216,7 @@ static bool _http_setUrl(DasHttpResp* pRes, const char* sUrl)
 		return false;
 	}
 
-	if(!_http_partCopy(pRes->sUrl, &(pRes->parts), DASURL_HOST, pRes->sHost, sizeof(pRes->sHost))){
+	if(!_http_partCopy(pRes->sUrl, &(pRes->parts), DASURLPART_HOST, pRes->sHost, sizeof(pRes->sHost))){
 		_http_err(pRes, "Host name in URL %s is too long", sUrl);
 		return false;
 	}
@@ -232,7 +232,7 @@ static bool _http_setUrl(DasHttpResp* pRes, const char* sUrl)
 		return false;
 	}
 
-	_http_partCopy(pRes->sUrl, &(pRes->parts), DASURL_PORT, pRes->sPort, sizeof(pRes->sPort));
+	_http_partCopy(pRes->sUrl, &(pRes->parts), DASURLPART_PORT, pRes->sPort, sizeof(pRes->sPort));
 	pRes->bDefPort = (strcmp(pRes->sPort, pRes->bHttps ? "443" : "80") == 0);
 	return true;
 }
@@ -241,7 +241,7 @@ static bool _http_setUrl(DasHttpResp* pRes, const char* sUrl)
 static void _http_server(const DasHttpResp* pRes, char* sBuf, size_t uLen)
 {
 	size_t uPath = 0;
-	const char* pPath = das_url_part(&(pRes->parts), pRes->sUrl, DASURL_PATH, &uPath);
+	const char* pPath = DasUrlParts_get(&(pRes->parts), pRes->sUrl, DASURLPART_PATH, &uPath);
 	snprintf(sBuf, uLen, "%s://%s%s%s%s%s%.*s", pRes->bHttps ? "https" : "http",
 		pRes->bIp6 ? "[" : "", pRes->sHost, pRes->bIp6 ? "]" : "",
 		pRes->bDefPort ? "" : ":", pRes->bDefPort ? "" : pRes->sPort,
@@ -260,7 +260,7 @@ static SSL_CTX* g_pSslCtx = NULL;
 
 static pthread_mutex_t g_mtxAddrArys;
 static DasAry* g_pHostAry = NULL;
-static DasAry* g_pAddrAry = NULL;
+static DasAry* g_pAddrInfoAry = NULL;
 
 
 bool das_http_init(const char* sProgName){
@@ -280,14 +280,14 @@ bool das_http_init(const char* sProgName){
 	void* fill = NULL;  /* the fill value *is* the void ptr, not it's value */
 
 	/* After this point, don't alter or use this without owning the mutext */
-	g_pAddrAry = new_DasAry(
-		"addr_pointers", vtUnknown, sizeof(ubyte*), (const ubyte*) &fill,
-		RANK_1(0), UNIT_DIMENSIONLESS
+	g_pAddrInfoAry = new_DasAry(
+		"addr_pointers", DASVT_UNK, sizeof(uint8_t*), (const uint8_t*) &fill,
+		DAS_SHAPE1(0), DASUNITS_DIMENSIONLESS
 	);
 
 	/* Setup a host name array as well, this as ragged in both dimensions */
 	g_pHostAry = new_DasAry(
-		"host_names", vtUByte, 0, (const ubyte[1]){0}, RANK_2(0,0), UNIT_DIMENSIONLESS
+		"host_names", DASVT_UBYTE, 0, (const uint8_t[1]){0}, DAS_SHAPE2(0,0), DASUNITS_DIMENSIONLESS
 	);
 
 	/* Let customers know we're storing null terminated strings as the
@@ -299,7 +299,7 @@ bool das_http_init(const char* sProgName){
 	WSADATA wsaData;
 	int nErr = WSAStartup(wVersionRequested, &wsaData);
 	if(nErr != 0){
-		das_error(DASERR_INIT, "Windows Socket startup failed with error: %d\n", nErr);
+		daserrf(DASERR_INIT, "Windows Socket startup failed with error: %d\n", nErr);
 		return false;
 	}
 #endif
@@ -312,17 +312,17 @@ void das_http_finish()
 {
 	if(g_pHostAry) dec_DasAry(g_pHostAry);
 
-	if(g_pAddrAry){
-		size_t uAddrs = DasAry_lengthIn(g_pAddrAry, DIM0);
+	if(g_pAddrInfoAry){
+		size_t uAddrs = DasAry_lengthIn(g_pAddrInfoAry, DAS_ADDR0);
 
-		struct addrinfo* pAddr = NULL;
+		struct addrinfo* pAddrInfo = NULL;
 
 		for(size_t u = 0; u < uAddrs; ++u){
-			pAddr = *((struct addrinfo**) DasAry_getAt(g_pAddrAry, vtUnknown, DIM1_AT(u)));
-			freeaddrinfo(pAddr);
+			pAddrInfo = *((struct addrinfo**) DasAry_valAt(g_pAddrInfoAry, DASVT_UNK, DAS_ADDR1(u)));
+			freeaddrinfo(pAddrInfo);
 		}
 
-		dec_DasAry(g_pAddrAry);
+		dec_DasAry(g_pAddrInfoAry);
 	}
 
 #ifdef _WIN32
@@ -398,27 +398,27 @@ static char* _http_get_ssl_global_errors(){
 static char* _http_sslErr(const SSL* pSsl, int nRet)
 {
 	switch(SSL_get_error(pSsl, nRet)){
-	case SSL_ERROR_ZERO_RETURN: return das_strdup("Connection closed");
+	case SSL_ERROR_ZERO_RETURN: return dasstr_new("Connection closed");
 	case SSL_ERROR_WANT_READ:
 	case SSL_ERROR_WANT_WRITE:
-		return das_strdup("Negotiation requested, initialize with "
+		return dasstr_new("Negotiation requested, initialize with "
 			               "SSL_MODE_AUTO_RETRY  to avoid.");
 	case SSL_ERROR_WANT_CONNECT:
 	case SSL_ERROR_WANT_ACCEPT:
-		return das_strdup("Connection not established.");
+		return dasstr_new("Connection not established.");
 
 	case SSL_ERROR_WANT_X509_LOOKUP:
-		return das_strdup("Cert change requested, callback given to "
+		return dasstr_new("Cert change requested, callback given to "
 				 "SSL_CTX_set_client_cert_cb() must be called again");
 
 	case SSL_ERROR_SYSCALL:
-		return das_strdup("Low level socket I/O error, timed out or reset");
+		return dasstr_new("Low level socket I/O error, timed out or reset");
 
 	case SSL_ERROR_SSL:
 		return _http_get_ssl_global_errors();
 
 	default:
-		return das_strdup("Unknown TLS error");
+		return dasstr_new("Unknown TLS error");
 	}
 }
 
@@ -525,7 +525,7 @@ static bool _das_http_getProxy(DasHttpResp* pRes, struct das_proxy* pProxy)
 	if((pIn == NULL)||(*pIn == '\0')) return true;
 
 	if(_das_http_noProxy(pRes->sHost)){
-		daslog_debug_v("Host %s is in no_proxy, connecting directly", pRes->sHost);
+		daslog_debugf("Host %s is in no_proxy, connecting directly", pRes->sHost);
 		return true;
 	}
 
@@ -558,7 +558,7 @@ static bool _das_http_getProxy(DasHttpResp* pRes, struct das_proxy* pProxy)
 			return false;
 		}
 		size_t uB64 = 0;
-		char* s64 = das_b64_encode((const unsigned char*)sUser, nUser, &uB64);
+		char* s64 = dasb64_encode((const unsigned char*)sUser, nUser, &uB64);
 		_dascred_wipe(sUser, sizeof(sUser));
 		if(s64 == NULL){
 			_http_err(pRes, "Couldn't encode proxy credentials from %s", sVar);
@@ -588,7 +588,7 @@ static bool _das_http_getProxy(DasHttpResp* pRes, struct das_proxy* pProxy)
 		}
 	}
 
-	daslog_debug_v("Using proxy %s:%s from %s for %s%s", pProxy->sHost,
+	daslog_debugf("Using proxy %s:%s from %s for %s%s", pProxy->sHost,
 		pProxy->sPort, sVar, pRes->sHost, pProxy->sAuth[0] ? ", with credentials" : ""
 	);
 	return true;
@@ -667,7 +667,7 @@ static bool _das_http_tunnel(
 		);
 		return false;
 	}
-	daslog_debug_v("Proxy tunnel open to %s:%s", pRes->sHost, pRes->sPort);
+	daslog_debugf("Proxy tunnel open to %s:%s", pRes->sHost, pRes->sPort);
 	return true;
 }
 
@@ -682,35 +682,35 @@ static bool _das_http_tunnel(
 */
 static struct addrinfo* _das_http_getsrvaddr(
 	DasHttpResp* pRes, const char* sHost, const char* sPort, const char* sKind,
-	das_ip_ver_e eIpVer
+	das_ipver eIpVer
 ){
 	struct addrinfo hints;
-	struct addrinfo* pAddr = NULL;
+	struct addrinfo* pAddrInfo = NULL;
 	char sKey[_HTTP_SZ_HOST + _HTTP_SZ_PORT + 8];
 	snprintf(sKey, sizeof(sKey), "%s:%s/%d", sHost, sPort, (int)eIpVer);
 
 	/* First see if I already have the address info I need in the cache */
 	pthread_mutex_lock(&g_mtxAddrArys);
 
-	size_t uStrLen, uHosts = DasAry_lengthIn(g_pHostAry, DIM0);
+	size_t uStrLen, uHosts = DasAry_lengthIn(g_pHostAry, DAS_ADDR0);
 	const char* sName = NULL;
 	for(size_t u = 0; u < uHosts; ++u){
-		sName = DasAry_getCharsIn(g_pHostAry, DIM1_AT(u), &uStrLen);
+		sName = DasAry_charsIn(g_pHostAry, DAS_ADDR1(u), &uStrLen);
 
 		if(strcmp(sKey, sName) == 0){
-			pAddr = *((struct addrinfo**) DasAry_getAt(g_pAddrAry, vtUnknown, DIM1_AT(u)));
+			pAddrInfo = *((struct addrinfo**) DasAry_valAt(g_pAddrInfoAry, DASVT_UNK, DAS_ADDR1(u)));
 			break;
 		}
 	}
 
 	pthread_mutex_unlock(&g_mtxAddrArys);
 
-	if(pAddr != NULL) return pAddr;   /* Yay, no DOSing the DNS today! */
+	if(pAddrInfo != NULL) return pAddrInfo;   /* Yay, no DOSing the DNS today! */
 
 	memset(&hints, 0, sizeof(struct addrinfo));
 	/* Any version starts with IPv4, the das servers people use mostly have
 	   it, and falls back to IPv6 for hosts that have no IPv4 address */
-	hints.ai_family = (eIpVer == DASIP_V6) ? AF_INET6 : AF_INET;
+	hints.ai_family = (eIpVer == DASIPVER_V6) ? AF_INET6 : AF_INET;
 	hints.ai_socktype = SOCK_STREAM;
 
 	/* Address lookups trigger a blizzard of calls, see this article for more:
@@ -737,20 +737,20 @@ static struct addrinfo* _das_http_getsrvaddr(
 	while(!bStop){
 
 		errno = 0;
-		nErr = getaddrinfo(sHost, sPort, &hints, &pAddr);
+		nErr = getaddrinfo(sHost, sPort, &hints, &pAddrInfo);
 		nErrno = errno;
 		if(nErr == 0) break;       /* Worked */
 
-		if(pAddr){                 /* Didn't work... */
-			freeaddrinfo(pAddr);
-			pAddr = NULL;
+		if(pAddrInfo){                 /* Didn't work... */
+			freeaddrinfo(pAddrInfo);
+			pAddrInfo = NULL;
 		}
 
 		switch(nErr){
 #ifdef EAI_SYSTEM
 		case EAI_SYSTEM:           /* ...because of a SIGNAL or system error */
 			if(nLoops == 0)
-				daslog_warn_v("Address resolution failed for %s, looping with timeout", sHost);
+				daslog_warnf("Address resolution failed for %s, looping with timeout", sHost);
 			break;
 #endif
 
@@ -763,8 +763,8 @@ static struct addrinfo* _das_http_getsrvaddr(
 #if defined(EAI_NODATA) && (EAI_NODATA != EAI_NONAME)
 		case EAI_NODATA:
 #endif
-			if((eIpVer == DASIP_ANY) && (hints.ai_family == AF_INET)){
-				daslog_debug_v("No IPv4 address for %s, trying IPv6", sHost);
+			if((eIpVer == DASIPVER_ANY) && (hints.ai_family == AF_INET)){
+				daslog_debugf("No IPv4 address for %s, trying IPv6", sHost);
 				hints.ai_family = AF_INET6;
 				continue;               /* a different question, no backoff */
 			}
@@ -803,7 +803,7 @@ static struct addrinfo* _das_http_getsrvaddr(
 
 	/* If I couldn't get an address, report last error message */
 	const char* sReason = NULL;
-	if(!pAddr){
+	if(!pAddrInfo){
 
 #ifdef EAI_SYSTEM
 		/* EAI_SYSTEM not defined as a return on Windows */
@@ -822,14 +822,14 @@ static struct addrinfo* _das_http_getsrvaddr(
 	/* Got an address, so save it */
 	pthread_mutex_lock(&g_mtxAddrArys);
 
-	DasAry_append(g_pAddrAry, (const ubyte*) &pAddr, 1);
+	DasAry_append(g_pAddrInfoAry, (const uint8_t*) &pAddrInfo, 1);
 
-	DasAry_append(g_pHostAry, (ubyte*)(sKey), strlen(sKey) + 1);
-	DasAry_markEnd(g_pHostAry, DIM1);  /* Roll first index, last idx is ragged */
+	DasAry_append(g_pHostAry, (uint8_t*)(sKey), strlen(sKey) + 1);
+	DasAry_markEnd(g_pHostAry, DAS_IDX1);  /* Roll first index, last idx is ragged */
 
 	pthread_mutex_unlock(&g_mtxAddrArys);
 
-	return pAddr;
+	return pAddrInfo;
 }
 
 /* ************************************************************************* */
@@ -871,9 +871,9 @@ static bool _http_setTimeout(int nFd, float rSec)
  * and start TLS for https.  Returns the connection as a transport, or NULL
  * with the error set.  The connect timeout covers the TLS handshake too;
  * after that the read timeout, if any, governs every read. */
-static DasXport* _das_http_connect(DasHttpResp* pRes, const das_http_opts* pOpts)
+static DasXport* _das_http_connect(DasHttpResp* pRes, const DasHttpOpts* pOpts)
 {
-	daslog_debug_v("Connecting to %s, port %s", pRes->sHost, pRes->sPort);
+	daslog_debugf("Connecting to %s, port %s", pRes->sHost, pRes->sPort);
 
 	/* Re-evaluated per call, a redirect may cross a no_proxy boundary */
 	struct das_proxy proxy;
@@ -883,35 +883,35 @@ static DasXport* _das_http_connect(DasHttpResp* pRes, const das_http_opts* pOpts
 	const char* sPort = bProxy ? proxy.sPort : pRes->sPort;
 	const char* sKind = bProxy ? "proxy" : "host";
 
-	struct addrinfo* pAddr = _das_http_getsrvaddr(pRes, sHost, sPort, sKind, pOpts->eIpVer);
-	if(pAddr == NULL) return NULL;
+	struct addrinfo* pAddrInfo = _das_http_getsrvaddr(pRes, sHost, sPort, sKind, pOpts->ipVersion);
+	if(pAddrInfo == NULL) return NULL;
 
 	errno = 0;
-	int nFd = socket(pAddr->ai_family, pAddr->ai_socktype, pAddr->ai_protocol);
+	int nFd = socket(pAddrInfo->ai_family, pAddrInfo->ai_socktype, pAddrInfo->ai_protocol);
 	if(nFd == -1){
 		_http_err(pRes,
 			"Couldn't get socket to %s %s, because %s, address info dump follows\n"
 			"   ai_family %d  ai_socktype %d  ai_protocol %d",
 			sKind, sHost, strerror(errno),
-			pAddr->ai_family, pAddr->ai_socktype, pAddr->ai_protocol);
+			pAddrInfo->ai_family, pAddrInfo->ai_socktype, pAddrInfo->ai_protocol);
 		return NULL;
 	}
-	daslog_debug_v("Connecting to %s %s, socket info follows\n"
+	daslog_debugf("Connecting to %s %s, socket info follows\n"
 		"ai_family %d  ai_socktype %d  ai_protocol %d  sock_fd %d",  sKind, sHost,
-		pAddr->ai_family, pAddr->ai_socktype, pAddr->ai_protocol, nFd
+		pAddrInfo->ai_family, pAddrInfo->ai_socktype, pAddrInfo->ai_protocol, nFd
 	);
 
-	if((pOpts->rConSec > 0.0) && !_http_setTimeout(nFd, pOpts->rConSec)){
+	if((pOpts->connectSec > 0.0) && !_http_setTimeout(nFd, pOpts->connectSec)){
 		_http_err(pRes, "Error setting socket timeout value");
 		_http_sockClose(nFd);
 		return NULL;
 	}
 
 	errno = 0;
-	if( connect(nFd, pAddr->ai_addr, pAddr->ai_addrlen) == -1){
-		if(pOpts->rConSec > 0.0)
+	if( connect(nFd, pAddrInfo->ai_addr, pAddrInfo->ai_addrlen) == -1){
+		if(pOpts->connectSec > 0.0)
 			_http_err(pRes, "Couldn't connect to %s %s port %s, within %.3f seconds",
-				sKind, sHost, sPort, pOpts->rConSec
+				sKind, sHost, sPort, pOpts->connectSec
 			);
 		else
 			_http_err(pRes, "Couldn't connect to %s %s port %s, %s", sKind,
@@ -947,7 +947,7 @@ static DasXport* _das_http_connect(DasHttpResp* pRes, const das_http_opts* pOpts
 		/* Create a new SSL object, keep the mutex lock until we are done
 		 * reading /generating any error strings */
 		pthread_mutex_lock(&g_mtxHttp);
-		daslog_debug_v("Creating new SSL session for fd %d", nFd);
+		daslog_debugf("Creating new SSL session for fd %d", nFd);
 		SSL* pSsl = SSL_new(g_pSslCtx);
 		pthread_mutex_unlock(&g_mtxHttp);
 
@@ -1004,7 +1004,7 @@ static DasXport* _das_http_connect(DasHttpResp* pRes, const das_http_opts* pOpts
 	}
 
 	/* The connect timeout is over, from here on each read waits rReadSec */
-	if(!_http_setTimeout(nFd, pOpts->rReadSec)){
+	if(!_http_setTimeout(nFd, pOpts->readSec)){
 		_http_err(pRes, "Error setting socket timeout value");
 		del_DasXport(pX);
 		return NULL;
@@ -1020,8 +1020,8 @@ static bool _das_http_sendRequest(
 	const char* sReqHdrs
 ){
 	size_t uPath = 0, uQuery = 0;
-	const char* pPath  = das_url_part(&(pRes->parts), pRes->sUrl, DASURL_PATH, &uPath);
-	const char* pQuery = das_url_part(&(pRes->parts), pRes->sUrl, DASURL_QUERY, &uQuery);
+	const char* pPath  = DasUrlParts_get(&(pRes->parts), pRes->sUrl, DASURLPART_PATH, &uPath);
+	const char* pQuery = DasUrlParts_get(&(pRes->parts), pRes->sUrl, DASURLPART_QUERY, &uQuery);
 
 	/* Sized to fit, the request line carries the whole query */
 	size_t uSz = uPath + uQuery + strlen(pRes->sHost) + 512 + DASCRED_AUTH_SZ +
@@ -1191,7 +1191,7 @@ bool _DasHttpResp_readHdrs(DasHttpResp* pRes, DasXport* pX)
 
 	char sType[256];
 	if(DasHttpResp_header(pRes, "Content-Type", sType, sizeof(sType)))
-		pRes->sMime = das_strdup(sType);
+		pRes->sMime = dasstr_new(sType);
 	_http_setFilename(pRes);
 	return true;
 }
@@ -1199,20 +1199,20 @@ bool _DasHttpResp_readHdrs(DasHttpResp* pRes, DasXport* pX)
 /* ************************************************************************* */
 /* Making requests */
 
-das_errcode das_http_opts_init_ver(das_http_opts* pOpts, size_t uVersion)
+das_errcode init_DasHttpOpts_ver(DasHttpOpts* pOpts, size_t uVersion)
 {
 	/* A later library adds cases here for each older layout it can still
 	   serve, clearing and defaulting only the members that layout has */
-	if(uVersion != DAS_HTTP_OPTS_V3_0)
-		return das_error(DASERR_HTTP,
-			"Unknown das_http_opts version 0x%04zx, this library knows 0x%04x",
-			uVersion, DAS_HTTP_OPTS_VER
+	if(uVersion != DASHTTPOPTS_V3_0)
+		return daserrf(DASERR_HTTP,
+			"Unknown DasHttpOpts version 0x%04zx, this library knows 0x%04x",
+			uVersion, DASHTTPOPTS_VER
 		);
 
-	memset(pOpts, 0, sizeof(das_http_opts));
-	pOpts->uVersion = uVersion;
-	pOpts->rConSec = DASHTTP_TO_MIN;
-	pOpts->eIpVer = DASIP_ANY;
+	memset(pOpts, 0, sizeof(DasHttpOpts));
+	pOpts->uStructVer = uVersion;
+	pOpts->connectSec = DASHTTP_TIMEOUT_MIN;
+	pOpts->ipVersion = DASIPVER_ANY;
 	return DAS_OKAY;
 }
 
@@ -1234,17 +1234,17 @@ static bool _http_nextUrl(DasHttpResp* pRes, const char* sLoc, char* sOut, size_
 }
 
 DasHttpResp* new_DasHttpResp_get(
-	const char* sUrl, const char* sAgent, DasCredMngr* pMgr, float rConSec
+	const char* sUrl, const char* sAgent, DasCredMgr* pMgr, float rConSec
 ){
-	das_http_opts opts;
-	das_http_opts_init(&opts);
-	opts.sAgent = sAgent;
-	opts.rConSec = rConSec;
+	DasHttpOpts opts;
+	init_DasHttpOpts(&opts);
+	opts.userAgent = sAgent;
+	opts.connectSec = rConSec;
 	return new_DasHttpResp_getEx(sUrl, pMgr, &opts);
 }
 
 DasHttpResp* new_DasHttpResp_getEx(
-	const char* sUrl, DasCredMngr* pMgr, const das_http_opts* pOpts
+	const char* sUrl, DasCredMgr* pMgr, const DasHttpOpts* pOpts
 ){
 	DasHttpResp* pRes = _new_DasHttpResp();
 	if(pRes == NULL) return NULL;
@@ -1252,18 +1252,18 @@ DasHttpResp* new_DasHttpResp_getEx(
 	/* Work from a copy in this library's own layout.  Only one layout exists
 	   so far; a later library copies just the members the caller's version
 	   has, and members it didn't know about keep their defaults. */
-	das_http_opts opts;
-	das_http_opts_init(&opts);
+	DasHttpOpts opts;
+	init_DasHttpOpts(&opts);
 	if(pOpts != NULL){
 		/* A zeroed struct (memset, = {0}) would otherwise run on defaults and
 		   quietly drop every setting the caller made */
-		if(pOpts->uVersion == 0){
-			_http_err(pRes, "das_http_opts was not initialized, start it with "
-			          "das_http_opts_init()");
+		if(pOpts->uStructVer == 0){
+			_http_err(pRes, "DasHttpOpts was not initialized, start it with "
+			          "init_DasHttpOpts()");
 			return pRes;
 		}
-		if(pOpts->uVersion != DAS_HTTP_OPTS_V3_0){
-			_http_err(pRes, "das_http_opts version is newer than this library");
+		if(pOpts->uStructVer != DASHTTPOPTS_V3_0){
+			_http_err(pRes, "DasHttpOpts version is newer than this library");
 			return pRes;
 		}
 		memcpy(&opts, pOpts, sizeof(opts));
@@ -1288,14 +1288,14 @@ DasHttpResp* new_DasHttpResp_getEx(
 		DasXport* pX = _das_http_connect(pRes, &opts);
 		if(pX == NULL) break;
 
-		if(!_das_http_sendRequest(pRes, pX, opts.sAgent, sAuth, opts.sReqHdrs) ||
+		if(!_das_http_sendRequest(pRes, pX, opts.userAgent, sAuth, opts.extraHeaders) ||
 		   !_DasHttpResp_readHdrs(pRes, pX)){
 			del_DasXport(pX);
 			break;
 		}
 
 		_http_server(pRes, sServer, sizeof(sServer));
-		if(!_http_partCopy(pRes->sUrl, &(pRes->parts), DASURL_DATASET, sDataset, sizeof(sDataset)))
+		if(!_http_partCopy(pRes->sUrl, &(pRes->parts), DASURLPART_DATASET, sDataset, sizeof(sDataset)))
 			sDataset[0] = '\0';  /* too long to be a das2 dataset, no per-dataset login */
 
 		switch(pRes->nCode){
@@ -1332,7 +1332,7 @@ DasHttpResp* new_DasHttpResp_getEx(
 				_http_err(pRes, "Can't follow redirect to %s from host %s", sLoc, pRes->sHost);
 				goto DONE;
 			}
-			daslog_debug_v("Redirected to: %s", sNext);
+			daslog_debugf("Redirected to: %s", sNext);
 			if(!_http_setUrl(pRes, sNext)) goto DONE;
 			break;
 
@@ -1369,8 +1369,8 @@ DasHttpResp* new_DasHttpResp_getEx(
 				if(nCred < 1){
 					_http_err(pRes, "Credentials manager did not supply an "
 						"authentication token for dataset %s on server %s%s", sDataset,
-						sServer, (DasCredMngr_getPrompt(pMgr, NULL) == NULL) ?
-						", and it has no prompt, see DasCredMngr_setPrompt()" : ""
+						sServer, (DasCredMgr_prompt(pMgr, NULL) == NULL) ?
+						", and it has no prompt, see DasCredMgr_setPrompt()" : ""
 					);
 					goto DONE;
 				}
@@ -1386,7 +1386,7 @@ DasHttpResp* new_DasHttpResp_getEx(
 
 		case HTTP_NotFound:{
 			size_t uPath = 0;
-			const char* pPath = das_url_part(&(pRes->parts), pRes->sUrl, DASURL_PATH, &uPath);
+			const char* pPath = DasUrlParts_get(&(pRes->parts), pRes->sUrl, DASURLPART_PATH, &uPath);
 			del_DasXport(pX);
 			_http_err(pRes, "Error in request path '%.*s' for host '%s'",
 				(int)uPath, pPath ? pPath : "", pRes->sHost
@@ -1396,7 +1396,7 @@ DasHttpResp* new_DasHttpResp_getEx(
 
 		case HTTP_BadReq:{
 			size_t uQuery = 0;
-			const char* pQuery = das_url_part(&(pRes->parts), pRes->sUrl, DASURL_QUERY, &uQuery);
+			const char* pQuery = DasUrlParts_get(&(pRes->parts), pRes->sUrl, DASURLPART_QUERY, &uQuery);
 			del_DasXport(pX);
 			_http_err(pRes, "Error in query parameters '%.*s'", (int)uQuery,
 				pQuery ? pQuery : ""
@@ -1421,19 +1421,19 @@ DONE:
 /* ************************************************************************* */
 /* A just-give-me-a-bag-of-bytes convenience function */
 
-DasAry* das_http_readUrl(
-	const char* sUrl, const char* sAgent, DasCredMngr* pMgr, int64_t nLimit,
+DasAry* new_DasAry_http(
+	const char* sUrl, const char* sAgent, DasCredMgr* pMgr, int64_t nLimit,
 	float rConSec, DasHttpResp** ppRes
 ){
-	das_http_opts opts;
-	das_http_opts_init(&opts);
-	opts.sAgent = sAgent;
-	opts.rConSec = rConSec;
-	return das_http_readUrl_ex(sUrl, pMgr, &opts, nLimit, ppRes);
+	DasHttpOpts opts;
+	init_DasHttpOpts(&opts);
+	opts.userAgent = sAgent;
+	opts.connectSec = rConSec;
+	return new_DasAry_httpEx(sUrl, pMgr, &opts, nLimit, ppRes);
 }
 
-DasAry* das_http_readUrl_ex(
-	const char* sUrl, DasCredMngr* pMgr, const das_http_opts* pOpts,
+DasAry* new_DasAry_httpEx(
+	const char* sUrl, DasCredMgr* pMgr, const DasHttpOpts* pOpts,
 	int64_t nLimit, DasHttpResp** ppRes
 ){
 	if(ppRes != NULL) *ppRes = NULL;
@@ -1447,14 +1447,14 @@ DasAry* das_http_readUrl_ex(
 		if(nLimit < 1) nLimit = -1;
 		int64_t nTotal = 0;
 
-		pAry = new_DasAry("http_body", vtUByte, 1, (const ubyte[1]){0}, RANK_1(0), UNIT_DIMENSIONLESS);
+		pAry = new_DasAry("http_body", DASVT_UBYTE, 1, (const uint8_t[1]){0}, DAS_SHAPE1(0), DASUNITS_DIMENSIONLESS);
 
-		ubyte aBuf[_HTTP_CHUNK_SZ];
+		uint8_t aBuf[_HTTP_CHUNK_SZ];
 		while((pAry != NULL) && ((nLimit == -1)||(nTotal < nLimit))){
 			ptrdiff_t nRead = DasXport_read(pX, aBuf, _HTTP_CHUNK_SZ);
 			if(nRead == 0) break;      /* Socket is done */
 			if(nRead < 0){             /* Socket is broke */
-				daslog_error_v("Error reading body of %s, %s", sUrl, DasXport_error(pX));
+				daslog_errorf("Error reading body of %s, %s", sUrl, DasXport_error(pX));
 				dec_DasAry(pAry);
 				pAry = NULL;
 				break;
@@ -1470,10 +1470,10 @@ DasAry* das_http_readUrl_ex(
 
 		if(pAry != NULL){
 			if((nLimit > 0)&&(nTotal > nLimit))
-				daslog_warn_v("Limit of %" PRId64 " bytes hit, almost certainly returning a "
+				daslog_warnf("Limit of %" PRId64 " bytes hit, almost certainly returning a "
 				              "partial download", nLimit);
 			else
-				daslog_debug_v("%zu bytes read from %s", (size_t)DasAry_size(pAry), sUrl);
+				daslog_debugf("%zu bytes read from %s", (size_t)DasAry_size(pAry), sUrl);
 		}
 	}
 

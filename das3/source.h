@@ -65,12 +65,12 @@ extern "C" {
  * The common path, through a DasCat:
  *
  * @code
- * DasSrc* pSrc = DasCat_newSrc(pCat, "uiowa/juno/wav/survey");
- * DasReq* pReq = DasSrc_newReq(pSrc, 0);             // seeded from example 0
+ * DasSrc* pSrc = new_DasSrc_cat(pCat, "uiowa/juno/wav/survey");
+ * DasReq* pReq = new_DasReq_src(pSrc, 0);             // seeded from example 0
  * DasReq_set(pReq, "time.res", "30");                 // then adjusted
  *
  * char sUrl[2048];
- * if(DasStreamSrc_url(pSrc, pReq, 0, sUrl, sizeof(sUrl)) > 0)
+ * if(DasSrc_reqUrl(pSrc, pReq, 0, sUrl, sizeof(sUrl)) > 0)
  *    new_DasHttpResp_get(sUrl, ...);                  // or fetch(), or QNAM
  *
  * del_DasReq(pReq);
@@ -112,7 +112,7 @@ extern "C" {
  *     sets only the maximum.
  *   - `time=2021-02-21` with no comma means the span that time denotes:
  *     the whole day; `time=2021-02-21T14` the hour from 14:00 to 15:00;
- *     `time=2021` the year.  See dt_parsespan() for the rule.
+ *     `time=2021` the year.  See DasTime_strToSpan() for the rule.
  *
  * In a well formed source, the group names under `coords` are the physical
  * dimension names of the emitted stream, @see DasDim.  A client that has
@@ -124,17 +124,17 @@ extern "C" {
  * @par Drawing a form
  *
  * @code
- * for(int sec = 0; sec < das_src_sec_size; ++sec){
- *    for(size_t g = 0; g < DasSrc_groupCount(pSrc, sec); ++g){
- *       const DasSrcGroup* pG = DasSrc_group(pSrc, sec, g);
- *       const DasSrcProp* pOn = DasSrcGroup_enable(pG);   // the gate, or NULL
+ * for(int sec = 0; sec < DASSRCSEC_SIZE; ++sec){
+ *    for(size_t g = 0; g < DasSrc_numGroups(pSrc, sec); ++g){
+ *       const DasSrcGroup* pG = DasSrc_groupAt(pSrc, sec, g);
+ *       const DasSrcProp* pOn = DasSrcGroup_enableProp(pG);   // the gate, or NULL
  *
- *       for(size_t p = 0; p < DasSrcGroup_propCount(pG); ++p){
- *          const DasSrcProp* pProp = DasSrcGroup_prop(pG, p);
+ *       for(size_t p = 0; p < DasSrcGroup_numProps(pG); ++p){
+ *          const DasSrcProp* pProp = DasSrcGroup_propAt(pG, p);
  *          const DasSrcCtrl* pCtrl = DasSrcProp_ctrl(pProp);
  *          if(pCtrl == NULL) continue;                    // nothing to set here
  *
- *          const char* sNow = DasReq_value(pReq, DasSrcProp_key(pProp));
+ *          const char* sNow = DasReq_val(pReq, DasSrcProp_key(pProp));
  *          draw_control(DasSrcProp_type(pProp), pCtrl, sNow ? sNow : DasSrcProp_value(pProp));
  *       }
  *    }
@@ -142,7 +142,7 @@ extern "C" {
  * @endcode
  *
  * The verdicts to mark boxes with come from DasSrc_check(), read back by
- * entry through DasReq_verdict() and DasReq_why().
+ * entry through DasReq_verdictAt() and DasReq_whyAt().
  *
  * @par Two node layouts
  *
@@ -154,26 +154,26 @@ extern "C" {
  */
 
 /** The parts of a source interface, in presentation order.
- * `das_src_sec_size` is the number of real sections, handy for sizing
+ * `DASSRCSEC_SIZE` is the number of real sections, handy for sizing
  * per section arrays. */
-typedef enum das_src_sec_enum {
-	das_src_sec_coord = 0,  /**< "coords": time, frequency, L-shell ... */
-	das_src_sec_data,       /**< "data": the variables a source can emit */
-	das_src_sec_format,     /**< "formats": output serializations and their knobs */
-	das_src_sec_option,     /**< "options": server specific switches, one group */
-	das_src_sec_size
-} das_src_sec_e;
+typedef enum das_srcsec_e {
+	DASSRCSEC_COORD = 0,  /**< "coords": time, frequency, L-shell ... */
+	DASSRCSEC_DATA,       /**< "data": the variables a source can emit */
+	DASSRCSEC_FORMAT,     /**< "formats": output serializations and their knobs */
+	DASSRCSEC_OPTION,     /**< "options": server specific switches, one group */
+	DASSRCSEC_SIZE
+} das_srcsec;
 
 /** The name of a section as it appears in keys, "coords", "data",
- * "formats" or "options".  "" for das_src_sec_size. */
-DAS_API const char* das_src_sec_name(das_src_sec_e sec);
+ * "formats" or "options".  "" for DASSRCSEC_SIZE. */
+DAS_API const char* dassrcsec_name(das_srcsec sec);
 
 /** Kinds of source.  Only stream sources are implemented today. */
-typedef enum das_src_kind_enum {
-	das_src_kind_inv = 0,
-	das_src_kind_stream,    /**< node type HttpStreamSrc, see DasStreamSrc_url() */
-	das_src_kind_file       /**< node type FileTimeAgg, reserved */
-} das_src_kind_e;
+typedef enum das_srckind_e {
+	DASSRCKIND_INVALID = 0,
+	DASSRCKIND_STREAM,    /**< node type HttpStreamSrc, see DasSrc_reqUrl() */
+	DASSRCKIND_FILE       /**< node type FileTimeAgg, reserved */
+} das_srckind;
 
 /** The kind of value a property holds.
  *
@@ -182,34 +182,34 @@ typedef enum das_src_kind_enum {
  * type the library does not recognize is reported as text and the
  * node's spelling is still available via DasSrcProp_typeName().
  */
-typedef enum das_srcprop_type_enum {
-	das_srcprop_text = 0,  /**< any string, including unrecognized types */
-	das_srcprop_bool,      /**< true or false, see DasSrcCtrl_check() for spellings */
-	das_srcprop_int,       /**< an integer in decimal */
-	das_srcprop_real,      /**< a real number */
-	das_srcprop_time,      /**< a UTC time, ISO 8601 */
-	das_srcprop_enum       /**< one of a fixed list, see DasSrcCtrl_enumCount() */
-} das_srcprop_type_e;
+typedef enum das_srcproptype_e {
+	DASSRCPROPTYPE_TEXT = 0,  /**< any string, including unrecognized types */
+	DASSRCPROPTYPE_BOOL,      /**< true or false, see DasSrcCtrl_check() for spellings */
+	DASSRCPROPTYPE_INT,       /**< an integer in decimal */
+	DASSRCPROPTYPE_REAL,      /**< a real number */
+	DASSRCPROPTYPE_TIME,      /**< a UTC time, ISO 8601 */
+	DASSRCPROPTYPE_ENUM       /**< one of a fixed list, see DasSrcCtrl_numEnums() */
+} das_srcproptype;
 
 /** @class DasSrc source.h <das3/source.h>
  *
  * A data source description.  See the group description. */
-typedef struct das_src DasSrc;
+typedef struct das_src_t DasSrc;
 
 /** @class DasSrcGroup source.h <das3/source.h>
  *
  * A box on the form.  Owned by its source.  */
-typedef struct das_src_group DasSrcGroup;
+typedef struct das_srcgroup_t DasSrcGroup;
 
 /** @class DasSrcProp source.h <das3/source.h>
  *
  * One property of a source, fixed or adjustable.  Owned by its source. */
-typedef struct das_src_prop DasSrcProp;
+typedef struct das_srcprop_t DasSrcProp;
 
 /** @class DasSrcCtrl source.h <das3/source.h>
  *
  * How an adjustable property may be changed.  Owned by its property. */
-typedef struct das_src_ctrl DasSrcCtrl;
+typedef struct das_srcctrl_t DasSrcCtrl;
 
 /* ************************************************************************* */
 /* Making and identifying sources */
@@ -235,15 +235,15 @@ typedef struct das_src_ctrl DasSrcCtrl;
  *
  * @returns The number of loadable children, which may exceed uMax.
  */
-DAS_API size_t dassrc_loadable(const DasNode* pNode, const char** aNames, size_t uMax);
+DAS_API size_t DasSrc_loadable(const DasNode* pNode, const char** aNames, size_t uMax);
 
 /** Build a DasSrc from a DasNode.
  *
  * The node's document is copied, so the node and its tree may be freed
- * afterwards.  Usually reached through DasCat_newSrc().
+ * afterwards.  Usually reached through new_DasSrc_cat().
  *
  * The node must be a source itself.  A container is refused with its
- * loadable children named in the log, see dassrc_loadable().
+ * loadable children named in the log, see DasSrc_loadable().
  *
  * @param pNode A node of type HttpStreamSrc.  Borrowed.
  * 
@@ -278,7 +278,7 @@ DAS_API DasSrc* new_DasSrc_json(
 DAS_API void del_DasSrc(DasSrc* pThis);
 
 /** @memberof DasSrc */
-DAS_API das_src_kind_e DasSrc_kind(const DasSrc* pThis);
+DAS_API das_srckind DasSrc_kind(const DasSrc* pThis);
 
 /** The catalog URI, the source's identity, or "" for a source given none
  * @memberof DasSrc */
@@ -306,16 +306,16 @@ DAS_API bool DasSrc_needsAuth(const DasSrc* pThis);
 DAS_API const char* DasSrc_authRealm(const DasSrc* pThis);
 
 /** The number of listed contacts for the data.  @memberof DasSrc */
-DAS_API size_t DasSrc_contactCount(const DasSrc* pThis);
+DAS_API size_t DasSrc_numContacts(const DasSrc* pThis);
 
 /** Contact number uIdx.
  * @param pThis The source
- * @param uIdx Which contact, 0 to DasSrc_contactCount() - 1
+ * @param uIdx Which contact, 0 to DasSrc_numContacts() - 1
  * @param psEmail Receives the address, or "" if none listed.  May be NULL.
  * @returns The name, or NULL past the end.  @memberof DasSrc */
-DAS_API const char* DasSrc_contact(const DasSrc* pThis, size_t uIdx, const char** psEmail);
+DAS_API const char* DasSrc_contactAt(const DasSrc* pThis, size_t uIdx, const char** psEmail);
 
-/** The source document, or an element of it by DasJdo_get() path, for
+/** The source document, or an element of it by DasJdo_subtree() path, for
  * anything the functions here do not model.  NULL when the path finds
  * nothing.  @memberof DasSrc */
 DAS_API const DasJdo* DasSrc_jdo(const DasSrc* pThis, const char* sFragment);
@@ -327,19 +327,19 @@ DAS_API const DasJdo* DasSrc_jdo(const DasSrc* pThis, const char* sFragment);
  * not have.  Coordinates list `time` first and the rest in node order;
  * the options section has one group when it has anything.
  * @memberof DasSrc */
-DAS_API size_t DasSrc_groupCount(const DasSrc* pThis, das_src_sec_e sec);
+DAS_API size_t DasSrc_numGroups(const DasSrc* pThis, das_srcsec sec);
 
 /** Group number uIdx of a section, or NULL past the end.  @memberof DasSrc */
-DAS_API const DasSrcGroup* DasSrc_group(const DasSrc* pThis, das_src_sec_e sec, size_t uIdx);
+DAS_API const DasSrcGroup* DasSrc_groupAt(const DasSrc* pThis, das_srcsec sec, size_t uIdx);
 
 /** The group of a section with a given name, case insensitively, or
  * NULL.  Pass "" for the options group.  @memberof DasSrc */
-DAS_API const DasSrcGroup* DasSrc_findGroup(
-	const DasSrc* pThis, das_src_sec_e sec, const char* sName
+DAS_API const DasSrcGroup* DasSrc_group(
+	const DasSrc* pThis, das_srcsec sec, const char* sName
 );
 
 /** @memberof DasSrcGroup */
-DAS_API das_src_sec_e DasSrcGroup_section(const DasSrcGroup* pThis);
+DAS_API das_srcsec DasSrcGroup_section(const DasSrcGroup* pThis);
 
 /** The name as the node spells it, "time", "lshell", "csv", or "" for
  * the options group.  @memberof DasSrcGroup */
@@ -356,7 +356,7 @@ DAS_API const char* DasSrcGroup_title(const DasSrcGroup* pThis);
  * Data variables usually have one, formats always do, coordinates and
  * options never.  A form draws it first and greys the rest of the group
  * when it is off.  @memberof DasSrcGroup */
-DAS_API const DasSrcProp* DasSrcGroup_enable(const DasSrcGroup* pThis);
+DAS_API const DasSrcProp* DasSrcGroup_enableProp(const DasSrcGroup* pThis);
 
 /** The name of the exclusive set this group's enable toggle belongs to,
  * or NULL.  Formats are in one, "format": exactly one is on at a time,
@@ -365,38 +365,38 @@ DAS_API const char* DasSrcGroup_xorGroup(const DasSrcGroup* pThis);
 
 /** The number of MIME types a format group may produce, 0 for other
  * groups.  @memberof DasSrcGroup */
-DAS_API size_t DasSrcGroup_mimeCount(const DasSrcGroup* pThis);
+DAS_API size_t DasSrcGroup_numMimes(const DasSrcGroup* pThis);
 
 /** MIME type number uIdx of a format group, or NULL.  The first is the
  * usual one.  @memberof DasSrcGroup */
-DAS_API const char* DasSrcGroup_mime(const DasSrcGroup* pThis, size_t uIdx);
+DAS_API const char* DasSrcGroup_mimeAt(const DasSrcGroup* pThis, size_t uIdx);
 
 /** @memberof DasSrcGroup */
-DAS_API size_t DasSrcGroup_propCount(const DasSrcGroup* pThis);
+DAS_API size_t DasSrcGroup_numProps(const DasSrcGroup* pThis);
 
 /** Property number uIdx of the group, in node order, or NULL.
  * @memberof DasSrcGroup */
-DAS_API const DasSrcProp* DasSrcGroup_prop(const DasSrcGroup* pThis, size_t uIdx);
+DAS_API const DasSrcProp* DasSrcGroup_propAt(const DasSrcGroup* pThis, size_t uIdx);
 
 /** The property of a group with a given name, accepting the long and
  * short spellings listed under @ref src_keys, or NULL.  @memberof DasSrcGroup */
-DAS_API const DasSrcProp* DasSrcGroup_findProp(const DasSrcGroup* pThis, const char* sName);
+DAS_API const DasSrcProp* DasSrcGroup_prop(const DasSrcGroup* pThis, const char* sName);
 
 /** How many of the group's properties have controls.  0 means a fixed
  * group, which a form may skip and a verbose listing may grey out.
  * @memberof DasSrcGroup */
-DAS_API size_t DasSrcGroup_ctrlCount(const DasSrcGroup* pThis);
+DAS_API size_t DasSrcGroup_numCtrls(const DasSrcGroup* pThis);
 
 /* ************************************************************************* */
 /* Properties */
 
 /** The number of properties over all sections.  @memberof DasSrc */
-DAS_API size_t DasSrc_propCount(const DasSrc* pThis);
+DAS_API size_t DasSrc_numProps(const DasSrc* pThis);
 
 /** Property number uIdx in presentation order: sections as in
- * das_src_sec_e, groups and properties within them in group order, so
+ * das_srcsec, groups and properties within them in group order, so
  * a group's properties are always adjacent.  @memberof DasSrc */
-DAS_API const DasSrcProp* DasSrc_prop(const DasSrc* pThis, size_t uIdx);
+DAS_API const DasSrcProp* DasSrc_propAt(const DasSrc* pThis, size_t uIdx);
 
 /** Find the one property a key names.
  *
@@ -419,7 +419,7 @@ DAS_API const DasSrcProp* DasSrc_findProp(
 );
 
 /** @memberof DasSrcProp */
-DAS_API das_src_sec_e DasSrcProp_section(const DasSrcProp* pThis);
+DAS_API das_srcsec DasSrcProp_section(const DasSrcProp* pThis);
 
 /** The group this property belongs to.  @memberof DasSrcProp */
 DAS_API const DasSrcGroup* DasSrcProp_group(const DasSrcProp* pThis);
@@ -456,7 +456,7 @@ DAS_API const char* DasSrcProp_title(const DasSrcProp* pThis, char* sBuf, size_t
 DAS_API const char* DasSrcProp_units(const DasSrcProp* pThis);
 
 /** @memberof DasSrcProp */
-DAS_API das_srcprop_type_e DasSrcProp_type(const DasSrcProp* pThis);
+DAS_API das_srcproptype DasSrcProp_type(const DasSrcProp* pThis);
 
 /** The node's spelling of the type, "isotime", "boolean", or ""
  * when it gave none and the type was inferred.  @memberof DasSrcProp */
@@ -485,7 +485,7 @@ DAS_API const DasSrcProp* DasSrcCtrl_prop(const DasSrcCtrl* pThis);
 /** True when a requisition must supply a value or the server will refuse
  * the request.  A required control whose property has a value is
  * satisfied by that default.  @memberof DasSrcCtrl */
-DAS_API bool DasSrcCtrl_required(const DasSrcCtrl* pThis);
+DAS_API bool DasSrcCtrl_isRequired(const DasSrcCtrl* pThis);
 
 /** The name of the protocol parameter a value travels in, "start_time"
  * or "read.time.min".  Several controls may share one, toggles that pack
@@ -495,12 +495,12 @@ DAS_API const char* DasSrcCtrl_param(const DasSrcCtrl* pThis);
 
 /** The number of allowed values of an enumerated control, 0 otherwise.
  * @memberof DasSrcCtrl */
-DAS_API size_t DasSrcCtrl_enumCount(const DasSrcCtrl* pThis);
+DAS_API size_t DasSrcCtrl_numEnums(const DasSrcCtrl* pThis);
 
 /** Allowed value number uIdx as the node spells it, or NULL.  Checks
  * accept these in any letter case; what is sent is the node's spelling.
  * @memberof DasSrcCtrl */
-DAS_API const char* DasSrcCtrl_enum(const DasSrcCtrl* pThis, size_t uIdx);
+DAS_API const char* DasSrcCtrl_enumAt(const DasSrcCtrl* pThis, size_t uIdx);
 
 /** The stated range of a numeric or time control.
  *
@@ -547,13 +547,13 @@ DAS_API das_errcode DasSrcCtrl_check(
 
 /** The number of worked examples a source provides, possibly 0.
  * @memberof DasSrc */
-DAS_API size_t DasSrc_exampleCount(const DasSrc* pThis);
+DAS_API size_t DasSrc_numExamples(const DasSrc* pThis);
 
 /** What example number uIdx shows, from its label, title or name, "" if
  * it has none, NULL past the end.  @memberof DasSrc */
-DAS_API const char* DasSrc_exampleLabel(const DasSrc* pThis, size_t uIdx);
+DAS_API const char* DasSrc_exampleLblAt(const DasSrc* pThis, size_t uIdx);
 
-/** The argument to DasSrc_newReq() for a requisition with nothing filled in */
+/** The argument to new_DasReq_src() for a requisition with nothing filled in */
 #define DASSRC_BLANK_REQ -1
 
 /** Make a DasReq for this source.
@@ -572,15 +572,15 @@ DAS_API const char* DasSrc_exampleLabel(const DasSrc* pThis, size_t uIdx);
  *        after logging that there is no such example.
  * @memberof DasSrc
  */
-DAS_API DasReq* DasSrc_newReq(const DasSrc* pThis, int nExample);
+DAS_API DasReq* new_DasReq_src(const DasSrc* pThis, int nExample);
 
 /** Stamp a requisition as belonging to this source, see DasReq_setSrc().
  * @memberof DasSrc */
-DAS_API void DasSrc_stamp(const DasSrc* pThis, DasReq* pReq);
+DAS_API void DasSrc_stampReq(const DasSrc* pThis, DasReq* pReq);
 
 /** Validate a request against this source.
  *
- * Every entry gets a verdict and the bad ones a reason, see DasReq_why().
+ * Every entry gets a verdict and the bad ones a reason, see DasReq_whyAt().
  * In order:
  *
  *   1. A DasReq stamped with another catalog URI is refused outright
@@ -633,12 +633,12 @@ DAS_API const char* DasSrc_mime(const DasSrc* pThis, const DasReq* pReq);
  * 1.  More means mirrors, tried in order by a careful client.  0 for a
  * source that is not a stream source or has no protocol section.
  * @memberof DasSrc */
-DAS_API size_t DasStreamSrc_urlCount(const DasSrc* pThis);
+DAS_API size_t DasSrc_numBaseUrls(const DasSrc* pThis);
 
 /** Base URL number uIdx, before any parameters, or NULL.  Old nodes
- * carry a query string in it already; DasStreamSrc_url() appends either
+ * carry a query string in it already; DasSrc_reqUrl() appends either
  * way.  @memberof DasSrc */
-DAS_API const char* DasStreamSrc_baseUrl(const DasSrc* pThis, size_t uIdx);
+DAS_API const char* DasSrc_baseUrlAt(const DasSrc* pThis, size_t uIdx);
 
 /** The request URL for a requisition.
  *
@@ -649,7 +649,7 @@ DAS_API const char* DasStreamSrc_baseUrl(const DasSrc* pThis, size_t uIdx);
  * control is required; required controls with defaults are sent even
  * when the requisition is silent.  Raw parameters go on last and
  * override.  Finally every protocol parameter the node marks required
- * must be present.  Values are percent encoded, see das_url_encode().
+ * must be present.  Values are percent encoded, see dasurl_encode().
  *
  * Works like snprintf: the return value is the length the whole URL
  * needs, and the buffer holds as much as fits, NUL terminated.
@@ -657,7 +657,7 @@ DAS_API const char* DasStreamSrc_baseUrl(const DasSrc* pThis, size_t uIdx);
  * @param pThis The source
  * @param pReq The requisition.  Its verdicts are updated as by
  *        DasSrc_check().
- * @param uBase Which base URL, see DasStreamSrc_urlCount().  0 unless an
+ * @param uBase Which base URL, see DasSrc_numBaseUrls().  0 unless an
  *        earlier attempt failed to connect.
  * @param sBuf Receives the URL.  2048 bytes is enough for any node seen
  *        so far, 4096 is safe.
@@ -668,7 +668,7 @@ DAS_API const char* DasStreamSrc_baseUrl(const DasSrc* pThis, size_t uIdx);
  *        no base URLs.  A URL is never empty, so 0 is unambiguous.
  * @memberof DasSrc
  */
-DAS_API size_t DasStreamSrc_url(
+DAS_API size_t DasSrc_reqUrl(
 	const DasSrc* pThis, DasReq* pReq, size_t uBase, char* sBuf, size_t uLen
 );
 

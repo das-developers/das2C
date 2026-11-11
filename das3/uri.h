@@ -31,14 +31,14 @@
  *   $(coord.field;mod=val)   long token with modifiers
  *   $(coord)                 shorthand, only for a coordinate with one field
  *
- * Any DasUriField with a non-zero cShort gets a short token.  A Voyager
+ * Any DasUriField with a non-zero shortChar gets a short token.  A Voyager
  * spacecraft clock registered with fields 'P' (partition), 'M' (mod64k) and
  * 'S' (mod60) could be used as:
  *
  *   P$P/V1P$P_$x/C$M$S.DAT
  *
- * The long form names the coordinate (DasUriSegDef.sCoord) and the field
- * (DasUriField.sLong), the same dotted name that a das_dim_range uses:
+ * The long form names the coordinate (DasUriSegDef.coord) and the field
+ * (DasUriField.longName), the same dotted name that a DasDimRng uses:
  *
  *   template:   /data/$(time.year)/$(time.yday)/file_$(time.year)$(time.yday).dat
  *   range key:  "time.year",  "time.yday"
@@ -53,8 +53,8 @@
  * @par Coordinate definitions
  *
  * The engine knows nothing about time.  Register any DasUriSegDef with
- * DasUriTplt_register() before calling DasUriTplt_pattern().  The library
- * ships one, das_time_uridef(), which supplies $Y $m $d $j $H $M $S.  A
+ * DasUriTplt_register() before calling DasUriTplt_setPattern().  The library
+ * ships one, DasUriSegDef_timeToks(), which supplies $Y $m $d $j $H $M $S.  A
  * coordinate such as an orbit counter is one more definition; no mapping
  * from orbit to time is assumed.
  *
@@ -62,26 +62,26 @@
  *
  * @par How ranges select files
  *
- * Files are selected by das_dim_range values: a das_range (see datum.h)
+ * Files are selected by DasDimRng values: a DasRng (see datum.h)
  * plus the name of what it constrains.  Template fields that no range names
  * are unconstrained.  Ranges are half-open: [dmBeg, dmEnd).
  *
- *   "time"          The whole time coordinate; dmBeg and dmEnd are vtTime.
+ *   "time"          The whole time coordinate; dmBeg and dmEnd are DASVT_TIME.
  *                   An entry is kept when the interval it covers overlaps the
  *                   range.  That interval runs from the time assembled out
  *                   of every time field in the path so far to one unit of
  *                   the finest such field later: a $Y directory covers a
  *                   year, a file named to the day covers that day.
  *
- *   "sclk.mod64k"   One sub-field, as "coord.field"; dmBeg and dmEnd are
+ *   "sclk.mod64k"   One sub-field, as "coord.field"; begin and end are
  *   "time.year"     numbers, truncated to integers, tested against that
- *                   field alone.  dmBeg > dmEnd is a rollover: the range runs
- *                   from dmBeg up to the field's nMax, then from nMin up to
- *                   dmEnd.
+ *                   field alone.  begin > end is a rollover: the range runs
+ *                   from begin up to the field's max, then from min up to
+ *                   end.
  *
- * A null end is open, see das_range.  A "time" range with only dmBeg keeps
- * everything from dmBeg on; with only dmEnd, everything before it.  A
- * sub-field range with one open end runs to the field's nMin or nMax and
+ * A null end is open, see DasRng.  A "time" range with only begin keeps
+ * everything from begin on; with only end, everything before it.  A
+ * sub-field range with one open end runs to the field's min or max and
  * never rolls over.  A range open at both ends constrains nothing.
  *
  * A file's name is taken as the start of its coverage.  No search is made
@@ -160,7 +160,7 @@ extern "C" {
  * Templates longer than this are refused.  Path buffers are the caller's,
  * see DasUriIter_next() and DasUriTplt_render(); this size always holds a
  * local path from a template that parsed. */
-#define DURI_MAX_PATH  1024
+#define DASURITPLT_PATH_SZ  1024
 
 
 /* ************************************************************************* */
@@ -169,7 +169,7 @@ extern "C" {
 /** One sub-field within a named coordinate type.
  *
  * The "time" coordinate has seven of these, an orbit counter has one.
- * sLong must be lower case to be reachable from a das_dim_range.
+ * longName must be lower case to be reachable from a DasDimRng.
  *
  * Callers build arrays of these.  The layout is versioned by the
  * DasUriSegDef that points to the array, so the rows carry no version of
@@ -177,33 +177,33 @@ extern "C" {
  *
  * @see DasUriSegDef
  */
-typedef struct das_uri_field_t {
-	int  nWidth;      /* rendered field width (zero-padded); 0 = variable    */
-	int  nMin;        /* smallest valid value; names outside nMin..nMax are  */
-	int  nMax;        /* skipped with a warning                              */
-	char sLong[32];   /* long name, the "year" in $(time.year)               */
-	char cShort;      /* single-char short token, e.g. 'Y'; '\0' if none     */
+typedef struct das_urifield_t {
+	int  width;          /* rendered field width (zero-padded); 0 = variable   */
+	int  min;            /* smallest valid value; names outside min..max are  */
+	int  max;            /* skipped with a warning                            */
+	char longName[32];   /* long name, the "year" in $(time.year)             */
+	char shortChar;      /* single-char short token, e.g. 'Y'; '\0' if none   */
 } DasUriField;
 
 
 /** The first DasUriSegDef and DasUriField layout, das 3.0.  Same numbering
- * as DAS_STREAM_PROC_V3_0. */
-#define DAS_URISEG_V3_0 ((3 << 8) | 0)
+ * as DASIOPROC_V3_0. */
+#define DASURISEGDEF_V3_0 ((3 << 8) | 0)
 
 /** The DasUriSegDef and DasUriField layout described by this header */
-#define DAS_URISEG_VER DAS_URISEG_V3_0
+#define DASURISEGDEF_VER DASURISEGDEF_V3_0
 
 /** Start a DasUriSegDef designated initializer with this, so a definition
  * records its layout version without naming the field:
- *   DasUriSegDef def = { DASURISEGDEF_INIT, .sCoord = "sclk", ... };
+ *   DasUriSegDef def = { DASURISEGDEF_INIT, .coord = "sclk", ... };
  */
-#define DASURISEGDEF_INIT .uVersion = DAS_URISEG_VER
+#define DASURISEGDEF_INIT .uStructVer = DASURISEGDEF_VER
 
 /** Definition of one coordinate type for use by the URI template parser.
  *
  * DasUriTplt_register() copies the definition and its field array, so both
- * may be on the stack and go out of scope afterwards.  sCoord must be lower
- * case to be reachable from a das_dim_range.
+ * may be on the stack and go out of scope afterwards.  coord must be lower
+ * case to be reachable from a DasDimRng.
  *
  * Start each definition with DASURISEGDEF_INIT.  It records the layout of this
  * structure and of its DasUriField rows as this program was compiled, so a
@@ -212,23 +212,23 @@ typedef struct das_uri_field_t {
  *
  * @code
  *   DasUriField aSclkFlds[] = {
- *     { .cShort = 'P', .sLong = "partition", .nWidth = 1, .nMin = 0, .nMax =     9 },
- *     { .cShort = 'M', .sLong = "mod64k",    .nWidth = 5, .nMin = 0, .nMax = 65535 },
- *     { .cShort = 'S', .sLong = "mod60",     .nWidth = 2, .nMin = 0, .nMax =    59 },
- *     { .cShort = 'L', .sLong = "line",      .nWidth = 3, .nMin = 1, .nMax =   800 },
+ *     { .shortChar = 'P', .longName = "partition", .width = 1, .min = 0, .max =     9 },
+ *     { .shortChar = 'M', .longName = "mod64k",    .width = 5, .min = 0, .max = 65535 },
+ *     { .shortChar = 'S', .longName = "mod60",     .width = 2, .min = 0, .max =    59 },
+ *     { .shortChar = 'L', .longName = "line",      .width = 3, .min = 1, .max =   800 },
  *   };
  *   DasUriSegDef sclkDef = {
- *       DASURISEGDEF_INIT, .sCoord = "sclk",
- *       .nFields = 4, .pFields = aSclkFlds
+ *       DASURISEGDEF_INIT, .coord = "sclk",
+ *       .numFields = 4, .fields = aSclkFlds
  *   };
  *   DasUriTplt_register(pTplt, &sclkDef);
  * @endcode
  */
-typedef struct das_uri_seg_def_t {
-	size_t             uVersion;   /* DAS_URISEG_VER, see above                */
-	const DasUriField* pFields;    /* sub-field table, copied by register()    */
-	int                nFields;    /* number of entries in pFields             */
-	char               sCoord[32]; /* coordinate, e.g. "time", "sclk", "orbit" */
+typedef struct das_urisegdef_t {
+	size_t             uStructVer; /* DASURISEGDEF_VER, see above              */
+	const DasUriField* fields;     /* sub-field table, copied by register()    */
+	int                numFields;  /* number of entries in fields              */
+	char               coord[32];  /* coordinate, e.g. "time", "sclk", "orbit" */
 } DasUriSegDef;
 
 
@@ -238,7 +238,7 @@ typedef struct das_uri_seg_def_t {
 /** @class DasUriTplt uri.h <das3/uri.h>
  *
  * A parsed URI template: the coordinate definitions registered with it and
- * the plan for searching directories that DasUriTplt_pattern() builds.
+ * the plan for searching directories that DasUriTplt_setPattern() builds.
  * The steps run in a fixed order.  
  * 
  * 1. Create it
@@ -250,8 +250,8 @@ typedef struct das_uri_seg_def_t {
  *
  * @code
  *   DasUriTplt* pTplt = new_DasUriTplt();
- *   DasUriTplt_register(pTplt, das_time_uridef());
- *   if(DasUriTplt_pattern(pTplt, "/data/$Y/$j/file_$Y$j_$v.cdf") != DAS_OKAY)
+ *   DasUriTplt_register(pTplt, DasUriSegDef_timeToks());
+ *   if(DasUriTplt_setPattern(pTplt, "/data/$Y/$j/file_$Y$j_$v.cdf") != DAS_OKAY)
  *       
  *   // ... iterate, see init_DasUriIter() ...
  * 
@@ -260,15 +260,15 @@ typedef struct das_uri_seg_def_t {
  *
  * The template must outlive every iterator made from it.
  */
-typedef struct das_uri_tplt_t DasUriTplt;
+typedef struct das_uritplt_t DasUriTplt;
 
 
 /* ************************************************************************* */
 /* A streaming iterator over a URI template and coordinate ranges */
 
 /** Iteration state values, see DasUriIter.nState */
-#define DURI_ITER_RUNNING  -1
-#define DURI_ITER_DONE      0
+#define DASURIITER_RUNNING  -1
+#define DASURIITER_DONE      0
 
 /** A streaming iterator over the files a template and ranges select.
  *
@@ -276,13 +276,13 @@ typedef struct das_uri_tplt_t DasUriTplt;
  * scan state, so it never needs to grow.  Paths are written to a buffer the
  * caller passes to each DasUriIter_next() call.
  *
- * nState is DURI_ITER_RUNNING until the iteration ends, DURI_ITER_DONE when
+ * nState is DASURIITER_RUNNING until the iteration ends, DASURIITER_DONE when
  * it ran to completion, or a positive das_errcode when it stopped on a
  * problem.  A zeroed DasUriIter reads as done.
  */
-typedef struct das_uri_iter_t {
+typedef struct das_uriiter_t {
 	const DasUriTplt*    pTplt;    /* must outlive the iterator               */
-	const das_dim_range* pRanges;  /* caller owns; must outlive iterator      */
+	const DasDimRng* pRanges;  /* caller owns; must outlive iterator      */
 	void*                pState;   /* scan state, owned by the iterator       */
 	int                  nRanges;
 	int                  nState;   /* running, done, or an error code         */
@@ -306,13 +306,13 @@ typedef struct das_uri_iter_t {
  *
  * The result is static: nothing to free, always valid.
  */
-DAS_API const DasUriSegDef* das_time_uridef(void);
+DAS_API const DasUriSegDef* DasUriSegDef_timeToks(void);
 
 
 /** Allocate an empty URI template object.
  *
  * Register coordinate definitions with DasUriTplt_register(), then call
- * DasUriTplt_pattern().  With none registered only literals, $x and $v are
+ * DasUriTplt_setPattern().  With none registered only literals, $x and $v are
  * recognised.
  *
  * @return A heap-allocated DasUriTplt, or NULL on allocation failure.
@@ -324,8 +324,8 @@ DAS_API DasUriTplt* new_DasUriTplt(void);
 
 /** Register a coordinate type definition with a template.
  *
- * Must be called before DasUriTplt_pattern().  pDef and its field array are
- * copied.  A definition whose uVersion this library doesn't know is refused.  It is an error to register a coordinate name twice, or a short
+ * Must be called before DasUriTplt_setPattern().  pDef and its field array are
+ * copied.  A definition whose uStructVer this library doesn't know is refused.  It is an error to register a coordinate name twice, or a short
  * token that an earlier definition already uses: short tokens are shared by
  * all coordinates of a template.
  *
@@ -352,7 +352,7 @@ DAS_API das_errcode DasUriTplt_register(DasUriTplt* pThis, const DasUriSegDef* p
  *
  * @memberof DasUriTplt
  */
-DAS_API das_errcode DasUriTplt_pattern(DasUriTplt* pThis, const char* sTemplate);
+DAS_API das_errcode DasUriTplt_setPattern(DasUriTplt* pThis, const char* sTemplate);
 
 
 /** Free a template and all deep-copied coordinate definitions.
@@ -378,16 +378,16 @@ DAS_API char* DasUriTplt_toStr(const DasUriTplt* pThis, char* sBuf, size_t uLen)
  *
  * The same as new_DasUriIter() but the caller supplies the storage:
  * @code
- *   das_range rng;
- *   das_range_fromUtc(&rng, "2025-10-01", "2025-11-01");
- *   das_dim_range dr;
- *   das_dim_range_init(&dr, "time", &rng);
+ *   DasRng rng;
+ *   DasRng_fromIso(&rng, "2025-10-01", "2025-11-01");
+ *   DasDimRng dr;
+ *   DasDimRng_set(&dr, "time", &rng);
  *
  *   DasUriIter iter;
  *   if(init_DasUriIter(&iter, pTplt, 1, &dr) != DAS_OKAY) ...
- *   char sPath[DURI_MAX_PATH];
+ *   char sPath[DASURITPLT_PATH_SZ];
  *   while(DasUriIter_next(&iter, sPath, sizeof(sPath)) != NULL) { ... }
- *   if(DasUriIter_err(&iter) != DAS_OKAY) ...
+ *   if(DasUriIter_errCode(&iter) != DAS_OKAY) ...
  *   fini_DasUriIter(&iter);
  * @endcode
  *
@@ -403,7 +403,7 @@ DAS_API char* DasUriTplt_toStr(const DasUriTplt* pThis, char* sBuf, size_t uLen)
  */
 DAS_API das_errcode init_DasUriIter(
 	DasUriIter* pThis, const DasUriTplt* pTplt,
-	int nRanges, const das_dim_range* pRanges
+	int nRanges, const DasDimRng* pRanges
 );
 
 
@@ -431,7 +431,7 @@ DAS_API void fini_DasUriIter(DasUriIter* pThis);
  * @memberof DasUriIter
  */
 DAS_API DasUriIter* new_DasUriIter(
-	const DasUriTplt* pTplt, int nRanges, const das_dim_range* pRanges
+	const DasUriTplt* pTplt, int nRanges, const DasDimRng* pRanges
 );
 
 
@@ -446,14 +446,14 @@ DAS_API DasUriIter* new_DasUriIter(
  *
  * A path that does not fit in uLen stops the iteration: it is logged, and
  * nState takes the error code.  Problems found in the archive end the
- * iteration, never the program, so they do not go through das_error().
+ * iteration, never the program, so they do not go through daserrf().
  * Once stopped, every later call returns NULL.
  *
  * @param pThis  The iterator to advance.
  * @param sBuf   Buffer to receive the path.
- * @param uLen   Size of sBuf; DURI_MAX_PATH is the suggested size.
+ * @param uLen   Size of sBuf; DASURITPLT_PATH_SZ is the suggested size.
  * @return  sBuf, or NULL when the iteration is done or has stopped on a
- *          problem; DasUriIter_err() tells which.
+ *          problem; DasUriIter_errCode() tells which.
  *
  * @memberof DasUriIter
  */
@@ -468,7 +468,7 @@ DAS_API const char* DasUriIter_next(DasUriIter* pThis, char* sBuf, size_t uLen);
  *
  * @memberof DasUriIter
  */
-DAS_API das_errcode DasUriIter_err(const DasUriIter* pThis);
+DAS_API das_errcode DasUriIter_errCode(const DasUriIter* pThis);
 
 
 /** Free a heap-allocated iterator.
@@ -491,13 +491,13 @@ DAS_API void del_DasUriIter(DasUriIter* pThis);
  * @param nRanges  Number of entries in pRanges.
  * @param pRanges  Coordinate values to render; dmBeg of each entry is used.
  * @param sBuf     Buffer to receive the result.
- * @param uLen     Size of sBuf; DURI_MAX_PATH is always sufficient.
+ * @param uLen     Size of sBuf; DASURITPLT_PATH_SZ is always sufficient.
  * @return         sBuf on success, NULL if the result would not fit.
  *
  * @memberof DasUriTplt
  */
 DAS_API char* DasUriTplt_render(
-	const DasUriTplt* pThis, int nRanges, const das_dim_range* pRanges,
+	const DasUriTplt* pThis, int nRanges, const DasDimRng* pRanges,
 	char* sBuf, size_t uLen
 );
 
@@ -508,15 +508,15 @@ DAS_API char* DasUriTplt_render(
  * handle files as they are found.
  *
  * @code
- *   das_range rng;
- *   das_range_fromUtc(&rng, "2025-288", "2025-290");
- *   das_dim_range dr;
- *   das_dim_range_init(&dr, "time", &rng);
+ *   DasRng rng;
+ *   DasRng_fromIso(&rng, "2025-288", "2025-290");
+ *   DasDimRng dr;
+ *   DasDimRng_set(&dr, "time", &rng);
  *
  *   size_t nCount = 0;
- *   char** ppPaths = das_uri_list(
+ *   char** ppPaths = DasUriTplt_newList(
  *       "/data/$Y/$j/instrument_$Y$j_$v.cdf",
- *       das_time_uridef(),
+ *       DasUriSegDef_timeToks(),
  *       1, &dr, &nCount
  *   );
  *   for(size_t i = 0; i < nCount; ++i)
@@ -524,7 +524,7 @@ DAS_API char* DasUriTplt_render(
  *   free(ppPaths);
  * @endcode
  *
- * @param sTemplate  URI template string, as for DasUriTplt_pattern().
+ * @param sTemplate  URI template string, as for DasUriTplt_setPattern().
  * @param pDef       The one coordinate definition to register, or NULL for
  *                   a template with only literals, $x and $v.  Templates
  *                   that need more than one must use the iterator.
@@ -535,9 +535,9 @@ DAS_API char* DasUriTplt_render(
  *                   one block released by a single free().  NULL on error
  *                   or when nothing matches.
  */
-DAS_API char** das_uri_list(
+DAS_API char** DasUriTplt_newList(
 	const char* sTemplate, const DasUriSegDef* pDef,
-	int nRanges, const das_dim_range* pRanges,
+	int nRanges, const DasDimRng* pRanges,
 	size_t* pCount
 );
 

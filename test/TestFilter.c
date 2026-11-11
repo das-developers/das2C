@@ -1,5 +1,5 @@
 /** @file TestFilter.c  Unit tests for the dataset operations that das stream
- *  filters depend on: DasDs_copy(), DasGen_setArray() and DasDs_replaceAry().
+ *  filters depend on: new_DasDs_copy(), DasGen_setArray() and DasDs_replaceAry().
  *
  *  These are the "copy the dataset, re-aim some storage, change the encodings"
  *  primitives a filter such as das3_text is built from.  The interesting
@@ -54,82 +54,82 @@
 /* Pull the first dataset out of a freshly loaded stream */
 static DasDs* first_ds(DasStream* pSd)
 {
-	return (DasDs*)DasStream_nextDesc(pSd, NULL, DASDESC_DS);
+	return (DasDs*)DasStream_nextDesc(pSd, NULL, DASDESCTYPE_DS);
 }
 
 /* Find the first coordinate variable whose backing array is an integer or real
-   epoch (a calendar-representable value not already stored as das_time).  This
-   is the thing das3_text has to convert to a das_time before it can write
+   epoch (a calendar-representable value not already stored as DasTime).  This
+   is the thing das3_text has to convert to a DasTime before it can write
    ISO-8601, so it's what the swap helpers are exercised against. */
 static DasVar* find_epoch_var(DasDs* pDs)
 {
-	size_t uDims = DasDs_numDims(pDs, DASDIM_COORD);
+	size_t uDims = DasDs_numDims(pDs, DASDIMTYPE_COORD);
 	for(size_t uD = 0; uD < uDims; ++uD){
-		DasDim* pDim = DasDs_getDimByIdx(pDs, uD, DASDIM_COORD);
+		DasDim* pDim = DasDs_dimAt(pDs, uD, DASDIMTYPE_COORD);
 		size_t uVars = DasDim_numVars(pDim);
 		for(size_t uV = 0; uV < uVars; ++uV){
-			DasVar* pVar = DasDim_getVarByIdx(pDim, uV);
+			DasVar* pVar = DasDim_varAt(pDim, uV);
 			if(DasGen_type(DasVar_gen(pVar)) != gtArray) continue;
-			DasAry* pAry = DasVar_getAry(pVar);
-			das_val_type vt = DasAry_valType(pAry);
-			if(((vt == vtLong)||(vt == vtDouble)) && Units_haveCalRep(DasVar_units(pVar)))
+			DasAry* pAry = DasVar_ary(pVar);
+			das_vt vt = DasAry_vt(pAry);
+			if(((vt == DASVT_LONG)||(vt == DASVT_DOUBLE)) && DasUnits_isTimePoint(DasVar_units(pVar)))
 				return pVar;
 		}
 	}
 	return NULL;
 }
 
-/* Build a das_time array with the same index shape as another array */
+/* Build a DasTime array with the same index shape as another array */
 static DasAry* like_shaped_time_ary(const char* sId, DasAry* pModel)
 {
-	ptrdiff_t aShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
+	ptrdiff_t aShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
 	int nRank = DasAry_shape(pModel, aShape);
 
-	size_t aSz[VARIDX_MAX];
+	size_t aSz[DASIDX_MAX];
 	for(int i = 0; i < nRank; ++i)
 		aSz[i] = (aShape[i] < 1) ? 0 : (size_t)aShape[i];
 	aSz[0] = 0;  /* index 0 always grows */
 
-	return new_DasAry(sId, vtTime, 0, NULL, nRank, aSz, UNIT_UTC);
+	return new_DasAry(sId, DASVT_TIME, 0, NULL, nRank, aSz, DASUNITS_UTC);
 }
 
 /* ************************************************************************* */
-/* Test 1: DasDs_copy shares arrays and mirrors structure */
+/* Test 1: new_DasDs_copy shares arrays and mirrors structure */
 
 static bool test_copy_structure(const char* sFile)
 {
-	DasStream* pSd = new_DasStream_path(PROG, sFile);
+	DasStream* pSd = new_DasStream_file(PROG, sFile);
 	CHECK(pSd != NULL, "could not load %s", sFile);
 	DasDs* pSrc = first_ds(pSd);
 	CHECK(pSrc != NULL, "no dataset in %s", sFile);
 
-	DasDs* pCopy = DasDs_copy(pSrc);
-	CHECK(pCopy != NULL, "DasDs_copy returned NULL");
+	DasDs* pCopy = new_DasDs_copy(pSrc);
+	CHECK(pCopy != NULL, "new_DasDs_copy returned NULL");
 	CHECK(pCopy != pSrc, "copy aliased the source");
 
 	/* Same shape of structure */
 	CHECK(DasDs_rank(pCopy) == DasDs_rank(pSrc), "rank mismatch");
-	CHECK(DasDs_numDims(pCopy, DASDIM_COORD) == DasDs_numDims(pSrc, DASDIM_COORD),
+	CHECK(DasDs_numDims(pCopy, DASDIMTYPE_COORD) == DasDs_numDims(pSrc, DASDIMTYPE_COORD),
 		"coord dim count mismatch");
-	CHECK(DasDs_numDims(pCopy, DASDIM_DATA) == DasDs_numDims(pSrc, DASDIM_DATA),
+	CHECK(DasDs_numDims(pCopy, DASDIMTYPE_DATA) == DasDs_numDims(pSrc, DASDIMTYPE_DATA),
 		"data dim count mismatch");
 	CHECK(DasDs_numCodecs(pCopy) == DasDs_numCodecs(pSrc), "codec count mismatch");
-	CHECK(DasDs_numAry(pCopy) == DasDs_numAry(pSrc), "array count mismatch");
+	CHECK(DasDs_numArys(pCopy) == DasDs_numArys(pSrc), "array count mismatch");
 
 	/* Arrays must be SHARED (same object), not deep copied, and each must have
 	   gained exactly one reference for the copy's array-list slot plus one per
 	   variable that points at it.  We can at least prove sharing + a bumped
 	   count. */
-	for(size_t u = 0; u < DasDs_numAry(pSrc); ++u){
-		DasAry* pA = DasDs_getAry(pSrc, u);
-		DasAry* pB = DasDs_getAryById(pCopy, DasAry_id(pA));
+	for(size_t u = 0; u < DasDs_numArys(pSrc); ++u){
+		DasAry* pA = DasDs_aryAt(pSrc, u);
+		DasAry* pB = DasDs_ary(pCopy, DasAry_id(pA));
 		CHECK(pB == pA, "array '%s' was copied, not shared", DasAry_id(pA));
 		CHECK(ref_DasAry(pA) >= 2, "array '%s' ref not bumped by copy", DasAry_id(pA));
 	}
 
 	del_DasDesc((DasDesc*)pCopy);
 	del_DasDesc((DasDesc*)pSd);
-	printf("PASS: DasDs_copy structure + array sharing on %s\n", sFile);
+	printf("PASS: new_DasDs_copy structure + array sharing on %s\n", sFile);
 	return true;
 }
 
@@ -138,31 +138,31 @@ static bool test_copy_structure(const char* sFile)
 
 static bool test_copy_independent_codecs(const char* sFile)
 {
-	DasStream* pSd = new_DasStream_path(PROG, sFile);
+	DasStream* pSd = new_DasStream_file(PROG, sFile);
 	CHECK(pSd != NULL, "could not load %s", sFile);
 	DasDs* pSrc = first_ds(pSd);
 	CHECK(pSrc != NULL, "no dataset in %s", sFile);
 
 	CHECK(DasDs_numCodecs(pSrc) > 0, "no codecs in %s", sFile);
 
-	DasDs* pCopy = DasDs_copy(pSrc);
-	CHECK(pCopy != NULL, "DasDs_copy returned NULL");
+	DasDs* pCopy = new_DasDs_copy(pSrc);
+	CHECK(pCopy != NULL, "new_DasDs_copy returned NULL");
 
 	/* The header promises the copied codecs can be changed without touching the
 	   original.  Prove they're independent memory by poking a field on the copy
 	   and confirming the source's codec is unmoved. */
-	int16_t nSrcWidth = DasDs_getCodec(pSrc, 0)->nBufValSz;
-	DasDs_getCodec(pCopy, 0)->nBufValSz = (int16_t)(nSrcWidth + 99);
+	int16_t nSrcWidth = DasDs_codecAt(pSrc, 0)->nBufValSz;
+	DasDs_codecAt(pCopy, 0)->nBufValSz = (int16_t)(nSrcWidth + 99);
 
-	CHECK(DasDs_getCodec(pCopy, 0)->nBufValSz == nSrcWidth + 99,
+	CHECK(DasDs_codecAt(pCopy, 0)->nBufValSz == nSrcWidth + 99,
 		"copy codec field did not change");
-	CHECK(DasDs_getCodec(pSrc, 0)->nBufValSz == nSrcWidth,
+	CHECK(DasDs_codecAt(pSrc, 0)->nBufValSz == nSrcWidth,
 		"mutating the copy changed the SOURCE codec (was %d, now %d)",
-		nSrcWidth, DasDs_getCodec(pSrc, 0)->nBufValSz);
+		nSrcWidth, DasDs_codecAt(pSrc, 0)->nBufValSz);
 
 	del_DasDesc((DasDesc*)pCopy);
 	del_DasDesc((DasDesc*)pSd);
-	printf("PASS: DasDs_copy codec independence on %s\n", sFile);
+	printf("PASS: new_DasDs_copy codec independence on %s\n", sFile);
 	return true;
 }
 
@@ -171,28 +171,28 @@ static bool test_copy_independent_codecs(const char* sFile)
 
 static bool test_set_array(const char* sFile)
 {
-	DasStream* pSd = new_DasStream_path(PROG, sFile);
+	DasStream* pSd = new_DasStream_file(PROG, sFile);
 	CHECK(pSd != NULL, "could not load %s", sFile);
 	DasDs* pSrc = first_ds(pSd);
 	CHECK(pSrc != NULL, "no dataset in %s", sFile);
 
-	DasDs* pCopy = DasDs_copy(pSrc);
-	CHECK(pCopy != NULL, "DasDs_copy returned NULL");
+	DasDs* pCopy = new_DasDs_copy(pSrc);
+	CHECK(pCopy != NULL, "new_DasDs_copy returned NULL");
 
 	DasVar* pVar = find_epoch_var(pCopy);
 	CHECK(pVar != NULL, "no epoch coordinate var in %s", sFile);
-	DasAry* pEpoch = DasVar_getAry(pVar);
+	DasAry* pEpoch = DasVar_ary(pVar);
 	int nEpochRefBefore = ref_DasAry(pEpoch);
 
 	DasAry* pTime = like_shaped_time_ary("test_time", pEpoch);
-	CHECK(pTime != NULL, "could not build das_time array");
+	CHECK(pTime != NULL, "could not build DasTime array");
 	CHECK(ref_DasAry(pTime) == 1, "fresh array should have one reference");
 
 	CHECK(DasVar_setAry(pVar, pTime), "DasVarAry_setArray failed");
 
 	/* Surface type, units and semantic all re-derived from the new array */
-	CHECK(DasVar_valType(pVar) == vtTime, "var did not become vtTime");
-	CHECK(DasVar_units(pVar) == UNIT_UTC, "var units did not become UTC");
+	CHECK(DasVar_vt(pVar) == DASVT_TIME, "var did not become DASVT_TIME");
+	CHECK(DasVar_units(pVar) == DASUNITS_UTC, "var units did not become UTC");
 
 	/* References moved: var dropped the epoch array and took the time array */
 	CHECK(ref_DasAry(pEpoch) == nEpochRefBefore - 1, "epoch ref not released by var");
@@ -201,7 +201,7 @@ static bool test_set_array(const char* sFile)
 	/* Source var is untouched (still an epoch) */
 	DasVar* pSrcVar = find_epoch_var(pSrc);
 	CHECK(pSrcVar != NULL, "source epoch var vanished");
-	CHECK(DasVar_valType(pSrcVar) != vtTime, "setArray leaked into the source dataset");
+	CHECK(DasVar_vt(pSrcVar) != DASVT_TIME, "setArray leaked into the source dataset");
 
 	del_DasDesc((DasDesc*)pCopy);     /* var releases pTime here */
 	dec_DasAry(pTime);    /* drop our own creation reference */
@@ -215,17 +215,17 @@ static bool test_set_array(const char* sFile)
 
 static bool test_replace_ary(const char* sFile)
 {
-	DasStream* pSd = new_DasStream_path(PROG, sFile);
+	DasStream* pSd = new_DasStream_file(PROG, sFile);
 	CHECK(pSd != NULL, "could not load %s", sFile);
 	DasDs* pSrc = first_ds(pSd);
 	CHECK(pSrc != NULL, "no dataset in %s", sFile);
 
-	DasDs* pCopy = DasDs_copy(pSrc);
-	CHECK(pCopy != NULL, "DasDs_copy returned NULL");
+	DasDs* pCopy = new_DasDs_copy(pSrc);
+	CHECK(pCopy != NULL, "new_DasDs_copy returned NULL");
 
 	DasVar* pVar = find_epoch_var(pCopy);
 	CHECK(pVar != NULL, "no epoch coordinate var in %s", sFile);
-	DasAry* pEpoch = DasVar_getAry(pVar);
+	DasAry* pEpoch = DasVar_ary(pVar);
 	char sEpochId[64];
 	strncpy(sEpochId, DasAry_id(pEpoch), sizeof(sEpochId) - 1);
 	sEpochId[sizeof(sEpochId)-1] = '\0';
@@ -233,15 +233,15 @@ static bool test_replace_ary(const char* sFile)
 	int nEpochBefore = ref_DasAry(pEpoch);  /* held by src list+var and copy list+var */
 
 	DasAry* pTime = like_shaped_time_ary("iso_time", pEpoch);
-	CHECK(pTime != NULL, "could not build das_time array");
+	CHECK(pTime != NULL, "could not build DasTime array");
 
 	CHECK(DasDs_replaceAry(pCopy, sEpochId, pTime) == DAS_OKAY,
 		"DasDs_replaceAry failed");
 
 	/* The copy's var now reads the time array; the copy's list slot holds it */
-	CHECK(DasVar_getAry(pVar) == pTime, "var not repointed to the new array");
-	CHECK(DasDs_getAryById(pCopy, "iso_time") == pTime, "list slot not swapped");
-	CHECK(DasVar_valType(pVar) == vtTime, "repointed var not vtTime");
+	CHECK(DasVar_ary(pVar) == pTime, "var not repointed to the new array");
+	CHECK(DasDs_ary(pCopy, "iso_time") == pTime, "list slot not swapped");
+	CHECK(DasVar_vt(pVar) == DASVT_TIME, "repointed var not DASVT_TIME");
 
 	/* The copy released both of its holds on the epoch array (list + var) */
 	CHECK(ref_DasAry(pEpoch) == nEpochBefore - 2,
@@ -253,7 +253,7 @@ static bool test_replace_ary(const char* sFile)
 	/* Source dataset is completely untouched */
 	DasVar* pSrcVar = find_epoch_var(pSrc);
 	CHECK(pSrcVar != NULL, "source epoch var vanished");
-	CHECK(DasVar_valType(pSrcVar) != vtTime, "replaceAry leaked into the source dataset");
+	CHECK(DasVar_vt(pSrcVar) != DASVT_TIME, "replaceAry leaked into the source dataset");
 
 	del_DasDesc((DasDesc*)pCopy);   /* drops the copy's list + var references on pTime */
 	CHECK(ref_DasAry(pTime) == 1, "time array should be down to our reference, is %d",
@@ -271,16 +271,16 @@ static bool test_replace_ary(const char* sFile)
 
 static bool test_update_codec(const char* sFile)
 {
-	DasStream* pSd = new_DasStream_path(PROG, sFile);
+	DasStream* pSd = new_DasStream_file(PROG, sFile);
 	CHECK(pSd != NULL, "could not load %s", sFile);
 	DasDs* pSrc = first_ds(pSd);
 	CHECK(pSrc != NULL, "no dataset in %s", sFile);
-	DasDs* pCopy = DasDs_copy(pSrc);
-	CHECK(pCopy != NULL, "DasDs_copy returned NULL");
+	DasDs* pCopy = new_DasDs_copy(pSrc);
+	CHECK(pCopy != NULL, "new_DasDs_copy returned NULL");
 
 	DasVar* pVar = find_epoch_var(pCopy);
 	CHECK(pVar != NULL, "no epoch coordinate var in %s", sFile);
-	DasAry* pEpoch = DasVar_getAry(pVar);
+	DasAry* pEpoch = DasVar_ary(pVar);
 	char sEpochId[64];
 	strncpy(sEpochId, DasAry_id(pEpoch), sizeof(sEpochId) - 1);
 	sEpochId[sizeof(sEpochId)-1] = '\0';
@@ -298,27 +298,27 @@ static bool test_update_codec(const char* sFile)
 	/* Find the codec serving the epoch array */
 	size_t uCd = DasDs_numCodecs(pCopy);
 	for(size_t u = 0; u < DasDs_numCodecs(pCopy); ++u)
-		if(DasCodec_getAry(DasDs_getCodec(pCopy, u)) == pEpoch){ uCd = u; break; }
+		if(DasCodec_ary(DasDs_codecAt(pCopy, u)) == pEpoch){ uCd = u; break; }
 	CHECK(uCd < DasDs_numCodecs(pCopy), "no codec for the epoch array");
 
 	DasAry* pTime = like_shaped_time_ary("iso_time", pEpoch);
-	CHECK(pTime != NULL, "could not build das_time array");
+	CHECK(pTime != NULL, "could not build DasTime array");
 	CHECK(DasDs_replaceAry(pCopy, sEpochId, pTime) == DAS_OKAY, "replaceAry failed");
-	CHECK(DasCodec_getAry(DasDs_getCodec(pCopy, uCd)) == pEpoch,
+	CHECK(DasCodec_ary(DasDs_codecAt(pCopy, uCd)) == pEpoch,
 		"replaceAry is documented to leave codecs alone");
 
 	/* Refusals: a bad index, and an id this dataset doesn't hold (the epoch
 	   array still exists, in the source dataset, but not in this list) */
-	CHECK(DasDs_updateCodec(pCopy, DasDs_numCodecs(pCopy), DASENC_WRITE, NULL,
+	CHECK(DasDs_updateCodec(pCopy, DasDs_numCodecs(pCopy), DASCODEC_WRITE, NULL,
 		NULL, 0, '\0', NULL, NULL) != DAS_OKAY, "out of range codec accepted");
-	CHECK(DasDs_updateCodec(pCopy, uCd, DASENC_WRITE, sEpochId, "utf8", 30, ' ',
+	CHECK(DasDs_updateCodec(pCopy, uCd, DASCODEC_WRITE, sEpochId, "utf8", 30, ' ',
 		NULL, NULL) != DAS_OKAY, "codec aimed at an array outside its dataset");
 
 	int nTimeBefore = ref_DasAry(pTime);
-	CHECK(DasDs_updateCodec(pCopy, uCd, DASENC_WRITE, "iso_time", "utf8", 30, ' ',
+	CHECK(DasDs_updateCodec(pCopy, uCd, DASCODEC_WRITE, "iso_time", "utf8", 30, ' ',
 		NULL, NULL) == DAS_OKAY, "updateCodec by id failed");
-	const DasCodec* pCd = DasDs_getCodec(pCopy, uCd);
-	CHECK(DasCodec_getAry(pCd) == pTime, "codec not re-aimed");
+	const DasCodec* pCd = DasDs_codecAt(pCopy, uCd);
+	CHECK(DasCodec_ary(pCd) == pTime, "codec not re-aimed");
 	CHECK(DasCodec_isText(pCd) && !DasCodec_isReader(pCd), "codec not a text writer");
 	CHECK(ref_DasAry(pTime) == nTimeBefore + 1, "codec did not take a reference");
 
@@ -335,13 +335,13 @@ static bool test_update_codec(const char* sFile)
 /* ************************************************************************* */
 /* Test 5: a dataset header survives encode -> re-parse.  This is the das3
    "conservative output" contract: DasDs_encodeHdr() must emit a header the
-   reader accepts.  It catches encoder bugs that DasDs_copy/setArray can't -- a string
+   reader accepts.  It catches encoder bugs that new_DasDs_copy/setArray can't -- a string
    var serialized with storage="ubyte", or a <sequence> whose minval comes out
    as a printf format. */
 
 static bool test_header_roundtrip(const char* sFile)
 {
-	DasStream* pSd = new_DasStream_path(PROG, sFile);
+	DasStream* pSd = new_DasStream_file(PROG, sFile);
 	CHECK(pSd != NULL, "could not load %s", sFile);
 	DasDs* pSrc = first_ds(pSd);
 	CHECK(pSrc != NULL, "no dataset in %s", sFile);
@@ -356,9 +356,9 @@ static bool test_header_roundtrip(const char* sFile)
 		sFile);
 
 	CHECK(DasDs_rank(pBack) == DasDs_rank(pSrc), "rank changed across round-trip");
-	CHECK(DasDs_numDims(pBack, DASDIM_COORD) == DasDs_numDims(pSrc, DASDIM_COORD),
+	CHECK(DasDs_numDims(pBack, DASDIMTYPE_COORD) == DasDs_numDims(pSrc, DASDIMTYPE_COORD),
 		"coord dim count changed across round-trip");
-	CHECK(DasDs_numDims(pBack, DASDIM_DATA) == DasDs_numDims(pSrc, DASDIM_DATA),
+	CHECK(DasDs_numDims(pBack, DASDIMTYPE_DATA) == DasDs_numDims(pSrc, DASDIMTYPE_DATA),
 		"data dim count changed across round-trip");
 
 	del_DasDesc((DasDesc*)pBack);
@@ -374,7 +374,7 @@ int main(int argc, char** argv)
 {
 	/* Return on error rather than exit, so a bad encode surfaces as a failed
 	   check instead of killing the test run. */
-	das_init(argv[0], DASERR_DIS_RET, DASLOG_WARN, NULL);
+	daslib_init(argv[0], DASERRDISP_RET, DASLOG_WARN, NULL);
 
 	/* ex12: rich rank-3 (time + reals + sequences + inline values) */
 	/* ex21: TRACERS L2 shape, TT2000 epoch coord + ragged string */

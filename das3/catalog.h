@@ -57,7 +57,7 @@ extern "C" {
  * whenever an organization reshuffles its servers, while a name must not.
  * For that reason a name may not start with a locator scheme, "http",
  * "https", "ftp" and so on; the library reads those as locations, see
- * das_isUrlOrFile().
+ * DasCat_isNodeUrl().
  *
  * In daily use the prefix "tag:das2.org,2012:site:/" is noise, so the
  * library also accepts the relative form "uiowa/juno/wav/survey" and the
@@ -87,13 +87,13 @@ extern "C" {
  if((pNode == NULL) || !DasNode_isStreamSrc(pNode)) handle_error();
 
  // The query interface of the source, laid out by the das catalog schema
- const DasJdo* pProto = DasNode_getJdo(pNode, "protocol");
+ const DasJdo* pProto = DasNode_jdo(pNode, "protocol");
  ...
  del_DasCat(pCat);   // frees every node the session loaded
  @endcode
  *
  * Programs that want to query a data source rather than inspect its node
- * use DasCat_newSrc(), which resolves the path and builds a DasSrc, see
+ * use new_DasSrc_cat(), which resolves the path and builds a DasSrc, see
  * source.h.
  *
  * Two objects do the work.  DasCat, in das3/catalog.h, is a session: it
@@ -109,7 +109,7 @@ extern "C" {
  *
  * A seed is a node a program starts from with nothing above it in memory.
  * The compiled in seed is the index of the das catalog, see
- * das_seed_urls(); a session loads it on first use and keeps it, so the
+ * DasNode_seedUrls(); a session loads it on first use and keeps it, so the
  * tree below it grows as paths are resolved.  A file can be a seed too,
  * see DasCat_setSeed(), given a prefix that names it, or none.  A seed
  * given no prefix is a root: the one node with no URI, from which names
@@ -125,10 +125,10 @@ extern "C" {
  */
 
 /** The catalog URI prefix relative paths start from unless told otherwise */
-#define DASCAT_DEF_PREFIX "tag:das2.org,2012:site:/"
+#define DASCAT_SITE_PREFIX "tag:das2.org,2012:site:/"
 
 /** How long, in seconds, a new session trusts a cached catalog node */
-#define DASCAT_DEF_CACHE_SEC 3600
+#define DASCAT_NODE_TTL_SEC 3600
 
 /** @class DasCat catalog.h <das3/catalog.h>
  *
@@ -151,7 +151,7 @@ extern "C" {
  *
  * Where relative paths start is one setting with two ways to set it:
  *
- *   - By default they start at DASCAT_DEF_PREFIX in the federated
+ *   - By default they start at DASCAT_SITE_PREFIX in the federated
  *     catalog.  DasCat_setPrefix() moves that.
  *   - DasCat_setSeed() makes a node loaded by location the seed: relative
  *     paths start at it, full URIs resolve only under its prefix or under
@@ -177,7 +177,7 @@ extern "C" {
  del_DasCat(pCat);
  @endcode
  */
-typedef struct das_cat DasCat;
+typedef struct das_cat_t DasCat;
 
 
 /** Create a catalog session
@@ -193,7 +193,7 @@ typedef struct das_cat DasCat;
  * @returns a new catalog, free with del_DasCat().
  * @memberof DasCat
  */
-DAS_API DasCat* new_DasCat(DasCredMngr* pMgr, const char* sAgent);
+DAS_API DasCat* new_DasCat(DasCredMgr* pMgr, const char* sAgent);
 
 /** Free a catalog session, every node it loaded, and its credentials manager
  * @memberof DasCat
@@ -204,7 +204,7 @@ DAS_API void del_DasCat(DasCat* pThis);
  * @returns the manager given to new_DasCat(), or NULL
  * @memberof DasCat
  */
-DAS_API DasCredMngr* DasCat_credMngr(const DasCat* pThis);
+DAS_API DasCredMgr* DasCat_credMgr(const DasCat* pThis);
 
 /** The user agent string, borrowed
  * @returns the string given to new_DasCat(), or NULL
@@ -215,8 +215,8 @@ DAS_API const char* DasCat_agent(const DasCat* pThis);
 /** Change where, and for how long, this session keeps copies of catalog
  * nodes fetched over HTTP
  *
- * A new session already caches: copies go under das_userdir() in
- * cache/nodes and are trusted for DASCAT_DEF_CACHE_SEC.  Walking a catalog
+ * A new session already caches: copies go under dasfs_userDir() in
+ * cache/nodes and are trusted for DASCAT_NODE_TTL_SEC.  Walking a catalog
  * costs one request per level, so this is what makes the second run of a
  * program fast.  A copy older than that is not thrown away: the server is
  * asked whether it changed, using the ETag or Last-Modified it came with,
@@ -266,7 +266,7 @@ DAS_API int DasCat_cacheAge(const DasCat* pThis);
 DAS_API das_errcode DasCat_setPrefix(DasCat* pThis, const char* sUri);
 
 /** Where relative paths start: the seed's URI when one is set, else the
- * prefix, DASCAT_DEF_PREFIX unless DasCat_setPrefix() was called
+ * prefix, DASCAT_SITE_PREFIX unless DasCat_setPrefix() was called
  * @memberof DasCat
  */
 DAS_API const char* DasCat_prefix(const DasCat* pThis);
@@ -335,7 +335,7 @@ DAS_API das_errcode DasCat_mount(DasCat* pThis, const char* sUrl, const char* sU
 /** Number of nodes mounted with DasCat_mount(); the seed is not one
  * @memberof DasCat
  */
-DAS_API size_t DasCat_mountCount(const DasCat* pThis);
+DAS_API size_t DasCat_numMounts(const DasCat* pThis);
 
 /** True if a seed is set, so paths reach only it and the mounted nodes
  * @memberof DasCat
@@ -384,7 +384,7 @@ DAS_API bool DasCat_covers(const DasCat* pThis, const char* sUri);
  * costs nothing when it is still in memory and one cache read otherwise.
  * DasCat_lastUri() afterwards names the node returned, so a caller can
  * say "no child X under URI Y" and list what Y does have with
- * DasNode_subName().
+ * DasNode_subNameAt().
  *
  * @param pThis The catalog session
  * @param psRest If not NULL, receives a pointer to the part of the failed
@@ -402,7 +402,7 @@ DAS_API DasNode* DasCat_nearest(DasCat* pThis, const char** psRest);
 /** Load a child of a node, with this session's settings
  *
  * For a program that has resolved a container, listed its children, see
- * DasNode_subName() and dassrc_loadable(), and picked one.  The child is
+ * DasNode_subNameAt() and DasSrc_loadable(), and picked one.  The child is
  * loaded with the session's credentials, agent and cache, attached under
  * pNode, and lives as long as the tree it is in.  The same as resolving
  * the child's full URI, without composing it.
@@ -424,7 +424,7 @@ DAS_API DasNode* DasCat_subNode(DasCat* pThis, DasNode* pNode, const char* sRelP
  * new_DasSrc_node().  The path has to end at a data source not a
  * Container, and it must be a catalog node type that das2C understands.
  * 
- * @see dassrc_loadable()
+ * @see DasSrc_loadable()
  *
  * @param pThis The catalog session
  * @param sPath A catalog path in any form DasCat_resolve() accepts,
@@ -435,7 +435,7 @@ DAS_API DasNode* DasCat_subNode(DasCat* pThis, DasNode* pNode, const char* sRelP
  *        say how far the path got.
  * @memberof DasCat
  */
-DAS_API DasSrc* DasCat_newSrc(DasCat* pThis, const char* sPath);
+DAS_API DasSrc* new_DasSrc_cat(DasCat* pThis, const char* sPath);
 
 /** Is this string a node location rather than a catalog path?
  *
@@ -445,7 +445,7 @@ DAS_API DasSrc* DasCat_newSrc(DasCat* pThis, const char* sPath);
  * uses, published so command line parsers can agree with it.
  *
  */
-DAS_API bool das_isUrlOrFile(const char* sPath);
+DAS_API bool DasCat_isNodeUrl(const char* sPath);
 
 /** @} */
 

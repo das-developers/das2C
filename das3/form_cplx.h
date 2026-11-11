@@ -65,7 +65,7 @@
 
 #include <das3/form.h>
 
-/* For the shared component-system numbering ONLY -- DAS_VSYS_UNKNOWN is the
+/* For the shared component-system numbering ONLY -- DASVECSYS_UNKNOWN is the
    whole space's "no system" sentinel and form_vec.h is where the space is
    chartered.  This file learns nothing else about vectors from it: complex
    has no rule for one and declines the pairing.  form_pos.h, by contrast,
@@ -84,74 +84,74 @@ extern "C" {
  * without knowing its issuer, which is the exact confusion the shared space
  * exists to prevent.
  *
- * Sharing the space does NOT make these geometric.  das_vsys_toStr() answers
+ * Sharing the space does NOT make these geometric.  dasvecsys_name() answers
  * NULL for both of them, which is correct: a complex plane has no third
  * component, no frame and no cross product, so no code in this file may be
- * handed to das_vsys_toCart().
+ * handed to dasvecsys_toCart().
  */
 
-#define DAS_VSYS_RECT      0x00000007  /* real, imaginary       */
-#define DAS_VSYS_POLAR     0x00000008  /* magnitude, phase      */
+#define DASCPLXSYS_RECT      0x00000007  /* real, imaginary       */
+#define DASCPLXSYS_POLAR     0x00000008  /* magnitude, phase      */
 
-#define DAS_VSYS_CPLX_MIN  0x00000007
-#define DAS_VSYS_CPLX_MAX  0x00000008
+#define DASCPLXSYS_MIN  0x00000007
+#define DASCPLXSYS_MAX  0x00000008
 
 /** The system= token for a complex system code, NULL if it is not one of
  * these two.
  *
- * Deliberately narrow.  das_vsys_toStr() spans two formalisms because vectors
+ * Deliberately narrow.  dasvecsys_name() spans two formalisms because vectors
  * and positions share the geometric six, but nothing needs to switch over a
  * geometric system and a complex one in the same statement, so nothing here
  * invites it. */
-DAS_API const char* das_cplxsys_toStr(ubyte uSys);
+DAS_API const char* dascplxsys_name(uint8_t uSys);
 
-/** The complex system code for a system= token, DAS_VSYS_UNKNOWN if
+/** The complex system code for a system= token, DASVECSYS_UNKNOWN if
  * unrecognized.
- * Accepts the leading "rect" and "polar" the way das_vsys_fromStr() accepts
+ * Accepts the leading "rect" and "polar" the way dasvecsys_id() accepts
  * "cart", since abbreviating a system name is long-standing practice in
  * stream headers. */
-DAS_API ubyte das_cplxsys_fromStr(const char* sSys);
+DAS_API uint8_t dascplxsys_id(const char* sSys);
 
 /** One line of prose about a complex system, for a "notes" property. */
-DAS_API const char* das_cplxsys_desc(ubyte uSys);
+DAS_API const char* dascplxsys_info(uint8_t uSys);
 
 /** The canonical symbol for component iComp of a complex system, NULL if the
  * system is not one of these two or the component is not 0 or 1. */
-DAS_API const char* das_cplxsys_symbol(ubyte uSys, int iComp);
+DAS_API const char* dascplxsys_compSym(uint8_t uSys, int iComp);
 
 /** Components as stored to a rectangular (real, imaginary) pair.
  * pIn and pOut may not overlap.  @returns false on a loud error. */
-DAS_API bool das_cplx_toRect(ubyte uSys, const double* pIn, double* pOut);
+DAS_API bool dascplxsys_toRect(uint8_t uSys, const double* pIn, double* pOut);
 
 /** A rectangular (real, imaginary) pair to components as stored.
  * pIn and pOut may not overlap.  @returns false on a loud error. */
-DAS_API bool das_cplx_fromRect(ubyte uSys, const double* pIn, double* pOut);
+DAS_API bool dascplxsys_fromRect(uint8_t uSys, const double* pIn, double* pOut);
 
 /* Exported so that its address can be compared.  Client code uses the
-   DAS_FORM_CPLX macro below and has no reason to name this directly. */
-DAS_API extern const DasForm_VTbl das_form_cplx_vtbl;
+   DASFORM_CPLX macro below and has no reason to name this directly. */
+DAS_API extern const DasFormVTable DasFormCplx_vtable;
 
 /** A complex number, two components making a single value.  Multiplication is
  * the complex rule and not component by component.
- * @see DasForm_isKind(), DasVar_formIs().  @relates DasForm */
-#define DAS_FORM_CPLX (&das_form_cplx_vtbl)
+ * @see DasForm_isKind(), DasVar_hasForm().  @relates DasForm */
+#define DASFORM_CPLX (&DasFormCplx_vtable)
 
 /** Build a complex formalism.
  *
- * @param uSysType DAS_VSYS_RECT or DAS_VSYS_POLAR.  A geometric system code
+ * @param uSysType DASCPLXSYS_RECT or DASCPLXSYS_POLAR.  A geometric system code
  *        is refused: a complex number is not a vector in a frame.
  * @returns a new form with one reference, or NULL on a loud error.
  * @memberof DasForm */
-DAS_API DasForm* new_DasFormCplx(ubyte uSysType);
+DAS_API DasForm* new_DasFormCplx(uint8_t uSysType);
 
 /** Which representation this form's components are stored in.
- * @returns DAS_VSYS_RECT, DAS_VSYS_POLAR, or 0 on a form that is not complex.
+ * @returns DASCPLXSYS_RECT, DASCPLXSYS_POLAR, or 0 on a form that is not complex.
  * @memberof DasForm */
-DAS_API ubyte DasFormCplx_sysType(const DasForm* pThis);
+DAS_API uint8_t DasFormCplx_sysId(const DasForm* pThis);
 
-/* To read a complex datum's two components use das_datum_toDoubles().  Values
+/* To read a complex datum's two components use DasDatum_toDoubles().  Values
    come back as stored, so a polar variable returns a magnitude and a phase in
-   degrees.  Use das_cplx_toRect() above to convert them. */
+   degrees.  Use dascplxsys_toRect() above to convert them. */
 
 #ifdef __cplusplus
 }

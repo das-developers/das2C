@@ -101,7 +101,7 @@
  * <ol>
  * <li>Making an HTTP request via new_DasHttpResp_get() (optional)</li>
  * <li>Creating a ::DasIO object</li>
- * <li>Registering your stream handling callbacks via DasIO_addProcessor()</li>
+ * <li>Registering your stream handling callbacks via DasIO_addProc()</li>
  * <li>Calling DasIO_readAll() read the stream an invoke your callbacks</li>
  * </ol>
  * or, if you want to break with the stream processing mentality and just spool
@@ -114,7 +114,7 @@
  * <li>Calling DasIO_readAll() to process your input.</li>
  * <li>Calling DasIO_takeStream() to get all data objects.</li>
  * </ol>
- * new_DasStream_path() and new_DasStream_stdin() do all of that in one call.
+ * new_DasStream_file() and new_DasStream_stdin() do all of that in one call.
  * </p>
  * 
  * <p>
@@ -127,30 +127,30 @@
  * 
  * int main(int argc, char** argv)
  * {
- *   das_init(argv[0], DASERR_DIS_EXIT, DASLOG_INFO, NULL);
+ *   daslib_init(argv[0], DASERRDISP_EXIT, DASLOG_INFO, NULL);
  *   if(argc < 2)
- *     return das_error(PROG_ERR, "Input file name missing");   
+ *     return daserrf(PROG_ERR, "Input file name missing");   
  *   
  *   DasIO* pIn = new_DasIO("das_example", new_DasXport_file(argv[1], "r"), NULL);
- *   DasIO_setModel(pIn, STREAM_MODEL_V3);  // das2 packets come up as datasets
+ *   DasIO_setModel(pIn, DASIOMODEL_V3);  // das2 packets come up as datasets
  *   DasIO_setAccum(pIn, true);             // keep every record in memory
  *   
  *   if(DasIO_readAll(pIn) != DAS_OKAY)
- *     return das_error(PROG_ERR, "Couldn't read %s", argv[1]);
+ *     return daserrf(PROG_ERR, "Couldn't read %s", argv[1]);
  * 
  *   DasStream* pStream = DasIO_takeStream(pIn);
  *   del_DasIO(pIn);
  *   
- *   if(DasStream_numDesc(pStream, DASDESC_DS) == 0)
- *     daslog_info_v("No datasets found in %s", argv[1]);
+ *   if(DasStream_numDesc(pStream, DASDESCTYPE_DS) == 0)
+ *     daslog_infof("No datasets found in %s", argv[1]);
  *
  *   DasDesc* pDesc = NULL;
- *   while((pDesc = DasStream_nextDesc(pStream, pDesc, DASDESC_DS)) != NULL){
+ *   while((pDesc = DasStream_nextDesc(pStream, pDesc, DASDESCTYPE_DS)) != NULL){
  *     DasDs* pDs = (DasDs*)pDesc;
  *     int nNeed = DasDs_info(pDs, NULL, 0);  // size it first
  *     char* sBuf = (char*)malloc(nNeed + 1);
  *     DasDs_info(pDs, sBuf, nNeed + 1);
- *     daslog_info_v("%s", sBuf);
+ *     daslog_infof("%s", sBuf);
  *     free(sBuf);
  *   }
  *   return 0;

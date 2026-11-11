@@ -30,7 +30,7 @@
  * capability, the library to use for Windows is yet to be determined.  
  * 
  * On linux if the file /etc/fftw/wisdom exists it will be loaded during the
- * call to das_init().  Pre-planning FFT operations can significantly 
+ * call to daslib_init().  Pre-planning FFT operations can significantly 
  * increase the speed of new_DasDftPlan() calls
  * 
  * The following example uses the pthread library to demonstrate running four
@@ -59,7 +59,7 @@
  *
  *   // Copy magnitude out to the location designated be the main thread
  *   size_t uLen = 0;
- *   const double* pMag = DasDft_getMagnitude(pDft, &uLen);
+ *   const double* pMag = DasDft_amplitude(pDft, &uLen);
  *   assert(uLen == FREQUENCIES);
  *   memcpy(pTd->pOutput, pMag, uLen*sizeof(double));
  * 
@@ -70,7 +70,7 @@
  * int main(int argc, char** argv){
  *   
  *   // Initialize das2C
- *   das_init(argv[0], DASERR_DIS_EXIT, DASLOG_INFO, NULL);
+ *   daslib_init(argv[0], DASERRDISP_EXIT, DASLOG_INFO, NULL);
  * 
  *   double* timeseries = (double*) calloc(SEC_IN_DAY*4, sizeof(double));
  *   
@@ -122,7 +122,7 @@ extern "C" {
  *
  * An structure containing a set of global planning data for DFTs 
  * to be preformed. */
-typedef struct das_dft_plan DasDftPlan;
+typedef struct das_dftplan_t DasDftPlan;
 
 /** Create a new shareable DFT plan on the heap 
  * 
@@ -163,7 +163,7 @@ DAS_API bool del_DasDftPlan(DasDftPlan* pThis);
  * FFTs.  Create one per thread; any number of them may share a DasDftPlan.  See
  * the example at the top of this file.
  */
-typedef struct das_dft DasDft;
+typedef struct das_dft_t DasDft;
 
 /** Create a new DFT calculator
  * 
@@ -228,7 +228,7 @@ DAS_API das_errcode DasDft_calculate(
  * @return 
  * @memberof DasDft
  */
-DAS_API const double* DasDft_getReal(DasDft* pThis, size_t* pLen);
+DAS_API const double* DasDft_real(DasDft* pThis, size_t* pLen);
 
 /** Return the imaginary component after a calculation
  * 
@@ -237,7 +237,7 @@ DAS_API const double* DasDft_getReal(DasDft* pThis, size_t* pLen);
  * @return 
  * @memberof DasDft
  */
-DAS_API const double* DasDft_getImg(DasDft* pThis, size_t* pLen);
+DAS_API const double* DasDft_imag(DasDft* pThis, size_t* pLen);
 
 /** Get the amplitude magnitude vector from a calculation
  * 
@@ -263,7 +263,7 @@ DAS_API const double* DasDft_getImg(DasDft* pThis, size_t* pLen);
  *          DasDft_calculate() calls, copy these data to another buffer.
  * @memberof DasDft
  */
-DAS_API const double* DasDft_getMagnitude(DasDft* pThis, size_t* pLen);
+DAS_API const double* DasDft_amplitude(DasDft* pThis, size_t* pLen);
 
 /** @class DasPsd dft.h <das3/dft.h>
  * A power spectral density estimator (periodogram)
@@ -271,7 +271,7 @@ DAS_API const double* DasDft_getMagnitude(DasDft* pThis, size_t* pLen);
  * This is a wrapper around the FFTW (Fastest Fourier Transform in the West)
  * library to handle memory management, normalization and windowing.
  */
-typedef struct das_psd DasPsd;
+typedef struct das_psd_t DasPsd;
 
 /** Create a new Power Spectral Density Calculator
  * 
@@ -339,7 +339,7 @@ DAS_API das_errcode DasPsd_calculate(
  * Internal calculations are still handled in double precision.
  * @memberof DasPsd
  */
-DAS_API das_errcode DasPsd_calculate_f(
+DAS_API das_errcode DasPsd_calcFloat(
 	DasPsd* pThis, const float* pReal, const float* pImg
 );
 
@@ -423,7 +423,7 @@ DAS_API double DasPsd_powerRatio(
  *
  * @memberof DasPsd
  */
-DAS_API const double* DasPsd_get(const DasPsd* pThis, size_t* pLen);
+DAS_API const double* DasPsd_power(const DasPsd* pThis, size_t* pLen);
 
 #ifdef __cplusplus
 }

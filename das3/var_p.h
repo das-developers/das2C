@@ -44,7 +44,7 @@ extern "C" {
 
 /* The variable base.  Every class embeds this as its first member, so a
    class pointer and its DasVar* are the same address. */
-struct das_var {
+struct das_var_t {
 
 	DasDesc base;          /* a variable IS a descriptor: it has properties, a
 	                          parent, and it serializes */
@@ -68,7 +68,7 @@ struct das_var {
 
 	/* One unit. Some DasForm objects may need more, in which
 	   case they can provide storage for them */
-	das_units units;
+	DasUnits units;
 
 	int   nRef;
 };
@@ -102,7 +102,7 @@ typedef struct das_var_comp {
 	   matrix.  Ragged levels are Flags.  Multi-level shapes read and write
 	   end to end (examples/ex40_rotation is the 3;3 case) */
 	int       nIntRank;
-	ptrdiff_t aIntShape[VARIDX_MAX];
+	ptrdiff_t aIntShape[DASIDX_MAX];
 
 	/* Per component labels live at this structural level, readable without
 	   understanding the formalism (the skippability contract: a dumb client
@@ -118,7 +118,7 @@ typedef struct das_var_bytes {
 
 	DasVar base;           /* base.form is unused: a byte run has no math */
 
-	ptrdiff_t nExtent;     /* item length in bytes, VARIDX_RAGGED if var-width */
+	ptrdiff_t nExtent;     /* item length in bytes, DASIDX_RAGGED if var-width */
 
 	/* string, not blob: a required trailing null in the last index, which is
 	   what lets a datum be a bare char*.  A blob is stored as given and must
@@ -146,9 +146,9 @@ typedef struct DasVar_VTbl {
 	 *
 	 * work is caller scratch, used ONLY when there is no storage to point at.
 	 * Returns 0 on success, the bytes of scratch needed if work is too small,
-	 * and a negative error code otherwise.  See DasVar_get(). */
+	 * and a negative error code otherwise.  See DasVar_datumAt(). */
 	int (*get)(
-		const DasVar* pThis, const ptrdiff_t* pLoc, das_byte_seq work, das_datum* pOut
+		const DasVar* pThis, const ptrdiff_t* pAddr, DasByteSeq work, DasDatum* pOut
 	);
 
 	/* The XML element name this class serializes as: "scalar", "composite",
@@ -156,12 +156,12 @@ typedef struct DasVar_VTbl {
 	   rather than deriving structure back out of a presentation vocabulary. */
 	const char* (*serialType)(const DasVar* pThis);
 
-	das_elem_type (*elemType)(const DasVar* pThis);   /* asks the generator */
+	das_et (*elemType)(const DasVar* pThis);   /* asks the generator */
 
 	int (*shape)(const DasVar* pThis, ptrdiff_t* pShape);      /* full shape */
 	int (*intrShape)(const DasVar* pThis, ptrdiff_t* pShape);  /* internal only */
 
-	/* How many items exist along external index nIdx at the location pLoc.
+	/* How many items exist along external index nIdx at the location pAddr.
 	 *
 	 * The question ragged data forces: record 5 may hold 1400 frequency bins
 	 * and record 6 only 1380, so a shape cannot answer it and the caller has
@@ -176,9 +176,9 @@ typedef struct DasVar_VTbl {
 	 * variables fill in different-sized blocks as a stream arrives, so at any
 	 * instant the range over which BOTH actually have data is the shorter one.
 	 * Operands disagreeing about length is a normal mid-stream state, not an
-	 * error.  das_varlength_merge() is where that lives.
+	 * error.  dasshape_mergeLen() is where that lives.
 	 */
-	ptrdiff_t (*lengthIn)(const DasVar* pThis, int nIdx, ptrdiff_t* pLoc);
+	ptrdiff_t (*lengthIn)(const DasVar* pThis, int nIdx, ptrdiff_t* pAddr);
 
 	/* Elements per item: 1 for a scalar, 3 for a vector, 9 for a 3;3 matrix,
 	 * 0 when the run is ragged and has no fixed width.
@@ -205,7 +205,7 @@ typedef struct DasVar_VTbl {
 	 * its two operands instead and applies the recipe as it goes. */
 	int (*subsetInto)(
 		const DasVar* pThis, int nExtRank, const ptrdiff_t* pMin,
-		const ptrdiff_t* pMax, ubyte* pBuf, size_t uBufLen
+		const ptrdiff_t* pMax, uint8_t* pBuf, size_t uBufLen
 	);
 
 	/* The first section of DasVar_toStr(): where the values come from.  A
@@ -246,16 +246,16 @@ DasGen* DasVar_gen(const DasVar* pThis);
 /* Variables over an existing value source.  The public constructors in var.h
  * build the generator and hand it here.  A reference is added to pGen and
  * pForm is fitted to the shape, then copied. */
-DasVar* _new_DasVar_gen(DasGen* pGen, das_units units, DasForm* pForm);
+DasVar* _new_DasVar_gen(DasGen* pGen, DasUnits units, DasForm* pForm);
 
 DasVar* _new_DasVarComp_gen(
-	DasGen* pGen, das_units units, DasForm* pForm,
+	DasGen* pGen, DasUnits units, DasForm* pForm,
 	int nIntRank, const ptrdiff_t* pIntShape
 );
 
-/* pGen must be an etUByte array generator, nExtent as for new_DasVarBytesAry */
+/* pGen must be an DASET_UBYTE array generator, nExtent as for new_DasVarBytesAry */
 DasVar* _new_DasVarBytes_gen(
-	DasGen* pGen, das_units units, bool bSentinel, ptrdiff_t nExtent
+	DasGen* pGen, DasUnits units, bool bSentinel, ptrdiff_t nExtent
 );
 
 /* The del_DasDesc() target for every variable type, given to DasDesc_init()
@@ -266,7 +266,7 @@ void _del_DasVar(DasDesc* pDesc);
  * width is a property of the location rather than the variable. */
 size_t _DasVar_itemBytes(const DasVar* pThis);
 
-/* Scratch bytes DasVar_get() needs to produce one item, 0 when every run
+/* Scratch bytes DasVar_datumAt() needs to produce one item, 0 when every run
  * involved can be pointed at in place.  Recurses through operation operands,
  * since a nested operation needs room for its own result too. */
 size_t _DasVar_runScratch(const DasVar* pThis);
@@ -277,16 +277,16 @@ size_t _DasVar_runScratch(const DasVar* pThis);
  * variable's OWN storage when it has any -- das2C lends rather than copies --
  * and pScratch otherwise.  Returns NULL having set *pNeed when the scratch is
  * too small, or NULL with *pNeed 0 on a loud error. */
-const ubyte* _DasVar_runAt(
-	const DasVar* pThis, const ptrdiff_t* pLoc, ubyte* pScratch, size_t uScratch,
+const uint8_t* _DasVar_runAt(
+	const DasVar* pThis, const ptrdiff_t* pAddr, uint8_t* pScratch, size_t uScratch,
 	size_t* pBytes, size_t* pNeed
 );
 
 /* One item run of a binary operation, the class with no generator to read
  * from.  _DasVar_runAt() dispatches here so a nested operation reads its
  * operands through the same call. */
-const ubyte* _DasVarBin_runAt(
-	const DasVar* pBase, const ptrdiff_t* pLoc, ubyte* pScratch, size_t uScratch,
+const uint8_t* _DasVarBin_runAt(
+	const DasVar* pBase, const ptrdiff_t* pAddr, uint8_t* pScratch, size_t uScratch,
 	size_t* pBytes, size_t* pNeed
 );
 
@@ -298,7 +298,7 @@ const ubyte* _DasVarBin_runAt(
  * The dimension calls this as a dataset header is written, so you rarely
  * need to.  The variable must belong to a dimension in a dataset.  An
  * operation (new_DasVarBin()) has no header form; to save one, read its
- * values out with DasVar_materialize() and build an array backed variable.
+ * values out with new_DasAry_materialize() and build an array backed variable.
  *
  * @param pThis the variable to write
  * @param sRole the variable's role in its dimension

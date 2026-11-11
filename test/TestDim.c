@@ -50,7 +50,7 @@
 		return 13; \
 	}
 
-/* Both DasDim_getRoleByIdx() and DasVar_role() can legitimately answer NULL,
+/* Both DasDim_roleAt() and DasVar_role() can legitimately answer NULL,
    and strcmp() may not be handed one -- gcc's -Werror=nonnull catches it,
    which is the same shape as the das3_cdf NULL-into-strcmp fixed this pass. */
 static bool _roleIs(const char* sRole, const char* sWant)
@@ -69,7 +69,7 @@ static DasVar* _mkSet(DasAry* pAry)
 	   its own reference to each.  A formalism is required -- a numeric
 	   variable always has one, and linear is what an absent <ops> means. */
 	DasForm* pForm = new_DasFormLin();
-	DasVar* pVar = _new_DasVar_gen(pGen, UNIT_NT, pForm);
+	DasVar* pVar = _new_DasVar_gen(pGen, DASUNITS_NT, pForm);
 	del_DasForm(pForm);
 	DasGen_decRef(pGen);
 	return pVar;
@@ -78,47 +78,47 @@ static DasVar* _mkSet(DasAry* pAry)
 static DasAry* _mkAry(const char* sId)
 {
 	float rFill = -1.0f;
-	DasAry* pAry = new_DasAry(sId, vtFloat, 0, (const ubyte*)&rFill, RANK_1(0), UNIT_NT);
+	DasAry* pAry = new_DasAry(sId, DASVT_FLOAT, 0, (const uint8_t*)&rFill, DAS_SHAPE1(0), DASUNITS_NT);
 	if(pAry == NULL) return NULL;
 	float aVals[4] = {1.0f, 2.0f, 3.0f, 4.0f};
-	DasAry_append(pAry, (const ubyte*)aVals, 4);
+	DasAry_append(pAry, (const uint8_t*)aVals, 4);
 	return pAry;
 }
 
 /* Construction and the plain accessors */
 static int test_dim_basics(void)
 {
-	DasDim* pDim = new_DasDim("B_GSM", "B_GSM_avg", DASDIM_DATA, 1);
+	DasDim* pDim = new_DasDim("B_GSM", "B_GSM_avg", DASDIMTYPE_DATA, 1);
 	CHECK(pDim != NULL);
 	CHECK(strcmp(DasDim_name(pDim), "B_GSM_avg") == 0);
 	CHECK(DasDim_numVars(pDim) == 0);
-	CHECK(DasDim_getVar(pDim, DASVAR_CENTER) == NULL);
-	CHECK(DasDim_getPointVar(pDim) == NULL);   /* nothing to point at yet */
+	CHECK(DasDim_var(pDim, DASDIM_ROLE_CENTER) == NULL);
+	CHECK(DasDim_pointVar(pDim) == NULL);   /* nothing to point at yet */
 	del_DasDesc((DasDesc*)pDim);
 	return 0;
 }
 
-/* Axes pack from slot 0 so DasDim_numAxes() bounds a DasDim_getAxis() loop;
+/* Axes pack from slot 0 so DasDim_numAxes() bounds a DasDim_axisSymAt() loop;
    numAxes used to answer 1 for a dimension with no axes at all */
 static int test_dim_axes(void)
 {
-	DasDim* pDim = new_DasDim("time", NULL, DASDIM_COORD, 1);
+	DasDim* pDim = new_DasDim("time", NULL, DASDIMTYPE_COORD, 1);
 	CHECK(pDim != NULL);
 	CHECK(DasDim_numAxes(pDim) == 0);
-	CHECK(DasDim_getAxis(pDim, 0) == NULL);
+	CHECK(DasDim_axisSymAt(pDim, 0) == NULL);
 
-	CHECK(DasDim_setAxis(pDim, 0, "x") == DAS_OKAY);
-	CHECK(DasDim_setAxis(pDim, 2, "z") != DAS_OKAY);    /* would skip slot 1 */
-	CHECK(DasDim_setAxis(pDim, 1, "") != DAS_OKAY);     /* would leave a gap  */
-	CHECK(DasDim_setAxis(pDim, 1, "θ") == DAS_OKAY);    /* two utf-8 bytes    */
+	CHECK(DasDim_setAxisSym(pDim, 0, "x") == DAS_OKAY);
+	CHECK(DasDim_setAxisSym(pDim, 2, "z") != DAS_OKAY);    /* would skip slot 1 */
+	CHECK(DasDim_setAxisSym(pDim, 1, "") != DAS_OKAY);     /* would leave a gap  */
+	CHECK(DasDim_setAxisSym(pDim, 1, "θ") == DAS_OKAY);    /* two utf-8 bytes    */
 	CHECK(DasDim_numAxes(pDim) == 2);
-	CHECK(strcmp(DasDim_getAxis(pDim, 0), "x") == 0);
-	CHECK(strcmp(DasDim_getAxis(pDim, 1), "θ") == 0);
-	CHECK(DasDim_getAxis(pDim, 2) == NULL);
-	CHECK(DasDim_getAxis(pDim, -1) == NULL);             /* out of range, not UB */
-	CHECK(DasDim_getAxis(pDim, DASDIM_NAXES) == NULL);
+	CHECK(strcmp(DasDim_axisSymAt(pDim, 0), "x") == 0);
+	CHECK(strcmp(DasDim_axisSymAt(pDim, 1), "θ") == 0);
+	CHECK(DasDim_axisSymAt(pDim, 2) == NULL);
+	CHECK(DasDim_axisSymAt(pDim, -1) == NULL);             /* out of range, not UB */
+	CHECK(DasDim_axisSymAt(pDim, DASDIM_NAXES) == NULL);
 
-	CHECK(DasDim_setAxis(pDim, 0, "y") == DAS_OKAY);    /* replacing is fine  */
+	CHECK(DasDim_setAxisSym(pDim, 0, "y") == DAS_OKAY);    /* replacing is fine  */
 	CHECK(DasDim_numAxes(pDim) == 2);
 	del_DasDesc((DasDesc*)pDim);
 	return 0;
@@ -129,19 +129,19 @@ static int test_dim_axes(void)
    one used to vanish. */
 static int test_dim_copyin_props(void)
 {
-	DasDim* pSrc = new_DasDim("B_GSM", "src", DASDIM_DATA, 1);
-	DasDim* pDst = new_DasDim("B_GSM", "dst", DASDIM_DATA, 1);
+	DasDim* pSrc = new_DasDim("B_GSM", "src", DASDIMTYPE_DATA, 1);
+	DasDim* pDst = new_DasDim("B_GSM", "dst", DASDIMTYPE_DATA, 1);
 	CHECK((pSrc != NULL) && (pDst != NULL));
 
-	CHECK(DasDesc_setStr((DasDesc*)pDst, "title", "x") == DAS_OKAY);
-	CHECK(DasDesc_setStr((DasDesc*)pDst, "label", "a much longer label value") == DAS_OKAY);
-	CHECK(DasDesc_setStr((DasDesc*)pSrc, "title", "a much longer title than before") == DAS_OKAY);
-	CHECK(DasDesc_setStr((DasDesc*)pSrc, "label", "short") == DAS_OKAY);
+	CHECK(DasDesc_setVal((DasDesc*)pDst, "title", "x") == DAS_OKAY);
+	CHECK(DasDesc_setVal((DasDesc*)pDst, "label", "a much longer label value") == DAS_OKAY);
+	CHECK(DasDesc_setVal((DasDesc*)pSrc, "title", "a much longer title than before") == DAS_OKAY);
+	CHECK(DasDesc_setVal((DasDesc*)pSrc, "label", "short") == DAS_OKAY);
 
 	DasDesc_copyIn((DasDesc*)pDst, (DasDesc*)pSrc);
 
-	const char* sTitle = DasDesc_getStr((DasDesc*)pDst, "title");
-	const char* sLabel = DasDesc_getStr((DasDesc*)pDst, "label");
+	const char* sTitle = DasDesc_val((DasDesc*)pDst, "title");
+	const char* sLabel = DasDesc_val((DasDesc*)pDst, "label");
 	CHECK((sTitle != NULL) && (strcmp(sTitle, "a much longer title than before") == 0));
 	CHECK((sLabel != NULL) && (strcmp(sLabel, "short") == 0));
 
@@ -157,7 +157,7 @@ static int test_dim_addvar_guards(void)
 {
 	DasAry* pAry = _mkAry("vals");
 	CHECK(pAry != NULL);
-	DasDim* pDim = new_DasDim("B_mag", "B_mag", DASDIM_DATA, 1);
+	DasDim* pDim = new_DasDim("B_mag", "B_mag", DASDIMTYPE_DATA, 1);
 	CHECK(pDim != NULL);
 
 	DasVar* pA = _mkSet(pAry);  CHECK(pA != NULL);
@@ -166,22 +166,22 @@ static int test_dim_addvar_guards(void)
 	/* an unnamed role would produce a parented set with no role */
 	CHECK(!DasDim_addVar(pDim, NULL, pA));
 	CHECK(!DasDim_addVar(pDim, "", pA));
-	CHECK(!DasDim_addVar(pDim, DASVAR_CENTER, NULL));
+	CHECK(!DasDim_addVar(pDim, DASDIM_ROLE_CENTER, NULL));
 	CHECK(DasDim_numVars(pDim) == 0);
 	CHECK(DasVar_role(pA) == NULL);   /* untouched, still standalone */
 
-	CHECK(DasDim_addVar(pDim, DASVAR_CENTER, pA));
+	CHECK(DasDim_addVar(pDim, DASDIM_ROLE_CENTER, pA));
 	CHECK(DasDim_numVars(pDim) == 1);
 
 	/* roles are unique, and the comparison is case insensitive, so a second
 	   spelling of the same role is still the same role */
-	CHECK(!DasDim_addVar(pDim, DASVAR_CENTER, pB));
+	CHECK(!DasDim_addVar(pDim, DASDIM_ROLE_CENTER, pB));
 	CHECK(!DasDim_addVar(pDim, "CeNtEr", pB));
 	CHECK(DasDim_numVars(pDim) == 1);
 
-	CHECK(DasDim_getVar(pDim, DASVAR_CENTER) == pA);
-	CHECK(_roleIs(DasDim_getRoleByIdx(pDim, 0), DASVAR_CENTER));
-	CHECK(DasDim_getRoleByIdx(pDim, 1) == NULL);   /* past the end */
+	CHECK(DasDim_var(pDim, DASDIM_ROLE_CENTER) == pA);
+	CHECK(_roleIs(DasDim_roleAt(pDim, 0), DASDIM_ROLE_CENTER));
+	CHECK(DasDim_roleAt(pDim, 1) == NULL);   /* past the end */
 
 	CHECK(dec_DasVar(pB) == 0);   /* never adopted, so mine to release */
 	del_DasDesc((DasDesc*)pDim);                /* takes pA down with it */
@@ -197,34 +197,34 @@ static int test_dim_pointvar_order(void)
 	CHECK(pAry != NULL);
 
 	/* mode alone answers */
-	DasDim* pDim = new_DasDim("B", "B", DASDIM_DATA, 1);
+	DasDim* pDim = new_DasDim("B", "B", DASDIMTYPE_DATA, 1);
 	DasVar* pMode = _mkSet(pAry);
-	CHECK(DasDim_addVar(pDim, DASVAR_MODE, pMode));
-	CHECK(DasDim_getPointVar(pDim) == pMode);
+	CHECK(DasDim_addVar(pDim, DASDIM_ROLE_MODE, pMode));
+	CHECK(DasDim_pointVar(pDim) == pMode);
 
 	/* median outranks mode */
 	DasVar* pMedian = _mkSet(pAry);
-	CHECK(DasDim_addVar(pDim, DASVAR_MEDIAN, pMedian));
-	CHECK(DasDim_getPointVar(pDim) == pMedian);
+	CHECK(DasDim_addVar(pDim, DASDIM_ROLE_MEDIAN, pMedian));
+	CHECK(DasDim_pointVar(pDim) == pMedian);
 
 	/* mean outranks median */
 	DasVar* pMean = _mkSet(pAry);
-	CHECK(DasDim_addVar(pDim, DASVAR_MEAN, pMean));
-	CHECK(DasDim_getPointVar(pDim) == pMean);
+	CHECK(DasDim_addVar(pDim, DASDIM_ROLE_MEAN, pMean));
+	CHECK(DasDim_pointVar(pDim) == pMean);
 
 	/* and center outranks everything */
 	DasVar* pCenter = _mkSet(pAry);
-	CHECK(DasDim_addVar(pDim, DASVAR_CENTER, pCenter));
-	CHECK(DasDim_getPointVar(pDim) == pCenter);
+	CHECK(DasDim_addVar(pDim, DASDIM_ROLE_CENTER, pCenter));
+	CHECK(DasDim_pointVar(pDim) == pCenter);
 
 	/* a dimension of bounds alone has no point variable: min/max could imply
 	   one, but the library does not invent it here */
-	DasDim* pBounds = new_DasDim("range", "range", DASDIM_COORD, 1);
+	DasDim* pBounds = new_DasDim("range", "range", DASDIMTYPE_COORD, 1);
 	DasVar* pMin = _mkSet(pAry);
 	DasVar* pMax = _mkSet(pAry);
-	CHECK(DasDim_addVar(pBounds, DASVAR_MIN, pMin));
-	CHECK(DasDim_addVar(pBounds, DASVAR_MAX, pMax));
-	CHECK(DasDim_getPointVar(pBounds) == NULL);
+	CHECK(DasDim_addVar(pBounds, DASDIM_ROLE_MIN, pMin));
+	CHECK(DasDim_addVar(pBounds, DASDIM_ROLE_MAX, pMax));
+	CHECK(DasDim_pointVar(pBounds) == NULL);
 
 	del_DasDesc((DasDesc*)pBounds);
 	del_DasDesc((DasDesc*)pDim);
@@ -239,34 +239,34 @@ static int test_dim_popvar(void)
 {
 	DasAry* pAry = _mkAry("vals");
 	CHECK(pAry != NULL);
-	DasDim* pDim = new_DasDim("time", "time", DASDIM_COORD, 1);
+	DasDim* pDim = new_DasDim("time", "time", DASDIMTYPE_COORD, 1);
 	CHECK(pDim != NULL);
 
 	DasVar* pRef    = _mkSet(pAry);
 	DasVar* pCenter = _mkSet(pAry);
 	DasVar* pOffset = _mkSet(pAry);
-	CHECK(DasDim_addVar(pDim, DASVAR_REF, pRef));
-	CHECK(DasDim_addVar(pDim, DASVAR_CENTER, pCenter));
-	CHECK(DasDim_addVar(pDim, DASVAR_OFFSET, pOffset));
+	CHECK(DasDim_addVar(pDim, DASDIM_ROLE_REF, pRef));
+	CHECK(DasDim_addVar(pDim, DASDIM_ROLE_CENTER, pCenter));
+	CHECK(DasDim_addVar(pDim, DASDIM_ROLE_OFFSET, pOffset));
 	CHECK(DasDim_numVars(pDim) == 3);
 
 	/* popping a role that isn't there changes nothing */
-	CHECK(DasDim_popVar(pDim, DASVAR_WIDTH) == NULL);
+	CHECK(DasDim_popVar(pDim, DASDIM_ROLE_WIDTH) == NULL);
 	CHECK(DasDim_numVars(pDim) == 3);
 
 	/* pop from the MIDDLE, which is the case that has to shift the arrays */
-	CHECK(DasDim_popVar(pDim, DASVAR_CENTER) == pCenter);
+	CHECK(DasDim_popVar(pDim, DASDIM_ROLE_CENTER) == pCenter);
 	CHECK(DasDim_numVars(pDim) == 2);
-	CHECK(DasDim_getVar(pDim, DASVAR_CENTER) == NULL);
+	CHECK(DasDim_var(pDim, DASDIM_ROLE_CENTER) == NULL);
 
 	/* the survivors keep their pairing: this is what a bad shift breaks */
-	CHECK(DasDim_getVar(pDim, DASVAR_REF) == pRef);
-	CHECK(DasDim_getVar(pDim, DASVAR_OFFSET) == pOffset);
-	CHECK(_roleIs(DasDim_getRoleByIdx(pDim, 0), DASVAR_REF));
-	CHECK(_roleIs(DasDim_getRoleByIdx(pDim, 1), DASVAR_OFFSET));
-	CHECK(DasDim_getRoleByIdx(pDim, 2) == NULL);
-	CHECK(_roleIs(DasVar_role(pRef), DASVAR_REF));
-	CHECK(_roleIs(DasVar_role(pOffset), DASVAR_OFFSET));
+	CHECK(DasDim_var(pDim, DASDIM_ROLE_REF) == pRef);
+	CHECK(DasDim_var(pDim, DASDIM_ROLE_OFFSET) == pOffset);
+	CHECK(_roleIs(DasDim_roleAt(pDim, 0), DASDIM_ROLE_REF));
+	CHECK(_roleIs(DasDim_roleAt(pDim, 1), DASDIM_ROLE_OFFSET));
+	CHECK(DasDim_roleAt(pDim, 2) == NULL);
+	CHECK(_roleIs(DasVar_role(pRef), DASDIM_ROLE_REF));
+	CHECK(_roleIs(DasVar_role(pOffset), DASDIM_ROLE_OFFSET));
 
 	/* The popped set is standalone again, NOT parented-but-roleless.  Assert
 	   the parent pointer directly: DasVar_role() answers NULL for BOTH states
@@ -277,8 +277,8 @@ static int test_dim_popvar(void)
 
 	/* and it can be re-registered, which is what the das2.2 up-convert does
 	   when it turns an old center variable into a reference variable */
-	CHECK(DasDim_addVar(pDim, DASVAR_MEAN, pCenter));
-	CHECK(_roleIs(DasVar_role(pCenter), DASVAR_MEAN));
+	CHECK(DasDim_addVar(pDim, DASDIM_ROLE_MEAN, pCenter));
+	CHECK(_roleIs(DasVar_role(pCenter), DASDIM_ROLE_MEAN));
 
 	del_DasDesc((DasDesc*)pDim);
 	dec_DasAry(pAry);
@@ -289,21 +289,21 @@ static int test_dim_popvar(void)
    the library will act on rather than merely carry. */
 static int test_dim_known_roles(void)
 {
-	CHECK(DasDim_isKnownRole(DASVAR_CENTER));
-	CHECK(DasDim_isKnownRole(DASVAR_MIN));
-	CHECK(DasDim_isKnownRole(DASVAR_MAX));
-	CHECK(DasDim_isKnownRole(DASVAR_WIDTH));
-	CHECK(DasDim_isKnownRole(DASVAR_MEAN));
-	CHECK(DasDim_isKnownRole(DASVAR_MEDIAN));
-	CHECK(DasDim_isKnownRole(DASVAR_MODE));
-	CHECK(DasDim_isKnownRole(DASVAR_REF));
-	CHECK(DasDim_isKnownRole(DASVAR_OFFSET));
-	CHECK(DasDim_isKnownRole(DASVAR_MAX_ERR));
-	CHECK(DasDim_isKnownRole(DASVAR_MIN_ERR));
-	CHECK(DasDim_isKnownRole(DASVAR_STD_DEV));
-	CHECK(DasDim_isKnownRole(DASVAR_COUNT));
-	CHECK(DasDim_isKnownRole(DASVAR_WEIGHT));
-	CHECK(DasDim_isKnownRole(DASVAR_NORM));
+	CHECK(DasDim_isKnownRole(DASDIM_ROLE_CENTER));
+	CHECK(DasDim_isKnownRole(DASDIM_ROLE_MIN));
+	CHECK(DasDim_isKnownRole(DASDIM_ROLE_MAX));
+	CHECK(DasDim_isKnownRole(DASDIM_ROLE_WIDTH));
+	CHECK(DasDim_isKnownRole(DASDIM_ROLE_MEAN));
+	CHECK(DasDim_isKnownRole(DASDIM_ROLE_MEDIAN));
+	CHECK(DasDim_isKnownRole(DASDIM_ROLE_MODE));
+	CHECK(DasDim_isKnownRole(DASDIM_ROLE_REF));
+	CHECK(DasDim_isKnownRole(DASDIM_ROLE_OFFSET));
+	CHECK(DasDim_isKnownRole(DASDIM_ROLE_MAX_ERR));
+	CHECK(DasDim_isKnownRole(DASDIM_ROLE_MIN_ERR));
+	CHECK(DasDim_isKnownRole(DASDIM_ROLE_STD_DEV));
+	CHECK(DasDim_isKnownRole(DASDIM_ROLE_COUNT));
+	CHECK(DasDim_isKnownRole(DASDIM_ROLE_WEIGHT));
+	CHECK(DasDim_isKnownRole(DASDIM_ROLE_NORM));
 
 	CHECK(!DasDim_isKnownRole("not_a_role"));
 	CHECK(!DasDim_isKnownRole(""));
@@ -317,21 +317,21 @@ static int test_dim_known_roles(void)
 	   the contract, and it is what makes the check worth having. */
 	DasAry* pAry = _mkAry("vals");
 	CHECK(pAry != NULL);
-	DasDim* pDim = new_DasDim("odd", "odd", DASDIM_DATA, 1);
+	DasDim* pDim = new_DasDim("odd", "odd", DASDIMTYPE_DATA, 1);
 	DasVar* pCustom = _mkSet(pAry);
 	CHECK(DasDim_addVar(pDim, "my_own_role", pCustom));
 	CHECK(_roleIs(DasVar_role(pCustom), "my_own_role"));
-	CHECK(DasDim_getVar(pDim, "my_own_role") == pCustom);
-	CHECK(DasDim_getPointVar(pDim) == NULL);   /* stored, never chosen */
+	CHECK(DasDim_var(pDim, "my_own_role") == pCustom);
+	CHECK(DasDim_pointVar(pDim) == NULL);   /* stored, never chosen */
 	del_DasDesc((DasDesc*)pDim);
 	dec_DasAry(pAry);
 
 	/* Liberal in, canonical out: the legacy wire spelling becomes the name
 	   the library uses, and anything else passes through untouched. */
-	CHECK(_roleIs(das_role_fromStr("average"), DASVAR_MEAN));
-	CHECK(_roleIs(das_role_fromStr(DASVAR_MEAN), DASVAR_MEAN));
-	CHECK(_roleIs(das_role_fromStr("my_own_role"), "my_own_role"));
-	CHECK(das_role_fromStr(NULL) == NULL);
+	CHECK(_roleIs(DasDim_roleFromStr("average"), DASDIM_ROLE_MEAN));
+	CHECK(_roleIs(DasDim_roleFromStr(DASDIM_ROLE_MEAN), DASDIM_ROLE_MEAN));
+	CHECK(_roleIs(DasDim_roleFromStr("my_own_role"), "my_own_role"));
+	CHECK(DasDim_roleFromStr(NULL) == NULL);
 
 	/* Retired names must not creep back in: 'uncertainty' left the library
 	   because it names no defined quantity, and 'point_spread' is withheld
@@ -347,7 +347,7 @@ int main(int argc, char** argv)
 	/* Unbuffered, so the library's stderr lines land between the banners */
 	setvbuf(stdout, NULL, _IONBF, 0);
 
-	das_init(argv[0], DASERR_DIS_RET, DASLOG_ERROR, NULL);
+	daslib_init(argv[0], DASERRDISP_RET, DASLOG_ERROR, NULL);
 
 	int nRet = 0;
 	printf("INFO: ======== ERROR lines below are intentional, provoked by negative checks ========\n");

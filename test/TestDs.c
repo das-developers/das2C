@@ -48,13 +48,13 @@ const char* g_sProg = "TestDs";
    returned stream (del_DasDesc) on success. */
 static DasDs* load_ds(const char* sFile, int nPktId, DasStream** ppSd, int nErr)
 {
-	DasStream* pSd = new_DasStream_path(g_sProg, sFile);
-	if(pSd == NULL){ das_error(nErr, "Couldn't read %s", sFile); return NULL; }
+	DasStream* pSd = new_DasStream_file(g_sProg, sFile);
+	if(pSd == NULL){ daserrf(nErr, "Couldn't read %s", sFile); return NULL; }
 
-	DasDesc* pDesc = DasStream_getDesc(pSd, nPktId);
-	if((pDesc == NULL)||(DasDesc_type(pDesc) != DASDESC_DS)){
+	DasDesc* pDesc = DasStream_desc(pSd, nPktId);
+	if((pDesc == NULL)||(DasDesc_type(pDesc) != DASDESCTYPE_DS)){
 		del_DasDesc((DasDesc*)pSd);
-		das_error(nErr, "%s packet %d is not a dataset", sFile, nPktId);
+		daserrf(nErr, "%s packet %d is not a dataset", sFile, nPktId);
 		return NULL;
 	}
 	*ppSd = pSd;
@@ -69,25 +69,25 @@ static int test_addary_refs(int nErr)
 {
 	float rFill = -1.0f;
 	DasAry* pAry = new_DasAry(
-		"refs", vtFloat, 0, (const ubyte*)&rFill, RANK_1(0), UNIT_DIMENSIONLESS
+		"refs", DASVT_FLOAT, 0, (const uint8_t*)&rFill, DAS_SHAPE1(0), DASUNITS_DIMENSIONLESS
 	);
-	if(pAry == NULL) return das_error(nErr, "no array");
+	if(pAry == NULL) return daserrf(nErr, "no array");
 	if(ref_DasAry(pAry) != 1)
-		return das_error(nErr, "fresh array has %d references", ref_DasAry(pAry));
+		return daserrf(nErr, "fresh array has %d references", ref_DasAry(pAry));
 
 	DasDs* pDs = new_DasDs("refs_ds", "refs_grp", 1);
-	if(pDs == NULL) return das_error(nErr, "no dataset");
+	if(pDs == NULL) return daserrf(nErr, "no dataset");
 
 	if(DasDs_addAry(pDs, pAry) != DAS_OKAY)
-		return das_error(nErr, "addAry refused");
+		return daserrf(nErr, "addAry refused");
 	if(ref_DasAry(pAry) != 2)
-		return das_error(nErr, "after addAry: %d references, expected 2 "
+		return daserrf(nErr, "after addAry: %d references, expected 2 "
 			"(mine + the dataset's)", ref_DasAry(pAry));
 
 	/* drop mine; the dataset's hold keeps it alive */
 	dec_DasAry(pAry);
 	if(ref_DasAry(pAry) != 1)
-		return das_error(nErr, "after my release: %d references, expected 1",
+		return daserrf(nErr, "after my release: %d references, expected 1",
 			ref_DasAry(pAry));
 
 	del_DasDesc((DasDesc*)pDs);   /* releases the last one */
@@ -98,15 +98,15 @@ static int test_addary_refs(int nErr)
 
 int main(int argc, char** argv)
 {
-	das_init(argv[0], DASERR_DIS_EXIT, DASLOG_INFO, NULL);
+	daslib_init(argv[0], DASERRDISP_EXIT, DASLOG_INFO, NULL);
 
 	int nTest = 0;
 	int nErr  = DASERR_MAX;
 
 	if(test_addary_refs(nErr) != 0) return nErr;
 	DasStream* pSd = NULL;
-	ptrdiff_t aShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
-	ptrdiff_t aLoc[VARIDX_MAX]   = VARIDX_INIT_BEGIN;
+	ptrdiff_t aShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+	ptrdiff_t aAddr[DASIDX_MAX]   = DASIDX_INIT_BEGIN;
 
 	/* ------------------------------------------------------------------ */
 	/* Test 1: cubic dataset (ex12).  For a cube the merge MUST equal the
@@ -120,33 +120,33 @@ int main(int argc, char** argv)
 	int nRank = DasDs_shape(pDs, aShape);
 	const ptrdiff_t aCube[3] = {3, 160, 80};
 	if(nRank != 3)
-		return das_error(nErr, "Test %d: ex12 rank %d, expected 3", nTest, nRank);
+		return daserrf(nErr, "Test %d: ex12 rank %d, expected 3", nTest, nRank);
 	for(int i = 0; i < 3; ++i)
 		if(aShape[i] != aCube[i])
-			return das_error(nErr, "Test %d: ex12 shape[%d]=%td, expected %td",
+			return daserrf(nErr, "Test %d: ex12 shape[%d]=%td, expected %td",
 				nTest, i, aShape[i], aCube[i]);
 
 	/* The merge must agree with the shape, index by index. */
 	for(int i = 0; i < 3; ++i){
-		ptrdiff_t nLen = DasDs_lengthIn(pDs, i, aLoc);
+		ptrdiff_t nLen = DasDs_lengthIn(pDs, i, aAddr);
 		if(nLen != aCube[i])
-			return das_error(nErr,
+			return daserrf(nErr,
 				"Test %d: DasDs_lengthIn(ex12, %d) = %td, expected %td (shape)",
 				nTest, i, nLen, aCube[i]);
 	}
 
 	/* And the data dimension alone (fully mapped) must report the same. */
-	DasDim* pData = DasDs_getDimByIdx(pDs, 0, DASDIM_DATA);
+	DasDim* pData = DasDs_dimAt(pDs, 0, DASDIMTYPE_DATA);
 	if(pData == NULL)
-		return das_error(nErr, "Test %d: ex12 has no data dimension", nTest);
+		return daserrf(nErr, "Test %d: ex12 has no data dimension", nTest);
 	for(int i = 0; i < 3; ++i){
-		ptrdiff_t nLen = DasDim_lengthIn(pData, i, aLoc);
+		ptrdiff_t nLen = DasDim_lengthIn(pData, i, aAddr);
 		if(nLen != aCube[i])
-			return das_error(nErr,
+			return daserrf(nErr,
 				"Test %d: DasDim_lengthIn(ex12 data, %d) = %td, expected %td",
 				nTest, i, nLen, aCube[i]);
 	}
-	daslog_info_v("Test %d success. Cubic merge agrees with shape [3,160,80].", nTest);
+	daslog_infof("Test %d success. Cubic merge agrees with shape [3,160,80].", nTest);
 	del_DasDesc((DasDesc*)pSd); pSd = NULL;
 
 	/* ------------------------------------------------------------------ */
@@ -157,45 +157,45 @@ int main(int argc, char** argv)
 	pDs = load_ds("examples/ex19_cassini_ragged_wfrm.d3t", 2, &pSd, nErr);
 	if(pDs == NULL) return nErr;
 
-	for(int i = 0; i < VARIDX_MAX; ++i) aShape[i] = VARIDX_UNUSED;
+	for(int i = 0; i < DASIDX_MAX; ++i) aShape[i] = DASIDX_UNUSED;
 	nRank = DasDs_shape(pDs, aShape);
 	if(nRank != 2)
-		return das_error(nErr, "Test %d: ex19 rank %d, expected 2", nTest, nRank);
+		return daserrf(nErr, "Test %d: ex19 rank %d, expected 2", nTest, nRank);
 	if(aShape[0] != 3)
-		return das_error(nErr, "Test %d: ex19 shape[0]=%td, expected 3 records",
+		return daserrf(nErr, "Test %d: ex19 shape[0]=%td, expected 3 records",
 			nTest, aShape[0]);
-	if(aShape[1] != VARIDX_RAGGED)
-		return das_error(nErr, "Test %d: ex19 shape[1]=%td, expected RAGGED (%d)",
-			nTest, aShape[1], VARIDX_RAGGED);
+	if(aShape[1] != DASIDX_RAGGED)
+		return daserrf(nErr, "Test %d: ex19 shape[1]=%td, expected RAGGED (%d)",
+			nTest, aShape[1], DASIDX_RAGGED);
 
 	/* Record count along index 0. */
-	aLoc[0] = 0; aLoc[1] = 0;
-	if(DasDs_lengthIn(pDs, 0, aLoc) != 3)
-		return das_error(nErr, "Test %d: ex19 record count %td, expected 3",
-			nTest, DasDs_lengthIn(pDs, 0, aLoc));
+	aAddr[0] = 0; aAddr[1] = 0;
+	if(DasDs_lengthIn(pDs, 0, aAddr) != 3)
+		return daserrf(nErr, "Test %d: ex19 record count %td, expected 3",
+			nTest, DasDs_lengthIn(pDs, 0, aAddr));
 
 	/* Per-row sample count along the ragged index 1. */
 	const ptrdiff_t aRows[3] = {2048, 1536, 2048};
-	pData = DasDs_getDimByIdx(pDs, 0, DASDIM_DATA);
+	pData = DasDs_dimAt(pDs, 0, DASDIMTYPE_DATA);
 	if(pData == NULL)
-		return das_error(nErr, "Test %d: ex19 has no data dimension", nTest);
+		return daserrf(nErr, "Test %d: ex19 has no data dimension", nTest);
 
 	for(int i = 0; i < 3; ++i){
-		aLoc[0] = i; aLoc[1] = 0;
+		aAddr[0] = i; aAddr[1] = 0;
 
-		ptrdiff_t nDs = DasDs_lengthIn(pDs, 1, aLoc);
+		ptrdiff_t nDs = DasDs_lengthIn(pDs, 1, aAddr);
 		if(nDs != aRows[i])
-			return das_error(nErr,
+			return daserrf(nErr,
 				"Test %d: DasDs_lengthIn(ex19, 1) row %d = %td, expected %td",
 				nTest, i, nDs, aRows[i]);
 
-		ptrdiff_t nDim = DasDim_lengthIn(pData, 1, aLoc);
+		ptrdiff_t nDim = DasDim_lengthIn(pData, 1, aAddr);
 		if(nDim != aRows[i])
-			return das_error(nErr,
+			return daserrf(nErr,
 				"Test %d: DasDim_lengthIn(ex19 data, 1) row %d = %td, expected %td",
 				nTest, i, nDim, aRows[i]);
 	}
-	daslog_info_v("Test %d success. Ragged merge: rows %td, %td, %td.",
+	daslog_infof("Test %d success. Ragged merge: rows %td, %td, %td.",
 		nTest, aRows[0], aRows[1], aRows[2]);
 	del_DasDesc((DasDesc*)pSd); pSd = NULL;
 

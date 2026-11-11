@@ -55,15 +55,15 @@
 
 static const char* _serial_role(DasPlane* pPlane)
 {
-	const char* sRole = DasDesc_getStr((DasDesc*)pPlane, "operation");
-	if(sRole == NULL) return DASVAR_CENTER;
+	const char* sRole = DasDesc_val((DasDesc*)pPlane, "operation");
+	if(sRole == NULL) return DASDIM_ROLE_CENTER;
 	
 	/* Interpret  Autoplot style strings */
-	if(strcmp("BIN_AVG", sRole) == 0) return DASVAR_MEAN;
-	if(strcmp("BIN_MAX", sRole) == 0) return DASVAR_MAX;
-	if(strcmp("BIN_MIN", sRole) == 0) return DASVAR_MIN;
+	if(strcmp("BIN_AVG", sRole) == 0) return DASDIM_ROLE_MEAN;
+	if(strcmp("BIN_MAX", sRole) == 0) return DASDIM_ROLE_MAX;
+	if(strcmp("BIN_MIN", sRole) == 0) return DASDIM_ROLE_MIN;
 	
-	return DASVAR_CENTER;
+	return DASDIM_ROLE_CENTER;
 }
 
 /* ************************************************************************** */
@@ -90,12 +90,12 @@ static int DasDim_copyInProps(DasDim* pThis, char cAxis, const DasDesc* pOther)
 	char sNewName[32] = {'\0'};
 
 	const DasAry* pSrcAry = &(pOther->properties);
-	size_t uProps = DasAry_lengthIn(pSrcAry, DIM0);
+	size_t uProps = DasAry_lengthIn(pSrcAry, DAS_ADDR0);
 
 	int nCopied = 0;
 	for(size_t u = 0; u < uProps; ++u){
 		size_t uPropLen = 0;
-		const DasProp* pIn = (const DasProp*) DasAry_getBytesIn(pSrcAry, DIM1_AT(u), &uPropLen);
+		const DasProp* pIn = (const DasProp*) DasAry_bytesIn(pSrcAry, DAS_ADDR1(u), &uPropLen);
 		if(!DasProp_isValid(pIn))
 			continue;
 
@@ -128,7 +128,7 @@ static int DasDim_copyInProps(DasDim* pThis, char cAxis, const DasDesc* pOther)
 
 static DasDim* _serial_getDim(
 	DasPlane* pPlane, DasPkt* pPd, DasStream* pSd,
-	char cAxis, DasDs* pDs, das_dim_type_e dType, const char* sDim,
+	char cAxis, DasDs* pDs, das_dimtype dType, const char* sDim,
 	const char* sDimId,  DasDim** ppDims, char* pDimSrc, size_t* puDims
 ){
 	/* if this plane has a source property then it might be grouped */
@@ -136,7 +136,7 @@ static DasDim* _serial_getDim(
 	char sNewDimId[64] = {'\0'};
 	DasDim* pDim = NULL;
 	
-	const char* sSource = DasDesc_getStr((DasDesc*)pPlane, "source");
+	const char* sSource = DasDesc_val((DasDesc*)pPlane, "source");
 	if(sSource != NULL){
 		/* See if this plane source appears in an existing dim */
 		for(size_t u = 0; u < *puDims; u++){
@@ -168,7 +168,7 @@ static DasDim* _serial_getDim(
 			return NULL;
 		
 		if((*puDims) + 1 >= LEGACY_MAX_DIMS){
-			das_error(DASERR_BLDR, "Too many dimensions in a single packet %d",
+			daserrf(DASERR_BLDR, "Too many dimensions in a single packet %d",
 						 LEGACY_MAX_DIMS);
 			return NULL;
 		}
@@ -189,8 +189,8 @@ static DasDim* _serial_getDim(
 		DasDim_copyInProps(pDim, cAxis, (DasDesc*)pPd);
 		DasDim_copyInProps(pDim, cAxis, (DasDesc*)pPlane);
 		char sAxis[2] = {'\0'}; sAxis[0] = cAxis;
-		DasDim_setAxis(pDim, 0, sAxis);
-		if(dType == DASDIM_COORD) DasDim_setPrimeCoord(pDim, true);
+		DasDim_setAxisSym(pDim, 0, sAxis);
+		if(dType == DASDIMTYPE_COORD) DasDim_setPrimeCoord(pDim, true);
 	}
 	return pDim;
 }
@@ -206,40 +206,40 @@ static DasDim* _serial_getDim(
  */
 static DasAry* _serial_makeAry(
 	bool bRaw, const char* sAryId, DasEnc* pEncoder, double dFill, 
-	int rank, size_t* shape, das_units defUnits
+	int rank, size_t* shape, DasUnits defUnits
 ){
 	DasAry* pAry = NULL;
-	das_val_type vtAry = vtDouble;  /* no choice, data already read */
-	das_units units = defUnits;
+	das_vt vtAry = DASVT_DOUBLE;  /* no choice, data already read */
+	DasUnits units = defUnits;
 	
 	/* I'm reading the stream directly and have a choice of internal encodings */
 	if(bRaw){
 
 		switch(pEncoder->nCat){
 		case DAS2DT_TIME:	 /* store text times as structures, and rm epoch units */
-			vtAry = vtTime; 
-			units = UNIT_UTC;
+			vtAry = DASVT_TIME; 
+			units = DASUNITS_UTC;
 			break;
 		case DAS2DT_ASCII:  /* If over 12 chars (including whitespace) encode as double */
-			vtAry = (pEncoder->nWidth > 12) ? vtDouble : vtFloat; 
+			vtAry = (pEncoder->nWidth > 12) ? DASVT_DOUBLE : DASVT_FLOAT; 
 			break;
 		default:				/* All that's left are DAS2DT_BE_REAL & DAS2DT_LE_REAL */
-			vtAry = (pEncoder->nWidth > 4) ? vtDouble : vtFloat;
+			vtAry = (pEncoder->nWidth > 4) ? DASVT_DOUBLE : DASVT_FLOAT;
 			break;
 		}
 	}
 	
-	const ubyte* pFill = NULL;
+	const uint8_t* pFill = NULL;
 	float fFill = 0.0;
-	if(vtAry == vtDouble){
-		pFill = (const ubyte*) &dFill;
+	if(vtAry == DASVT_DOUBLE){
+		pFill = (const uint8_t*) &dFill;
 	}
-	else if(vtAry == vtFloat){
+	else if(vtAry == DASVT_FLOAT){
 		fFill = (float)dFill;
-		pFill = (const ubyte*) &fFill;
+		pFill = (const uint8_t*) &fFill;
 	}
 	else{
-		pFill = das_vt_fill(vtTime);
+		pFill = dasvt_fill(DASVT_TIME);
 	}
 
 	pAry = new_DasAry(sAryId, vtAry, 0, pFill, rank, shape, units);
@@ -282,15 +282,15 @@ static das_errcode _serial_addCodec(
 	   calculations, e.g. <x type="time25" units="us2000">.  Text times are
 	   calendar values regardless, so here the units only serve to flag the
 	   plane as a time.  Legacy since 2006. */
-	DasAry* pAry = DasDs_getAryById(pDs, sAryId);
-	if((pAry != NULL) && Units_haveCalRep(DasAry_units(pAry)))
+	DasAry* pAry = DasDs_ary(pDs, sAryId);
+	if((pAry != NULL) && DasUnits_isTimePoint(DasAry_units(pAry)))
 		sSemantic = "datetime";
 
-	DasCodec* pCodec = DasDs_addFixedCodec(
-		pDs, sAryId, sSemantic, sEncType, nItemBytes, nItems, DASENC_READ
+	DasCodec* pCodec = DasDs_makeFixedCodec(
+		pDs, sAryId, sSemantic, sEncType, nItemBytes, nItems, DASCODEC_READ
 	);
 	if(pCodec == NULL)
-		return das_error(DASERR_BLDR, "Couldn't generate codec for array %s", sAryId);
+		return daserrf(DASERR_BLDR, "Couldn't generate codec for array %s", sAryId);
 	return DAS_OKAY;
 }
 
@@ -311,27 +311,27 @@ static void _strrep(char* pId, char c, char r)
 	}
 }
 
-static void _guessDimFromUnits(char cAxis, das_units units, char* sBuf, size_t uLen)
+static void _guessDimFromUnits(char cAxis, DasUnits units, char* sBuf, size_t uLen)
 {
-	if(Units_haveCalRep(units)){
+	if(DasUnits_isTimePoint(units)){
 		strncpy(sBuf, "time", uLen); return; 
 	}
-	if(Units_canConvert(units, UNIT_HERTZ)){
+	if(DasUnits_canConvert(units, DASUNITS_HERTZ)){
 		strncpy(sBuf, "frequency", uLen); return;
 	}
-	if(Units_canConvert(units, UNIT_NT)){
+	if(DasUnits_canConvert(units, DASUNITS_NT)){
 		strncpy(sBuf, "B", uLen); return;
 	}
-	if(Units_canConvert(units, UNIT_E_SPECDENS)){
+	if(DasUnits_canConvert(units, DASUNITS_E_SPECDENS)){
 		strncpy(sBuf, "e_spec_dens", uLen); return;
 	}
-	if(Units_canConvert(units, UNIT_B_SPECDENS)){
+	if(DasUnits_canConvert(units, DASUNITS_B_SPECDENS)){
 		strncpy(sBuf, "b_spec_dens", uLen); return;
 	}
-	if(Units_canConvert(units, UNIT_EV)){
+	if(DasUnits_canConvert(units, DASUNITS_EV)){
 		strncpy(sBuf, "energy", uLen); return;
 	}
-	if(Units_canConvert(units, UNIT_KM)){
+	if(DasUnits_canConvert(units, DASUNITS_KM)){
 		strncpy(sBuf, "length", uLen); return;	
 	}
 	sBuf[0] = toupper(cAxis);
@@ -348,13 +348,13 @@ static DasVar* _serial_setFromAry(DasAry* pAry, int nExtRank, const int8_t* pMap
 	DasGen* pGen = new_DasGenAry(pAry, nExtRank, pMap);
 	if(pGen == NULL) return NULL;
 
-	das_units units = DasAry_units(pAry);
+	DasUnits units = DasAry_units(pAry);
 
 	/* A das2 time plane is an absolute position on a calendar scale, which is
 	   the POINT formalism; everything else is plain linear.  The typed
 	   constructors are right here rather than the wire factory: das2 has no
 	   <ops> element, so there are no attribute pairs to build from. */
-	bool bPoint = (DasAry_valType(pAry) == vtTime)||Units_haveCalRep(units);
+	bool bPoint = (DasAry_vt(pAry) == DASVT_TIME)||DasUnits_isTimePoint(units);
 	DasForm* pForm = bPoint ? new_DasFormPt() : new_DasFormLin();
 
 	DasVar* pVar = _new_DasVar_gen(pGen, units, pForm);
@@ -363,8 +363,8 @@ static DasVar* _serial_setFromAry(DasAry* pAry, int nExtRank, const int8_t* pMap
 	return pVar;
 }
 
-#define _MAP1(I)   1, (int8_t[VARIDX_MAX]){I,-3,-3,-3,-3,-3,-3,-3}
-#define _MAP2(I,J) 2, (int8_t[VARIDX_MAX]){I,J,-3,-3,-3,-3,-3,-3}
+#define _MAP1(I)   1, (int8_t[DASIDX_MAX]){I,-3,-3,-3,-3,-3,-3,-3}
+#define _MAP2(I,J) 2, (int8_t[DASIDX_MAX]){I,J,-3,-3,-3,-3,-3,-3}
 
 static DasDs* _serial_initXY(
 	DasStream* pSd, DasPkt* pPd, int nPktId, const char* pGroup, bool bCodecs
@@ -378,12 +378,12 @@ static DasDs* _serial_initXY(
 	char sBuf[64] = {'\0'};
 	char sDsId[64] = {'\0'};
 	if(pGroup == NULL){
-		if(DasPkt_getNPlanesOfType(pPd, DASPLANE_Y) == 1){
-			pPlane = DasPkt_getPlaneByType(pPd, DASPLANE_Y, 0);
-			pGroup = DasPlane_getName(pPlane);
+		if(DasPkt_numPlanesOfType(pPd, DASPLANETYPE_Y) == 1){
+			pPlane = DasPkt_planeOfType(pPd, DASPLANETYPE_Y, 0);
+			pGroup = DasPlane_name(pPlane);
 		}
 		else{
-			nY = DasPkt_getNPlanesOfType(pPd, DASPLANE_Y);
+			nY = DasPkt_numPlanesOfType(pPd, DASPLANETYPE_Y);
 			snprintf(sBuf, 63, "unknown_%dY", nY);
 			pGroup = sBuf;
 			nY = 0;
@@ -396,36 +396,36 @@ static DasDs* _serial_initXY(
 	DasDim* pDim = NULL;
 	DasAry* pAry = NULL;
 	DasVar* pVar = NULL;
-	das_units units = UNIT_DIMENSIONLESS;
-	das_dim_type_e dType = DASDIM_UNK;
+	DasUnits units = DASUNITS_DIMENSIONLESS;
+	das_dimtype dType = DASDIMTYPE_UNK;
 	
 	/* Tracking for array groups (aka dimensions) */
 	DasDim* aDims[LEGACY_MAX_DIMS] = {NULL};
 	char aDimSrc[LEGACY_MAX_DIMS * LEGACY_SRC_ARY_SZ] = {'\0'};
 	size_t uDims = 0;
 	
-	char sDim[DAS_MAX_ID_BUFSZ] = {'\0'};
+	char sDim[DASID_SZ] = {'\0'};
 	char sAryId[64] = {'\0'};
 	double fill;
 	char cAxis = '\0';
 	
 	for(size_t u = 0; u < pPd->uPlanes; ++u){
 		pPlane = pPd->planes[u];
-		pEncoder = DasPlane_getValEncoder(pPlane);
-		fill = DasPlane_getFill(pPlane);
+		pEncoder = DasPlane_valEnc(pPlane);
+		fill = DasPlane_fill(pPlane);
 		units = pPlane->units;
 
 		pId = pPlane->sName;
-		if(pPlane->planeType == DASPLANE_X){
+		if(pPlane->planeType == DASPLANETYPE_X){
 			cAxis = 'x';
 			if(pId == NULL){
-				if(Units_haveCalRep(pPlane->units)) pId = "time";
+				if(DasUnits_isTimePoint(pPlane->units)) pId = "time";
 				else pId = "X";
 			}
 
 			strncpy(sAryId, pId, 63);
 			pAry = _serial_makeAry(
-				bCodecs, pId, pEncoder, fill, RANK_1(0), units
+				bCodecs, pId, pEncoder, fill, DAS_SHAPE1(0), units
 			);
 		}
 		else{
@@ -438,7 +438,7 @@ static DasDs* _serial_initXY(
 			_strrep(sAryId, '.', '_');  /* handle amplitude.max type stuff */
 
 			pAry = _serial_makeAry(
-				bCodecs, sAryId, pEncoder, fill, RANK_1(0), units
+				bCodecs, sAryId, pEncoder, fill, DAS_SHAPE1(0), units
 			);
 		}
 		if(pAry == NULL) return NULL;
@@ -450,10 +450,10 @@ static DasDs* _serial_initXY(
 		
 		/* On to higher level data organizational structures:  Create dimensions
 		 * and variables as needed for the new arrays */
-		if(pPlane->planeType == DASPLANE_X) dType = DASDIM_COORD;
-		else dType = DASDIM_DATA;
+		if(pPlane->planeType == DASPLANETYPE_X) dType = DASDIMTYPE_COORD;
+		else dType = DASDIMTYPE_DATA;
 		
-		_guessDimFromUnits(cAxis, pPlane->units, sDim, DAS_MAX_ID_BUFSZ - 1);
+		_guessDimFromUnits(cAxis, pPlane->units, sDim, DASID_SZ - 1);
 		pDim = _serial_getDim(
 			pPlane, pPd, pSd, cAxis, pDs, dType, sDim, pId, aDims, aDimSrc, &uDims
 		);
@@ -486,12 +486,12 @@ static DasDs* _serial_initXYZ(
 	char sBuf[64] = {'\0'};
 	char sDsId[64] = {'\0'};
 	if(pGroup == NULL){
-		if(DasPkt_getNPlanesOfType(pPd, DASPLANE_Z) == 1){
-			pPlane = DasPkt_getPlaneByType(pPd, DASPLANE_Z, 0);
-			pGroup = DasPlane_getName(pPlane);
+		if(DasPkt_numPlanesOfType(pPd, DASPLANETYPE_Z) == 1){
+			pPlane = DasPkt_planeOfType(pPd, DASPLANETYPE_Z, 0);
+			pGroup = DasPlane_name(pPlane);
 		}
 		else{
-			nZ = DasPkt_getNPlanesOfType(pPd, DASPLANE_Z);
+			nZ = DasPkt_numPlanesOfType(pPd, DASPLANETYPE_Z);
 			snprintf(sBuf, 63, "unknown_%dZ", nZ);
 			pGroup = sBuf;
 			nZ = 0;
@@ -504,15 +504,15 @@ static DasDs* _serial_initXYZ(
 	DasDim* pDim = NULL;
 	DasAry* pAry = NULL;
 	DasVar* pVar = NULL;
-	das_units units = UNIT_DIMENSIONLESS;
+	DasUnits units = DASUNITS_DIMENSIONLESS;
 	
-	das_dim_type_e dType = DASDIM_UNK;
+	das_dimtype dType = DASDIMTYPE_UNK;
 	
 	/* Tracking for array groups (aka dimensions) */
 	DasDim* aDims[LEGACY_MAX_DIMS] = {NULL};
 	char aDimSrc[LEGACY_MAX_DIMS * LEGACY_SRC_ARY_SZ] = {'\0'};
 	size_t uDims = 0;
-	char sDim[DAS_MAX_ID_BUFSZ] = {'\0'};
+	char sDim[DASID_SZ] = {'\0'};
 	
 	char sAryId[64] = {'\0'};
 	double fill;
@@ -521,37 +521,37 @@ static DasDs* _serial_initXYZ(
 	for(size_t u = 0; u < pPd->uPlanes; ++u){
 		pPlane = pPd->planes[u];
 		pId = pPlane->sName; 
-		pEncoder = DasPlane_getValEncoder(pPlane);
-		fill = DasPlane_getFill(pPlane);
+		pEncoder = DasPlane_valEnc(pPlane);
+		fill = DasPlane_fill(pPlane);
 		units = pPlane->units;
 		
 		switch(pPlane->planeType){
-		case DASPLANE_X:
+		case DASPLANETYPE_X:
 			cAxis = 'x';
 			if(pId == NULL){
-				if(Units_haveCalRep(pPlane->units)) pId = "time";
+				if(DasUnits_isTimePoint(pPlane->units)) pId = "time";
 				else pId = "X";
 			}
 
 			/* Fill is not allowed for Das 2.2 X planes in an X,Y,Z pattern */
 			strncpy(sAryId, pId, 63);
 			pAry = _serial_makeAry(
-				bCodecs, pId, pEncoder, fill, RANK_1(0), units
+				bCodecs, pId, pEncoder, fill, DAS_SHAPE1(0), units
 			);
 			break;
 			
-		case DASPLANE_Y:
+		case DASPLANETYPE_Y:
 			cAxis = 'y';
 			if(pId == NULL)pId = "Y";
 
 			/* Fill is not allowed for Das 2.2 Y planes in an X,Y,Z pattern */
 			strncpy(sAryId, pId, 63);
 			pAry = _serial_makeAry(
-				bCodecs, pId, pEncoder, fill, RANK_1(0), units
+				bCodecs, pId, pEncoder, fill, DAS_SHAPE1(0), units
 			);
 			break;
 			
-		case DASPLANE_Z:
+		case DASPLANETYPE_Z:
 			cAxis = 'z';
 			++nZ;
 			
@@ -560,13 +560,13 @@ static DasDs* _serial_initXYZ(
 			_strrep(sAryId, '.', '_');	/* handle amplitude.max stuff */
 
 			pAry = _serial_makeAry(
-				bCodecs, pId, pEncoder, fill, RANK_1(0), units
+				bCodecs, pId, pEncoder, fill, DAS_SHAPE1(0), units
 			);
 			break;
 			
 		
 		default:
-			das_error(DASERR_BLDR, "Unexpected plane type in XYZ pattern");
+			daserrf(DASERR_BLDR, "Unexpected plane type in XYZ pattern");
 			return NULL;
 		}
 		
@@ -578,10 +578,10 @@ static DasDs* _serial_initXYZ(
 		dec_DasAry(pAry);   /* the dataset holds the surviving reference */
 		
 		/* Create dimensions and variables as needed for the new arrays */
-		if(pPlane->planeType == DASPLANE_Z) dType = DASDIM_DATA;
-		else dType = DASDIM_COORD;
+		if(pPlane->planeType == DASPLANETYPE_Z) dType = DASDIMTYPE_DATA;
+		else dType = DASDIMTYPE_COORD;
 		
-		_guessDimFromUnits(cAxis, pPlane->units, sDim, DAS_MAX_ID_BUFSZ - 1);
+		_guessDimFromUnits(cAxis, pPlane->units, sDim, DASID_SZ - 1);
 		pDim = _serial_getDim(
 			pPlane, pPd, pSd, cAxis, pDs, dType, sDim, pId, aDims, aDimSrc, &uDims
 		);
@@ -610,7 +610,7 @@ static DasDs* _serial_initEvents(
 	DasStream* pSd, DasPkt* pPd, int nPktId, const char* sGroupId
 )
 {
-	das_error(DASERR_BLDR, "Event stream reading has not been implemented");
+	daserrf(DASERR_BLDR, "Event stream reading has not been implemented");
 	return NULL;
 }
 
@@ -619,44 +619,44 @@ static DasDs* _serial_initEvents(
 
 static bool _serial_checkYTags(DasPkt* pPd)
 {
-	size_t uYScans = DasPkt_getNPlanesOfType(pPd, DASPLANE_YSCAN);
+	size_t uYScans = DasPkt_numPlanesOfType(pPd, DASPLANETYPE_YSCAN);
 	if(uYScans < 2) return true;
 
-	DasPlane* pFirst = DasPkt_getPlaneByType(pPd, DASPLANE_YSCAN, 0);
-	size_t uYTags = DasPlane_getNItems(pFirst);
-	das_ytag_type_e spec = DasPlane_getYTagType(pFirst);
+	DasPlane* pFirst = DasPkt_planeOfType(pPd, DASPLANETYPE_YSCAN, 0);
+	size_t uYTags = DasPlane_numItems(pFirst);
+	das_ytagtype spec = DasPlane_yTagType(pFirst);
 	double rInterval = -1.0, rMin = -1.0, rMax = -1.0;
-	if(spec == DASPLANE_YTAGS_SEQ)
-		DasPlane_getYTagSeq(pFirst, &rInterval, &rMin, &rMax);
+	if(spec == DASYTAGTYPE_SEQ)
+		DasPlane_yTagSeq(pFirst, &rInterval, &rMin, &rMax);
 	const double* pYTags = NULL;
-	if(spec == DASPLANE_YTAGS_LIST) pYTags = DasPlane_getYTags(pFirst);
+	if(spec == DASYTAGTYPE_LIST) pYTags = DasPlane_yTags(pFirst);
 
-	das_units units = DasPlane_getYTagUnits(pFirst);
+	DasUnits units = DasPlane_yTagUnits(pFirst);
 
 	DasPlane* pNext = NULL;
 	size_t u,v;
 	double rNextInterval = -1.0, rNextMin = -1.0, rNextMax = -1.0;
 	const double* pNextYTags = NULL;
 	for(u = 1; u < uYScans; ++u){
-		pNext = DasPkt_getPlaneByType(pPd, DASPLANE_YSCAN, u);
-		if(uYTags != DasPlane_getNItems(pNext)) return false;
+		pNext = DasPkt_planeOfType(pPd, DASPLANETYPE_YSCAN, u);
+		if(uYTags != DasPlane_numItems(pNext)) return false;
 
 		/* The tags can be specified as none, a list, or a series */
-		if(spec != DasPlane_getYTagType(pNext)) return false;
+		if(spec != DasPlane_yTagType(pNext)) return false;
 
-		if(units != DasPlane_getYTagUnits(pNext)) return false;
+		if(units != DasPlane_yTagUnits(pNext)) return false;
 
 		switch(spec){
-		case DASPLANE_YTAGS_NONE: break;
-		case DASPLANE_YTAGS_SEQ:
-			DasPlane_getYTagSeq(pNext, &rNextInterval, &rNextMin, &rNextMax);
+		case DASYTAGTYPE_NONE: break;
+		case DASYTAGTYPE_SEQ:
+			DasPlane_yTagSeq(pNext, &rNextInterval, &rNextMin, &rNextMax);
 			if(rInterval != rNextInterval ) return false;
 			if(rMin != rNextMin) return false;
 			if(rMax != rNextMax) return false;
 			break;
 
-		case DASPLANE_YTAGS_LIST:
-			pNextYTags = DasPlane_getYTags(pNext);
+		case DASYTAGTYPE_LIST:
+			pNextYTags = DasPlane_yTags(pNext);
 			for(v = 0; v<uYTags; ++v) if(pYTags[v] != pNextYTags[v]) return false;
 			break;
 		}
@@ -667,24 +667,24 @@ static bool _serial_checkYTags(DasPkt* pPd)
 
 static float* _serial_yTagVals(DasPlane* pPlane)
 {
-	if(pPlane->planeType != DASPLANE_YSCAN){
-		das_error(DASERR_BLDR, "Program logic error");
+	if(pPlane->planeType != DASPLANETYPE_YSCAN){
+		daserrf(DASERR_BLDR, "Program logic error");
 		return NULL;
 	}
-	float* pTags = (float*)calloc(DasPlane_getNItems(pPlane), sizeof(float));
-	size_t u, uItems = DasPlane_getNItems(pPlane);
+	float* pTags = (float*)calloc(DasPlane_numItems(pPlane), sizeof(float));
+	size_t u, uItems = DasPlane_numItems(pPlane);
 	const double* pListTags = NULL;
 	double rInterval, rMin, rMax;
 	switch(pPlane->ytag_spec){
-	case DASPLANE_YTAGS_LIST:
-		pListTags = DasPlane_getYTags(pPlane);
+	case DASYTAGTYPE_LIST:
+		pListTags = DasPlane_yTags(pPlane);
 		for(u = 0; u < uItems; ++u) pTags[u] = (float) pListTags[u];
 		break;
-	case DASPLANE_YTAGS_NONE:
+	case DASYTAGTYPE_NONE:
 		for(u = 0; u < uItems; ++u) pTags[u] = u;
 		break;
-	case DASPLANE_YTAGS_SEQ:
-		DasPlane_getYTagSeq(pPlane, &rInterval, &rMin, &rMax);
+	case DASYTAGTYPE_SEQ:
+		DasPlane_yTagSeq(pPlane, &rInterval, &rMin, &rMax);
 		for(u = 0; u < uItems; ++u) pTags[u] = (float) rMin + (rInterval * u);
 		break;
 	}
@@ -693,12 +693,12 @@ static float* _serial_yTagVals(DasPlane* pPlane)
 
 static bool _serial_isWaveform(DasPlane* pPlane){
 
-	const char* sRend = DasDesc_getStr((DasDesc*)pPlane, "renderer");
+	const char* sRend = DasDesc_val((DasDesc*)pPlane, "renderer");
 	if(sRend == NULL) return false;
 	if(strcmp("waveform", sRend) != 0) return false;
 	
-	das_units units = DasPlane_getYTagUnits(pPlane);
-	if(! Units_canConvert(units, UNIT_SECONDS)) return false;
+	DasUnits units = DasPlane_yTagUnits(pPlane);
+	if(! DasUnits_canConvert(units, DASUNITS_SECONDS)) return false;
 	return true;
 }
 
@@ -710,26 +710,26 @@ static DasDs* _serial_initYScan(
 	 * two yscans have different yTag sets then they are not correlated. */
 	
 	if(!_serial_checkYTags(pPd)){
-		das_error(DASERR_BLDR, "YTags are not equivalent in multi-yscan packet");
+		daserrf(DASERR_BLDR, "YTags are not equivalent in multi-yscan packet");
 		return NULL;
 	}
 
 	/* If my group name is null, make up a new one appropriate to YScan data */
-	DasPlane* pPlane = DasPkt_getPlaneByType(pPd, DASPLANE_YSCAN, 0);
+	DasPlane* pPlane = DasPkt_planeOfType(pPd, DASPLANETYPE_YSCAN, 0);
 	int nY = 0, nYScan = 0;
 	char sDsGroup[64] = {'\0'};
 	char sDsId[64] = {'\0'};
-	char sDim[DAS_MAX_ID_BUFSZ] = {'\0'};
+	char sDim[DASID_SZ] = {'\0'};
 	
-	if(pGroup == NULL) pGroup = DasPlane_getName(pPlane);
+	if(pGroup == NULL) pGroup = DasPlane_name(pPlane);
 	if(pGroup == NULL){
-		nYScan = DasPkt_getNPlanesOfType(pPd, DASPLANE_YSCAN);
+		nYScan = DasPkt_numPlanesOfType(pPd, DASPLANETYPE_YSCAN);
 		snprintf(sDsGroup, 63, "default_%d_MultiZ", nYScan);
 		pGroup = sDsGroup;
 	}
 	snprintf(sDsId, 63, "%s_%02d", pGroup, nPktId);
 
-	size_t uItems = DasPlane_getNItems(pPlane);
+	size_t uItems = DasPlane_numItems(pPlane);
 
 	DasDs* pDs = new_DasDs(sDsId, pGroup, 2);
 	DasDim* pDim = NULL;
@@ -742,8 +742,8 @@ static DasDs* _serial_initYScan(
 	const char* pPlaneId = NULL;
 	DasEnc* pEncoder = NULL;
 	const char* sRole = NULL;
-	das_units Yunits = UNIT_DIMENSIONLESS;
-	das_units Zunits = UNIT_DIMENSIONLESS;
+	DasUnits Yunits = DASUNITS_DIMENSIONLESS;
+	DasUnits Zunits = DASUNITS_DIMENSIONLESS;
 	const char* pYTagDim = NULL;
 	DasAry* pAry = NULL;
 	char sAryId[64] = {'\0'};
@@ -770,30 +770,30 @@ static DasDs* _serial_initYScan(
 		
 		/* Assume this is a center value unless told otherwise */
 		sRole	 = _serial_role(pPlane);
-		pEncoder = DasPlane_getValEncoder(pPlane);
-		fill	  = DasPlane_getFill(pPlane);
+		pEncoder = DasPlane_valEnc(pPlane);
+		fill	  = DasPlane_fill(pPlane);
 		
 		/* If we're lucky the plane will tell us the purpose for it's
 		 * values, i.e. min, center, max, err-bar  */
 
 		switch(pPlane->planeType){
-		case DASPLANE_X:
+		case DASPLANETYPE_X:
 			if(pPlaneId == NULL){
-				if(Units_haveCalRep(pPlane->units)) pPlaneId = "time"; 
+				if(DasUnits_isTimePoint(pPlane->units)) pPlaneId = "time"; 
 				else										  pPlaneId = "X";
 			}
 	
 			pAry = _serial_makeAry(
-				bCodecs, pPlaneId, pEncoder, fill, RANK_1(0), pPlane->units
+				bCodecs, pPlaneId, pEncoder, fill, DAS_SHAPE1(0), pPlane->units
 			);
 			
 			if(pAry == NULL) return NULL;
 			if(DasDs_addAry(pDs, pAry) != DAS_OKAY) return NULL;
 			dec_DasAry(pAry);   /* the dataset holds the surviving reference */
 			
-			_guessDimFromUnits('x', pPlane->units, sDim, DAS_MAX_ID_BUFSZ - 1);
+			_guessDimFromUnits('x', pPlane->units, sDim, DASID_SZ - 1);
 			pXDim = _serial_getDim(
-				pPlane, pPd, pSd, 'x', pDs, DASDIM_COORD, sDim, pPlaneId,
+				pPlane, pPd, pSd, 'x', pDs, DASDIMTYPE_COORD, sDim, pPlaneId,
 				aDims, aDimSrc, &uDims
 			);
 			if(pXDim == NULL) return NULL; 
@@ -808,7 +808,7 @@ static DasDs* _serial_initYScan(
 					return NULL;
 			break;
 			
-		case DASPLANE_Y:
+		case DASPLANETYPE_Y:
 			++nY;
 			if(pPlaneId == NULL)
 				snprintf(sAryId, 63, "Y_%d", nY);
@@ -817,7 +817,7 @@ static DasDs* _serial_initYScan(
 			_strrep(sAryId, '.', '_');
 
 			pAry = _serial_makeAry(
-				bCodecs, sAryId, pEncoder, fill, RANK_1(0), pPlane->units
+				bCodecs, sAryId, pEncoder, fill, DAS_SHAPE1(0), pPlane->units
 			);
 			if(pAry == NULL) return NULL;
 
@@ -826,9 +826,9 @@ static DasDs* _serial_initYScan(
 			
 			/* Assume that extra Y values are more coordinates unless told 
 			 * otherwise by a setting of some sort that I don't yet know */
-			_guessDimFromUnits('y', pPlane->units, sDim, DAS_MAX_ID_BUFSZ - 1);
+			_guessDimFromUnits('y', pPlane->units, sDim, DASID_SZ - 1);
 			pYDim = _serial_getDim(
-				pPlane, pPd, pSd, 'y', pDs, DASDIM_COORD, sDim, pPlaneId,
+				pPlane, pPd, pSd, 'y', pDs, DASDIMTYPE_COORD, sDim, pPlaneId,
 				aDims, aDimSrc, &uDims
 			);
 			if(pYDim == NULL) return NULL; 
@@ -844,7 +844,7 @@ static DasDs* _serial_initYScan(
 					return NULL;
 			break;
 			
-		case DASPLANE_YSCAN:
+		case DASPLANETYPE_YSCAN:
 			++nYScan;
 			
 			/* This one is interesting, maybe have to add two arrays.
@@ -854,25 +854,25 @@ static DasDs* _serial_initYScan(
 			 */
 			
 			if(!bAddedYTags){
-				Yunits = DasPlane_getYTagUnits(pPlane);
-				if( Units_canConvert(Yunits, UNIT_HERTZ) ){ 
+				Yunits = DasPlane_yTagUnits(pPlane);
+				if( DasUnits_canConvert(Yunits, DASUNITS_HERTZ) ){ 
 					pYTagDim = "frequency";
 				}
 				else{
-					if(Units_canConvert(Yunits, UNIT_SECONDS)) pYTagDim = "offset";
+					if(DasUnits_canConvert(Yunits, DASUNITS_SECONDS)) pYTagDim = "offset";
 					else{
-						if(Units_canConvert(Yunits, UNIT_EV)) pYTagDim = "energy";
+						if(DasUnits_canConvert(Yunits, DASUNITS_EV)) pYTagDim = "energy";
 						else pYTagDim = "ytags";
 					}
 				}
-				pAry = new_DasAry(pYTagDim, vtFloat, 0, NULL, RANK_1(uItems), Yunits);
+				pAry = new_DasAry(pYTagDim, DASVT_FLOAT, 0, NULL, DAS_SHAPE1(uItems), Yunits);
 				if(pAry == NULL) return NULL;
 				if(DasDs_addAry(pDs, pAry) != DAS_OKAY) return NULL;
 				dec_DasAry(pAry);   /* the dataset holds the surviving reference */
 				pYTags = _serial_yTagVals(pPlane);
 
 				/* Use put instead of append since we've already allocated the space */
-				DasAry_putAt(pAry, DIM1_AT(0), (const ubyte*)pYTags, uItems);
+				DasAry_setValsAt(pAry, DAS_ADDR1(0), (const uint8_t*)pYTags, uItems);
 				free(pYTags);  pYTags = NULL;
 				
 				/* If the data aren't waveforms we're going to need to add a new
@@ -880,11 +880,11 @@ static DasDs* _serial_initYScan(
 				if( _serial_isWaveform(pPlane) ){
 					/* ignore first index, map second index to array */
 					pOffset = _serial_setFromAry(pAry, _MAP2(-3, 0));
-					DasDim_addVar(pXDim, DASVAR_OFFSET, pOffset);
+					DasDim_addVar(pXDim, DASDIM_ROLE_OFFSET, pOffset);
 					
 					/* Convert the old CENTER variable to a Reference variable */
-					pReference = DasDim_popVar(pXDim, DASVAR_CENTER);
-					DasDim_addVar(pXDim, DASVAR_REF, pReference);
+					pReference = DasDim_popVar(pXDim, DASDIM_ROLE_CENTER);
+					DasDim_addVar(pXDim, DASDIM_ROLE_REF, pReference);
 					
 					/* Make new center variable that is rank 2 since reference and
 					 * offset are orthogonal */
@@ -893,7 +893,7 @@ static DasDs* _serial_initYScan(
 					   Das2py may need to do this on it's own
 					*/
 					pVar = new_DasVarBin(pReference, '+', pOffset);
-					if(! DasDim_addVar(pXDim, DASVAR_CENTER, pVar) ) return NULL;
+					if(! DasDim_addVar(pXDim, DASDIM_ROLE_CENTER, pVar) ) return NULL;
 					
 				}
 				else{
@@ -902,11 +902,11 @@ static DasDs* _serial_initYScan(
 						add the Ytags as offsets */
 					if(pYDim != NULL){
 						pOffset = _serial_setFromAry(pAry, _MAP2(-3, 0));
-						DasDim_addVar(pYDim, DASVAR_OFFSET, pOffset);
+						DasDim_addVar(pYDim, DASDIM_ROLE_OFFSET, pOffset);
 
 						/* Convert the old CENTER variable to a Reference variable */
-						pReference = DasDim_popVar(pYDim, DASVAR_CENTER);
-						DasDim_addVar(pYDim, DASVAR_REF, pReference);
+						pReference = DasDim_popVar(pYDim, DASDIM_ROLE_CENTER);
+						DasDim_addVar(pYDim, DASDIM_ROLE_REF, pReference);
 					
 						/* Make new center variable that is rank 2 since reference and
 						* offset are orthogonal */
@@ -915,14 +915,14 @@ static DasDs* _serial_initYScan(
 					   Das2py may need to do this on it's own
 						*/
 						pVar = new_DasVarBin(pReference, '+', pOffset);
-						if(! DasDim_addVar(pYDim, DASVAR_CENTER, pVar) ) return NULL;
+						if(! DasDim_addVar(pYDim, DASDIM_ROLE_CENTER, pVar) ) return NULL;
 						
 					}
 					else{
 						/* Nope no offsets in freq or time, just a new center variable */
-						pDim = DasDs_makeDim(pDs, DASDIM_COORD, pYTagDim, "");
+						pDim = DasDs_makeDim(pDs, DASDIMTYPE_COORD, pYTagDim, "");
 						if(pDim == NULL) return NULL;
-						DasDim_setAxis(pDim, 0, "y");
+						DasDim_setAxisSym(pDim, 0, "y");
 						DasDim_setPrimeCoord(pDim, true);
 
 						DasDim_copyInProps(pDim, 'y', (DasDesc*)pSd);
@@ -932,7 +932,7 @@ static DasDs* _serial_initYScan(
 						/* Map index 1 to this array's index 0, ignore 0, assume  */
 						/* center values */
 						pVar = _serial_setFromAry(pAry, _MAP2(-3, 0));
-						if(! DasDim_addVar(pDim, DASVAR_CENTER, pVar)) return NULL;
+						if(! DasDim_addVar(pDim, DASDIM_ROLE_CENTER, pVar)) return NULL;
 						pVar = NULL; /* null out since re-used */
 					}
 				}
@@ -941,11 +941,11 @@ static DasDs* _serial_initYScan(
 			}
 
 			/* Now for the actual data values array, try for a good array name */
-			Zunits = DasPlane_getUnits(pPlane);
+			Zunits = DasPlane_units(pPlane);
 			if(pPlaneId == NULL){
-				if(Units_canConvert(Zunits, UNIT_E_SPECDENS)) 
+				if(DasUnits_canConvert(Zunits, DASUNITS_E_SPECDENS)) 
 					strncpy(sAryId, "e_spec_dens", 63);
-				else if(Units_canConvert(Zunits, UNIT_B_SPECDENS))
+				else if(DasUnits_canConvert(Zunits, DASUNITS_B_SPECDENS))
 					strncpy(sAryId, "b_spec_dens", 63);
 				else
 					snprintf(sAryId, 63, "YScan_%d", nYScan);
@@ -956,16 +956,16 @@ static DasDs* _serial_initYScan(
 			_strrep(sAryId, '.', '_');
 						
 			pAry = _serial_makeAry(
-				bCodecs, sAryId, pEncoder, fill, RANK_2(0, uItems), Zunits
+				bCodecs, sAryId, pEncoder, fill, DAS_SHAPE2(0, uItems), Zunits
 			);
 			if(pAry == NULL) return NULL;
 
 			if(DasDs_addAry(pDs, pAry) != DAS_OKAY) return NULL;
 			dec_DasAry(pAry);   /* the dataset holds the surviving reference */
 			
-			_guessDimFromUnits('z', pPlane->units, sDim, DAS_MAX_ID_BUFSZ - 1);
+			_guessDimFromUnits('z', pPlane->units, sDim, DASID_SZ - 1);
 			pDim = _serial_getDim(
-				pPlane, pPd, pSd, 'z', pDs, DASDIM_DATA, sDim, pPlaneId, aDims, 
+				pPlane, pPd, pSd, 'z', pDs, DASDIMTYPE_DATA, sDim, pPlaneId, aDims, 
 				aDimSrc, &uDims
 			);
 			if(pDim == NULL) return NULL; 
@@ -982,7 +982,7 @@ static DasDs* _serial_initYScan(
 			break;
 			
 		default:
-			das_error(DASERR_DS, "logic error");
+			daserrf(DASERR_DS, "logic error");
 			return NULL;
 			break;
 		}
@@ -1018,30 +1018,30 @@ static DasDs* _serial_initYScan(
  *                it can be used to parse data packet payloads.  See the note above.
  *
  * @returns A new DasDs object allocated on the heap if successful, NULL otherwise
- *        and das_error is called internally.  Note that the dataset is not 
+ *        and daserrf is called internally.  Note that the dataset is not 
  *        attached to the stream descriptor.  It is the callers responsibility to
  *        attach it if desired.
  */
-DasDs* new_DasDs_packet(
+DasDs* new_DasDs_fromPkt(
 	DasStream* pSd, DasPkt* pPd, int nPktId, const char* sGroup, bool bCodecs
 )
 {
 	/* Initialize based on the observed pattern.  Das2 streams have traditionally
 	 * followed certain layout patterns, you can't have arbitrary collections of
 	 * <x> <y> <yscan> and <z> planes.	 */
-	size_t u, uPlanes = DasPkt_getNPlanes(pPd);
+	size_t u, uPlanes = DasPkt_numPlanes(pPd);
 	DasPlane* pPlane = NULL;
 	/* <y> planes aren't counted, no layout choice below depends on them, and
 	   clang rejects a counter that is set but never read (-Wunused-but-set-variable) */
 	int nXs = 0, nYScans = 0, nZs = 0;
 	for(u = 0; u < uPlanes; ++u){
-		pPlane = DasPkt_getPlane(pPd, u);
-		switch(DasPlane_getType(pPlane)){
-		case DASPLANE_X: ++nXs; break;
-		case DASPLANE_Y: break;
-		case DASPLANE_YSCAN: ++nYScans; break;
-		case DASPLANE_Z: ++nZs; break;
-		case DASPLANE_INV: das_error(DASERR_DS, "logic error"); return NULL;
+		pPlane = DasPkt_planeAt(pPd, u);
+		switch(DasPlane_type(pPlane)){
+		case DASPLANETYPE_X: ++nXs; break;
+		case DASPLANETYPE_Y: break;
+		case DASPLANETYPE_YSCAN: ++nYScans; break;
+		case DASPLANETYPE_Z: ++nZs; break;
+		case DASPLANETYPE_INV: daserrf(DASERR_DS, "logic error"); return NULL;
 		}
 	}
 

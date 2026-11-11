@@ -103,7 +103,7 @@ int _Via_realloc(Via* pThis, int iVirt)
 	
 	double* pNewBuf = (double*)calloc(nNewSz, sizeof(double));
 	if(pNewBuf == NULL){ 
-		das_error(38, "Alloc failure on %zu bytes", nNewSz*sizeof(double));
+		daserrf(38, "Alloc failure on %zu bytes", nNewSz*sizeof(double));
 		return -1;
 	}
 	
@@ -145,7 +145,7 @@ int Via_length(const Via* pThis){
 int Via_lastSet(const Via* pThis){
 	if(!pThis->bHasData) 
 		exit( 
-			das_error(38, "Logic error in caller to Via_lastSet, no value has "
+			daserrf(38, "Logic error in caller to Via_lastSet, no value has "
 			           "been written for this virtual index array.")
 		);
 	return pThis->iVlast;
@@ -165,7 +165,7 @@ Via* new_Via(int nInitial, int nMax)
 	
 	pThis->pBuf = (double*)calloc(nInitial, sizeof(double));
 	if(pThis->pBuf == NULL){
-		das_error(32, "Alloc failure on %zu bytes", nInitial*sizeof(double));
+		daserrf(32, "Alloc failure on %zu bytes", nInitial*sizeof(double));
 		return NULL;
 	}
 	
@@ -201,20 +201,20 @@ double Via_get(const Via* pThis, int iVirt)
 {
 	if(!pThis->bHasData)
 		exit(
-			das_error(38, "No valid indices in current virtual index array")
+			daserrf(38, "No valid indices in current virtual index array")
 		);
 	
 	  
 	if((iVirt < pThis->iVmin) || (iVirt > pThis->iVmax)){ 
 		/* index is in no man's land */
 		exit(
-			das_error(38, "Index %d outside of range %d to %d (inclusive)",
+			daserrf(38, "Index %d outside of range %d to %d (inclusive)",
 				        iVirt, pThis->iVmin, pThis->iVmax)
 		);		
 	}
 	
 	int iReal = _Via_realIdx(pThis, iVirt);
-	if(iReal == -1) exit(das_error(32, "WTF?"));
+	if(iReal == -1) exit(daserrf(32, "WTF?"));
 	
 	return *(pThis->pBuf + iReal);
 }
@@ -269,7 +269,7 @@ int main(int argc, char** argv)
 	double rVal = 0.0;
 	
 	/* Exit on errors, log info messages and above */
-	das_init(argv[0], DASERR_DIS_EXIT, DASLOG_INFO, NULL);
+	daslib_init(argv[0], DASERRDISP_EXIT, DASLOG_INFO, NULL);
 	
 	Via* pVia = new_Via(10, 100);
 	assert( Via_valid(pVia, 0) == false);

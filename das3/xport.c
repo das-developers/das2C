@@ -29,12 +29,12 @@
 #include <string.h>
 #include <zlib.h>
 
-#include "defs.h"   /* first, it decides DAS_NO_NETWORK */
+#include "defs.h"   /* first, it decides DASCONF_NO_NET */
 
 #ifndef _WIN32
 #include <unistd.h>
 #include <sys/wait.h>
-#ifndef DAS_NO_NETWORK
+#ifndef DASCONF_NO_NET
 #include <sys/socket.h>
 #endif
 #else
@@ -43,7 +43,7 @@
 #define pclose _pclose
 #endif
 
-#ifndef DAS_NO_NETWORK
+#ifndef DASCONF_NO_NET
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 #endif
@@ -122,7 +122,7 @@ ptrdiff_t _DasXport_readFull(DasXport* pThis, void* pOut, size_t uLen)
 {
 	size_t uGot = 0;
 	while(uGot < uLen){
-		ptrdiff_t nRead = DasXport_read(pThis, (ubyte*)pOut + uGot, uLen - uGot);
+		ptrdiff_t nRead = DasXport_read(pThis, (uint8_t*)pOut + uGot, uLen - uGot);
 		if(nRead < 0) return -1;
 		if(nRead == 0) break;
 		uGot += (size_t)nRead;
@@ -150,16 +150,16 @@ ptrdiff_t DasXport_write(DasXport* pThis, const void* pIn, size_t uLen)
 das_errcode _DasXport_unread(DasXport* pThis, const void* pIn, size_t uLen)
 {
 	if(!(pThis->uFlags & DASXPORT_RD))
-		return das_error(DASERR_IO, "Unread on the %s transport, which is not "
+		return daserrf(DASERR_IO, "Unread on the %s transport, which is not "
 		                 "open for reading", pThis->pVt->sKind);
 	if(uLen == 0) return DAS_OKAY;
 
 	/* The new bytes go in front of any still waiting.  This happens about
 	   once per HTTP request, a fresh allocation each time is fine. */
 	size_t uHave = pThis->uBackLen - pThis->uBackPos;
-	ubyte* pNew = (ubyte*)malloc(uLen + uHave);
+	uint8_t* pNew = (uint8_t*)malloc(uLen + uHave);
 	if(pNew == NULL)
-		return das_error(DASERR_IO, "Couldn't allocate %zu bytes of pushback", uLen + uHave);
+		return daserrf(DASERR_IO, "Couldn't allocate %zu bytes of pushback", uLen + uHave);
 	memcpy(pNew, pIn, uLen);
 	if(uHave > 0) memcpy(pNew + uLen, pThis->pBack + pThis->uBackPos, uHave);
 	free(pThis->pBack);
@@ -175,11 +175,11 @@ ptrdiff_t _DasXport_fill(DasXport* pThis, DasBuf* pBuf, size_t uLen)
 
 	/* An elastic buffer grows here, a pinned one has to have the room */
 	size_t uSpace = 0;
-	ubyte* pDest = DasBuf_prepare(pBuf, uLen, &uSpace);
+	uint8_t* pDest = DasBuf_prepare(pBuf, uLen, &uSpace);
 	if(pDest == NULL){
 		/* prepare already reported a read-only buffer, only "full" is ours */
 		if(!DasBuf_isReadOnly(pBuf))
-			das_error(DASERR_BUF, "Buffer can't take %zu more bytes, only %zu "
+			daserrf(DASERR_BUF, "Buffer can't take %zu more bytes, only %zu "
 			          "of space is left", uLen, DasBuf_writeSpace(pBuf));
 		return -1;
 	}
@@ -192,7 +192,7 @@ ptrdiff_t _DasXport_fill(DasXport* pThis, DasBuf* pBuf, size_t uLen)
 ptrdiff_t _DasXport_drain(DasXport* pThis, DasBuf* pBuf)
 {
 	size_t uLen = 0;
-	const ubyte* pData = DasBuf_data(pBuf, &uLen);
+	const uint8_t* pData = DasBuf_data(pBuf, &uLen);
 	if(pData == NULL) return 0;
 
 	ptrdiff_t nWrote = DasXport_write(pThis, pData, uLen);
@@ -213,7 +213,7 @@ das_errcode DasXport_close(DasXport* pThis)
 
 	/* Checked first so a quiet log skips building the varargs call */
 	if(daslog_level() <= DASLOG_DEBUG)
-		daslog_debug_v("%s transport closed after %lld bytes", pThis->pVt->sKind,
+		daslog_debugf("%s transport closed after %lld bytes", pThis->pVt->sKind,
 		               (long long)pThis->nMoved);
 	return nRet;
 }
@@ -241,7 +241,7 @@ static DasXport* _xport_alloc(size_t uSize, const char* sKind)
 {
 	DasXport* pThis = (DasXport*)calloc(1, uSize);
 	if(pThis == NULL)
-		das_error(DASERR_IO, "Couldn't allocate a %s transport", sKind);
+		daserrf(DASERR_IO, "Couldn't allocate a %s transport", sKind);
 	return pThis;
 }
 
@@ -309,13 +309,13 @@ static das_errcode _DasXportCmd_close(DasXport* pBase)
 	}
 #ifndef _WIN32
 	if(WIFEXITED(nStat) && (WEXITSTATUS(nStat) != 0))
-		daslog_warn_v("Sub-command exited with status %d: %s", WEXITSTATUS(nStat),
+		daslog_warnf("Sub-command exited with status %d: %s", WEXITSTATUS(nStat),
 		              pThis->sCmd);
 	else if(WIFSIGNALED(nStat))
-		daslog_warn_v("Sub-command ended by signal %d: %s", WTERMSIG(nStat), pThis->sCmd);
+		daslog_warnf("Sub-command ended by signal %d: %s", WTERMSIG(nStat), pThis->sCmd);
 #else
 	if(nStat != 0)
-		daslog_warn_v("Sub-command exited with status %d: %s", nStat, pThis->sCmd);
+		daslog_warnf("Sub-command exited with status %d: %s", nStat, pThis->sCmd);
 #endif
 	return DAS_OKAY;
 }
@@ -337,12 +337,12 @@ DasXport* _new_DasXport_cfile(FILE* pFile, const char* sMode, bool bOwn)
 {
 	unsigned int uFlags = _xport_mode(sMode, false);
 	if(uFlags == 0){
-		das_error(DASERR_IO, "File transport mode must be \"r\" or \"w\", not \"%s\"",
+		daserrf(DASERR_IO, "File transport mode must be \"r\" or \"w\", not \"%s\"",
 		          sMode ? sMode : "(null)");
 		return NULL;
 	}
 	if(pFile == NULL){
-		das_error(DASERR_IO, "No FILE given for a file transport");
+		daserrf(DASERR_IO, "No FILE given for a file transport");
 		return NULL;
 	}
 	DasXportFile* pThis = (DasXportFile*)_xport_alloc(sizeof(DasXportFile), "file");
@@ -355,7 +355,7 @@ DasXport* _new_DasXport_cfile(FILE* pFile, const char* sMode, bool bOwn)
 
 DasXport* new_DasXport_cfile(FILE* pFile, const char* sMode)
 {
-	if(pFile != NULL) das_stdio_binary(pFile);  /* text mode alters bytes on Windows */
+	if(pFile != NULL) dasfs_setStdioBinary(pFile);  /* text mode alters bytes on Windows */
 	return _new_DasXport_cfile(pFile, sMode, false);
 }
 
@@ -365,19 +365,19 @@ DasXport* new_DasXport_stdout(void){ return new_DasXport_cfile(stdout, "w"); }
 DasXport* new_DasXport_file(const char* sPath, const char* sMode)
 {
 	if(sPath == NULL){
-		das_error(DASERR_IO, "No path given for a file transport");
+		daserrf(DASERR_IO, "No path given for a file transport");
 		return NULL;
 	}
 	unsigned int uFlags = _xport_mode(sMode, false);
 	if(uFlags == 0){
-		das_error(DASERR_IO, "File transport mode must be \"r\" or \"w\", not \"%s\"",
+		daserrf(DASERR_IO, "File transport mode must be \"r\" or \"w\", not \"%s\"",
 		          sMode ? sMode : "(null)");
 		return NULL;
 	}
 	errno = 0;
 	FILE* pFile = fopen(sPath, (uFlags & DASXPORT_RD) ? "rb" : "wb");
 	if(pFile == NULL){
-		das_error(DASERR_IO, "Couldn't open %s, %s", sPath, strerror(errno));
+		daserrf(DASERR_IO, "Couldn't open %s, %s", sPath, strerror(errno));
 		return NULL;
 	}
 	DasXport* pThis = _new_DasXport_cfile(pFile, sMode, true);
@@ -388,7 +388,7 @@ DasXport* new_DasXport_file(const char* sPath, const char* sMode)
 DasXport* new_DasXport_cmd(const char* sCmd)
 {
 	if(sCmd == NULL){
-		das_error(DASERR_IO, "No command given for a command transport");
+		daserrf(DASERR_IO, "No command given for a command transport");
 		return NULL;
 	}
 	errno = 0;
@@ -398,7 +398,7 @@ DasXport* new_DasXport_cmd(const char* sCmd)
 	FILE* pPipe = popen(sCmd, "r");
 #endif
 	if(pPipe == NULL){
-		das_error(DASERR_IO, "Error running sub-command %s, %s", sCmd, strerror(errno));
+		daserrf(DASERR_IO, "Error running sub-command %s, %s", sCmd, strerror(errno));
 		return NULL;
 	}
 	DasXportFile* pThis = (DasXportFile*)_xport_alloc(sizeof(DasXportFile), "cmd");
@@ -406,7 +406,7 @@ DasXport* new_DasXport_cmd(const char* sCmd)
 	_DasXport_init(&(pThis->base), &g_vtCmd, DASXPORT_RD);
 	pThis->pFile = pPipe;
 	pThis->bOwn = true;
-	pThis->sCmd = das_strdup(sCmd);  /* NULL only costs the warning its text */
+	pThis->sCmd = dasstr_new(sCmd);  /* NULL only costs the warning its text */
 	return &(pThis->base);
 }
 
@@ -415,7 +415,7 @@ DasXport* new_DasXport_cmd(const char* sCmd)
 
 typedef struct das_xport_mem {
 	DasXport base;
-	ubyte* pMem;
+	uint8_t* pMem;
 	size_t uLen;
 	size_t uPos;
 } DasXportMem;
@@ -449,18 +449,18 @@ DasXport* new_DasXport_mem(void* pMem, size_t uLen, const char* sMode)
 {
 	unsigned int uFlags = _xport_mode(sMode, false);
 	if(uFlags == 0){
-		das_error(DASERR_IO, "Memory transport mode must be \"r\" or \"w\", not \"%s\"",
+		daserrf(DASERR_IO, "Memory transport mode must be \"r\" or \"w\", not \"%s\"",
 		          sMode ? sMode : "(null)");
 		return NULL;
 	}
 	if((pMem == NULL) && (uLen > 0)){
-		das_error(DASERR_IO, "No memory given for a %zu byte memory transport", uLen);
+		daserrf(DASERR_IO, "No memory given for a %zu byte memory transport", uLen);
 		return NULL;
 	}
 	DasXportMem* pThis = (DasXportMem*)_xport_alloc(sizeof(DasXportMem), "mem");
 	if(pThis == NULL) return NULL;
 	_DasXport_init(&(pThis->base), &g_vtMem, uFlags);
-	pThis->pMem = (ubyte*)pMem;
+	pThis->pMem = (uint8_t*)pMem;
 	pThis->uLen = uLen;
 	return &(pThis->base);
 }
@@ -468,7 +468,7 @@ DasXport* new_DasXport_mem(void* pMem, size_t uLen, const char* sMode)
 /* ************************************************************************* */
 /* Sockets */
 
-#ifndef DAS_NO_NETWORK
+#ifndef DASCONF_NO_NET
 
 #ifdef _WIN32
 #define _XP_SOCK(n) ((SOCKET)(n))
@@ -479,7 +479,7 @@ DasXport* new_DasXport_mem(void* pMem, size_t uLen, const char* sMode)
 /* Read the socket error before anything else can overwrite it */
 static const char* _xport_sockErr(char* sBuf, size_t uLen)
 {
-	/* A receive timeout (see das_http_opts.rReadSec) shows up as a would-block
+	/* A receive timeout (see DasHttpOpts.readSec) shows up as a would-block
 	   error on a blocking socket, which reads as nonsense to a user */
 #ifdef _WIN32
 	int nErr = WSAGetLastError();
@@ -570,12 +570,12 @@ DasXport* _new_DasXport_sock(intptr_t nSock, const char* sMode, bool bOwn)
 {
 	unsigned int uFlags = _xport_mode(sMode, true);
 	if(uFlags == 0){
-		das_error(DASERR_IO, "Socket transport mode must be \"r\", \"w\" or \"rw\", "
+		daserrf(DASERR_IO, "Socket transport mode must be \"r\", \"w\" or \"rw\", "
 		          "not \"%s\"", sMode ? sMode : "(null)");
 		return NULL;
 	}
 	if(nSock == -1){
-		das_error(DASERR_IO, "Invalid socket given for a socket transport");
+		daserrf(DASERR_IO, "Invalid socket given for a socket transport");
 		return NULL;
 	}
 	DasXportSock* pThis = (DasXportSock*)_xport_alloc(sizeof(DasXportSock), "sock");
@@ -661,7 +661,7 @@ static ptrdiff_t _DasXportSsl_write(DasXport* pBase, const void* pIn, size_t uLe
 	while(uSent < uLen){
 		size_t uLeft = uLen - uSent;
 		int nAsk = (uLeft > INT_MAX) ? INT_MAX : (int)uLeft;
-		int nSent = SSL_write(pThis->pSsl, (const ubyte*)pIn + uSent, nAsk);
+		int nSent = SSL_write(pThis->pSsl, (const uint8_t*)pIn + uSent, nAsk);
 		if(nSent <= 0)
 			return _xport_sslFail(pBase, pThis->pSsl, nSent, "Error writing to TLS session");
 		uSent += (size_t)nSent;
@@ -695,12 +695,12 @@ DasXport* _new_DasXport_ssl(struct ssl_st* pSsl, const char* sMode)
 {
 	unsigned int uFlags = _xport_mode(sMode, true);
 	if(uFlags == 0){
-		das_error(DASERR_IO, "TLS transport mode must be \"r\", \"w\" or \"rw\", "
+		daserrf(DASERR_IO, "TLS transport mode must be \"r\", \"w\" or \"rw\", "
 		          "not \"%s\"", sMode ? sMode : "(null)");
 		return NULL;
 	}
 	if(pSsl == NULL){
-		das_error(DASERR_IO, "No TLS session given for a TLS transport");
+		daserrf(DASERR_IO, "No TLS session given for a TLS transport");
 		return NULL;
 	}
 	DasXportSsl* pThis = (DasXportSsl*)_xport_alloc(sizeof(DasXportSsl), "ssl");
@@ -716,11 +716,11 @@ DasXport* _new_DasXport_ssl(struct ssl_st* pSsl, const char* sMode)
 DasXport* new_DasXport_sock(intptr_t nSock, const char* sMode)
 {
 	(void)nSock; (void)sMode;
-	das_error(DASERR_NOTIMP, "Sockets are not available in this build");
+	daserrf(DASERR_NOTIMP, "Sockets are not available in this build");
 	return NULL;
 }
 
-#endif /* DAS_NO_NETWORK */
+#endif /* DASCONF_NO_NET */
 
 /* ************************************************************************* */
 /* Copying */
@@ -728,12 +728,12 @@ DasXport* new_DasXport_sock(intptr_t nSock, const char* sMode)
 #define _XP_COPY_CHUNK 16384
 
 das_errcode DasXport_copyTo(
-	DasXport* pThis, DasXport* pDest, das_progress_f onProgress, void* pUser,
+	DasXport* pThis, DasXport* pDest, dasfn_onProgress onProgress, void* pUser,
 	int64_t* pCopied
 ){
 	das_errcode nRet = DAS_OKAY;
 	int64_t nTotal = 0;
-	ubyte aBuf[_XP_COPY_CHUNK];
+	uint8_t aBuf[_XP_COPY_CHUNK];
 
 	while(true){
 		ptrdiff_t nRead = DasXport_read(pThis, aBuf, _XP_COPY_CHUNK);
@@ -765,7 +765,7 @@ typedef struct das_xport_zlib {
 	DasXport* pInner;
 	z_stream zs;
 	bool bEnd;               /* inflate saw the end of the zlib stream */
-	ubyte aChunk[_XP_ZCHUNK];
+	uint8_t aChunk[_XP_ZCHUNK];
 } DasXportZlib;
 
 static ptrdiff_t _DasXportInflate_read(DasXport* pBase, void* pOut, size_t uLen)
@@ -795,7 +795,7 @@ static ptrdiff_t _DasXportInflate_read(DasXport* pBase, void* pOut, size_t uLen)
 			pThis->bEnd = true;
 			/* Whatever follows the zlib stream is not ours, hand it back */
 			if(pThis->zs.avail_in > 0){
-				daslog_debug_v("%u bytes follow the zlib stream, handed back",
+				daslog_debugf("%u bytes follow the zlib stream, handed back",
 				               (unsigned)pThis->zs.avail_in);
 				_DasXport_unread(pThis->pInner, pThis->zs.next_in, pThis->zs.avail_in);
 			}
@@ -836,7 +836,7 @@ static ptrdiff_t _DasXportDeflate_write(DasXport* pBase, const void* pIn, size_t
 	while(uDone < uLen){
 		size_t uLeft = uLen - uDone;
 		uInt uTake = (uLeft > UINT_MAX) ? UINT_MAX : (uInt)uLeft;
-		pThis->zs.next_in = (Bytef*)((const ubyte*)pIn + uDone);
+		pThis->zs.next_in = (Bytef*)((const uint8_t*)pIn + uDone);
 		pThis->zs.avail_in = uTake;
 		if(_xport_deflateRun(pThis, Z_NO_FLUSH) < 0) return -1;
 		uDone += uTake;
@@ -887,13 +887,13 @@ static const das_xport_vt g_vtDeflate = {
 DasXport* _new_DasXport_inflate(DasXport* pInner)
 {
 	if((pInner == NULL) || !(pInner->uFlags & DASXPORT_RD)){
-		das_error(DASERR_IO, "Inflate needs a transport open for reading");
+		daserrf(DASERR_IO, "Inflate needs a transport open for reading");
 		return NULL;
 	}
 	DasXportZlib* pThis = (DasXportZlib*)_xport_alloc(sizeof(DasXportZlib), "inflate");
 	if(pThis == NULL) return NULL;
 	if(inflateInit(&(pThis->zs)) != Z_OK){
-		das_error(DASERR_IO, "Couldn't start zlib inflate, %s",
+		daserrf(DASERR_IO, "Couldn't start zlib inflate, %s",
 		          pThis->zs.msg ? pThis->zs.msg : "no detail");
 		free(pThis);
 		return NULL;
@@ -906,13 +906,13 @@ DasXport* _new_DasXport_inflate(DasXport* pInner)
 DasXport* _new_DasXport_deflate(DasXport* pInner)
 {
 	if((pInner == NULL) || !(pInner->uFlags & DASXPORT_WR)){
-		das_error(DASERR_IO, "Deflate needs a transport open for writing");
+		daserrf(DASERR_IO, "Deflate needs a transport open for writing");
 		return NULL;
 	}
 	DasXportZlib* pThis = (DasXportZlib*)_xport_alloc(sizeof(DasXportZlib), "deflate");
 	if(pThis == NULL) return NULL;
 	if(deflateInit(&(pThis->zs), Z_DEFAULT_COMPRESSION) != Z_OK){
-		das_error(DASERR_IO, "Couldn't start zlib deflate, %s",
+		daserrf(DASERR_IO, "Couldn't start zlib deflate, %s",
 		          pThis->zs.msg ? pThis->zs.msg : "no detail");
 		free(pThis);
 		return NULL;

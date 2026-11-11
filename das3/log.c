@@ -38,7 +38,7 @@ static int  g_nLevel     = DASLOG_WARN;
 static bool g_bShowTime  = false;
 static bool g_bShowLine  = true;
 
-static das_loghook g_hook = {daslog_stderr, NULL};
+static DasLogHook g_hook = {daslog_stderr, NULL};
 
 /* The lock that serializes handler calls.  It is an error checking mutex
  * in every build: a handler that calls back into das2C gets EDEADLK from
@@ -74,9 +74,9 @@ static void _unlock(void){ pthread_mutex_unlock(&g_mtx); }
 /* ************************************************************************* */
 /* Level names */
 
-int daslog_strlevel(const char* sLevel){
+int daslog_levelFromStr(const char* sLevel){
 	if(sLevel != NULL){
-		if(sLevel[0] == 'c'||sLevel[0] == 'C') return DASLOG_CRIT;
+		if(sLevel[0] == 'c'||sLevel[0] == 'C') return DASLOG_CRITICAL;
 		if(sLevel[0] == 'e'||sLevel[0] == 'E') return DASLOG_ERROR;
 		if(sLevel[0] == 'w'||sLevel[0] == 'W') return DASLOG_WARN;
 		if(sLevel[0] == 'i'||sLevel[0] == 'I') return DASLOG_INFO;
@@ -86,10 +86,10 @@ int daslog_strlevel(const char* sLevel){
 	return -1;
 }
 
-const char* daslog_levelstr(int nLevel)
+const char* daslog_levelToStr(int nLevel)
 {
 	if(nLevel < DASLOG_TRACE)    return "";
-	if(nLevel >= DASLOG_CRIT)    return "CRITICAL";
+	if(nLevel >= DASLOG_CRITICAL)    return "CRITICAL";
 	if(nLevel >= DASLOG_ERROR)   return "ERROR";
 	if(nLevel >= DASLOG_WARN)    return "WARNING";
 	if(nLevel >= DASLOG_INFO)    return "INFO";
@@ -106,14 +106,14 @@ const char* daslog_levelstr(int nLevel)
 
 int daslog_level(void){ return g_nLevel; }
 
-int daslog_setlevel(int nLevel){
+int daslog_setLevel(int nLevel){
 	int nOld = g_nLevel;
 
 	/* Report a bad level without changing anything, so the return value is
 	   always a level the caller can hand back to restore it. */
-	if((nLevel < DASLOG_TRACE) || (nLevel > DASLOG_CRIT)){
-		daslog_warn_v("Log level %d is not in the range %d to %d, staying at %s",
-		              nLevel, DASLOG_TRACE, DASLOG_CRIT, daslog_levelstr(nOld));
+	if((nLevel < DASLOG_TRACE) || (nLevel > DASLOG_CRITICAL)){
+		daslog_warnf("Log level %d is not in the range %d to %d, staying at %s",
+		              nLevel, DASLOG_TRACE, DASLOG_CRITICAL, daslog_levelToStr(nOld));
 		return nOld;
 	}
 
@@ -123,7 +123,7 @@ int daslog_setlevel(int nLevel){
 	return nOld;
 }
 
-bool daslog_showtime(bool bShow)
+bool daslog_showTime(bool bShow)
 {
 	int nLock = _lock();
 	bool bOld = g_bShowTime;
@@ -132,7 +132,7 @@ bool daslog_showtime(bool bShow)
 	return bOld;
 }
 
-bool daslog_showline(bool bShow)
+bool daslog_showLine(bool bShow)
 {
 	int nLock = _lock();
 	bool bOld = g_bShowLine;
@@ -141,13 +141,13 @@ bool daslog_showline(bool bShow)
 	return bOld;
 }
 
-das_loghook daslog_sethook(const das_loghook* pHook)
+DasLogHook daslog_setHook(const DasLogHook* pHook)
 {
-	das_loghook hookNew = {daslog_stderr, NULL};
-	if((pHook != NULL)&&(pHook->fn != NULL)) hookNew = *pHook;
+	DasLogHook hookNew = {daslog_stderr, NULL};
+	if((pHook != NULL)&&(pHook->callback != NULL)) hookNew = *pHook;
 
 	int nLock = _lock();
-	das_loghook hookOld = g_hook;
+	DasLogHook hookOld = g_hook;
 	g_hook = hookNew;
 	if(nLock == 0) _unlock();
 	return hookOld;
@@ -156,15 +156,15 @@ das_loghook daslog_sethook(const das_loghook* pHook)
 /* ************************************************************************* */
 /* Delivery */
 
-static void _dispatch(const das_logmsg* pMsg)
+static void _dispatch(const DasLogMsg* pMsg)
 {
 	int nLock = _lock();
 	if((nLock != 0)||g_bInHook){
 		/* The handler called back into das2C.  Say so where someone will see
 		   it and drop the nested message, a hang helps nobody. */
 		fprintf(stderr, "das2C: a log handler called back into the library, "
-		        "nested %s message dropped: %s\n", daslog_levelstr(pMsg->nLevel),
-		        pMsg->sMsg);
+		        "nested %s message dropped: %s\n", daslog_levelToStr(pMsg->level),
+		        pMsg->msg);
 
 		/* A lock that "succeeded" here is a stub (no-op unlock) or a libc
 		   that ignored the type and gave a recursive mutex, whose count this
@@ -175,9 +175,9 @@ static void _dispatch(const das_logmsg* pMsg)
 
 	/* Copy first so a handler that swaps hooks (it shouldn't) can't pull the
 	   one being called out from under itself */
-	das_loghook hook = g_hook;
+	DasLogHook hook = g_hook;
 	g_bInHook = true;
-	hook.fn(pMsg, hook.pUser);
+	hook.callback(pMsg, hook.userData);
 	g_bInHook = false;
 	_unlock();
 }
@@ -197,9 +197,9 @@ static void _daslog_vsend(
 	else if(nNeed >= DASLOG_MSG_SZ)
 		memcpy(sBuf + DASLOG_MSG_SZ - 4, "...", 4);
 
-	das_logmsg msg = {
-		.nLevel = nLevel, .nErr = nErr, .sMsg = sBuf,
-		.sFile = sFile, .sFunc = sFunc, .nLine = nLine
+	DasLogMsg msg = {
+		.level = nLevel, .errCode = nErr, .msg = sBuf,
+		.file = sFile, .func = sFunc, .line = nLine
 	};
 	_dispatch(&msg);
 }
@@ -210,14 +210,14 @@ static void _daslog_send(
 ){
 	if(nLevel < g_nLevel) return;
 
-	das_logmsg msg = {
-		.nLevel = nLevel, .nErr = nErr, .sMsg = (sMsg != NULL) ? sMsg : "",
-		.sFile = sFile, .sFunc = sFunc, .nLine = nLine
+	DasLogMsg msg = {
+		.level = nLevel, .errCode = nErr, .msg = (sMsg != NULL) ? sMsg : "",
+		.file = sFile, .func = sFunc, .line = nLine
 	};
 	_dispatch(&msg);
 }
 
-void daslog(
+void daslog_funcf(
 	int nLevel, const char* sSrcFile, const char* sFunc, int nLine,
 	const char* sFmt, ...
 ){
@@ -230,16 +230,16 @@ void daslog(
 }
 
 /* ************************************************************************* */
-/* The error facility, das_error() messages are log messages */
+/* The error facility, daserrf() messages are log messages */
 
-/* Set once at startup, see daserr_setdisp() */
-static das_errdis_e g_nErrDisposition = DASERR_DIS_EXIT;
+/* Set once at startup, see daserr_setDisp() */
+static das_errdisp g_nErrDisposition = DASERRDISP_EXIT;
 
-das_errdis_e daserr_disp(void){ return g_nErrDisposition; }
+das_errdisp daserr_disp(void){ return g_nErrDisposition; }
 
-void daserr_setdisp(das_errdis_e nDisp){
-	if((nDisp != DASERR_DIS_EXIT) && (nDisp != DASERR_DIS_RET)){
-		das_error(DASERR_LOG, "Invalid error disposition %d", (int)nDisp);
+void daserr_setDisp(das_errdisp nDisp){
+	if((nDisp != DASERRDISP_EXIT) && (nDisp != DASERRDISP_RET)){
+		daserrf(DASERR_LOG, "Invalid error disposition %d", (int)nDisp);
 		return;
 	}
 	g_nErrDisposition = nDisp;
@@ -249,15 +249,15 @@ void daserr_setdisp(das_errdis_e nDisp){
  * disposition decides.  exit() comes only after the hook has returned and
  * the log lock is released, so atexit() functions may use the library. */
 
-das_errcode daserr_func(
+das_errcode daserr_funcf(
 	const char* sFile, const char* sFunc, int nLine, das_errcode nCode,
 	const char* sFmt, ...
 ){
-	bool bExit = (g_nErrDisposition != DASERR_DIS_RET);
+	bool bExit = (g_nErrDisposition != DASERRDISP_RET);
 	
 	va_list ap;
 	va_start(ap, sFmt);
-	_daslog_vsend(bExit ? DASLOG_CRIT : DASLOG_ERROR, nCode, sFile, sFunc,
+	_daslog_vsend(bExit ? DASLOG_CRITICAL : DASLOG_ERROR, nCode, sFile, sFunc,
 	              nLine, sFmt, ap);
 	va_end(ap);
 
@@ -265,13 +265,13 @@ das_errcode daserr_func(
 	return nCode;
 }
 
-das_errcode daserr_func_fixed(
+das_errcode daserr_func(
 	const char* sFile, const char* sFunc, int nLine, das_errcode nCode,
 	const char* sMsg
 ){
-	bool bExit = (g_nErrDisposition != DASERR_DIS_RET);
+	bool bExit = (g_nErrDisposition != DASERRDISP_RET);
 	
-	_daslog_send(bExit ? DASLOG_CRIT : DASLOG_ERROR, nCode, sFile, sFunc,
+	_daslog_send(bExit ? DASLOG_CRITICAL : DASLOG_ERROR, nCode, sFile, sFunc,
 	             nLine, sMsg);
 
 	if(bExit) exit(nCode);
@@ -281,11 +281,11 @@ das_errcode daserr_func_fixed(
 /* ************************************************************************* */
 /* The default handler */
 
-void daslog_stderr(const das_logmsg* pMsg, void* pUser)
+void daslog_stderr(const DasLogMsg* pMsg, void* pUser)
 {
 	(void)pUser;
 
-	const char* sLvl = daslog_levelstr(pMsg->nLevel);
+	const char* sLvl = daslog_levelToStr(pMsg->level);
 
 	if(g_bShowTime){
 		char sTime[32] = {'\0'};
@@ -298,17 +298,17 @@ void daslog_stderr(const das_logmsg* pMsg, void* pUser)
 		strftime(sTime, sizeof(sTime), "%Y-%m-%dT%H:%M:%S%z",
 		         localtime_r(&tEpoch, &bdTime));
 #endif
-		fprintf(stderr, "(%s, %s) %s\n", sTime, sLvl, pMsg->sMsg);
+		fprintf(stderr, "(%s, %s) %s\n", sTime, sLvl, pMsg->msg);
 	}
 	else{
-		fprintf(stderr, "%s: %s\n", sLvl, pMsg->sMsg);
+		fprintf(stderr, "%s: %s\n", sLvl, pMsg->msg);
 	}
 
-	if(g_bShowLine && (pMsg->nLevel >= DASLOG_ERROR) && (pMsg->sFile != NULL)){
-		if(pMsg->sFunc != NULL)
-			fprintf(stderr, "\t(reported from %s:%d, %s)\n", pMsg->sFile,
-			        pMsg->nLine, pMsg->sFunc);
+	if(g_bShowLine && (pMsg->level >= DASLOG_ERROR) && (pMsg->file != NULL)){
+		if(pMsg->func != NULL)
+			fprintf(stderr, "\t(reported from %s:%d, %s)\n", pMsg->file,
+			        pMsg->line, pMsg->func);
 		else
-			fprintf(stderr, "\t(reported from %s:%d)\n", pMsg->sFile, pMsg->nLine);
+			fprintf(stderr, "\t(reported from %s:%d)\n", pMsg->file, pMsg->line);
 	}
 }

@@ -157,11 +157,11 @@ char* getYLabel(const UserData* pState, char* sOutLbl, size_t uLen){
 
 /* Values are totals per bin.  The bin size is in the Y label and xTagWidth;
    it can't go in the units, "packets 30 s**-1" isn't a units string. */
-das_units getYUnits(const UserData* pState)
+DasUnits getYUnits(const UserData* pState)
 {
-	if(pState->bEvents) return UNIT_DIMENSIONLESS;
+	if(pState->bEvents) return DASUNITS_DIMENSIONLESS;
 
-	return Units_fromStr((pState->sVolUnits != NULL) ? pState->sVolUnits : "packets");
+	return DasUnits_fromStr((pState->sVolUnits != NULL) ? pState->sVolUnits : "packets");
 }
 
 /* ************************************************************************* */
@@ -189,36 +189,36 @@ das_errcode onStreamHdr(DasStream* pSdIn, void* vpState)
 	   in the input */
 	if(pState->pSdOut != NULL) return 0;
 		
-	pState->pSdOut = DasStream_copy(pSdIn); /* Start by coping all the properties */
+	pState->pSdOut = new_DasStream_copy(pSdIn); /* Start by coping all the properties */
 
 	pOut = (DasDesc*) pState->pSdOut;
 	pIn = (DasDesc*)pSdIn;
 
 	/* Remove known Y and Z properties if present */
-	for(i = 0; i < g_szRmProps; ++i) DasDesc_remove(pOut, g_pRmProps[i]);
+	for(i = 0; i < g_szRmProps; ++i) DasDesc_rmProp(pOut, g_pRmProps[i]);
 		
 	/* Override the title */
 	if(pState->sTitle != NULL){
-		DasDesc_setStr(pOut, "title", pState->sTitle);
+		DasDesc_setVal(pOut, "title", pState->sTitle);
 	}
 	else{
 		if(DasDesc_has(pIn, "title"))
-			DasDesc_vSetStr(pOut, "title", "%s (coverage)", 
-					           DasDesc_getStr(pIn, "title"));
+			DasDesc_setValf(pOut, "title", "%s (coverage)", 
+					           DasDesc_val(pIn, "title"));
 		else
-			DasDesc_setStr(pOut, "title", "Data Coverage");
+			DasDesc_setVal(pOut, "title", "Data Coverage");
 	}
 	
 	/* Override the yLabel */
-	DasDesc_setStr(pOut, "yLabel", getYLabel(pState, sYlabel, 64));
+	DasDesc_setVal(pOut, "yLabel", getYLabel(pState, sYlabel, 64));
 		
 	/* Override the xTagWidth and xCacheResolution */
 	rSec = pState->rBinSzMicroSec / 1.0e6;
-	DasDesc_setDatum(pOut, "xTagWidth", rSec, UNIT_SECONDS);
-	DasDesc_setDatum(pOut, "xCacheResolution", rSec, UNIT_SECONDS);
+	DasDesc_setValDatum(pOut, "xTagWidth", rSec, DASUNITS_SECONDS);
+	DasDesc_setValDatum(pOut, "xCacheResolution", rSec, DASUNITS_SECONDS);
 	
 	/* Override the renderer selection */
-	DasDesc_setStr(pOut, "renderer", "stairSteps");
+	DasDesc_setVal(pOut, "renderer", "stairSteps");
 	
 	int nRet = 0;
 	if( (nRet = DasIO_writeStreamDesc(pState->pIoOut, pState->pSdOut)) != 0) 
@@ -228,13 +228,13 @@ das_errcode onStreamHdr(DasStream* pSdIn, void* vpState)
 	   output will look like */
 	pPkt = DasStream_createPkt(pState->pSdOut, 
 	                                new_DasEnc(DAS2DT_HOST_REAL, 8, NULL),
-	                                UNIT_US2000);
-	assert(DasStream_getPktId(pState->pSdOut, (DasDesc*)pPkt) == 1);
+	                                DASUNITS_US2000);
+	assert(DasStream_pktId(pState->pSdOut, (DasDesc*)pPkt) == 1);
 	
 	const char* sName = pState->bEvents ? "coverage" : "rate";
 	
-	das_units yUnits = getYUnits(pState);
-	pPlane = new_DasPlane(DASPLANE_Y, sName, new_DasEnc(DAS2DT_HOST_REAL, 4, NULL), 
+	DasUnits yUnits = getYUnits(pState);
+	pPlane = new_DasPlane(DASPLANETYPE_Y, sName, new_DasEnc(DAS2DT_HOST_REAL, 4, NULL), 
 			                 yUnits);
 	
 	DasPkt_addPlane(pPkt, pPlane);
@@ -260,21 +260,21 @@ das_errcode onStreamHdr(DasStream* pSdIn, void* vpState)
 das_errcode onPktData(DasPkt* pPdIn, int nPktId, void* vpState)
 {
 	UserData* pState = (UserData*)vpState;
-	DasPlane* pXIn = DasPkt_getXPlane(pPdIn);
+	DasPlane* pXIn = DasPkt_xPlane(pPdIn);
 	Via* pVia = pState->pVia;
 	
-	double rCurTime = DasPlane_getValue(pXIn, 0);
-	rCurTime = Units_convertTo(rCurTime, DasPlane_getUnits(pXIn), UNIT_US2000);
+	double rCurTime = DasPlane_valAt(pXIn, 0);
+	rCurTime = DasUnits_convert(rCurTime, DasPlane_units(pXIn), DASUNITS_US2000);
 	
 	/* Initialize location of bin 0 if not already set */
-	if(pState->rStartMicroSec == DAS_FILL_VALUE)
+	if(pState->rStartMicroSec == DASVAL_FILL)
 		pState->rStartMicroSec = rCurTime;
 	
 	/* Note: If data are out of order this can be negative! */
 	long ilCurBin = (rCurTime - pState->rStartMicroSec)/pState->rBinSzMicroSec;
 	
 	if(labs(ilCurBin) > INT_MAX)
-		return das_error(P_ERR, "Bin size too small, or bin0 too far away from "
+		return daserrf(P_ERR, "Bin size too small, or bin0 too far away from "
 		                  "this data value.  The bin position exceeds maximum "
 				            "value for an integer on this system");
 	int iCurBin = ilCurBin;
@@ -297,23 +297,23 @@ das_errcode onPktData(DasPkt* pPdIn, int nPktId, void* vpState)
 	
 	/* Monotonic: Current Bin < Last Bin */
 	if(iCurBin < Via_lastSet(pVia))
-		return das_error(P_ERR, "Time revision detected in supposedly "
+		return daserrf(P_ERR, "Time revision detected in supposedly "
 					            "monotonic data");
 	
 	/* Monotonic: Current Bin > Last Bin */
 	int iLastBin = Via_lastSet(pVia);
 	
-	DasPkt* pPdOut = DasStream_getPkt(pState->pSdOut, 1);
-	DasPlane* pXOut = DasPkt_getXPlane(pPdOut);
-	DasPlane* pYOut = DasPkt_getPlane(pPdOut, 1);
+	DasPkt* pPdOut = DasStream_pkt(pState->pSdOut, 1);
+	DasPlane* pXOut = DasPkt_xPlane(pPdOut);
+	DasPlane* pYOut = DasPkt_planeAt(pPdOut, 1);
 		
 	rCurTime = pState->rStartMicroSec  + pState->rBinSzMicroSec*(iLastBin + 0.5);
-	DasPlane_setValue(pXOut, 0, rCurTime);
+	DasPlane_setValAt(pXOut, 0, rCurTime);
 	
 	if(pState->bEvents)
-		DasPlane_setValue(pYOut, 0, 1.0);
+		DasPlane_setValAt(pYOut, 0, 1.0);
 	else
-		DasPlane_setValue(pYOut, 0, Via_get(pVia, iLastBin));
+		DasPlane_setValAt(pYOut, 0, Via_get(pVia, iLastBin));
 	
 	/* Save start of new data first ... */
 	Via_clear(pVia);
@@ -329,9 +329,9 @@ das_errcode onClose(DasStream* pSdIn, const DasExcept* pExcept, void* vpState)
 {
 	UserData* pState = (UserData*)vpState;
 	DasIO*    pIoOut = pState->pIoOut;
-	DasPkt* pPdOut = DasStream_getPkt(pState->pSdOut, 1);
-	DasPlane* pXOut = DasPkt_getXPlane(pPdOut);
-	DasPlane* pYOut = DasPkt_getPlane(pPdOut, 1);
+	DasPkt* pPdOut = DasStream_pkt(pState->pSdOut, 1);
+	DasPlane* pXOut = DasPkt_xPlane(pPdOut);
+	DasPlane* pYOut = DasPkt_planeAt(pPdOut, 1);
 	das_errcode nRet = 0;
 	double rTime = 0.0, rVal = 0.0;
 	Via* pVia = pState->pVia;
@@ -344,12 +344,12 @@ das_errcode onClose(DasStream* pSdIn, const DasExcept* pExcept, void* vpState)
 			int iLastBin = Via_lastSet(pState->pVia);
 			
 			rTime = pState->rStartMicroSec + pState->rBinSzMicroSec*(iLastBin+0.5);
-			DasPlane_setValue(pXOut, 0, rTime);
+			DasPlane_setValAt(pXOut, 0, rTime);
 			
 			if(pState->bEvents)
-				DasPlane_setValue(pYOut, 0, 1.0);
+				DasPlane_setValAt(pYOut, 0, 1.0);
 			else
-				DasPlane_setValue(pYOut, 0, Via_get(pState->pVia, iLastBin));
+				DasPlane_setValAt(pYOut, 0, Via_get(pState->pVia, iLastBin));
 		}
 		return DasIO_writeData(pState->pIoOut, (DasDesc*)pPdOut, 1);
 	}
@@ -360,10 +360,10 @@ das_errcode onClose(DasStream* pSdIn, const DasExcept* pExcept, void* vpState)
 		rVal = Via_get(pVia, i);
 		
 		rTime = pState->rStartMicroSec + pState->rBinSzMicroSec * (i + 0.5);
-		DasPlane_setValue(pXOut, 0, rTime);
+		DasPlane_setValAt(pXOut, 0, rTime);
 		
-		if(pState->bEvents) DasPlane_setValue(pYOut, 0, 1.0);
-		else                DasPlane_setValue(pYOut, 0, rVal);
+		if(pState->bEvents) DasPlane_setValAt(pYOut, 0, 1.0);
+		else                DasPlane_setValAt(pYOut, 0, rVal);
 		
 		if( (nRet = DasIO_writeData(pIoOut, (DasDesc*)pPdOut, 1)) != 0) return nRet;
 	}
@@ -449,7 +449,7 @@ int main(int argc, char* argv[])
 {
 	
 	UserData ud = {
-		DAS_FILL_VALUE, /* Bin Start */
+		DASVAL_FILL, /* Bin Start */
 		0.0,        /* bin Size microsec */
 		NULL,       /* Virtual index array */
 		NULL,       /* override title */
@@ -464,9 +464,9 @@ int main(int argc, char* argv[])
 	double rBinSize = 0.0;
 	
 	/* Exit on errors, log info messages and above */
-	das_init(argv[0], DASERR_DIS_EXIT, DASLOG_INFO, NULL);
+	daslib_init(argv[0], DASERRDISP_EXIT, DASLOG_INFO, NULL);
 	
-	das_time dt = {0};
+	DasTime dt = {0};
 	
 	if(argc < 2){
 		fprintf(stderr, "Usage das2_bin_avgsec BIN_SIZE_SECS\n\nIssue -h"
@@ -486,11 +486,11 @@ int main(int argc, char* argv[])
 	for(int i = 1; i < argc; i++){
 		if((strcmp(argv[i], "-b") == 0)||(strcmp(argv[i], "--begin")==0)){
 			if(i+1 == argc)
-				return das_error(P_ERR, "Begin bin position missing after %s", argv[i]);
+				return daserrf(P_ERR, "Begin bin position missing after %s", argv[i]);
 			i++;
-			if(!dt_parsetime(&dt, argv[i]))
-				return das_error(P_ERR, "Couldn't convert %s to a date-time", argv[i]);
-			ud.rStartMicroSec = Units_convertFromDt(&dt, UNIT_US2000);
+			if(!DasTime_fromStr(&dt, argv[i]))
+				return daserrf(P_ERR, "Couldn't convert %s to a date-time", argv[i]);
+			ud.rStartMicroSec = DasTime_toPoint(&dt, DASUNITS_US2000);
 			continue;
 		}
 		if((strcmp(argv[i], "-m")==0)||(strcmp(argv[i], "--monotonic")==0)){
@@ -499,7 +499,7 @@ int main(int argc, char* argv[])
 		}
 		if((strcmp(argv[i], "-v")==0) || (strcmp(argv[i], "--vol-units")==0)){
 			if(i+1 == argc)
-				return das_error(P_ERR, "Volume units missing after %s", argv[i]);
+				return daserrf(P_ERR, "Volume units missing after %s", argv[i]);
 			i++;
 			/* Handle odd case entries */
 			if(strcasecmp(argv[i], "bytes")==0){
@@ -518,7 +518,7 @@ int main(int argc, char* argv[])
 				ud.sVolUnits = "GB"; ud.nVolUnitDiv = 0x40000000; continue;
 			}
 			
-			return das_error(P_ERR, "Unknown volume units '%s', use -h for help",
+			return daserrf(P_ERR, "Unknown volume units '%s', use -h for help",
 					            argv[i]);
 		}
 		if((strcmp(argv[i], "-e")==0) ||(strcmp(argv[i], "--events")==0)){
@@ -527,34 +527,34 @@ int main(int argc, char* argv[])
 		}
 		if((strcmp(argv[i], "-t")==0)||(strcmp(argv[i], "--title")==0)){
 			if(i+1 == argc)
-				return das_error(P_ERR, "Title missing after %s", argv[i]);
+				return daserrf(P_ERR, "Title missing after %s", argv[i]);
 			ud.sTitle = argv[i+1];
 			i++;
 			continue;
 		}
 		if((strcmp(argv[i], "-y")==0)||(strcmp(argv[i], "--ylabel")==0)){
 			if(i+1 == argc)
-				return das_error(P_ERR, "Y Axis label missing after %s", argv[i]);
+				return daserrf(P_ERR, "Y Axis label missing after %s", argv[i]);
 			ud.sYlabel = argv[i+1];
 			i++;
 			continue;
 		}
 		
 		if(rBinSize > 0.0)
-			return das_error(P_ERR, "Unknown extra command line arguments "
+			return daserrf(P_ERR, "Unknown extra command line arguments "
 					            "starting at '%s'", argv[i]);
 					
 		if(sscanf(argv[i], "%lf", &rBinSize) < 1)
-			return das_error(P_ERR, "Couldn't convert %s to a positive seconds "
+			return daserrf(P_ERR, "Couldn't convert %s to a positive seconds "
 					            "value", argv[i]);
 		
 		if(rBinSize <= 0.0)
-			return das_error(
+			return daserrf(
 					P_ERR,"Output bin size must be bigger than 0 seconds!");
 	}
 	
 	if(rBinSize <= 0.0)
-		return das_error(P_ERR, "Bin size not provided, use -h for help");
+		return daserrf(P_ERR, "Bin size not provided, use -h for help");
 
 	ud.rBinSzMicroSec = rBinSize * 1.0e6;  /* Convert to microseconds */
 	
@@ -571,17 +571,17 @@ int main(int argc, char* argv[])
 	ud.pIoOut = new_DasIO("das2_bin_ratesec", new_DasXport_stdout(), NULL);
 
 	/* Set the global stuff to be the user data pointer */
-	das_stream_proc proc;
-	das_stream_proc_init(&proc, &ud);
-	proc.onStreamDesc = onStreamHdr;
-	proc.onPktDesc = NULL;   /* Ignore incoming packet headers */
+	DasIOProc proc;
+	init_DasIOProc(&proc, &ud);
+	proc.onStream = onStreamHdr;
+	proc.onPkt = NULL;   /* Ignore incoming packet headers */
 	proc.onPktData = onPktData;
 	proc.onClose = onClose;
    proc.onComment = NULL;   /* Ignore incoming comments */
 	/* onClose ignores an incoming exception and flushes as usual */
 	
 	DasIO* pIn = new_DasIO("Standard Input", new_DasXport_stdin(), NULL);
-	DasIO_addProcessor(pIn, &proc);
+	DasIO_addProc(pIn, &proc);
 	 
 	return DasIO_readAll(pIn);
 }

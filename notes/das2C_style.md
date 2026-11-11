@@ -22,8 +22,8 @@ pointer, and destroyed.  Objects get CamelCase names that start with `Das`:
 stays readable; `DasFormCplx` and `DasFormPos` are the model.
 
 A *plain value* is a small struct or enum that gets copied around freely and
-needs no cleanup: `das_datum`, `das_operand`, `das_val_type`,
-`das_form_param_buf`.  These are lower case with a `das_` prefix.
+needs no cleanup: `DasDatum`, `das_operand`, `das_vt`,
+`DasFormParamBuf`.  These are lower case with a `das_` prefix.
 
 
 ## Creating and destroying objects
@@ -51,14 +51,14 @@ drops the whole lifecycle group at once.  If they were spelled
 carried over.  `DasAry` and `DasVar` follow this; `DasGen` and `DasBinOp` do
 not yet.
 
-A constructor that fails returns NULL after calling `das_error()`, so the
+A constructor that fails returns NULL after calling `daserrf()`, so the
 caller only has to pass the NULL along; the reason has already been reported.
 
 
 ## Methods
 
 A function whose first argument is the object it works on is a method, and
-it is named after the class: `DasForm_getParam(pForm, ...)`,
+it is named after the class: `DasForm_param(pForm, ...)`,
 `DasVar_shape(pVar, ...)`.  Pick the class from the type of that first
 argument.  The argument itself is `pThis`.
 
@@ -72,8 +72,8 @@ line.
 
 Everything else is a free function: a lookup table, a unit conversion, a
 helper that takes two operands and belongs to neither.  Public free functions
-are lower case with a `das_` prefix, such as `das_vsys_toStr()` and
-`das_form_lookup()`.  Private ones shared between files through a `_p.h`
+are lower case with a `das_` prefix, such as `dasvecsys_name()` and
+`DasForm_lookup()`.  Private ones shared between files through a `_p.h`
 header add a leading underscore, such as `_dasform_prnOrder()`; helpers
 used in only one file just need the underscore and a short lower case name,
 like `_toDbl()`.

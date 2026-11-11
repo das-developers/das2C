@@ -62,8 +62,8 @@ extern "C" {
  DasNode* pSite = new_DasNode_json(sBytes, uLen, sUrl, "tag:das2.org,2012:site:/uiowa");
 
  DasNodeWalk* pWalk = new_DasNodeWalk(pSite, "juno/wav/survey");
- while(DasNodeWalk_state(pWalk) == das_walk_fetch){
-    const char* sNext = DasNodeWalk_url(pWalk, 0);
+ while(DasNodeWalk_state(pWalk) == DASWALKSTATE_FETCH){
+    const char* sNext = DasNodeWalk_urlAt(pWalk, 0);
     if(my_fetch(sNext, &sDoc, &uDoc))
        DasNodeWalk_feed(pWalk, 0, sDoc, uDoc, NULL);
     else
@@ -101,11 +101,11 @@ extern "C" {
 #define DASNODE_SPDF_CAT_S    "SpdfMasterCat"
 
 /** Catalog node type */
-typedef enum das_node_type {
-   DASNODE_INV = 0, DASNODE_CATALOG = 1, DASNODE_COLLECTION = 2, 
-   DASNODE_SRCSET = 3, DASNODE_STREAM_SRC = 4,  DASNODE_FILE_AGG = 5, 
-   DASNODE_SPDF_CAT = 6, DASNODE_SPASE_CAT = 7
-} das_node_type_e;
+typedef enum das_nodetype_e {
+   DASNODETYPE_INV = 0, DASNODETYPE_CATALOG = 1, DASNODETYPE_COLLECTION = 2, 
+   DASNODETYPE_SRCSET = 3, DASNODETYPE_STREAM_SRC = 4,  DASNODETYPE_FILE_AGG = 5, 
+   DASNODETYPE_SPDF_CAT = 6, DASNODETYPE_SPASE_CAT = 7
+} das_nodetype;
 
 
 /** @addtogroup catalog 
@@ -120,7 +120,7 @@ typedef enum das_node_type {
  * through the accessors below, and freed by del_DasNode() on a tree top,
  * which takes the nodes walked to below it along.
  */
-typedef struct das_node DasNode;
+typedef struct das_node_t DasNode;
 
 /** @} */
 
@@ -134,15 +134,15 @@ typedef struct das_node DasNode;
  * @param  pLen Receives the number of URLs.  May be NULL.
  * @return An array of NUL terminated strings, static.
  */
-DAS_API const char** das_seed_urls(size_t* pLen);
+DAS_API const char** DasNode_seedUrls(size_t* pLen);
 
 /** Build a node from the JSON text of a node document
  *
  * For programs that fetch documents themselves, a browser build in
  * particular.  Nothing is fetched and no file is read.  The result is a
  * tree top the caller owns, with no parent in memory; a container built
- * this way lists its children, see DasNode_subCount(), and names the
- * URLs each would load from, see DasNode_subStub().
+ * this way lists its children, see DasNode_numSubs(), and names the
+ * URLs each would load from, see DasNode_subStubAt().
  *
  * @param pBytes The document text, need not be NUL terminated.
  * @param uBytes The number of bytes in pBytes.
@@ -206,10 +206,10 @@ DAS_API const char* DasNode_srcUrl(const DasNode* pThis);
  * usually the better choice so that application code works in a duck
  * typing manner.
  * @param pThis the catalog node
- * @return The node type, see das_node_type_e
+ * @return The node type, see das_nodetype
  * @memberof DasNode
  */
-DAS_API das_node_type_e DasNode_type(const DasNode* pThis);
+DAS_API das_nodetype DasNode_type(const DasNode* pThis);
 
 /** Get the node name, the catalog's "name" field
  * 
@@ -268,15 +268,15 @@ DAS_API const char* DasNode_pathSep(const DasNode* pThis);
  * @returns the number of listed children, 0 for non-container nodes
  * @memberof DasNode
  */
-DAS_API size_t DasNode_subCount(const DasNode* pThis);
+DAS_API size_t DasNode_numSubs(const DasNode* pThis);
 
 /** Get the name of a listed child by index.  No network activity.
  * @param pThis The node
- * @param uIdx 0 to DasNode_subCount() - 1
+ * @param uIdx 0 to DasNode_numSubs() - 1
  * @returns the child's name, or NULL if the index is out of range
  * @memberof DasNode
  */
-DAS_API const char* DasNode_subName(const DasNode* pThis, size_t uIdx);
+DAS_API const char* DasNode_subNameAt(const DasNode* pThis, size_t uIdx);
 
 /** Get the listing entry (stub) for a child by index.  No network activity.
  *
@@ -287,21 +287,21 @@ DAS_API const char* DasNode_subName(const DasNode* pThis, size_t uIdx);
  * @returns the stub dictionary, or NULL if the index is out of range
  * @memberof DasNode
  */
-DAS_API const DasJdo* DasNode_subStub(const DasNode* pThis, size_t uIdx);
+DAS_API const DasJdo* DasNode_subStubAt(const DasNode* pThis, size_t uIdx);
 
 /** Get the node type of a listed child by index.  No network activity.
- * @returns the type, DASNODE_INV if the type string is unknown to this
+ * @returns the type, DASNODETYPE_INV if the type string is unknown to this
  *          library (ex: "Das2DSDF", "WebSocSrc") or the index is bad
  * @memberof DasNode
  */
-DAS_API das_node_type_e DasNode_subType(const DasNode* pThis, size_t uIdx);
+DAS_API das_nodetype DasNode_subTypeAt(const DasNode* pThis, size_t uIdx);
 
 
 /** If true the internal data for this node are in JSON format
  *
  * Always true today; the hook is for catalogs in another format.
  * @param pThis The catalog node
- * @return True if DasNode_getJdo() is usable
+ * @return True if DasNode_jdo() is usable
  * @memberof DasNode
  */
 DAS_API bool DasNode_isJson(const DasNode* pThis);
@@ -314,7 +314,7 @@ DAS_API bool DasNode_isJson(const DasNode* pThis);
  *         contain the given element.
  * @memberof DasNode
  */
-DAS_API const DasJdo* DasNode_getJdo(const DasNode* pThis, const char* sFragment);
+DAS_API const DasJdo* DasNode_jdo(const DasNode* pThis, const char* sFragment);
 
 
 
@@ -354,10 +354,10 @@ DAS_API const DasJdo* DasNode_getJdo(const DasNode* pThis, const char* sFragment
  DasNodeWalk* pWalk = new_DasNodeWalk(pSite, "juno/wav/survey");
  if(pWalk == NULL) handle_error();
 
- while(DasNodeWalk_state(pWalk) == das_walk_fetch){
+ while(DasNodeWalk_state(pWalk) == DASWALKSTATE_FETCH){
 
     // Index 0 is always the next candidate to try, see below
-    const char* sUrl = DasNodeWalk_url(pWalk, 0);
+    const char* sUrl = DasNodeWalk_urlAt(pWalk, 0);
 
     char* pDoc = NULL;
     size_t uDoc = 0;
@@ -383,21 +383,21 @@ DAS_API const DasJdo* DasNode_getJdo(const DasNode* pThis, const char* sFragment
  @endcode
  *
  * The same loop loads the compiled in seed, new_DasNodeWalk_seed(): the
- * candidates are then the seed URLs, see das_seed_urls(), and the result
+ * candidates are then the seed URLs, see DasNode_seedUrls(), and the result
  * is the root of the das catalog, a seed the caller owns and frees with
  * del_DasNode().  A lookup by full URI is a walk from it, and what it
  * loads stays under it, so a client keeps the seed for its lifetime and
  * the tree below it is its memory of the catalog.  In a browser build the
  * loop is the same again with an await on fetch() in place of my_fetch().
  */
-typedef struct das_node_walk DasNodeWalk;
+typedef struct das_nodewalk_t DasNodeWalk;
 
 /** What a walk is waiting for */
-typedef enum das_walk_state_enum {
-	das_walk_fetch = 0,  /**< a document, see DasNodeWalk_url() */
-	das_walk_done,       /**< nothing, DasNodeWalk_result() has the node */
-	das_walk_failed      /**< nothing, no path led to it, see DasNodeWalk_nearest() */
-} das_walk_state_e;
+typedef enum das_walkstate_e {
+	DASWALKSTATE_FETCH = 0,  /**< a document, see DasNodeWalk_urlAt() */
+	DASWALKSTATE_DONE,       /**< nothing, DasNodeWalk_result() has the node */
+	DASWALKSTATE_FAILED      /**< nothing, no path led to it, see DasNodeWalk_nearest() */
+} das_walkstate;
 
 /** Start a walk.
  *
@@ -418,7 +418,7 @@ DAS_API DasNodeWalk* new_DasNodeWalk(DasNode* pFrom, const char* sRelPath);
 
 /** Start a walk that loads the compiled in seed.
  *
- * One step, whose candidates are the URLs from das_seed_urls() in order,
+ * One step, whose candidates are the URLs from DasNode_seedUrls() in order,
  * so a mirror that does not answer is passed over for the next.  The
  * result is the index of the das catalog, a root: it has no URI, its
  * children are the top level catalogs by URI prefix, and it is the
@@ -438,15 +438,15 @@ DAS_API DasNodeWalk* new_DasNodeWalk_seed(void);
 DAS_API void del_DasNodeWalk(DasNodeWalk* pThis);
 
 /** @memberof DasNodeWalk */
-DAS_API das_walk_state_e DasNodeWalk_state(const DasNodeWalk* pThis);
+DAS_API das_walkstate DasNodeWalk_state(const DasNodeWalk* pThis);
 
 /** The number of candidate URLs on offer, 0 unless the state is
- * das_walk_fetch.  @memberof DasNodeWalk */
-DAS_API size_t DasNodeWalk_urlCount(const DasNodeWalk* pThis);
+ * DASWALKSTATE_FETCH.  @memberof DasNodeWalk */
+DAS_API size_t DasNodeWalk_numUrls(const DasNodeWalk* pThis);
 
 /** Candidate number uIdx, borrowed and valid until the next feed or fail,
  * or NULL past the end.  @memberof DasNodeWalk */
-DAS_API const char* DasNodeWalk_url(const DasNodeWalk* pThis, size_t uIdx);
+DAS_API const char* DasNodeWalk_urlAt(const DasNodeWalk* pThis, size_t uIdx);
 
 /** The catalog URI of the node this step would load, for messages and
  * for a driver's cache.  "" when loading a seed, which has none.
@@ -456,7 +456,7 @@ DAS_API const char* DasNodeWalk_uri(const DasNodeWalk* pThis);
 /** Hand the walk the document a candidate URL produced.
  *
  * @param pThis The walk
- * @param uIdx Which candidate, see DasNodeWalk_url().  Candidates before
+ * @param uIdx Which candidate, see DasNodeWalk_urlAt().  Candidates before
  *        it are dropped as not tried.
  * @param pBytes The document text, need not be NUL terminated.
  * @param uBytes Its length.
@@ -498,7 +498,7 @@ DAS_API DasNode* DasNodeWalk_result(const DasNodeWalk* pThis);
  * @param pThis The walk
  * @param psRest If not NULL, receives the part of the path below that
  *        container, valid for the life of the walk.
- * @returns The URI, or NULL when the state is not das_walk_failed or no
+ * @returns The URI, or NULL when the state is not DASWALKSTATE_FAILED or no
  *        container was ever searched, as when no seed URL answered.
  * @memberof DasNodeWalk */
 DAS_API const char* DasNodeWalk_nearest(const DasNodeWalk* pThis, const char** psRest);

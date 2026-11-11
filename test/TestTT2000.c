@@ -45,7 +45,7 @@ void prnUtc(long long tt)
 	   arg function without a template, it's too easy to provide the
 		wrong data type!  It's used here for testing, but go with:
 		
-		Units_convertToDt(&dt, tt, UNIT_TT2000);
+		DasTime_fromPoint(&dt, tt, DASUNITS_TT2000);
 		
 		instead.
 	*/
@@ -65,8 +65,8 @@ char* tt2000_isoc(char* sBuf, size_t uLen, long long tt)
 	   arg function without a template, it's too easy to provide the
 		wrong data type!  It's used here for testing, but go with:
 		
-		das_time dt;
-		Units_convertToDt(&dt, tt, UNIT_TT2000);
+		DasTime dt;
+		DasTime_fromPoint(&dt, tt, DASUNITS_TT2000);
 		
 		instead.
 	*/
@@ -117,7 +117,7 @@ struct map_t {
 
 bool testETtoTT(double rEt2k, int nTest)
 {
-	double rTt2k = Units_convertTo(rEt2k, UNIT_ET2000, UNIT_TT2000);
+	double rTt2k = DasUnits_convert(rEt2k, DASUNITS_ET2000, DASUNITS_TT2000);
 	double rDiff = (rEt2k*1e3) - (rTt2k*1e-6);
 	double rExpectMsDiff = 1.658;
 	if(fabs(rDiff) > (rExpectMsDiff*1.1)){
@@ -141,13 +141,13 @@ bool testETtoTT(double rEt2k, int nTest)
 	}
 
 	/* For good measure test a trip out to us2000 and back */
-	double rUs2k = Units_convertTo(rEt2k, UNIT_ET2000, UNIT_US2000);
-	double rEtRev = Units_convertTo(rUs2k, UNIT_US2000, UNIT_ET2000);
+	double rUs2k = DasUnits_convert(rEt2k, DASUNITS_ET2000, DASUNITS_US2000);
+	double rEtRev = DasUnits_convert(rUs2k, DASUNITS_US2000, DASUNITS_ET2000);
 
-	das_time dt;
-	Units_convertToDt(&dt, rEt2k, UNIT_ET2000);
+	DasTime dt;
+	DasTime_fromPoint(&dt, rEt2k, DASUNITS_ET2000);
 	char sBuf[32];
-	dt_isoc(&dt, 9, sBuf, 31);
+	DasTime_toIsoC(&dt, 9, sBuf, 31);
 	/* us2000 is microseconds in a double, so for these dates the trip back
 	   agrees to about 0.25 us.  The tolerance was 10 s before 2026-10, which
 	   is how a mostly uninitialized leap table in tt2000.c went unnoticed
@@ -166,7 +166,7 @@ bool testETtoTT(double rEt2k, int nTest)
 
 bool testTTtoET(double rTt2k, int nTest)
 {
-	double rEt2k = Units_convertTo(rTt2k, UNIT_TT2000, UNIT_ET2000);
+	double rEt2k = DasUnits_convert(rTt2k, DASUNITS_TT2000, DASUNITS_ET2000);
 	double rDiff = (rTt2k*1e-6) - (rEt2k*1e3) ;
 	double rExpectMsDiff = 1.658;
 	if(fabs(rDiff) > (rExpectMsDiff*1.1)){
@@ -191,7 +191,7 @@ int main(int argc, char** argv)
 	unsetenv("CDF_LEAPSECONDSTABLE");
 	
 	/* Exit on errors, log info messages and above */
-	das_init(argv[0], DASERR_DIS_EXIT, DASLOG_INFO, NULL);
+	daslib_init(argv[0], DASERRDISP_EXIT, DASLOG_INFO, NULL);
 	
 	/* Extra demonstration of zero points if desired */
 	if((argc > 1)&&(strcmp(argv[1], "-h") != 0)){
@@ -232,7 +232,7 @@ int main(int argc, char** argv)
 	};
 	
 	const char* sTmp = "ERROR: Test 1, bi-directional mapping failed";
-	das_time dtTmp = {0};
+	DasTime dtTmp = {0};
 	struct map_t a;
 	bool bFail = false;
 	for(i = 0; i < 9; ++i){
@@ -253,8 +253,8 @@ int main(int argc, char** argv)
 			printf("%s, calc: %.11e, expect: %.11e, diff: %.3f (sec)\n", 
 					 sTmp, dUS2K, a.us2000, (a.us2000 - dUS2K)*1e-6);
 			
-			Units_convertToDt(&dtTmp, a.us2000, UNIT_US2000);
-			dt_isoc(&dtTmp, 3, sBuf, 63);
+			DasTime_fromPoint(&dtTmp, a.us2000, DASUNITS_US2000);
+			DasTime_toIsoC(&dtTmp, 3, sBuf, 63);
 			
 			printf("%s, Direct conversion: %s\n\n", sTmp, sBuf);
 			bFail = true;
@@ -318,12 +318,12 @@ int main(int argc, char** argv)
 	}
 		
 	/* Demonstrate pre-2000 missing second on us2000 scale */
-	das_time dtPre;  dt_set(&dtPre,  1976, 12, 31,  366, 23, 59, 59.0);
-	das_time dtPost; dt_set(&dtPost, 1977,  1,  1,    1,  0,  0,  0.0);
-	double rNoLeapPre  = Units_convertFromDt(&dtPre, UNIT_US2000);
-	double rNoLeapPost = Units_convertFromDt(&dtPost, UNIT_US2000);
-	double rLeapPre    = Units_convertFromDt(&dtPre, UNIT_TT2000);
-	double rLeapPost   = Units_convertFromDt(&dtPost, UNIT_TT2000);
+	DasTime dtPre;  DasTime_set(&dtPre,  1976, 12, 31,  366, 23, 59, 59.0);
+	DasTime dtPost; DasTime_set(&dtPost, 1977,  1,  1,    1,  0,  0,  0.0);
+	double rNoLeapPre  = DasTime_toPoint(&dtPre, DASUNITS_US2000);
+	double rNoLeapPost = DasTime_toPoint(&dtPost, DASUNITS_US2000);
+	double rLeapPre    = DasTime_toPoint(&dtPre, DASUNITS_TT2000);
+	double rLeapPost   = DasTime_toPoint(&dtPost, DASUNITS_TT2000);
 
 	/* Check tt2000 and us2000 differences across leap seconds */
 	if( (rNoLeapPost - rNoLeapPre) != 1e6){
@@ -340,10 +340,10 @@ int main(int argc, char** argv)
 	}
 	
 	/* Now do it again for positive values */
-	das_time dt_preleap = {2016, 12, 31, 0, 23, 59, 59};
-	das_time dt_postleap = {2017,  1,  1, 0};
-	double rPreLeap = Units_convertFromDt(&dt_preleap, UNIT_TT2000);
-	double rPostLeap = Units_convertFromDt(&dt_postleap, UNIT_TT2000);
+	DasTime dt_preleap = {2016, 12, 31, 0, 23, 59, 59};
+	DasTime dt_postleap = {2017,  1,  1, 0};
+	double rPreLeap = DasTime_toPoint(&dt_preleap, DASUNITS_TT2000);
+	double rPostLeap = DasTime_toPoint(&dt_postleap, DASUNITS_TT2000);
 	if( fabs((rPostLeap - rPreLeap) - 2e9) > 1e-9) {
 		printf("ERROR: Test 5 Failed, TT2000 difference was %e s, expected ~2.0 s "
 		       "across leapsecond boundary.\n", (rPostLeap - rPreLeap)*1e-9);
@@ -353,77 +353,77 @@ int main(int argc, char** argv)
 	/* Parsed text must land on the nanosecond it names.  "58.939456789" is a
 	   double just under that decimal, and splitting it by truncation used to
 	   lose the last nanosecond for about half of all values. */
-	das_time dtBase;
-	if(!dt_parsetime(&dtBase, "2025-11-28T23:59:58")){
+	DasTime dtBase;
+	if(!DasTime_fromStr(&dtBase, "2025-11-28T23:59:58")){
 		printf("ERROR: Test 5b failed, could not parse the base time\n");
 		return 15;
 	}
-	int64_t nBase = dt_to_tt2k(&dtBase);
+	int64_t nBase = DasTime_toTt2k(&dtBase);
 	char sFrac[64];
 	for(int64_t nNs = 7; nNs < 1000000000LL; nNs += 999983LL){
 		snprintf(sFrac, 63, "2025-11-28T23:59:58.%09lld", (long long)nNs);
-		das_time dtFrac;
-		if(!dt_parsetime(&dtFrac, sFrac) || (dt_to_tt2k(&dtFrac) != nBase + nNs)){
+		DasTime dtFrac;
+		if(!DasTime_fromStr(&dtFrac, sFrac) || (DasTime_toTt2k(&dtFrac) != nBase + nNs)){
 			printf("ERROR: Test 5b failed, %s converted to %lld ns after the "
 			       "base, expected %lld\n", sFrac,
-			       (long long)(dt_to_tt2k(&dtFrac) - nBase), (long long)nNs);
+			       (long long)(DasTime_toTt2k(&dtFrac) - nBase), (long long)nNs);
 			return 15;
 		}
 	}
 
-	/* dt_from_tt2k() keeps a leap second rather than colliding it with :59,
-	   and comes back exactly through dt_to_tt2k() on either side of it */
-	das_time dtLs;
-	if(!dt_parsetime(&dtLs, "2016-12-31T23:59:60.25")){
+	/* DasTime_fromTt2k() keeps a leap second rather than colliding it with :59,
+	   and comes back exactly through DasTime_toTt2k() on either side of it */
+	DasTime dtLs;
+	if(!DasTime_fromStr(&dtLs, "2016-12-31T23:59:60.25")){
 		printf("ERROR: Test 5c failed, could not parse a leap second\n");
 		return 15;
 	}
-	int64_t nLs = dt_to_tt2k(&dtLs);
+	int64_t nLs = DasTime_toTt2k(&dtLs);
 	int64_t aLs[] = {nLs - 1000000000LL, nLs, nLs + 1000000000LL};
 	for(int i = 0; i < 3; ++i){
-		das_time dtOut;
-		dt_from_tt2k(&dtOut, aLs[i]);
-		if(dt_to_tt2k(&dtOut) != aLs[i]){
+		DasTime dtOut;
+		DasTime_fromTt2k(&dtOut, aLs[i]);
+		if(DasTime_toTt2k(&dtOut) != aLs[i]){
 			printf("ERROR: Test 5c failed, %s did not round trip (%lld ns off)\n",
-			       dt_isoc(&dtOut, 9, sBuf, 63), (long long)(dt_to_tt2k(&dtOut) - aLs[i]));
+			       DasTime_toIsoC(&dtOut, 9, sBuf, 63), (long long)(DasTime_toTt2k(&dtOut) - aLs[i]));
 			return 15;
 		}
 	}
-	das_time dtMid; dt_from_tt2k(&dtMid, nLs);
+	DasTime dtMid; DasTime_fromTt2k(&dtMid, nLs);
 	if((dtMid.second < 60.0)||(dtMid.yday != 366)){
 		printf("ERROR: Test 5c failed, leap second read as %s (yday %d)\n",
-		       dt_isoc(&dtMid, 3, sBuf, 63), dtMid.yday);
+		       DasTime_toIsoC(&dtMid, 3, sBuf, 63), dtMid.yday);
 		return 15;
 	}
 
 	/* Test 5d, the integer parts pair.  Expected values come from
-	   dt_to_tt2k(), which the tests above already pin. */
+	   DasTime_toTt2k(), which the tests above already pin. */
 	{
 		int64_t nTT = 0, nRef = 0;
-		das_time dtRef;
+		DasTime dtRef;
 
 		/* Plain round trip, every field distinct, nanoseconds all nonzero */
-		dt_set(&dtRef, 2025, 10, 21, 294, 13, 47, 58.123456789);
-		nRef = dt_to_tt2k(&dtRef);
-		if((tt2k_from_parts(2025, 10, 21, 13, 47, 58, 123456789, &nTT) != DAS_OKAY)
+		DasTime_set(&dtRef, 2025, 10, 21, 294, 13, 47, 58.123456789);
+		nRef = DasTime_toTt2k(&dtRef);
+		if((DasTime_utcToTt2k(2025, 10, 21, 13, 47, 58, 123456789, &nTT) != DAS_OKAY)
 		   || (nTT != nRef)){
-			printf("ERROR: Test 5d failed, tt2k_from_parts gave %lld, expected %lld\n",
+			printf("ERROR: Test 5d failed, DasTime_utcToTt2k gave %lld, expected %lld\n",
 			       (long long)nTT, (long long)nRef);
 			return 15;
 		}
 		int yr, mt, dy, hr, mn, sc; int32_t ns;
-		tt2k_to_parts(nTT, &yr, &mt, &dy, &hr, &mn, &sc, &ns);
+		DasTime_tt2kToUtc(nTT, &yr, &mt, &dy, &hr, &mn, &sc, &ns);
 		if((yr != 2025)||(mt != 10)||(dy != 21)||(hr != 13)||(mn != 47)||(sc != 58)
 		   ||(ns != 123456789)){
-			printf("ERROR: Test 5d failed, tt2k_to_parts gave %04d-%02d-%02dT%02d:%02d:%02d"
+			printf("ERROR: Test 5d failed, DasTime_tt2kToUtc gave %04d-%02d-%02dT%02d:%02d:%02d"
 			       " + %d ns\n", yr, mt, dy, hr, mn, sc, (int)ns);
 			return 15;
 		}
 
 		/* Day of year through month 1 */
 		int64_t nDoy = 0, nFeb = 0;
-		tt2k_from_parts(2024, 1, 60, 0, 0, 0, 0, &nDoy);
-		tt2k_from_parts(2024, 2, 29, 0, 0, 0, 0, &nFeb);
+		DasTime_utcToTt2k(2024, 1, 60, 0, 0, 0, 0, &nDoy);
+		DasTime_utcToTt2k(2024, 2, 29, 0, 0, 0, 0, &nFeb);
 		if(nDoy != nFeb){
 			printf("ERROR: Test 5d failed, day of year 60 is not 2024-02-29\n");
 			return 15;
@@ -431,9 +431,9 @@ int main(int argc, char** argv)
 
 		/* Nanoseconds past a second carry into the 2016 leap second */
 		int64_t nCarry = 0, nLeap = 0;
-		tt2k_from_parts(2016, 12, 31, 23, 59, 59, 1500000000, &nCarry);
-		tt2k_from_parts(2016, 12, 31, 23, 59, 60, 500000000, &nLeap);
-		tt2k_to_parts(nLeap, NULL, NULL, NULL, NULL, NULL, &sc, &ns);
+		DasTime_utcToTt2k(2016, 12, 31, 23, 59, 59, 1500000000, &nCarry);
+		DasTime_utcToTt2k(2016, 12, 31, 23, 59, 60, 500000000, &nLeap);
+		DasTime_tt2kToUtc(nLeap, NULL, NULL, NULL, NULL, NULL, &sc, &ns);
 		if((nCarry != nLeap)||(sc != 60)||(ns != 500000000)){
 			printf("ERROR: Test 5d failed, leap second carry or breakdown (sec %d, ns %d)\n",
 			       sc, (int)ns);
@@ -441,25 +441,25 @@ int main(int argc, char** argv)
 		}
 
 		/* Refusals leave the output alone */
-		daserr_setdisp(DASERR_DIS_RET);
+		daserr_setDisp(DASERRDISP_RET);
 		printf("INFO: Two expected TT2000 range errors follow\n");
 		nTT = 42;
-		if((tt2k_from_parts(1600, 1, 1, 0, 0, 0, 0, &nTT) == DAS_OKAY)||(nTT != 42)){
+		if((DasTime_utcToTt2k(1600, 1, 1, 0, 0, 0, 0, &nTT) == DAS_OKAY)||(nTT != 42)){
 			printf("ERROR: Test 5d failed, year 1600 accepted\n");
 			return 15;
 		}
-		if((tt2k_from_parts(2020, 1, 1, 0, 0, 0, -1, &nTT) == DAS_OKAY)||(nTT != 42)){
+		if((DasTime_utcToTt2k(2020, 1, 1, 0, 0, 0, -1, &nTT) == DAS_OKAY)||(nTT != 42)){
 			printf("ERROR: Test 5d failed, negative nanoseconds accepted\n");
 			return 15;
 		}
-		daserr_setdisp(DASERR_DIS_EXIT);
+		daserr_setDisp(DASERRDISP_EXIT);
 
-		dt_set(&dtRef, 1600, 1, 1, 1, 0, 0, 0.0);
-		if(dt_to_tt2k(&dtRef) != DAS_TT2000_ILLEGAL){
-			printf("ERROR: Test 5d failed, dt_to_tt2k didn't flag year 1600\n");
+		DasTime_set(&dtRef, 1600, 1, 1, 1, 0, 0, 0.0);
+		if(DasTime_toTt2k(&dtRef) != DASTIME_TT2K_ILLEGAL){
+			printf("ERROR: Test 5d failed, DasTime_toTt2k didn't flag year 1600\n");
 			return 15;
 		}
-		printf("INFO: Test 5d, tt2k_from_parts / tt2k_to_parts, passed\n");
+		printf("INFO: Test 5d, DasTime_utcToTt2k / DasTime_tt2kToUtc, passed\n");
 	}
 
 	/* Test loading a Leapseconds file, okay since single threaded. */
@@ -471,25 +471,25 @@ int main(int argc, char** argv)
 	}
 	
 	
-	/* Make sure seconds == 60 is handled correctly by das_time to tt2000 */
-	das_time dtLeap1; dt_set(&dtLeap1, 2020, 12, 31, 366, 23, 59, 60.0);
-	double rLeap = Units_convertFromDt(&dtLeap1, UNIT_TT2000);
-	das_time dtLeap2;
-	Units_convertToDt(&dtLeap2, rLeap, UNIT_TT2000);
+	/* Make sure seconds == 60 is handled correctly by DasTime to tt2000 */
+	DasTime dtLeap1; DasTime_set(&dtLeap1, 2020, 12, 31, 366, 23, 59, 60.0);
+	double rLeap = DasTime_toPoint(&dtLeap1, DASUNITS_TT2000);
+	DasTime dtLeap2;
+	DasTime_fromPoint(&dtLeap2, rLeap, DASUNITS_TT2000);
 	if( dtLeap1.second != dtLeap2.second){
 		printf(
-			"ERROR: Test 7 failed, round-trip to das_time did not preserve leap "
-			"second, pre %s, post %s, diff %.5e.\n", dt_isoc(&dtLeap1, 3, sBuf, 63),
-			dt_isoc(&dtLeap2, 3, sBuf2, 63), dtLeap2.second - dtLeap1.second
+			"ERROR: Test 7 failed, round-trip to DasTime did not preserve leap "
+			"second, pre %s, post %s, diff %.5e.\n", DasTime_toIsoC(&dtLeap1, 3, sBuf, 63),
+			DasTime_toIsoC(&dtLeap2, 3, sBuf2, 63), dtLeap2.second - dtLeap1.second
 				);
 		return 13;
 	}
 		
 	/* Test the fake leap second at 2021-01-01 */
-	dt_set(&dtPre, 2020, 12, 31,  366, 23, 59, 59.0);
-	dt_set(&dtPost, 2021,  1,  1,    1,  0,  0,  1.0);
-	rLeapPre  = Units_convertFromDt(&dtPre, UNIT_TT2000);
-	rLeapPost = Units_convertFromDt(&dtPost, UNIT_TT2000);
+	DasTime_set(&dtPre, 2020, 12, 31,  366, 23, 59, 59.0);
+	DasTime_set(&dtPost, 2021,  1,  1,    1,  0,  0,  1.0);
+	rLeapPre  = DasTime_toPoint(&dtPre, DASUNITS_TT2000);
+	rLeapPost = DasTime_toPoint(&dtPost, DASUNITS_TT2000);
 	
 	if(rLeapPost - rLeapPre != 3e9){
 		printf("ERROR: Test 8 failed, time calculations not altered by external table\n");

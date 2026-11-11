@@ -75,9 +75,9 @@
 
 /* Units are user and data input, and input can always be bad.  Helpers that
  * meet bad input write why here and return failure; the public function that
- * took the input decides whether that is worth a das_error().  The first
+ * took the input decides whether that is worth a daserrf().  The first
  * reason written wins, keeping the root cause.  Internal bugs still call
- * das_error() on the spot and leave this empty, so an empty reason on a
+ * daserrf() on the spot and leave this empty, so an empty reason on a
  * failure means it was already reported. */
 static void _units_err(char* sErr, const char* sFmt, ...) _das_fmt_check(2, 3);
 
@@ -92,43 +92,43 @@ static void _units_err(char* sErr, const char* sFmt, ...)
 
 
 /* Time Point Units */
-const char* UNIT_US2000 = "us2000";
-const char* UNIT_MJ1958 = "mj1958";
-const char* UNIT_T2000  = "t2000";
-const char* UNIT_T1970  = "t1970";
-const char* UNIT_NS1970 = "ns1970";
-const char* UNIT_UTC    = "UTC";
-const char* UNIT_TT2000 = "TT2000";
-const char* UNIT_ET2000 = "ET2000";
+const char* DASUNITS_US2000 = "us2000";
+const char* DASUNITS_MJ1958 = "mj1958";
+const char* DASUNITS_T2000  = "t2000";
+const char* DASUNITS_T1970  = "t1970";
+const char* DASUNITS_NS1970 = "ns1970";
+const char* DASUNITS_UTC    = "UTC";
+const char* DASUNITS_TT2000 = "TT2000";
+const char* DASUNITS_ET2000 = "ET2000";
 
 /* Other common units */
-const char* UNIT_SECONDS = "s";
-const char* UNIT_HOURS = "hours";
-const char* UNIT_DAYS  = "days";
-const char* UNIT_MILLISECONDS = "ms";
-const char* UNIT_MICROSECONDS = "μs";
-const char* UNIT_NANOSECONDS = "ns";
+const char* DASUNITS_SECONDS = "s";
+const char* DASUNITS_HOURS = "hours";
+const char* DASUNITS_DAYS  = "days";
+const char* DASUNITS_MILLISECONDS = "ms";
+const char* DASUNITS_MICROSECONDS = "μs";
+const char* DASUNITS_NANOSECONDS = "ns";
 
-const char* UNIT_DEGREES = "deg";
+const char* DASUNITS_DEGREES = "deg";
 
-const char* UNIT_HERTZ = "Hz";
-const char* UNIT_KILO_HERTZ = "kHz";
-const char* UNIT_MEGA_HERTZ = "MHz";
-const char* UNIT_GIGA_HERTZ = "GHz";
-const char* UNIT_E_SPECDENS = "V**2 m**-2 Hz**-1";
-const char* UNIT_B_SPECDENS = "nT**2 Hz**-1";
+const char* DASUNITS_HERTZ = "Hz";
+const char* DASUNITS_KILO_HERTZ = "kHz";
+const char* DASUNITS_MEGA_HERTZ = "MHz";
+const char* DASUNITS_GIGA_HERTZ = "GHz";
+const char* DASUNITS_E_SPECDENS = "V**2 m**-2 Hz**-1";
+const char* DASUNITS_B_SPECDENS = "nT**2 Hz**-1";
 
-const char* UNIT_NT = "nT";
+const char* DASUNITS_NT = "nT";
 
-const char* UNIT_NUMBER_DENS = "cm**-3";
+const char* DASUNITS_NUMBER_DENS = "cm**-3";
 
-const char* UNIT_DB = "dB";
+const char* DASUNITS_DB = "dB";
 
-const char* UNIT_KM = "km";   /* Welcome to radar work! */
+const char* DASUNITS_KM = "km";   /* Welcome to radar work! */
 
-const char* UNIT_EV = "eV";   /* Welcome to particle work! */
+const char* DASUNITS_EV = "eV";   /* Welcome to particle work! */
 
-const char* UNIT_DIMENSIONLESS = "";
+const char* DASUNITS_DIMENSIONLESS = "";
 
 /* Definitions for ad-hoc conversions, compare is case insensitive */
 #define NUM_ADHOC 8
@@ -209,31 +209,31 @@ bool das_units_init(const char* sProgName)
 #endif
 	if( pthread_mutex_init(&g_mtxUnits, &attr) != 0) return false;
 
-	g_lUnits[0] = UNIT_US2000;
-	g_lUnits[1] = UNIT_MJ1958;
-	g_lUnits[2] = UNIT_T2000;
-	g_lUnits[3] = UNIT_T1970;
-	g_lUnits[4] = UNIT_NS1970;
-	g_lUnits[5] = UNIT_UTC;
-	g_lUnits[6] = UNIT_TT2000;
-	g_lUnits[7] = UNIT_ET2000;
-	g_lUnits[8] = UNIT_MILLISECONDS;
-	g_lUnits[9] = UNIT_MICROSECONDS;
-	g_lUnits[10] = UNIT_NANOSECONDS;
-	g_lUnits[11] = UNIT_SECONDS;
-	g_lUnits[12] = UNIT_HOURS;
-	g_lUnits[13] = UNIT_DAYS;
-	g_lUnits[14] = UNIT_HERTZ;
-	g_lUnits[15] = UNIT_KILO_HERTZ;
-	g_lUnits[16] = UNIT_MEGA_HERTZ;
-	g_lUnits[17] = UNIT_E_SPECDENS;
-	g_lUnits[18] = UNIT_B_SPECDENS;
-	g_lUnits[19] = UNIT_NT;
-	g_lUnits[20] = UNIT_NUMBER_DENS;
-	g_lUnits[21] = UNIT_DB;
-	g_lUnits[22] = UNIT_KM;
-	g_lUnits[23] = UNIT_EV;
-	g_lUnits[24] = UNIT_DIMENSIONLESS;
+	g_lUnits[0] = DASUNITS_US2000;
+	g_lUnits[1] = DASUNITS_MJ1958;
+	g_lUnits[2] = DASUNITS_T2000;
+	g_lUnits[3] = DASUNITS_T1970;
+	g_lUnits[4] = DASUNITS_NS1970;
+	g_lUnits[5] = DASUNITS_UTC;
+	g_lUnits[6] = DASUNITS_TT2000;
+	g_lUnits[7] = DASUNITS_ET2000;
+	g_lUnits[8] = DASUNITS_MILLISECONDS;
+	g_lUnits[9] = DASUNITS_MICROSECONDS;
+	g_lUnits[10] = DASUNITS_NANOSECONDS;
+	g_lUnits[11] = DASUNITS_SECONDS;
+	g_lUnits[12] = DASUNITS_HOURS;
+	g_lUnits[13] = DASUNITS_DAYS;
+	g_lUnits[14] = DASUNITS_HERTZ;
+	g_lUnits[15] = DASUNITS_KILO_HERTZ;
+	g_lUnits[16] = DASUNITS_MEGA_HERTZ;
+	g_lUnits[17] = DASUNITS_E_SPECDENS;
+	g_lUnits[18] = DASUNITS_B_SPECDENS;
+	g_lUnits[19] = DASUNITS_NT;
+	g_lUnits[20] = DASUNITS_NUMBER_DENS;
+	g_lUnits[21] = DASUNITS_DB;
+	g_lUnits[22] = DASUNITS_KM;
+	g_lUnits[23] = DASUNITS_EV;
+	g_lUnits[24] = DASUNITS_DIMENSIONLESS;
 	g_lUnits[25] = NULL;
 		
 	return true;
@@ -263,7 +263,7 @@ static int _Units_getUnique(const char* string, char* sErr)
 		char* sHeap = (char*)calloc(uLen + 1, sizeof(char));
 		if(sHeap == NULL){
 			pthread_mutex_unlock(&g_mtxUnits);
-			das_error(DASERR_UNITS, "Couldn't allocate %zu bytes for units", uLen + 1);
+			daserrf(DASERR_UNITS, "Couldn't allocate %zu bytes for units", uLen + 1);
 			return -1*DASERR_UNITS;
 		}
 		memcpy(sHeap, string, uLen);
@@ -281,40 +281,40 @@ static int _Units_getUnique(const char* string, char* sErr)
 /* ********************************************************************* */
 
 /* Unfortunately this is just an enumeration of know interval types */
-das_units Units_interval(das_units unit){
-	if(unit == UNIT_US2000) return UNIT_MICROSECONDS;
-	if(unit == UNIT_MJ1958) return UNIT_DAYS;
-	if(unit == UNIT_T2000) return UNIT_SECONDS;
-	if(unit == UNIT_T1970) return UNIT_SECONDS;
-	if(unit == UNIT_NS1970) return UNIT_NANOSECONDS;
-	if(unit == UNIT_UTC) return UNIT_SECONDS;
-	if(unit == UNIT_TT2000) return UNIT_NANOSECONDS;
-	if(unit == UNIT_ET2000) return UNIT_SECONDS;
+DasUnits DasUnits_toInterval(DasUnits unit){
+	if(unit == DASUNITS_US2000) return DASUNITS_MICROSECONDS;
+	if(unit == DASUNITS_MJ1958) return DASUNITS_DAYS;
+	if(unit == DASUNITS_T2000) return DASUNITS_SECONDS;
+	if(unit == DASUNITS_T1970) return DASUNITS_SECONDS;
+	if(unit == DASUNITS_NS1970) return DASUNITS_NANOSECONDS;
+	if(unit == DASUNITS_UTC) return DASUNITS_SECONDS;
+	if(unit == DASUNITS_TT2000) return DASUNITS_NANOSECONDS;
+	if(unit == DASUNITS_ET2000) return DASUNITS_SECONDS;
 	return unit;
 }
 
 /** Determine if a unit is a time point on a calendar epoch
  *
- * True for the time point units: UNIT_US2000, UNIT_MJ1958, UNIT_T2000,
- * UNIT_T1970, UNIT_NS1970, UNIT_UTC, UNIT_TT2000 and UNIT_ET2000.
- * These ones need Units_interval() calls. 
- * Matches Units_haveCalRep() for now because , the two may diverge.
+ * True for the time point units: DASUNITS_US2000, DASUNITS_MJ1958, DASUNITS_T2000,
+ * DASUNITS_T1970, DASUNITS_NS1970, DASUNITS_UTC, DASUNITS_TT2000 and DASUNITS_ET2000.
+ * These ones need DasUnits_toInterval() calls. 
+ * Matches DasUnits_isTimePoint() for now because , the two may diverge.
  */
-static bool Units_isPoint(das_units unit){
+static bool Units_isPoint(DasUnits unit){
 	return (
-		(unit == UNIT_US2000) || (unit == UNIT_MJ1958) || (unit == UNIT_T2000) ||
-		(unit == UNIT_T1970) || (unit == UNIT_NS1970) || (unit == UNIT_UTC) ||
-		(unit == UNIT_TT2000) || (unit == UNIT_ET2000)
+		(unit == DASUNITS_US2000) || (unit == DASUNITS_MJ1958) || (unit == DASUNITS_T2000) ||
+		(unit == DASUNITS_T1970) || (unit == DASUNITS_NS1970) || (unit == DASUNITS_UTC) ||
+		(unit == DASUNITS_TT2000) || (unit == DASUNITS_ET2000)
 	);
 }
 
 /* Happens to be identical to Units_isPoint for now, will likely diverge
  * in the future. */
-bool Units_haveCalRep(das_units unit){
-	return (unit == UNIT_US2000) || (unit == UNIT_MJ1958) || 
-			 (unit == UNIT_T2000)  || (unit == UNIT_T1970) || 
-			 (unit == UNIT_NS1970) || (unit == UNIT_UTC) ||
-	       (unit == UNIT_TT2000) || (unit == UNIT_ET2000);
+bool DasUnits_isTimePoint(DasUnits unit){
+	return (unit == DASUNITS_US2000) || (unit == DASUNITS_MJ1958) || 
+			 (unit == DASUNITS_T2000)  || (unit == DASUNITS_T1970) || 
+			 (unit == DASUNITS_NS1970) || (unit == DASUNITS_UTC) ||
+	       (unit == DASUNITS_TT2000) || (unit == DASUNITS_ET2000);
 }
 
 /* ************************************************************************* */
@@ -475,7 +475,7 @@ static void _Units_reduceExp(struct base_unit* pBase){
 	
 	/* Check signs, negative denominators are not allowed */
 	if(pBase->nExpDenom < 1){
-		das_error(15, "Illegal denominator in exponent for '%s**%d/%d'",
+		daserrf(15, "Illegal denominator in exponent for '%s**%d/%d'",
 		           pBase->sName, pBase->nExpNum, pBase->nExpDenom);
 		return;
 	}
@@ -509,13 +509,13 @@ static bool _Units_finishComp(char* sErr, struct base_unit* pComp, int nPwrFlip)
 	bool bOkay = true;
 	if( (pDiv = strchr(pComp->sExp, '/')) != NULL){
 		*pDiv = '\0';
-		if( (bOkay=das_str2baseint(pComp->sExp, 10, &(pComp->nExpNum))) )
-			bOkay = das_str2baseint(pDiv + 1, 10, &(pComp->nExpDenom));
+		if( (bOkay=dasstr_toBaseInt(pComp->sExp, 10, &(pComp->nExpNum))) )
+			bOkay = dasstr_toBaseInt(pDiv + 1, 10, &(pComp->nExpDenom));
 		*pDiv = '/';
 		if(bOkay) bOkay = pComp->nExpDenom >= 1;
 	}
 	else{
-		bOkay = das_str2baseint(pComp->sExp, 10, &(pComp->nExpNum));
+		bOkay = dasstr_toBaseInt(pComp->sExp, 10, &(pComp->nExpNum));
 	}
 
 	if(! bOkay){
@@ -748,7 +748,7 @@ static int _Units_strToComponents(
 			
 			/* x**0 is 1.  Take it on input but keep it out of every result */
 			if(pComp[iComp].nExpNum == 0){
-				daslog_debug_v("Ignoring '%s**0' in units string '%s'",
+				daslog_debugf("Ignoring '%s**0' in units string '%s'",
 					pComp[iComp].sName, sUnits);
 				memset(pComp + iComp, 0, sizeof(struct base_unit));
 				pComp[iComp].nExpNum = 1; pComp[iComp].nExpDenom = 1;
@@ -788,7 +788,7 @@ static int _Units_strToComponents(
 			++iPower;
 			break;
 		default:
-			das_error(15, "Broken assumption, code fix required"); 
+			daserrf(15, "Broken assumption, code fix required"); 
 			return -1;
 		}
 				 
@@ -861,27 +861,27 @@ static int _Units_fromCompAry(struct base_unit* pComp, int nComp, char* sErr){
 /* ************************************************************************** */
 /* Unit Math Operations */
 
-das_units Units_invert(das_units unit) {
+DasUnits DasUnits_invert(DasUnits unit) {
 	
-	if(unit == UNIT_DIMENSIONLESS) return UNIT_DIMENSIONLESS;
+	if(unit == DASUNITS_DIMENSIONLESS) return DASUNITS_DIMENSIONLESS;
 	
 	if( Units_isPoint(unit) ){
 		
-		das_error(15, "Units '%s' are an offset from an epoch, these are not"
+		daserrf(15, "Units '%s' are an offset from an epoch, these are not"
 		           " invertible.  Use Unit_interval() to get an invertible"
 		           " unit type first.", unit);
 		return NULL;
 	}
 	
-	if(unit == UNIT_SECONDS) return UNIT_HERTZ;
-	if(unit == UNIT_MILLISECONDS) return UNIT_KILO_HERTZ; 
-	if(unit == UNIT_MICROSECONDS) return UNIT_MEGA_HERTZ;
-	if(unit == UNIT_NANOSECONDS) return UNIT_GIGA_HERTZ;
+	if(unit == DASUNITS_SECONDS) return DASUNITS_HERTZ;
+	if(unit == DASUNITS_MILLISECONDS) return DASUNITS_KILO_HERTZ; 
+	if(unit == DASUNITS_MICROSECONDS) return DASUNITS_MEGA_HERTZ;
+	if(unit == DASUNITS_NANOSECONDS) return DASUNITS_GIGA_HERTZ;
 
-	if(unit == UNIT_HERTZ) return UNIT_SECONDS;
-	if(unit == UNIT_KILO_HERTZ) return UNIT_MILLISECONDS;
-	if(unit == UNIT_MEGA_HERTZ) return UNIT_MICROSECONDS;
-	if(unit == UNIT_GIGA_HERTZ) return UNIT_NANOSECONDS;
+	if(unit == DASUNITS_HERTZ) return DASUNITS_SECONDS;
+	if(unit == DASUNITS_KILO_HERTZ) return DASUNITS_MILLISECONDS;
+	if(unit == DASUNITS_MEGA_HERTZ) return DASUNITS_MICROSECONDS;
+	if(unit == DASUNITS_GIGA_HERTZ) return DASUNITS_NANOSECONDS;
 	
 	/* Okay, the rest use the general invert function */
 	struct base_unit aComp[_MAX_NUM_COMP];
@@ -901,7 +901,7 @@ das_units Units_invert(das_units unit) {
 
 INVERT_ERR:
 	if(sErr[0] != '\0')
-		das_error(DASERR_UNITS, "Can't invert units '%s', %s", unit, sErr);
+		daserrf(DASERR_UNITS, "Can't invert units '%s', %s", unit, sErr);
 	return NULL;
 }
 
@@ -922,21 +922,21 @@ static bool _Units_accumPowers(
 	return _Units_powInRange(pBase, sErr);
 }
 
-das_units Units_multiply(das_units ut1, das_units ut2)
+DasUnits DasUnits_mul(DasUnits ut1, DasUnits ut2)
 {
 	/* Dimensionless stuff reduces to trivial operations*/
-	if(ut1 == UNIT_DIMENSIONLESS) return ut2;
-	if(ut2 == UNIT_DIMENSIONLESS) return ut1;
+	if(ut1 == DASUNITS_DIMENSIONLESS) return ut2;
+	if(ut2 == DASUNITS_DIMENSIONLESS) return ut1;
 
-	/* A failed operation upstream, Units_divide() passing on a failed
-	   Units_power() for example, already said why */
+	/* A failed operation upstream, DasUnits_div() passing on a failed
+	   DasUnits_pow() for example, already said why */
 	if((ut1 == NULL)||(ut2 == NULL)) return NULL;
 
 	int i = 0;
 	const char* ut[2] = {ut1, ut2};
 	for(i = 0; i < 2; ++i){
 		if( Units_isPoint(ut[i]) ){
-			das_error(15, "Units '%s' are an offset from an epoch, these are not"
+			daserrf(15, "Units '%s' are an offset from an epoch, these are not"
 			           " usable in algebraic operations.  Use Unit_interval() to get "
 					     "an invertible unit type first.", ut[i]);
 			return NULL;
@@ -1009,7 +1009,7 @@ das_units Units_multiply(das_units ut1, das_units ut2)
 		++nKeep;
 	}
 	len3 = nKeep;
-	if(len3 == 0) return UNIT_DIMENSIONLESS;
+	if(len3 == 0) return DASUNITS_DIMENSIONLESS;
 
 	/* Sort positive first and use the sort order tags */
 	qsort(comp3, len3, sizeof(struct base_unit), _Units_positiveFirst);
@@ -1019,22 +1019,22 @@ das_units Units_multiply(das_units ut1, das_units ut2)
 
 MULTIPLY_ERR:
 	if(sErr[0] != '\0')
-		das_error(DASERR_UNITS, "Can't multiply units '%s' by '%s', %s", ut1, ut2, sErr);
+		daserrf(DASERR_UNITS, "Can't multiply units '%s' by '%s', %s", ut1, ut2, sErr);
 	return NULL;
 }
 
-das_units Units_power(das_units unit, int power)
+DasUnits DasUnits_pow(DasUnits unit, int power)
 {
-	if( unit == UNIT_DIMENSIONLESS) return unit;
+	if( unit == DASUNITS_DIMENSIONLESS) return unit;
 	
 	if( Units_isPoint(unit) ){
-		das_error(15, "Units '%s' are an offset from an epoch, these are not"
+		daserrf(15, "Units '%s' are an offset from an epoch, these are not"
 			           " usable in algebraic operations.  Use Unit_interval() to get "
 					     "an invertible unit type first.", unit);
 		return NULL;
 	}
 	
-	if(power == 0) return UNIT_DIMENSIONLESS;
+	if(power == 0) return DASUNITS_DIMENSIONLESS;
 
 	struct base_unit comp[_MAX_NUM_COMP] = { {{'\0'}, {'\0'}, 0, 0, 0} };
 	char sErr[_UNITS_PARSE_ERR_SZ] = {'\0'};
@@ -1063,21 +1063,21 @@ das_units Units_power(das_units unit, int power)
 
 POWER_ERR:
 	if(sErr[0] != '\0')
-		das_error(DASERR_UNITS, "Can't raise units '%s' to the power %d, %s",
+		daserrf(DASERR_UNITS, "Can't raise units '%s' to the power %d, %s",
 		          unit, power, sErr);
 	return NULL;
 }
 
-das_units Units_root(das_units unit, int root)
+DasUnits DasUnits_root(DasUnits unit, int root)
 {
 	if(root < 1){
-		das_error(15, "Value error root = '%d', expected >= 1", root);
+		daserrf(15, "Value error root = '%d', expected >= 1", root);
 		return NULL;
 	}
-	if( unit == UNIT_DIMENSIONLESS) return unit;
+	if( unit == DASUNITS_DIMENSIONLESS) return unit;
 	
 	if( Units_isPoint(unit) ){
-		das_error(15, "Units '%s' are an offset from an epoch, these are not"
+		daserrf(15, "Units '%s' are an offset from an epoch, these are not"
 			           " usable in algebraic operations.  Use Unit_interval() to get "
 					     "an invertible unit type first.", unit);
 		return NULL;
@@ -1110,14 +1110,14 @@ das_units Units_root(das_units unit, int root)
 
 ROOT_ERR:
 	if(sErr[0] != '\0')
-		das_error(DASERR_UNITS, "Can't take root %d of units '%s', %s",
+		daserrf(DASERR_UNITS, "Can't take root %d of units '%s', %s",
 		          root, unit, sErr);
 	return NULL;
 }
 
-das_units Units_divide(das_units a, das_units b)
+DasUnits DasUnits_div(DasUnits a, DasUnits b)
 {
-	return Units_multiply( a, Units_power(b, -1));
+	return DasUnits_mul( a, DasUnits_pow(b, -1));
 }
 
 
@@ -1127,18 +1127,18 @@ das_units Units_divide(das_units a, das_units b)
 /* ************************************************************************** */
 /* Generating various strings from units */
 
-char* Units_toLabel(das_units unit, char* sBuf, size_t uLen)
+char* DasUnits_toLbl(DasUnits unit, char* sBuf, size_t uLen)
 {
 	if(uLen > 0) sBuf[0] = '\0';
 	if(unit == NULL)
-		return das_error_null(DASERR_UNITS, "Can't label NULL units, they were never set");
-	if((unit == UNIT_US2000) || (unit == UNIT_MJ1958) || (unit == UNIT_T2000)
-	   || (unit == UNIT_T1970) || (unit == UNIT_NS1970) || (unit == UNIT_UTC)
-		|| (unit == UNIT_TT2000)|| (unit == UNIT_ET2000) ){
+		return daserr_nullf(DASERR_UNITS, "Can't label NULL units, they were never set");
+	if((unit == DASUNITS_US2000) || (unit == DASUNITS_MJ1958) || (unit == DASUNITS_T2000)
+	   || (unit == DASUNITS_T1970) || (unit == DASUNITS_NS1970) || (unit == DASUNITS_UTC)
+		|| (unit == DASUNITS_TT2000)|| (unit == DASUNITS_ET2000) ){
 		return _prn_fit(sBuf, uLen, _prn_catf(sBuf, uLen, 0, "UTC"));
 	}
 	
-	const char* sUnits = Units_toStr(unit);
+	const char* sUnits = DasUnits_toStr(unit);
 	int nOld = _STATE_SEP;
 	int nCur = _STATE_INVALID;
 	const char* pRead = sUnits;
@@ -1208,7 +1208,7 @@ char* Units_toLabel(das_units unit, char* sBuf, size_t uLen)
 		}
 		
 		if(bError){
-			das_error(15, "Error parsing units string '%s' at byte number %td",
+			daserrf(15, "Error parsing units string '%s' at byte number %td",
 					    sUnits, (pRead - sUnits)+1);
 			return NULL;
 		}
@@ -1478,7 +1478,7 @@ static double _Units_reduce(struct base_unit* pComp, int* pLen, char* sErr)
 	return rFactor;
 }
 
-das_units Units_reduce(das_units orig, double* pFactor){
+DasUnits DasUnits_reduce(DasUnits orig, double* pFactor){
 	struct base_unit aComp[_MAX_NUM_COMP];
 	memset(aComp, 0, sizeof(struct base_unit)*_MAX_NUM_COMP);
 	
@@ -1487,7 +1487,7 @@ das_units Units_reduce(das_units orig, double* pFactor){
 	int nComp = _Units_strToComponents(orig, aComp, _MAX_NUM_COMP, sErr);
 	if(nComp < 0){
 		if(sErr[0] != '\0')
-			das_error(DASERR_UNITS, "Can't reduce units '%s', %s", orig, sErr);
+			daserrf(DASERR_UNITS, "Can't reduce units '%s', %s", orig, sErr);
 		return orig;
 	}
 
@@ -1497,29 +1497,29 @@ das_units Units_reduce(das_units orig, double* pFactor){
 	if(iUnit >= 0) return g_lUnits[iUnit];
 
 	if(sErr[0] != '\0')
-		das_error(DASERR_UNITS, "Can't reduce units '%s', %s", orig, sErr);
+		daserrf(DASERR_UNITS, "Can't reduce units '%s', %s", orig, sErr);
 	return NULL;
 }
 
 /* ************************************************************************** */
 /* Construct Unit singletons using strings  */
 
-das_units Units_fromStr(const char* string) 
+DasUnits DasUnits_fromStr(const char* string) 
 {
 	/* NULL is a caller bug.  Everything else is input, and bad input is a
 	   warning plus a NULL return; the caller decides what that costs. */
 	if(string == NULL)
-		return das_error_null(DASERR_UNITS, "NULL units string, use \"\" for dimensionless");
+		return daserr_nullf(DASERR_UNITS, "NULL units string, use \"\" for dimensionless");
 
 	/* Advance to the first non space and non-null character in the string */
 	while( isspace((unsigned char)*string) && *string != '\0') string++;
-	if(*string == '\0') return UNIT_DIMENSIONLESS;
+	if(*string == '\0') return DASUNITS_DIMENSIONLESS;
 
 	/* Check the length before copying, a units string that won't fit is
 	   rejected, never truncated into something it isn't */
 	size_t uLen = strlen(string);
 	if(uLen >= _UNITS_STR_SZ){
-		daslog_warn_v("Can't parse units '%.40s...', longer than %d bytes",
+		daslog_warnf("Can't parse units '%.40s...', longer than %d bytes",
 		              string, _UNITS_STR_SZ - 1);
 		return NULL;
 	}
@@ -1528,17 +1528,17 @@ das_units Units_fromStr(const char* string)
 
 	/* Initialize our list if this is the first time */
 	if(g_lUnits[0] == NULL){
-		das_error(DASERR_INIT, "Call das_init() before using Units functions");
+		daserrf(DASERR_INIT, "Call daslib_init() before using Units functions");
 		return NULL;
 	}
 	
 	/* Hack in time unit collapse for now, make unit synonyms general later */
-	if(strcasecmp(sBuf, "sec") == 0) return UNIT_SECONDS;
-	if(strncasecmp(sBuf, "second", 6) == 0) return UNIT_SECONDS;
-	if(strcasecmp(sBuf, "millisec") == 0) return UNIT_MILLISECONDS;
-	if(strcasecmp(sBuf, "microsec") == 0) return UNIT_MICROSECONDS;
-	if(strcasecmp(sBuf, "nanosec") == 0) return UNIT_NANOSECONDS;
-	if(strcasecmp(sBuf, "hertz") == 0) return UNIT_HERTZ;
+	if(strcasecmp(sBuf, "sec") == 0) return DASUNITS_SECONDS;
+	if(strncasecmp(sBuf, "second", 6) == 0) return DASUNITS_SECONDS;
+	if(strcasecmp(sBuf, "millisec") == 0) return DASUNITS_MILLISECONDS;
+	if(strcasecmp(sBuf, "microsec") == 0) return DASUNITS_MICROSECONDS;
+	if(strcasecmp(sBuf, "nanosec") == 0) return DASUNITS_NANOSECONDS;
+	if(strcasecmp(sBuf, "hertz") == 0) return DASUNITS_HERTZ;
 	
 	/* Decompose any old Latin-1 Supplemental microsign characters into lower case
 	   greek mu.  */
@@ -1574,7 +1574,7 @@ das_units Units_fromStr(const char* string)
 	int nComp = _Units_strToComponents(sBuf, lComp, _MAX_NUM_COMP, sErr);
 	if(nComp < 0){
 		if(sErr[0] != '\0')
-			daslog_warn_v("Can't parse units '%s', %s", string, sErr);
+			daslog_warnf("Can't parse units '%s', %s", string, sErr);
 		return NULL;
 	}
 
@@ -1583,7 +1583,7 @@ das_units Units_fromStr(const char* string)
 
 	double rReduceFactor = _Units_reduce(lReduced, &nReduced, sErr);
 	if(nReduced < 0){
-		daslog_warn_v("Can't parse units '%s', %s", string, sErr);
+		daslog_warnf("Can't parse units '%s', %s", string, sErr);
 		return NULL;
 	}
 
@@ -1598,7 +1598,7 @@ das_units Units_fromStr(const char* string)
 		   is a bug, not bad input */
 		nOther = _Units_strToComponents(g_lUnits[i], lOther, _MAX_NUM_COMP, sErr);
 		if(nOther < 0){
-			das_error(DASERR_UNITS, "Registered units '%s' don't parse, %s",
+			daserrf(DASERR_UNITS, "Registered units '%s' don't parse, %s",
 			          g_lUnits[i], sErr);
 			return NULL;
 		}
@@ -1607,7 +1607,7 @@ das_units Units_fromStr(const char* string)
 		
 		rOtherFactor = _Units_reduce(lOther, &nOther, sErr);
 		if(nOther < 0){
-			das_error(DASERR_UNITS, "Registered units '%s' don't reduce, %s",
+			daserrf(DASERR_UNITS, "Registered units '%s' don't reduce, %s",
 			          g_lUnits[i], sErr);
 			return NULL;
 		}
@@ -1624,7 +1624,7 @@ das_units Units_fromStr(const char* string)
 	if(iUnit >= 0) return g_lUnits[iUnit];
 
 	if(sErr[0] != '\0')
-		daslog_warn_v("Can't register units '%s', %s", string, sErr);
+		daslog_warnf("Can't register units '%s', %s", string, sErr);
 	return NULL;
 }
 
@@ -1634,13 +1634,13 @@ das_units Units_fromStr(const char* string)
 
 /* General Rules:  Time point units convert, special built in conversions
  * work, and anything that is a pile of SI units can convert */
-bool Units_canConvert(das_units from, das_units to )
+bool DasUnits_canConvert(DasUnits from, DasUnits to )
 {  
 	if(to == NULL && from == NULL) return true; /* <-- Not sure about this */
 	if(to == NULL || from == NULL) return false; /* <-- Sure about this */
 
 	if(strcmp(from, to) == 0) return true;
-	if(Units_haveCalRep(from) && Units_haveCalRep(to)) return true;
+	if(DasUnits_isTimePoint(from) && DasUnits_isTimePoint(to)) return true;
 	
 	struct base_unit aCompFrom[_MAX_NUM_COMP];
 	memset(aCompFrom, 0, sizeof(struct base_unit)*_MAX_NUM_COMP);
@@ -1687,8 +1687,8 @@ bool Units_canConvert(das_units from, das_units to )
  * Uses the TDB-TT periodic terms from the SPICE leapseconds kernel, no SPICE
  * library call.  Good to the kernel's own approximation, not to 16 digits.
  *
- * @param rET seconds past J2000 in TDB (SPICE ET, UNIT_ET2000)
- * @returns nanoseconds past J2000 in TT (UNIT_TT2000), as a double
+ * @param rET seconds past J2000 in TDB (SPICE ET, DASUNITS_ET2000)
+ * @returns nanoseconds past J2000 in TT (DASUNITS_TT2000), as a double
  */
 static double Units_et2k_to_tt2k(double rET)
 {
@@ -1707,8 +1707,8 @@ static double Units_et2k_to_tt2k(double rET)
 
 /** Convert TT2000 to SPICE ephemeris time, the inverse of Units_et2k_to_tt2k()
  *
- * @param rTT nanoseconds past J2000 in TT (UNIT_TT2000)
- * @returns seconds past J2000 in TDB (SPICE ET, UNIT_ET2000)
+ * @param rTT nanoseconds past J2000 in TT (DASUNITS_TT2000)
+ * @returns seconds past J2000 in TDB (SPICE ET, DASUNITS_ET2000)
  */
 static double Units_tt2k_to_et2k(double rTT)
 {
@@ -1725,49 +1725,49 @@ static double Units_tt2k_to_et2k(double rTT)
 
 
 /* Special conversion helpers, needs an upgrade when we switch to datums */
-static double _Units_convertToUS2000( double value, das_units fromUnits ) 
+static double _Units_convertToUS2000( double value, DasUnits fromUnits ) 
 {
 	/* Singleton nature of units pointers allows for faster pointer compares
 	 * instead of strcmp calls */
-	if(fromUnits == UNIT_US2000) return value;
-	if(fromUnits == UNIT_T2000)  return value * 1.0e6;
-	if(fromUnits == UNIT_MJ1958) return (value - 15340) * 86400 * 1e6;
-	if(fromUnits == UNIT_T1970)  return (value - 946684800 ) * 1e6;
-	if(fromUnits == UNIT_NS1970) return (value - 9.466848e+17 ) * 1e-3;
-	if(fromUnits == UNIT_TT2000) return das_tt2K_to_us2K(value);
-	if(fromUnits == UNIT_ET2000){
+	if(fromUnits == DASUNITS_US2000) return value;
+	if(fromUnits == DASUNITS_T2000)  return value * 1.0e6;
+	if(fromUnits == DASUNITS_MJ1958) return (value - 15340) * 86400 * 1e6;
+	if(fromUnits == DASUNITS_T1970)  return (value - 946684800 ) * 1e6;
+	if(fromUnits == DASUNITS_NS1970) return (value - 9.466848e+17 ) * 1e-3;
+	if(fromUnits == DASUNITS_TT2000) return das_tt2K_to_us2K(value);
+	if(fromUnits == DASUNITS_ET2000){
 		value = Units_et2k_to_tt2k(value);
 		return das_tt2K_to_us2K(value);
 	} 
-	das_error(DASERR_UNITS,
-		"unsupported conversion to US2000 from %s\n", Units_toStr(fromUnits)
+	daserrf(DASERR_UNITS,
+		"unsupported conversion to US2000 from %s\n", DasUnits_toStr(fromUnits)
 	);
-	return DAS_FILL_VALUE;
+	return DASVAL_FILL;
 }
 
-static double _Units_convertFromUS2000( double value, das_units toUnits ) {
+static double _Units_convertFromUS2000( double value, DasUnits toUnits ) {
 	
 	/* Singleton nature of units pointers allows for faster case usage
 	 * instead of strcmp calls */
-	if(toUnits == UNIT_US2000) return value;
-	if(toUnits == UNIT_T2000)  return value * 1e-6;
-	if(toUnits == UNIT_MJ1958) return value / ( 86400 * 1e6 ) + 15340;
-	if(toUnits == UNIT_T1970)  return value / 1e6 + 946684800;
-	if(toUnits == UNIT_NS1970) return (value + 9.466848e+14) * 1e3;
-	if(toUnits == UNIT_TT2000) return das_us2K_to_tt2K(value);
-	if(toUnits == UNIT_ET2000){
+	if(toUnits == DASUNITS_US2000) return value;
+	if(toUnits == DASUNITS_T2000)  return value * 1e-6;
+	if(toUnits == DASUNITS_MJ1958) return value / ( 86400 * 1e6 ) + 15340;
+	if(toUnits == DASUNITS_T1970)  return value / 1e6 + 946684800;
+	if(toUnits == DASUNITS_NS1970) return (value + 9.466848e+14) * 1e3;
+	if(toUnits == DASUNITS_TT2000) return das_us2K_to_tt2K(value);
+	if(toUnits == DASUNITS_ET2000){
 		value = das_us2K_to_tt2K(value);
 		return Units_tt2k_to_et2k(value);
 	}
 	
-	das_error(DASERR_UNITS,
-		"unsupported conversion from US2000 to %s\n", Units_toStr(toUnits)
+	daserrf(DASERR_UNITS,
+		"unsupported conversion from US2000 to %s\n", DasUnits_toStr(toUnits)
 	);
-	return DAS_FILL_VALUE;
+	return DASVAL_FILL;
 }
 
 
-double Units_convertTo(double rFrom, das_units from, das_units to)
+double DasUnits_convert(double rFrom, DasUnits from, DasUnits to)
 {
 	/* Up top since the error exit below reads it from every path */
 	char sErr[_UNITS_PARSE_ERR_SZ] = {'\0'};
@@ -1783,12 +1783,12 @@ double Units_convertTo(double rFrom, das_units from, das_units to)
 		goto Units_convertTo_Error;
 	
 	double rUs2k = 0.0, rTo = 0.0;
-	if(Units_haveCalRep(to) && Units_haveCalRep(from)){
+	if(DasUnits_isTimePoint(to) && DasUnits_isTimePoint(from)){
 		/* TT2000 & ET2000 have no time loss across leap seconds, don't 
 		   go out to a lossy time when converting between the two */
-		if((to == UNIT_ET2000)&&(from == UNIT_TT2000))
+		if((to == DASUNITS_ET2000)&&(from == DASUNITS_TT2000))
 			return Units_tt2k_to_et2k(rFrom);
-		if((to == UNIT_TT2000)&&(from == UNIT_ET2000))
+		if((to == DASUNITS_TT2000)&&(from == DASUNITS_ET2000))
 			return Units_et2k_to_tt2k(rFrom);
 		
 		rUs2k = _Units_convertToUS2000( rFrom, from );
@@ -1829,11 +1829,11 @@ double Units_convertTo(double rFrom, das_units from, das_units to)
 	
 Units_convertTo_Error:
 	if(sErr[0] != '\0')
-		das_error(DASERR_UNITS, "Unit types %s and %s are not convertible, %s",
+		daserrf(DASERR_UNITS, "Unit types %s and %s are not convertible, %s",
 		          to, from, sErr);
 	else
-		das_error(15, "Unit types %s and %s are not convertible.", to, from);
-	return DAS_FILL_VALUE;
+		daserrf(15, "Unit types %s and %s are not convertible.", to, from);
+	return DASVAL_FILL;
 }
 
 
@@ -1855,7 +1855,7 @@ Units_convertTo_Error:
 #define DAS_INT32_MIN -2147483648LL
 #define DAS_INT32_MAX 2147483647LL
 
-static das_errcode unixToCalDate(das_time* pDt, int64_t nUnix)
+static das_errcode unixToCalDate(DasTime* pDt, int64_t nUnix)
 {
 	int64_t days, secs;
 	int32_t remdays, remsecs, remyears;
@@ -1866,7 +1866,7 @@ static das_errcode unixToCalDate(das_time* pDt, int64_t nUnix)
 
 	/* Reject time_t values whose year would overflow int32 */
 	if ((nUnix < (DAS_INT32_MIN * 31622400LL)) || (nUnix > (DAS_INT32_MAX * 31622400LL))){
-		return das_error(DASERR_UNITS, "Unix time value %" PRId64 " would overflow during conversion", nUnix);
+		return daserrf(DASERR_UNITS, "Unix time value %" PRId64 " would overflow during conversion", nUnix);
 	}
 
 	secs = nUnix - LEAPOCH;
@@ -1926,16 +1926,16 @@ static das_errcode unixToCalDate(das_time* pDt, int64_t nUnix)
 /* Note, no time parsing is included in this module, that is the job of the
    parsetime.c file and it's public interface */
 
-double Units_secondsSinceMidnight(double rVal, das_units epoch_units ) 
+double DasTime_pointToSod(double rVal, DasUnits epoch_units ) 
 {
 	/* For calendar units that start from integer days, convert to fractional days */
-	if(epoch_units == UNIT_US2000)
+	if(epoch_units == DASUNITS_US2000)
 		rVal /= (24.0 * 60 * 60 * 1000 * 1000);
-	else if((epoch_units == UNIT_T1970)||(epoch_units == UNIT_T2000))
+	else if((epoch_units == DASUNITS_T1970)||(epoch_units == DASUNITS_T2000))
 		rVal /= (24.0 * 60 * 60);
-	else if (epoch_units == UNIT_NS1970) 
+	else if (epoch_units == DASUNITS_NS1970) 
 		rVal /= (24.0 * 60 * 60 * 1000 * 1000 * 1000);
-	else if (epoch_units != UNIT_MJ1958)
+	else if (epoch_units != DASUNITS_MJ1958)
 		goto GENERIC;  
 
 	/* Get the fraction towards zero, but return fraction from start of day */
@@ -1948,7 +1948,7 @@ double Units_secondsSinceMidnight(double rVal, das_units epoch_units )
 	/* Handle other time types with via default calc */
 	double xx;
 GENERIC:
-	xx = Units_convertTo( rVal, epoch_units, UNIT_T2000 );
+	xx = DasUnits_convert( rVal, epoch_units, DASUNITS_T2000 );
 	double result;
 	if(xx<0){
 		xx= fmod( xx, 86400 );
@@ -1964,9 +1964,9 @@ GENERIC:
 }
 
 /* TODO: Bugged! Julian days start an NOON not midnight! */
-int Units_getJulianDay( double time, das_units units)
+int DasTime_pointToJdn( double time, DasUnits units)
 {
-	double rDays = Units_convertTo(time, units, UNIT_MJ1958);
+	double rDays = DasUnits_convert(time, units, DASUNITS_MJ1958);
 
 	return (int)floor(rDays) + DAS_MJ1958_EPOCH;
 }
@@ -1978,22 +1978,22 @@ static int days[2][14] = {
 
 #define LEAP(y) ((y) % 4 ? 0 : ((y) % 100 ? 1 : ((y) % 400 ? 0 : 1)))
 
-das_errcode Units_convertToDt(das_time* pDt, double value, das_units epoch_units)
+das_errcode DasTime_fromPoint(DasTime* pDt, double value, DasUnits epoch_units)
 {
-	dt_null(pDt);
+	DasTime_clear(pDt);
 
 #define SEC_1970_TO_2000 (30*365*86400 + 7*86400) /* 30 years and 7 leap days */
 #define DAY_1958_TO_1970 (12*365 + 3)             /* 12 years and 3 leap days */
 	double rUnix;
 	
 	/* If this is SPICE ephemeris time we'll need to convert to TT2k first */
-	if(epoch_units == UNIT_ET2000){
+	if(epoch_units == DASUNITS_ET2000){
 		value = Units_et2k_to_tt2k(value);
-		epoch_units = UNIT_TT2000;
+		epoch_units = DASUNITS_TT2000;
 	}
 
 	/* If input is TT2K, use a dedicated converter that allows seconds field > 59 */
-	if(epoch_units == UNIT_TT2000){
+	if(epoch_units == DASUNITS_TT2000){
 
 		long long ntt2k = (long long) value;
 		
@@ -2011,14 +2011,14 @@ das_errcode Units_convertToDt(das_time* pDt, double value, das_units epoch_units
 		return DAS_OKAY;
 	}
 	/* Convert to Unix time, then calculate values from there */
-	else if(epoch_units == UNIT_T1970)  rUnix = value;
-	else if(epoch_units == UNIT_NS1970) rUnix = value * 1e-9;
-	else if(epoch_units == UNIT_T2000)  rUnix = value + 946684800.0;
-	else if(epoch_units == UNIT_US2000) rUnix = (value * 1e-6) + 946684800.0;
-	else if(epoch_units == UNIT_MJ1958) rUnix = (value - DAY_1958_TO_1970)*86400.0;
+	else if(epoch_units == DASUNITS_T1970)  rUnix = value;
+	else if(epoch_units == DASUNITS_NS1970) rUnix = value * 1e-9;
+	else if(epoch_units == DASUNITS_T2000)  rUnix = value + 946684800.0;
+	else if(epoch_units == DASUNITS_US2000) rUnix = (value * 1e-6) + 946684800.0;
+	else if(epoch_units == DASUNITS_MJ1958) rUnix = (value - DAY_1958_TO_1970)*86400.0;
 	else{
-		return das_error(DASERR_UNITS, 
-			"Date-time conversion of %s values not supported", Units_toStr(epoch_units)
+		return daserrf(DASERR_UNITS, 
+			"Date-time conversion of %s values not supported", DasUnits_toStr(epoch_units)
 		);
 	}
 
@@ -2038,7 +2038,7 @@ das_errcode Units_convertToDt(das_time* pDt, double value, das_units epoch_units
 	}	
 	return nRet;
 
-	//int julian = Units_getJulianDay(value, epoch_units);
+	//int julian = DasTime_pointToJdn(value, epoch_units);
 
 	/* Break the Julian day apart into month, day year.  This is based on
     * http://en.wikipedia.org/wiki/Julian_day
@@ -2059,7 +2059,7 @@ das_errcode Units_convertToDt(das_time* pDt, double value, das_units epoch_units
 	int M = (m + 2) % 12 + 1;
 	int D = d + 1;
 	
-	double seconds = Units_secondsSinceMidnight(value, epoch_units);
+	double seconds = DasTime_pointToSod(value, epoch_units);
 	
 	int hour = (int)(seconds/3600.0);
 	int minute = (int)((seconds - hour*3600.0)/60.0);
@@ -2073,17 +2073,17 @@ das_errcode Units_convertToDt(das_time* pDt, double value, das_units epoch_units
 	pDt->minute = minute;
 	pDt->second = justSeconds;
 	
-	dt_tnorm(pDt);
+	DasTime_normalize(pDt);
 
 	return DAS_OKAY;
 	*/
 }
 
-double Units_convertFromDt(const das_time* pDt, das_units epoch_units)
+double DasTime_toPoint(const DasTime* pDt, DasUnits epoch_units)
 {
 	/* If input is TT2K, use a dedicated converter that allows seconds field > 59 */
-	if((epoch_units == UNIT_TT2000)||(epoch_units == UNIT_ET2000)){
-		/* Same rounding as dt_to_tt2k(), see the note there */
+	if((epoch_units == DASUNITS_TT2000)||(epoch_units == DASUNITS_ET2000)){
+		/* Same rounding as DasTime_toTt2k(), see the note there */
 		double sc = (int)pDt->second; 
 		int64_t nNano = llround((pDt->second - sc) * 1.0e9);
 		if(nNano > 999999999) nNano = 999999999;
@@ -2101,7 +2101,7 @@ double Units_convertFromDt(const das_time* pDt, das_units epoch_units)
 		double rTT2k = (double)ntt2k;
 
 		/* Out convert from TT2K if ET2000 is the actual desire */
-		if(epoch_units == UNIT_ET2000)
+		if(epoch_units == DASUNITS_ET2000)
 			return Units_tt2k_to_et2k(rTT2k);
 		else
 			return rTT2k;
@@ -2115,48 +2115,48 @@ double Units_convertFromDt(const das_time* pDt, das_units epoch_units)
 
 	double ssm = pDt->second + pDt->hour*3600.0 + pDt->minute*60.0;
 	
-	if( strcmp(epoch_units, UNIT_MJ1958) == 0 ) {
+	if( strcmp(epoch_units, DASUNITS_MJ1958) == 0 ) {
 		mj1958 = ( jd - (double)DAS_MJ1958_EPOCH ) + ssm / 86400.;
 		return mj1958;
 	} 
 	
 	double us2000= ( jd - 2451545 ) * 86400000000. + ssm * 1000000;
 	
-	if( strcmp(epoch_units, UNIT_US2000) == 0 ) return us2000;
+	if( strcmp(epoch_units, DASUNITS_US2000) == 0 ) return us2000;
 	 
 	return _Units_convertFromUS2000(us2000, epoch_units);
 }
 
-bool Units_canMerge(das_units left, int op, das_units right){
-	if(das_op_isUnary(op)){
-		das_error(DASERR_UNITS, "Expected a binary operation,  '%s' is unary", 
-				    das_op_toStr(op, NULL));
+bool DasUnits_canMerge(DasUnits left, int op, DasUnits right){
+	if(dasop_isUnary(op)){
+		daserrf(DASERR_UNITS, "Expected a binary operation,  '%s' is unary", 
+				    dasop_name(op, NULL));
 		return false;
 	}
 	
-	bool bCalRight = Units_haveCalRep(right);
-	bool bCalLeft  = Units_haveCalRep(left);
+	bool bCalRight = DasUnits_isTimePoint(right);
+	bool bCalLeft  = DasUnits_isTimePoint(left);
 	
 	if(!bCalRight && !bCalLeft){             /* Normal non epoch stuff */
-		if((op == D2BOP_MUL)||(op == D2BOP_DIV)) return true;
-		if((op == D2BOP_POW) && (left == UNIT_DIMENSIONLESS)) return true;
+		if((op == DASOP_MUL)||(op == DASOP_DIV)) return true;
+		if((op == DASOP_POW) && (left == DASUNITS_DIMENSIONLESS)) return true;
 		
-		if((op != D2BOP_ADD) && (op != D2BOP_SUB)){
+		if((op != DASOP_ADD) && (op != DASOP_SUB)){
 			/* Don't recognize these units */
-			das_error(DASERR_UNITS, "Unrecognized binary operation: '%s'", 
-					  das_op_toStr(op, NULL));
+			daserrf(DASERR_UNITS, "Unrecognized binary operation: '%s'", 
+					  dasop_name(op, NULL));
 			return false;
 		}
 		
-		return Units_canConvert(left, right);
+		return DasUnits_canConvert(left, right);
 	}
 		
 	if(bCalRight && bCalLeft)               /* Both are epochs, subtract only */
-		return (op == D2BOP_SUB);
+		return (op == DASOP_SUB);
 		
 	if(bCalLeft && !bCalRight){             /* differencing to epoch */
-		das_units interval = Units_interval(left);
-		return Units_canConvert(interval, right);
+		DasUnits interval = DasUnits_toInterval(left);
+		return DasUnits_canConvert(interval, right);
 	}
 	
 	/* All that's left is normal on left and epoch on right, can't do this */

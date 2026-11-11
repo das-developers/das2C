@@ -47,7 +47,7 @@ extern "C" {
  *              DasCodec_decode -> DasCodex_decode() for the blob when set
  *              DasCodec_encode -> DasCodex_encode() per record when set
  *   datset_3.c : parse <packet mime="...">, and on encoding="blob" + mime +
- *              !das_codex_supported(mime) fail loud -- the message now in
+ *              !DasCodex_isSupported(mime) fail loud -- the message now in
  *              var_ary.c moves to this decode site, where the mime is in hand.
  */
 
@@ -56,7 +56,7 @@ extern "C" {
  *
  * Nothing can be registered in v3.0, so the registration/seal/unload API is
  * commented out below, kept for the design record.  When it lands, the intended
- * shape is:  das_init() -> das_codex_reg()xN -> das_codices_ready().  The map
+ * shape is:  daslib_init() -> das_codex_reg()xN -> das_codices_ready().  The map
  * seals at ready() and is immutable after (so post-ready lookups need no lock),
  * and new_DasCodex succeeds only post-seal.  Apps that use no codecs never call
  * any of it.
@@ -82,10 +82,10 @@ extern "C" {
  * fails loud at the reader (dataset_hdr3 / var_ary). */
 
 /** True if a codec for this mime is registered and loaded.  v3.0: always false. */
-DAS_API bool das_codex_supported(const char* sMime);
+DAS_API bool DasCodex_isSupported(const char* sMime);
 
 /** The absolute path registered for a mime, or NULL.  v3.0: always NULL. */
-DAS_API const char* das_codex_path(const char* sMime);
+DAS_API const char* DasCodex_regPath(const char* sMime);
 
 /* ------------------------------------------------------------------------- *
  * Per-variable codec instance
@@ -98,7 +98,7 @@ DAS_API const char* das_codex_path(const char* sMime);
  * thread, so it may carry mutable decode and encode scratch.  Opaque; the
  * interface a codec plugin implements arrives with codec registration.
  */
-typedef struct das_codex DasCodex;
+typedef struct das_codex_t DasCodex;
 
 /** Make a codec extension (codex) instance for a given mime type to a
  * specific output type.
@@ -113,7 +113,7 @@ typedef struct das_codex DasCodex;
  * 
  * @param vtStore a declared value type. For example grayscale pixels
  *   may be output as bytes, shorts, floats, etc. this nails it down.
- *   Use vtUnknown to let the codex select one.
+ *   Use DASVT_UNK to let the codex select one.
  * 
  * @param nRank the number of index dimensions in the full stream output
  *   this is each blob's shape plus an over all stream index.
@@ -128,12 +128,12 @@ typedef struct das_codex DasCodex;
  * @memberof DasCodex
  */
 DAS_API DasCodex* new_DasCodex(
-	const char* sMime, das_val_type vtStore, int nRank, const ptrdiff_t* pShape
+	const char* sMime, das_vt vtStore, int nRank, const ptrdiff_t* pShape
 );
 
 /** Get the value type for individual items read from or written to blobs.
  * @memberof DasCodex */
-DAS_API das_val_type DasCodex_storage(const DasCodex* pThis);
+DAS_API das_vt DasCodex_storage(const DasCodex* pThis);
 
 /** Write this instance's plugin .so file path into a buffer, for diagnostics.
  * @memberof DasCodex */
@@ -150,7 +150,7 @@ DAS_API das_errcode DasCodex_mime(const DasCodex* pThis, char* sBuf, size_t uLen
  * @param pOut receives the properties
  * @param pPropsOut receives the number of properties written
  * @memberof DasCodex */
-DAS_API das_errcode DasCodex_properties(
+DAS_API das_errcode DasCodex_descProps(
 	const DasCodex* pThis, DasAry* pOut, size_t* pPropsOut
 );
 
@@ -163,22 +163,22 @@ DAS_API das_errcode DasCodex_properties(
  * @param pAppended receives the number of items written
  * @memberof DasCodex */
 DAS_API das_errcode DasCodex_decode(
-	DasCodex* pThis, const ubyte* pBlob, size_t uLen, DasAry* pAry,
+	DasCodex* pThis, const uint8_t* pBlob, size_t uLen, DasAry* pAry,
 	size_t* pAppended
 );
 
 /** Encode one record back into an embedded blob byte-run
  *
- * The caller guarantees pLoc subsumes enough items to form one object.
+ * The caller guarantees pAddr subsumes enough items to form one object.
  *
  * @param pThis the codec instance
  * @param pItems the array holding the record's items
- * @param pLoc the location of the record in pItems
+ * @param pAddr the location of the record in pItems
  * @param pBuf receives the blob bytes
  * @param pAppended receives the number of bytes appended to pBuf
  * @memberof DasCodex */
 DAS_API das_errcode DasCodex_encode(
-	DasCodex* pThis, const DasAry* pItems, const ptrdiff_t* pLoc,
+	DasCodex* pThis, const DasAry* pItems, const ptrdiff_t* pAddr,
 	DasBuf* pBuf, size_t* pAppended
 );
 

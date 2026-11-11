@@ -15,7 +15,7 @@
  * version 2.1 along with das2C; if not, see <http://www.gnu.org/licenses/>.
  */
 
-/* The error and log facility: das_error() messages arrive in the log hook
+/* The error and log facility: daserrf() messages arrive in the log hook
    with the caller's location, the disposition decides what happens after,
    and the hook contract holds (re-entry doesn't hang, atexit() runs after
    the lock is released). */
@@ -51,16 +51,16 @@ typedef struct capture {
 	char sFunc[64];
 } capture_t;
 
-static void _capture(const das_logmsg* pMsg, void* pUser)
+static void _capture(const DasLogMsg* pMsg, void* pUser)
 {
 	capture_t* pCap = (capture_t*)pUser;
 	pCap->nCalls += 1;
-	pCap->nLevel = pMsg->nLevel;
-	pCap->nErr   = pMsg->nErr;
-	pCap->nLine  = pMsg->nLine;
-	snprintf(pCap->sMsg, sizeof(pCap->sMsg), "%s", pMsg->sMsg);
+	pCap->nLevel = pMsg->level;
+	pCap->nErr   = pMsg->errCode;
+	pCap->nLine  = pMsg->line;
+	snprintf(pCap->sMsg, sizeof(pCap->sMsg), "%s", pMsg->msg);
 	snprintf(pCap->sFunc, sizeof(pCap->sFunc), "%s",
-	         (pMsg->sFunc != NULL) ? pMsg->sFunc : "");
+	         (pMsg->func != NULL) ? pMsg->func : "");
 }
 
 static capture_t g_cap;
@@ -71,15 +71,15 @@ static void _reset(void){ memset(&g_cap, 0, sizeof(g_cap)); }
 
 static int _raiseUnits(void)
 {
-	return das_error(DASERR_UNITS, "bad units %d", 42);
+	return daserrf(DASERR_UNITS, "bad units %d", 42);
 }
 
 static void testErrors(void)
 {
 	_reset();
 	int nLine = __LINE__ + 1;
-	int nRet = das_error(DASERR_ARRAY, "array %s", "trouble");
-	CHECK(nRet == DASERR_ARRAY, "das_error returned %d in return mode", nRet);
+	int nRet = daserrf(DASERR_ARRAY, "array %s", "trouble");
+	CHECK(nRet == DASERR_ARRAY, "daserrf returned %d in return mode", nRet);
 	CHECK(g_cap.nCalls == 1, "hook called %d times", g_cap.nCalls);
 	CHECK(g_cap.nLevel == DASLOG_ERROR, "level %d, not ERROR", g_cap.nLevel);
 	CHECK(g_cap.nErr == DASERR_ARRAY, "nErr %d", g_cap.nErr);
@@ -94,20 +94,20 @@ static void testErrors(void)
 	CHECK(strcmp(g_cap.sMsg, "bad units 42") == 0, "text '%s'", g_cap.sMsg);
 
 	_reset();
-	CHECK(das_error_false(DASERR_UTIL, "x") == false, "das_error_false");
-	CHECK(das_error_null(DASERR_UTIL, "x") == NULL, "das_error_null");
+	CHECK(daserr_falsef(DASERR_UTIL, "x") == false, "daserr_falsef");
+	CHECK(daserr_nullf(DASERR_UTIL, "x") == NULL, "daserr_nullf");
 	CHECK(g_cap.nCalls == 2, "both logged, %d calls", g_cap.nCalls);
 
 	/* Not a format string, a '%' passes through */
 	_reset();
-	das_error_str(DASERR_UTIL, "100% sure, %s %d");
+	daserr(DASERR_UTIL, "100% sure, %s %d");
 	CHECK(strcmp(g_cap.sMsg, "100% sure, %s %d") == 0, "text '%s'", g_cap.sMsg);
 }
 
 static void testLog(void)
 {
 	_reset();
-	daslog_info_v("plain %s", "info");
+	daslog_infof("plain %s", "info");
 	CHECK(g_cap.nCalls == 1, "info delivered");
 	CHECK(g_cap.nErr == DAS_OKAY, "plain log nErr %d", g_cap.nErr);
 	CHECK(g_cap.nLevel == DASLOG_INFO, "level %d", g_cap.nLevel);
@@ -118,7 +118,7 @@ static void testLog(void)
 	CHECK(strcmp(g_cap.sMsg, "50% done") == 0, "text '%s'", g_cap.sMsg);
 
 	/* Below the level never reaches the hook */
-	int nOld = daslog_setlevel(DASLOG_WARN);
+	int nOld = daslog_setLevel(DASLOG_WARN);
 	CHECK(nOld == DASLOG_INFO, "previous level %d", nOld);
 	_reset();
 	daslog_info("dropped");
@@ -127,26 +127,26 @@ static void testLog(void)
 
 	/* A bad level warns, changes nothing, and hands back a usable level */
 	_reset();
-	int nRet = daslog_setlevel(999);
+	int nRet = daslog_setLevel(999);
 	CHECK(nRet == DASLOG_WARN, "bad level returned %d", nRet);
 	CHECK(daslog_level() == DASLOG_WARN, "level moved to %d", daslog_level());
 	CHECK((g_cap.nCalls == 1)&&(g_cap.nLevel == DASLOG_WARN), "bad level warned");
-	daslog_setlevel(nOld);
+	daslog_setLevel(nOld);
 
-	/* With return on errors, a level above ERROR hides das_error() text.  The
-	   call is still allowed after das_init(), on purpose. */
-	daslog_setlevel(DASLOG_CRIT);
+	/* With return on errors, a level above ERROR hides daserrf() text.  The
+	   call is still allowed after daslib_init(), on purpose. */
+	daslog_setLevel(DASLOG_CRITICAL);
 	_reset();
-	CHECK(das_error(DASERR_UTIL, "hidden") == DASERR_UTIL, "code still returned");
+	CHECK(daserrf(DASERR_UTIL, "hidden") == DASERR_UTIL, "code still returned");
 	CHECK(g_cap.nCalls == 0, "hidden error delivered");
-	daslog_setlevel(nOld);
+	daslog_setLevel(nOld);
 
 	/* Messages too long for the buffer are cut, and say so */
 	char* sLong = (char*)malloc(3 * DASLOG_MSG_SZ);
 	memset(sLong, 'x', 3 * DASLOG_MSG_SZ - 1);
 	sLong[3 * DASLOG_MSG_SZ - 1] = '\0';
 	_reset();
-	daslog_info_v("%s", sLong);
+	daslog_infof("%s", sLong);
 	size_t uLen = strlen(g_cap.sMsg);
 	CHECK(uLen == DASLOG_MSG_SZ - 1, "cut message is %zu bytes", uLen);
 	CHECK(strcmp(g_cap.sMsg + uLen - 3, "...") == 0, "cut message ends '%s'",
@@ -156,31 +156,31 @@ static void testLog(void)
 
 static void testLevels(void)
 {
-	CHECK(daslog_strlevel("Warning") == DASLOG_WARN, "warn");
-	CHECK(daslog_strlevel("crit") == DASLOG_CRIT, "crit");
-	CHECK(daslog_strlevel("nope") == -1, "unknown is -1");
-	CHECK(daslog_strlevel(NULL) == -1, "NULL is -1");
-	CHECK(strcmp(daslog_levelstr(70), "WARNING") == 0, "70 rounds down");
-	CHECK(strcmp(daslog_levelstr(DASLOG_CRIT), "CRITICAL") == 0, "crit name");
-	CHECK(strcmp(daslog_levelstr(-1), "") == 0, "negative is empty");
+	CHECK(daslog_levelFromStr("Warning") == DASLOG_WARN, "warn");
+	CHECK(daslog_levelFromStr("crit") == DASLOG_CRITICAL, "crit");
+	CHECK(daslog_levelFromStr("nope") == -1, "unknown is -1");
+	CHECK(daslog_levelFromStr(NULL) == -1, "NULL is -1");
+	CHECK(strcmp(daslog_levelToStr(70), "WARNING") == 0, "70 rounds down");
+	CHECK(strcmp(daslog_levelToStr(DASLOG_CRITICAL), "CRITICAL") == 0, "crit name");
+	CHECK(strcmp(daslog_levelToStr(-1), "") == 0, "negative is empty");
 }
 
 /* Swapping hooks is a pair operation that restores exactly */
 static void testHooks(void)
 {
 	capture_t other = {0};
-	das_loghook hook = {_capture, &other};
-	das_loghook prev = daslog_sethook(&hook);
-	CHECK((prev.fn == _capture)&&(prev.pUser == &g_cap), "previous hook returned");
+	DasLogHook hook = {_capture, &other};
+	DasLogHook prev = daslog_setHook(&hook);
+	CHECK((prev.callback == _capture)&&(prev.userData == &g_cap), "previous hook returned");
 
 	_reset();
 	daslog_warn("to the other one");
 	CHECK((other.nCalls == 1)&&(g_cap.nCalls == 0), "pUser passed through");
 
-	das_loghook mine = daslog_sethook(NULL);
-	CHECK(mine.pUser == &other, "swapped hook returned");
-	das_loghook dflt = daslog_sethook(&prev);
-	CHECK((dflt.fn == daslog_stderr)&&(dflt.pUser == NULL), "NULL installs the default");
+	DasLogHook mine = daslog_setHook(NULL);
+	CHECK(mine.userData == &other, "swapped hook returned");
+	DasLogHook dflt = daslog_setHook(&prev);
+	CHECK((dflt.callback == daslog_stderr)&&(dflt.userData == NULL), "NULL installs the default");
 
 	_reset();
 	daslog_warn("back again");
@@ -190,7 +190,7 @@ static void testHooks(void)
 /* A handler that calls back into the library breaks the contract.  The
    nested message is dropped with a note on stderr, but nothing hangs. */
 static int g_nOuter = 0;
-static void _reenter(const das_logmsg* pMsg, void* pUser)
+static void _reenter(const DasLogMsg* pMsg, void* pUser)
 {
 	(void)pMsg; (void)pUser;
 	++g_nOuter;
@@ -199,8 +199,8 @@ static void _reenter(const das_logmsg* pMsg, void* pUser)
 
 static void testReentry(void)
 {
-	das_loghook hook = {_reenter, NULL};
-	das_loghook prev = daslog_sethook(&hook);
+	DasLogHook hook = {_reenter, NULL};
+	DasLogHook prev = daslog_setHook(&hook);
 
 #ifdef HAVE_FORK
 	/* Keep the expected note off a passing run's output */
@@ -216,21 +216,21 @@ static void testReentry(void)
 	close(nSave);
 #endif
 
-	daslog_sethook(&prev);
+	daslog_setHook(&prev);
 	CHECK(g_nOuter == 1, "outer message delivered %d times", g_nOuter);
 }
 
-/* In exit mode das_error() logs at CRITICAL, then exits with its code.  The
+/* In exit mode daserrf() logs at CRITICAL, then exits with its code.  The
    lock must be released by then, so an atexit() function can still log. */
 #ifdef HAVE_FORK
 static int g_fdOut = -1;
 static int g_nChildLevel = -1;
 static int g_nChildCalls = 0;
 
-static void _childHook(const das_logmsg* pMsg, void* pUser)
+static void _childHook(const DasLogMsg* pMsg, void* pUser)
 {
 	(void)pUser;
-	if(pMsg->nErr != DAS_OKAY) g_nChildLevel = pMsg->nLevel;
+	if(pMsg->errCode != DAS_OKAY) g_nChildLevel = pMsg->level;
 	++g_nChildCalls;
 }
 
@@ -251,11 +251,11 @@ static void testExit(void)
 	if(pid == 0){
 		close(aPipe[0]);
 		g_fdOut = aPipe[1];
-		das_loghook hook = {_childHook, NULL};
-		daslog_sethook(&hook);
-		daserr_setdisp(DASERR_DIS_EXIT);
+		DasLogHook hook = {_childHook, NULL};
+		daslog_setHook(&hook);
+		daserr_setDisp(DASERRDISP_EXIT);
 		atexit(_childAtExit);
-		das_error(DASERR_UNITS, "time to go");
+		daserrf(DASERR_UNITS, "time to go");
 		_exit(98);   /* not reached */
 	}
 
@@ -269,7 +269,7 @@ static void testExit(void)
 	CHECK(WIFEXITED(nStatus) && (WEXITSTATUS(nStatus) == DASERR_UNITS),
 	      "exit status %d, expected %d", WEXITSTATUS(nStatus), DASERR_UNITS);
 	CHECK(nRead == (ssize_t)sizeof(aRes), "atexit report missing");
-	CHECK(aRes[0] == DASLOG_CRIT, "exit mode error logged at level %d", aRes[0]);
+	CHECK(aRes[0] == DASLOG_CRITICAL, "exit mode error logged at level %d", aRes[0]);
 	CHECK(aRes[1] == 2, "%d messages reached the hook, expected the error "
 	      "and the atexit warning", aRes[1]);
 }
@@ -281,18 +281,18 @@ static void testExit(void)
 int main(int argc, char** argv)
 {
 	(void)argc;
-	das_loghook hook = {_capture, &g_cap};
+	DasLogHook hook = {_capture, &g_cap};
 
 	/* Return mode with a level that hides errors is refused, and the hook
 	   is in place in time to hear why */
 	_reset();
-	int nRet = das_init(argv[0], DASERR_DIS_RET, DASLOG_CRIT, &hook);
-	CHECK(nRet == DASERR_INIT, "das_init returned %d", nRet);
+	int nRet = daslib_init(argv[0], DASERRDISP_RET, DASLOG_CRITICAL, &hook);
+	CHECK(nRet == DASERR_INIT, "daslib_init returned %d", nRet);
 	CHECK((g_cap.nCalls == 1)&&(g_cap.nErr == DASERR_INIT), "refusal reported");
 
-	nRet = das_init(argv[0], DASERR_DIS_RET, DASLOG_INFO, &hook);
-	CHECK(nRet == DAS_OKAY, "das_init returned %d", nRet);
-	CHECK(daserr_disp() == DASERR_DIS_RET, "disposition %d", daserr_disp());
+	nRet = daslib_init(argv[0], DASERRDISP_RET, DASLOG_INFO, &hook);
+	CHECK(nRet == DAS_OKAY, "daslib_init returned %d", nRet);
+	CHECK(daserr_disp() == DASERRDISP_RET, "disposition %d", daserr_disp());
 
 	testErrors();
 	testLog();
@@ -303,7 +303,7 @@ int main(int argc, char** argv)
 	testExit();
 #endif
 
-	daslog_sethook(NULL);
+	daslog_setHook(NULL);
 	if(g_fails > 0){
 		printf("ERROR: %d error and log checks failed\n", g_fails);
 		return 13;

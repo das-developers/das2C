@@ -86,7 +86,7 @@ static inline char* _prn_fit(char* sBuf, size_t uLen, int nNeed)
 }
 
 /* Index tuple printer for error messages, "(i, j, k)", see array.c.  It
-   returns sBuf so it can sit inline in a das_error() argument list. */
+   returns sBuf so it can sit inline in a daserrf() argument list. */
 char* das_idx_prn(int nRank, const ptrdiff_t* pIdx, size_t uLen, char* sBuf);
 
 #endif /* _das_info_p_h_ */

@@ -25,36 +25,36 @@ extern "C" {
 #endif
 	
 /* Invalid Operator */
-#define D2OP_INVALID 0
+#define DASOP_INVALID 0
 	
 /* Unary operators, before */
-#define D2UOP_SIGN     1
-#define D2UOP_SQRT     7
-#define D2UOP_CURT     8
-#define D2UOP_LOG10    9
-#define D2UOP_LN      10
-#define D2UOP_COS     11
-#define D2UOP_SIN     12
-#define D2UOP_TAN     13
+#define DASOP_SIGN     1
+#define DASOP_SQRT     7
+#define DASOP_CURT     8
+#define DASOP_LOG10    9
+#define DASOP_LN      10
+#define DASOP_COS     11
+#define DASOP_SIN     12
+#define DASOP_TAN     13
 
 /* Unary operators after */
-#define D2UOP_SQUARE   101
-#define D2UOP_CUBE     102
-#define D2UOP_INV      103
-#define D2UOP_INVSQ    104
-#define D2UOP_INVCUBE  105
+#define DASOP_SQUARE   101
+#define DASOP_CUBE     102
+#define DASOP_INV      103
+#define DASOP_INVSQ    104
+#define DASOP_INVCUBE  105
 	
 /* Binary operators */
-#define D2BOP_ADD    201
-#define D2BOP_SUB    202
-#define D2BOP_MUL    203
-#define D2BOP_DIV    204
-#define D2BOP_POW    205
+#define DASOP_ADD    201
+#define DASOP_SUB    202
+#define DASOP_MUL    203
+#define DASOP_DIV    204
+#define DASOP_POW    205
 	
 /* Operator positions */
-#define D2OP_BEFORE   1
-#define D2OP_BETWEEN  2
-#define D2OP_AFTER    3
+#define DASOP_POS_BEFORE   1
+#define DASOP_POS_BETWEEN  2
+#define DASOP_POS_AFTER    3
 
 
 /** @addtogroup Utilities
@@ -68,7 +68,7 @@ extern "C" {
  * @return an operator token id or 0 if the string did not correspond to a 
  *         known unary operator
  */
-DAS_API int das_op_unary(const char* sOp);
+DAS_API int dasop_unary(const char* sOp);
 
 /** Convert a string into a binary operator token 
  *
@@ -77,27 +77,27 @@ DAS_API int das_op_unary(const char* sOp);
  * @return an operator token id or 0 if the string did not correspond to a 
  *         known unary operator
  */
-DAS_API int das_op_binary(const char* sOp);
+DAS_API int dasop_binary(const char* sOp);
 
 /** Provide a string representation of an operator token and an indication
  * of where the operator normally appears.
  * 
  * @param nOp The operator token value
  * 
- * @param pos a pointer to an integer to receive one of the values D2OP_BEFORE, 
- *        D2OP_BETWEEN or D2OP_AFTER.  If pos is NULL the operator position is
+ * @param pos a pointer to an integer to receive one of the values DASOP_POS_BEFORE, 
+ *        DASOP_POS_BETWEEN or DASOP_POS_AFTER.  If pos is NULL the operator position is
  *        not set.
  * 
  * @return A pointer to a character representation of the operator or NULL if
  *         the token nOp is unknown.
  */
-DAS_API const char* das_op_toStr(int nOp, int* pos);
+DAS_API const char* dasop_name(int nOp, int* pos);
 
 /** Return true if this is a binary operation, false otherwise */
-DAS_API bool das_op_isBinary(int nOp);
+DAS_API bool dasop_isBinary(int nOp);
 
 /** Return true if op is a unary operation, false otherwise */
-DAS_API bool das_op_isUnary(int nOp);
+DAS_API bool dasop_isUnary(int nOp);
 
 /** @} */
 

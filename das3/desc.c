@@ -42,13 +42,13 @@
 #include "prop_p.h"
 #include "info_p.h"
 
-const char* das_desc_type_toStr(das_desc_type_e dt){
+const char* dasdesctype_name(das_desctype dt){
 	switch(dt){
-	case DASDESC_STREAM:   return "stream";
-	case DASDESC_PLANE:    return "plane";
-	case DASDESC_PKT:   return "packet";
-	case DASDESC_DIM:  return "physdim";
-	case DASDESC_DS:  return "dataset";
+	case DASDESCTYPE_STREAM:   return "stream";
+	case DASDESCTYPE_PLANE:    return "plane";
+	case DASDESCTYPE_PKT:   return "packet";
+	case DASDESCTYPE_DIM:  return "physdim";
+	case DASDESCTYPE_DS:  return "dataset";
 	default: return "unknown";
 	}
 }
@@ -56,7 +56,7 @@ const char* das_desc_type_toStr(das_desc_type_e dt){
 /* ************************************************************************* */
 /* Construction/Destruction */
 
-void DasDesc_init(DasDesc* pThis, das_desc_type_e dt, void (*pfDel)(DasDesc*)){
+void DasDesc_init(DasDesc* pThis, das_desctype dt, void (*pfDel)(DasDesc*)){
 	memset(pThis, 0, sizeof(DasDesc));
 	pThis->type = dt;  /* Intentionally invalid */
 	pThis->uMagic = DASDESC_MAGIC;
@@ -64,16 +64,16 @@ void DasDesc_init(DasDesc* pThis, das_desc_type_e dt, void (*pfDel)(DasDesc*)){
 
 	const char* sId;
 	switch(dt){
-	case DASDESC_STREAM:   sId = "stream_properties";    break;
-	case DASDESC_PLANE:    sId = "plane_properties";     break;
-	case DASDESC_PKT:   sId = "packet_properties";    break;
-	case DASDESC_DIM:  sId = "physdim_properties";   break;
-	case DASDESC_DS:  sId = "dataset_properties";   break;
+	case DASDESCTYPE_STREAM:   sId = "stream_properties";    break;
+	case DASDESCTYPE_PLANE:    sId = "plane_properties";     break;
+	case DASDESCTYPE_PKT:   sId = "packet_properties";    break;
+	case DASDESCTYPE_DIM:  sId = "physdim_properties";   break;
+	case DASDESCTYPE_DS:  sId = "dataset_properties";   break;
 	default:       sId = "desciptor_properties"; break;
 	}
-	ubyte zero = 0;
+	uint8_t zero = 0;
 
-	init_DasAry(&(pThis->properties), sId, vtUByte, 0, &zero, RANK_2(0,0), NULL);
+	init_DasAry(&(pThis->properties), sId, DASVT_UBYTE, 0, &zero, DAS_SHAPE2(0,0), NULL);
 	DasAry_setUsage(&(pThis->properties), DASARY_AS_SUBSEQ);
 
 	pThis->parent = NULL;
@@ -90,13 +90,13 @@ static void _del_DasDesc(DasDesc* pThis){
 
 DasDesc* new_DasDesc(){
 	DasDesc* pThis = (DasDesc*)calloc(1, sizeof(DasDesc));
-	pThis->type = DASDESC_UNK;
+	pThis->type = DASDESCTYPE_UNK;
 	pThis->uMagic = DASDESC_MAGIC;
 	pThis->pfDel = _del_DasDesc;
-	ubyte zero = 0;
+	uint8_t zero = 0;
 	init_DasAry(
-		&(pThis->properties), "descriptor_properties", vtUByte, 0, &zero, RANK_2(0,0),
-		UNIT_DIMENSIONLESS
+		&(pThis->properties), "descriptor_properties", DASVT_UBYTE, 0, &zero, DAS_SHAPE2(0,0),
+		DASUNITS_DIMENSIONLESS
 	); 
 	DasAry_setUsage(&(pThis->properties), DASARY_AS_SUBSEQ);
 	return pThis;
@@ -108,11 +108,11 @@ void del_DasDesc(DasDesc* pThis){
 	/* Callers cast to DasDesc*, so the compiler can't tell us this is a
 	   descriptor at all. Add a probabilistic guard against a wrong cast */
 	if(pThis->uMagic != DASDESC_MAGIC){
-		das_error(DASERR_DESC,"Object at %p is not a descriptor", (void*)pThis);
+		daserrf(DASERR_DESC,"Object at %p is not a descriptor", (void*)pThis);
 		return;
 	}
 	if(pThis->pfDel == NULL){
-		das_error(DASERR_DESC,
+		daserrf(DASERR_DESC,
 			"Destructor pointer missing for descriptor at %p", (void*)pThis
 		);
 		return;
@@ -139,12 +139,12 @@ int DasDesc_info(const DasDesc* pThis, const char* sIndent, char* sBuf, size_t u
 	int n = 0;
 
 	const DasAry* pProps = &(pThis->properties);
-	size_t uProps = DasAry_lengthIn(pProps, DIM0);
+	size_t uProps = DasAry_lengthIn(pProps, DAS_ADDR0);
 
 	size_t uPropLen = 0;
 	for(size_t u = 0; u < uProps; ++u){
-		const DasProp* pProp = (const DasProp*) DasAry_getBytesIn(
-			pProps, DIM1_AT(u), &uPropLen
+		const DasProp* pProp = (const DasProp*) DasAry_bytesIn(
+			pProps, DAS_ADDR1(u), &uPropLen
 		);
 	
 		if(!DasProp_isValid(pProp))
@@ -161,8 +161,8 @@ int DasDesc_info(const DasDesc* pThis, const char* sIndent, char* sBuf, size_t u
 		else
 			n = _prn_catf(sBuf, uLen, n, "%s", sVal);
 
-		if((pProp->units != NULL)&&(pProp->units != UNIT_DIMENSIONLESS))
-			n = _prn_catf(sBuf, uLen, n, " (%s)", Units_toStr(pProp->units));
+		if((pProp->units != NULL)&&(pProp->units != DASUNITS_DIMENSIONLESS))
+			n = _prn_catf(sBuf, uLen, n, " (%s)", DasUnits_toStr(pProp->units));
 
 		n = _prn_catf(sBuf, uLen, n, "\n");
 	}
@@ -172,11 +172,11 @@ int DasDesc_info(const DasDesc* pThis, const char* sIndent, char* sBuf, size_t u
 /* ************************************************************************* */
 /* Ownership */
 
-das_desc_type_e DasDesc_type(const DasDesc* pThis){ return pThis->type; }
+das_desctype DasDesc_type(const DasDesc* pThis){ return pThis->type; }
 
 void DasDesc_setUser(DasDesc* pThis, void* pUser){ pThis->pUser = pUser; }
 
-void* DasDesc_getUser(const DasDesc* pThis){ return pThis->pUser; }
+void* DasDesc_user(const DasDesc* pThis){ return pThis->pUser; }
 
 const DasDesc* DasDesc_parent(const DasDesc* pThis)
 {
@@ -187,15 +187,15 @@ const DasDesc* DasDesc_parent(const DasDesc* pThis)
 /* ************************************************************************* */
 /* Getting Properties */
 
-const DasProp* DasDesc_getLocal(const DasDesc* pThis, const char* sName)
+const DasProp* DasDesc_localProp(const DasDesc* pThis, const char* sName)
 {
 	const DasAry* pProps = &(pThis->properties);
-	size_t nProps = DasAry_lengthIn(pProps, DIM0);
+	size_t nProps = DasAry_lengthIn(pProps, DAS_ADDR0);
 	const DasProp* pProp;
 
 	for(size_t i = 0; i < nProps; ++i){
 		size_t uPropLen = 0;
-		pProp = (const DasProp*) DasAry_getBytesIn(pProps, DIM1_AT(i), &uPropLen);
+		pProp = (const DasProp*) DasAry_bytesIn(pProps, DAS_ADDR1(i), &uPropLen);
 		if((pProp->flags & DASPROP_VALID_MASK) && 
 			(strcmp(pProp->buffer, sName) == 0)
 		)
@@ -204,16 +204,16 @@ const DasProp* DasDesc_getLocal(const DasDesc* pThis, const char* sName)
 	return NULL;
 }
 
-const DasProp* DasDesc_getProp(const DasDesc* pThis, const char* sName)
+const DasProp* DasDesc_prop(const DasDesc* pThis, const char* sName)
 {
 	// Still a linear search, with two loops, but over a continuous block
 	// of memory at least
-	const DasProp* pProp = DasDesc_getLocal(pThis, sName);
+	const DasProp* pProp = DasDesc_localProp(pThis, sName);
 	if(pProp != NULL)
 		return pProp;
 
 	if ((pThis->parent != NULL) && (!pThis->bNoInherit))
-		return DasDesc_getProp(pThis->parent, sName);
+		return DasDesc_prop(pThis->parent, sName);
 	
 	return NULL;
 }
@@ -223,17 +223,17 @@ const DasProp* DasDesc_getProp(const DasDesc* pThis, const char* sName)
 static const DasProp* _DasDesc_liveAt(const DasDesc* pThis, size_t uIdx)
 {
 	const DasAry* pProps = &(pThis->properties);
-	size_t uSlots = DasAry_lengthIn(pProps, DIM0);
+	size_t uSlots = DasAry_lengthIn(pProps, DAS_ADDR0);
 	if(uIdx >= uSlots - pThis->uInvalid)
 		return NULL;
 
 	size_t uPropLen;
 	if(pThis->uInvalid == 0)
-		return (const DasProp*)DasAry_getBytesIn(pProps, DIM1_AT(uIdx), &uPropLen);
+		return (const DasProp*)DasAry_bytesIn(pProps, DAS_ADDR1(uIdx), &uPropLen);
 
 	for(size_t u = 0; u < uSlots; ++u){
-		const DasProp* pProp = (const DasProp*)DasAry_getBytesIn(
-			pProps, DIM1_AT(u), &uPropLen
+		const DasProp* pProp = (const DasProp*)DasAry_bytesIn(
+			pProps, DAS_ADDR1(u), &uPropLen
 		);
 		if(!DasProp_isValid(pProp)) continue;
 		if(uIdx == 0) return pProp;
@@ -242,7 +242,7 @@ static const DasProp* _DasDesc_liveAt(const DasDesc* pThis, size_t uIdx)
 	return NULL;   /* uInvalid out of step with the slots, a library bug */
 }
 
-const DasProp* DasDesc_getPropByIdx(const DasDesc* pThis, size_t uIdx)
+const DasProp* DasDesc_propAt(const DasDesc* pThis, size_t uIdx)
 {
 	return _DasDesc_liveAt(pThis, uIdx);
 }
@@ -254,19 +254,19 @@ const DasProp* DasDesc_getPropByIdx(const DasDesc* pThis, size_t uIdx)
 
 /* property isn't present in this descriptor                                 */
 
-size_t DasDesc_getArray(
+size_t DasDesc_valStrsSep(
 	DasDesc* pThis, const char* sName, char cSep,
 	char* pBuf, size_t uBufSz, char** psVals, size_t uMaxVals
 ){
 	if((uBufSz < 2)||(uMaxVals < 1)) return 0;
 	if(isspace(cSep)){
-		das_error(DASERR_DESC, 
+		daserrf(DASERR_DESC, 
 			"Space separators not supported, since functions trims each output"
 		);
 		return 0;
 	}
 	
-	const char* sVal = DasDesc_getStr(pThis, sName);
+	const char* sVal = DasDesc_val(pThis, sName);
 	if(sVal == NULL)
 		return 0;
 
@@ -325,53 +325,53 @@ size_t DasDesc_getArray(
 	return uMaxVals;
 }
 
-const char* DasDesc_getType(const DasDesc* pThis, const char* sName)
+const char* DasDesc_propType(const DasDesc* pThis, const char* sName)
 {
-	const DasProp* pProp = DasDesc_getProp(pThis, sName);
+	const DasProp* pProp = DasDesc_prop(pThis, sName);
 	if(pProp != NULL)
 		return DasProp_typeStr2(pProp);
 
 	return NULL;
 }
 
-das_units DasDesc_getUnits(const DasDesc* pThis, const char* sName)
+DasUnits DasDesc_propUnits(const DasDesc* pThis, const char* sName)
 {
-	const DasProp* pProp = DasDesc_getProp(pThis, sName);
+	const DasProp* pProp = DasDesc_prop(pThis, sName);
 	if(pProp != NULL)
 		return pProp->units;
-	return UNIT_DIMENSIONLESS;
+	return DASUNITS_DIMENSIONLESS;
 }
 
 
 bool DasDesc_has(const DasDesc* pThis, const char* sName)
 {
-    return (DasDesc_getProp(pThis, sName) != NULL);
+    return (DasDesc_prop(pThis, sName) != NULL);
 }
 
 bool DasDesc_hasLocal(const DasDesc* pThis, const char* sName)
 {
-	return (DasDesc_getLocal(pThis, sName) != NULL);
+	return (DasDesc_localProp(pThis, sName) != NULL);
 }
 
-size_t DasDesc_length(const DasDesc* pThis)
+size_t DasDesc_numProps(const DasDesc* pThis)
 {
 	/* Live properties only, retired slots are counted as they die */
-	return DasAry_lengthIn(&(pThis->properties), DIM0) - pThis->uInvalid;
+	return DasAry_lengthIn(&(pThis->properties), DAS_ADDR0) - pThis->uInvalid;
 }
 
-const char* DasDesc_getNameByIdx(const DasDesc* pThis, size_t uIdx)
+const char* DasDesc_propNameAt(const DasDesc* pThis, size_t uIdx)
 {
 	const DasProp* pProp = _DasDesc_liveAt(pThis, uIdx);
 	return (pProp == NULL) ? NULL : DasProp_name(pProp);
 }
 
-const char* DasDesc_getValByIdx(const DasDesc* pThis, size_t uIdx)
+const char* DasDesc_valAt(const DasDesc* pThis, size_t uIdx)
 {
 	const DasProp* pProp = _DasDesc_liveAt(pThis, uIdx);
 	return (pProp == NULL) ? NULL : DasProp_value(pProp);
 }
 
-const char* DasDesc_getTypeByIdx(const DasDesc* pThis, size_t uIdx)
+const char* DasDesc_propTypeAt(const DasDesc* pThis, size_t uIdx)
 {
 	const DasProp* pProp = _DasDesc_liveAt(pThis, uIdx);
 	return (pProp == NULL) ? NULL : DasProp_typeStr2(pProp);
@@ -383,20 +383,20 @@ const char* DasDesc_getTypeByIdx3(const DasDesc* pThis, size_t uIdx)
 	return (pProp == NULL) ? NULL : DasProp_typeStr3(pProp);
 }
 
-const char* DasDesc_getStr(const DasDesc* pThis, const char* sName)
+const char* DasDesc_val(const DasDesc* pThis, const char* sName)
 {
-	const DasProp* pProp = DasDesc_getProp(pThis, sName);
+	const DasProp* pProp = DasDesc_prop(pThis, sName);
 	if(pProp != NULL)
 		return DasProp_value(pProp);
 
 	return NULL;
 }
 
-size_t DasDesc_getStrAry(
+size_t DasDesc_valStrs(
 	DasDesc* pThis, const char* sName, char* pBuf, size_t uBufSz,
 	char** psVals, size_t uMaxVals
 ){
-	const DasProp* pProp = DasDesc_getProp(pThis, sName);
+	const DasProp* pProp = DasDesc_prop(pThis, sName);
 	if(pProp == NULL) return 0;
 
 	char cSep = DasProp_sep(pProp);
@@ -405,12 +405,12 @@ size_t DasDesc_getStrAry(
 	   going with a default of `|` here for old das2 DSDF reading */
 	if(cSep == '\0') cSep = '|';
 
-	return DasDesc_getArray(pThis, sName, cSep, pBuf, uBufSz, psVals, uMaxVals);
+	return DasDesc_valStrsSep(pThis, sName, cSep, pBuf, uBufSz, psVals, uMaxVals);
 }
 
-bool DasDesc_getBool(DasDesc* pThis, const char* sName)
+bool DasDesc_valBool(DasDesc* pThis, const char* sName)
 {
-	const char* sVal = DasDesc_getStr(pThis, sName);
+	const char* sVal = DasDesc_val(pThis, sName);
 	if(sVal == NULL) return false;
 	if(strlen(sVal) == 0) return false;
 	if(isdigit(sVal[0]) && sVal[0] != '0') return true;
@@ -418,29 +418,29 @@ bool DasDesc_getBool(DasDesc* pThis, const char* sName)
 	return false;
 }
 
-double DasDesc_getDouble(const DasDesc* pThis, const char* sName)
+double DasDesc_valDouble(const DasDesc* pThis, const char* sName)
 {
 	double rVal;
-	const char* sVal = DasDesc_getStr( pThis, sName );
+	const char* sVal = DasDesc_val( pThis, sName );
 	if(sVal == NULL) 
-		return DAS_FILL_VALUE;
+		return DASVAL_FILL;
    
 	if(sscanf(sVal, "%lf", &rVal ) != 1){
-		das_error(DASERR_DESC, "Can't convert %s to an double", sVal);
-		return DAS_FILL_VALUE;
+		daserrf(DASERR_DESC, "Can't convert %s to an double", sVal);
+		return DASVAL_FILL;
 	};
 	return rVal;
 }
 
-int DasDesc_getInt(const DasDesc* pThis, const char* sName ) 
+int DasDesc_valInt(const DasDesc* pThis, const char* sName ) 
 {
 	int nVal;
-	const char* sVal = DasDesc_getStr( pThis, sName );
+	const char* sVal = DasDesc_val( pThis, sName );
 	if(sVal == NULL)
 		return INT_MIN;
 
 	if( sscanf(sVal, "%d", &nVal) != 1){
-		das_error(DASERR_DESC, "Can't convert %s to an integer", sVal);
+		daserrf(DASERR_DESC, "Can't convert %s to an integer", sVal);
 		return INT_MIN;
 	}
    
@@ -454,75 +454,75 @@ static bool _Desc_looksLikeTime(const char* sVal)
 	return false;
 }
 
-double DasDesc_getDatum(DasDesc* pThis, const char* sName, das_units units)
+double DasDesc_valDatum(DasDesc* pThis, const char* sName, DasUnits units)
 {
-	const DasProp* pProp = DasDesc_getProp(pThis, sName);
-	if(pProp == NULL) return DAS_FILL_VALUE;
+	const DasProp* pProp = DasDesc_prop(pThis, sName);
+	if(pProp == NULL) return DASVAL_FILL;
 
 	const char* sValue = DasProp_value(pProp);
 
 	// Can't convert calendar units to non calendar units
-	if(!Units_canConvert(pProp->units, units)){
-		das_error(DASERR_DESC, 
+	if(!DasUnits_canConvert(pProp->units, units)){
+		daserrf(DASERR_DESC, 
 			"Can't convert property units of type %s to %s", pProp->units, units
 		);
-		return DAS_FILL_VALUE;
+		return DASVAL_FILL;
 	}
 
 	/* If these are calendar units and I look like time, use parse time */
-	if(Units_haveCalRep(pProp->units) || (pProp->units == UNIT_DIMENSIONLESS))
+	if(DasUnits_isTimePoint(pProp->units) || (pProp->units == DASUNITS_DIMENSIONLESS))
 	{
 		/* If the units string is null, assume dimensionless unless the value
 			looks like a Time string */
 		if(_Desc_looksLikeTime(sValue)){
-			das_time dt;
-			if(!dt_parsetime(&dt, sValue)){
-				das_error(DASERR_DESC, "Couldn't parse %s as a date time", sValue);
-				return DAS_FILL_VALUE;	
+			DasTime dt;
+			if(!DasTime_fromStr(&dt, sValue)){
+				daserrf(DASERR_DESC, "Couldn't parse %s as a date time", sValue);
+				return DASVAL_FILL;	
 			}
-			return Units_convertFromDt(&dt, pProp->units);
+			return DasTime_toPoint(&dt, pProp->units);
 		}
 	}
 
 	double rValue;
 	if( sscanf(sValue, "%lf", &rValue) != 1){
-		das_error(DASERR_DESC, "Couldn't parse %s as a real value", sValue);
-		return DAS_FILL_VALUE;
+		daserrf(DASERR_DESC, "Couldn't parse %s as a real value", sValue);
+		return DASVAL_FILL;
 	}
 	
-	return Units_convertTo(rValue, pProp->units, units);
+	return DasUnits_convert(rValue, pProp->units, units);
 }
 
-double* DasDesc_getDoubleAry(DasDesc* pThis, const char* sName, int* pNumItems)
+double* DasDesc_newValDoubles(DasDesc* pThis, const char* sName, int* pNumItems)
 {
-	const char* sAry = DasDesc_getStr(pThis, sName);
+	const char* sAry = DasDesc_val(pThis, sName);
 	if(sAry == NULL){
 		if(pNumItems != NULL) *pNumItems = 0;
-		das_error(DASERR_DESC, "No property named '%s'", sName);
+		daserrf(DASERR_DESC, "No property named '%s'", sName);
 		return NULL;
 	}
-	return das_csv2doubles(sAry, pNumItems);
+	return dascsv_newDoubles(sAry, pNumItems);
 }
 
 /* ************************************************************************* */
 /* Checking equality of content in this descriptor */
 
-bool DasDesc_equals(const DasDesc* pThis, const DasDesc* pOther)
+bool DasDesc_isEqual(const DasDesc* pThis, const DasDesc* pOther)
 {
 	const DasAry* pMyAry = &(pThis->properties);
 
 	/* Same live properties, whatever either side's replace history */
-	if(DasDesc_length(pThis) != DasDesc_length(pOther))
+	if(DasDesc_numProps(pThis) != DasDesc_numProps(pOther))
 		return false;
 
-	size_t uProps = DasAry_lengthIn(pMyAry, DIM0);
+	size_t uProps = DasAry_lengthIn(pMyAry, DAS_ADDR0);
 	for(size_t u = 0; u < uProps; u++){
 		size_t uPropLen;
-		const DasProp* pMyProp = (const DasProp*)DasAry_getBytesIn(pMyAry, DIM1_AT(u), &uPropLen);
+		const DasProp* pMyProp = (const DasProp*)DasAry_bytesIn(pMyAry, DAS_ADDR1(u), &uPropLen);
 		if(!DasProp_isValid(pMyProp)) continue;
-		const DasProp* pYourProp = DasDesc_getLocal(pOther, pMyProp->buffer);
+		const DasProp* pYourProp = DasDesc_localProp(pOther, pMyProp->buffer);
 		
-		if(!DasProp_equal(pMyProp, pYourProp))
+		if(!DasProp_isEqual(pMyProp, pYourProp))
 			return false;
 	}
 	return true;
@@ -536,18 +536,18 @@ bool DasDesc_equals(const DasDesc* pThis, const DasDesc* pOther)
  * Dead slots are skipped on purpose.  Growing a value leaves its old slot
  * in place (invalidated) and appends a fresh one, so the first slot that
  * matches the name is not always the current value. */
-static ubyte* _DasDesc_getPropBuf(
+static uint8_t* _DasDesc_getPropBuf(
 	DasDesc* pThis, const char* sName, size_t* pPropSz, size_t* pIdx
 ){
 	DasAry* pProps = &(pThis->properties);
-	size_t nProps = DasAry_lengthIn(pProps, DIM0);
+	size_t nProps = DasAry_lengthIn(pProps, DAS_ADDR0);
 	DasProp* pProp;
 
 	for(size_t i = 0; i < nProps; ++i){
-		pProp = (DasProp*) DasAry_getBuf(pProps, vtUByte, DIM1_AT(i), pPropSz);
+		pProp = (DasProp*) DasAry_dataIn(pProps, DASVT_UBYTE, DAS_ADDR1(i), pPropSz);
 		if(DasProp_isValid(pProp) && (strcmp(pProp->buffer, sName) == 0)){
 			if(pIdx != NULL) *pIdx = i;
-			return (ubyte*)pProp;
+			return (uint8_t*)pProp;
 		}
 	}
 	return NULL;
@@ -558,11 +558,11 @@ static ubyte* _DasDesc_getPropBuf(
  * big enough is reused in place.  Otherwise a new slot is appended and the
  * old one is retired only after that succeeds, so a failed append leaves
  * the old value alone. */
-static ubyte* _DasDesc_getWriteBuf(DasDesc* pThis, const char* sName, size_t uNeedSz)
+static uint8_t* _DasDesc_getWriteBuf(DasDesc* pThis, const char* sName, size_t uNeedSz)
 {	
 	size_t uOldSz = 0;
 	size_t uOldIdx = 0;
-	ubyte* pBuf = _DasDesc_getPropBuf(pThis, sName, &uOldSz, &uOldIdx);
+	uint8_t* pBuf = _DasDesc_getPropBuf(pThis, sName, &uOldSz, &uOldIdx);
 	if((pBuf != NULL) && (uNeedSz <= uOldSz))
 		return pBuf;
 	bool bRetire = (pBuf != NULL);
@@ -571,20 +571,20 @@ static ubyte* _DasDesc_getWriteBuf(DasDesc* pThis, const char* sName, size_t uNe
 	DasAry* pProps = &(pThis->properties);
 
 	if(!DasAry_append(pProps, NULL, uNeedSz)){
-		das_error(DASERR_DESC, "Couldn't create space for new property");
+		daserrf(DASERR_DESC, "Couldn't create space for new property");
 		return NULL;
 	}
-	DasAry_markEnd(pProps, DIM1);
+	DasAry_markEnd(pProps, DAS_IDX1);
 
 	size_t uTmp = 0;
 	if(bRetire){
 		/* The append may have moved the storage, look the old slot up again */
-		pBuf = DasAry_getBuf(pProps, vtUByte, DIM1_AT((ptrdiff_t)uOldIdx), &uTmp);
+		pBuf = DasAry_dataIn(pProps, DASVT_UBYTE, DAS_ADDR1((ptrdiff_t)uOldIdx), &uTmp);
 		DasProp_invalidate((DasProp*)pBuf);
 		++(pThis->uInvalid);
 	}
 
-	pBuf = DasAry_getBuf(pProps, vtUByte, DIM1_AT(-1), &uTmp);
+	pBuf = DasAry_dataIn(pProps, DASVT_UBYTE, DAS_ADDR1(-1), &uTmp);
 	assert(uTmp == uNeedSz);
 	return pBuf;
 }
@@ -595,12 +595,12 @@ static ubyte* _DasDesc_getWriteBuf(DasDesc* pThis, const char* sName, size_t uNe
 static bool _DasDesc_ownsPtr(DasDesc* pThis, const void* p)
 {
 	DasAry* pProps = &(pThis->properties);
-	if((p == NULL)||(DasAry_lengthIn(pProps, DIM0) == 0))
+	if((p == NULL)||(DasAry_lengthIn(pProps, DAS_ADDR0) == 0))
 		return false;
 
 	size_t uLen = 0;
-	const ubyte* pBeg  = DasAry_getBuf(pProps, vtUByte, DIM1_AT(0), &uLen);
-	const ubyte* pLast = DasAry_getBuf(pProps, vtUByte, DIM1_AT(-1), &uLen);
+	const uint8_t* pBeg  = DasAry_dataIn(pProps, DASVT_UBYTE, DAS_ADDR1(0), &uLen);
+	const uint8_t* pLast = DasAry_dataIn(pProps, DASVT_UBYTE, DAS_ADDR1(-1), &uLen);
 	uintptr_t uPtr = (uintptr_t)p;
 	return (uPtr >= (uintptr_t)pBeg) && (uPtr < (uintptr_t)(pLast + uLen));
 }
@@ -615,8 +615,8 @@ static char* _DasDesc_strcopy(const char* s)
 }
 
 static das_errcode _DasDesc_flexSet(
-	DasDesc* pThis, const char* sType, ubyte uType, const char* sName, 
-	const char* sVal, char cSep, das_units units, int nStandard
+	DasDesc* pThis, const char* sType, uint8_t uType, const char* sName, 
+	const char* sVal, char cSep, DasUnits units, int nStandard
 ){
 	/* Check before taking a slot, the property array can't give one back */
 	das_propplan plan;
@@ -627,9 +627,9 @@ static das_errcode _DasDesc_flexSet(
 
 	size_t uPropSz = dasprop_memsz(sName, sVal);
 
-	ubyte* pBuf = _DasDesc_getWriteBuf(pThis, sName, uPropSz);
+	uint8_t* pBuf = _DasDesc_getWriteBuf(pThis, sName, uPropSz);
 	if(pBuf == NULL){
-		return das_error(DASERR_DESC, 
+		return daserrf(DASERR_DESC, 
 			"Couldn't get write buffer for property %s of size %zu", sName, 
 			uPropSz
 		);
@@ -641,8 +641,8 @@ static das_errcode _DasDesc_flexSet(
 
 /* copies the property into the property array */
 das_errcode DasDesc_flexSet(
-	DasDesc* pThis, const char* sType, ubyte uType, const char* sName, 
-	const char* sVal, char cSep, das_units units, int nStandard
+	DasDesc* pThis, const char* sType, uint8_t uType, const char* sName, 
+	const char* sVal, char cSep, DasUnits units, int nStandard
 ){
 	/* A name or value read from this same descriptor lives in storage that
 	   taking a new slot may move, das2_from_cdf sets ySummary from yLabel
@@ -656,7 +656,7 @@ das_errcode DasDesc_flexSet(
 	char* sValCopy  = bVal  ? _DasDesc_strcopy(sVal)  : NULL;
 	das_errcode nRet;
 	if((bName && (sNameCopy == NULL))||(bVal && (sValCopy == NULL)))
-		nRet = das_error(DASERR_DESC, "Couldn't copy a property from its own descriptor");
+		nRet = daserrf(DASERR_DESC, "Couldn't copy a property from its own descriptor");
 	else
 		nRet = _DasDesc_flexSet(pThis, sType, uType, bName ? sNameCopy : sName,
 			bVal ? sValCopy : sVal, cSep, units, nStandard
@@ -666,27 +666,27 @@ das_errcode DasDesc_flexSet(
 	return nRet;
 }
 
-das_errcode DasDesc_setProp(DasDesc* pThis, const DasProp* pProp)
+das_errcode DasDesc_copyProp(DasDesc* pThis, const DasProp* pProp)
 {
 	size_t uPropSz = DasProp_size(pProp);
 	const char* sName = pProp->buffer;
 
 	/* Same hazard as DasDesc_flexSet(), the source may move with the append */
-	ubyte* pCopy = NULL;
+	uint8_t* pCopy = NULL;
 	if(_DasDesc_ownsPtr(pThis, pProp)){
-		if(DasDesc_getLocal(pThis, sName) == pProp)
+		if(DasDesc_localProp(pThis, sName) == pProp)
 			return DAS_OKAY;  /* set onto itself */
-		if((pCopy = (ubyte*)malloc(uPropSz)) == NULL)
-			return das_error(DASERR_DESC, "Couldn't copy property %s", sName);
+		if((pCopy = (uint8_t*)malloc(uPropSz)) == NULL)
+			return daserrf(DASERR_DESC, "Couldn't copy property %s", sName);
 		memcpy(pCopy, pProp, uPropSz);
 		pProp = (const DasProp*)pCopy;
 		sName = pProp->buffer;
 	}
 
 	das_errcode nRet = DAS_OKAY;
-	ubyte* pBuf = _DasDesc_getWriteBuf(pThis, sName, uPropSz);
+	uint8_t* pBuf = _DasDesc_getWriteBuf(pThis, sName, uPropSz);
 	if(pBuf == NULL)
-		nRet = das_error(DASERR_DESC, 
+		nRet = daserrf(DASERR_DESC, 
 			"Couldn't get write buffer for property %s of size %zu", 
 			sName, uPropSz
 		);
@@ -697,7 +697,7 @@ das_errcode DasDesc_setProp(DasDesc* pThis, const DasProp* pProp)
 	return nRet;
 }
 
-das_errcode DasDesc_set(
+das_errcode DasDesc_setProp(
 	DasDesc* pThis, const char* sType, const char* sName, const char* sVal
 ){
 	int nStandard = pThis->bLooseParsing ? DASPROP_DAS1 : DASPROP_DAS2;
@@ -705,7 +705,7 @@ das_errcode DasDesc_set(
 }
 
 
-das_errcode DasDesc_setStr(
+das_errcode DasDesc_setVal(
 	DasDesc* pThis, const char* sName, const char * sVal 
 ) {
 	return DasDesc_flexSet(
@@ -714,7 +714,7 @@ das_errcode DasDesc_setStr(
 	);
 }
 
-das_errcode DasDesc_vSetStr(
+das_errcode DasDesc_setValf(
 	DasDesc* pThis, const char* sName, const char* sFmt, ...
 ) {
 	
@@ -724,7 +724,7 @@ das_errcode DasDesc_vSetStr(
 	va_list ap;
 	
 	if( (sVal = (char*)malloc(nLen)) == NULL) 
-		return das_error(DASERR_DESC, "Unable to malloc %d bytes", nLen);
+		return daserrf(DASERR_DESC, "Unable to malloc %d bytes", nLen);
 	
 	while (1) {
 		/* Try to print in the allocated space. */
@@ -743,7 +743,7 @@ das_errcode DasDesc_vSetStr(
 			nLen *= 2;  /* twice the old nLen */
 		
 		if( (sVal = (char*)realloc(sVal, nLen)) == NULL)
-			return das_error(DASERR_DESC, "Unable to malloc %d bytes", nLen);
+			return daserrf(DASERR_DESC, "Unable to malloc %d bytes", nLen);
 	}
 	
 	das_errcode nRet = DasDesc_flexSet(
@@ -755,7 +755,7 @@ das_errcode DasDesc_vSetStr(
 	return nRet;
 }
 
-das_errcode DasDesc_setBool(DasDesc* pThis, const char* sName, bool bVal)
+das_errcode DasDesc_setValBool(DasDesc* pThis, const char* sName, bool bVal)
 {
 	return DasDesc_flexSet(
 		pThis, NULL, DASPROP_BOOL|DASPROP_SINGLE, sName, 
@@ -763,8 +763,8 @@ das_errcode DasDesc_setBool(DasDesc* pThis, const char* sName, bool bVal)
 	);
 }
 
-das_errcode DasDesc_setDatum( 
-	DasDesc* pThis, const char* sName, double rVal, das_units units 
+das_errcode DasDesc_setValDatum( 
+	DasDesc* pThis, const char* sName, double rVal, DasUnits units 
 ) {
 	char sVal[50] = {'\0'};
 
@@ -778,8 +778,8 @@ das_errcode DasDesc_setDatum(
 	);
 }
 
-das_errcode DasDesc_setDatumRng(
-	DasDesc* pThis, const char * sName, double beg, double end, das_units units 
+das_errcode DasDesc_setValDatumRng(
+	DasDesc* pThis, const char * sName, double beg, double end, DasUnits units 
 ){
 	char sVal[50] = {'\0'};
 
@@ -793,24 +793,24 @@ das_errcode DasDesc_setDatumRng(
 	);
 }
 
-das_errcode DasDesc_getStrRng(
+das_errcode DasDesc_valRng(
 	DasDesc* pThis, const char* sName, char* sMin, char* sMax, 
-	das_units* pUnits, size_t uLen
+	DasUnits* pUnits, size_t uLen
 ){
-	if(uLen < 2) return das_error(DASERR_DESC, "uLen too small (%zu bytes)", uLen);
+	if(uLen < 2) return daserrf(DASERR_DESC, "uLen too small (%zu bytes)", uLen);
 
-	const DasProp* pProp = DasDesc_getProp(pThis, sName);
+	const DasProp* pProp = DasDesc_prop(pThis, sName);
 
 	if(pProp == NULL)
-		return das_error(DASERR_DESC, "Property %s not present in descriptor", sName);
+		return daserrf(DASERR_DESC, "Property %s not present in descriptor", sName);
 
 	if(!DasProp_isRange(pProp))
-		return das_error(DASERR_DESC, "Property %s is not a Range", sName);
+		return daserrf(DASERR_DESC, "Property %s is not a Range", sName);
 	
 	char buf[128] = {'\0'};
 	char* pBeg = buf;
 	char* pEnd = NULL;
-	das_time dt = {0};
+	DasTime dt = {0};
 	
 	/* Copy everything up to the old das2 comment section */
 	const char* sValue = DasProp_value(pProp);
@@ -849,18 +849,18 @@ das_errcode DasDesc_getStrRng(
 	
 	/* If the end string is 'now' return the max as the current UTC time */
 	if(strcasecmp(sMax, "now") == 0){
-		dt_now(&dt);
-		dt_isoc(&dt, 0, sMax, 63);
+		DasTime_now(&dt);
+		DasTime_toIsoC(&dt, 0, sMax, 63);
 	}
 
 	*pUnits = pProp->units;
 	return DAS_OKAY;
 			
 	ERROR:
-	return das_error(DASERR_DESC, "Malformed range string %s", buf);	
+	return daserrf(DASERR_DESC, "Malformed range string %s", buf);	
 }
 
-das_errcode DasDesc_setDouble(DasDesc* pThis, const char* sName, double rVal) 
+das_errcode DasDesc_setValDouble(DasDesc* pThis, const char* sName, double rVal) 
 {
 	/* Keep the precision the value has. trimming significant digits for
 	   display is a text formatters' job */
@@ -872,7 +872,7 @@ das_errcode DasDesc_setDouble(DasDesc* pThis, const char* sName, double rVal)
 	);
 }
 
-das_errcode DasDesc_setInt(DasDesc* pThis, const char* sName, int nVal) 
+das_errcode DasDesc_setValInt(DasDesc* pThis, const char* sName, int nVal) 
 {
 	char sVal[50] = {'\0'};
 	snprintf(sVal, 49, "%d", nVal);
@@ -881,17 +881,17 @@ das_errcode DasDesc_setInt(DasDesc* pThis, const char* sName, int nVal)
 	);
 }
 
-das_errcode DasDesc_setDoubleArray(
+das_errcode DasDesc_setValDoubles(
 	DasDesc* pThis, const char* sName, int nItems, double* pValues
 ){
 
 	char* sVal = (char *)calloc(nItems, 50);
 	if(sVal == NULL){
-		return das_error(DASERR_DESC, "Failed to allocate %d bytes for %d items", 
+		return daserrf(DASERR_DESC, "Failed to allocate %d bytes for %d items", 
 			nItems*50, nItems
 		);
 	}
-	das_doubles2csv(pValues, nItems, sVal, nItems*50);
+	dascsv_fromDoubles(pValues, nItems, sVal, nItems*50);
 
 	das_errcode nRet = DasDesc_flexSet(
 		pThis, NULL, DASPROP_REAL|DASPROP_SET, sName, sVal, ',', NULL, DASPROP_DAS3
@@ -900,16 +900,16 @@ das_errcode DasDesc_setDoubleArray(
 	return nRet;
 }
 
-das_errcode DasDesc_setFloatAry(
+das_errcode DasDesc_setValFloats(
 	DasDesc* pThis, const char* sName, int nItems, float* pValues
 ){ 
 	char* sVal = (char*)calloc(nItems, 50);
 	if(sVal == NULL){
-		return das_error(DASERR_DESC, "Failed to allocate %d bytes for %d items", 
+		return daserrf(DASERR_DESC, "Failed to allocate %d bytes for %d items", 
 			nItems*50, nItems
 		);
 	}
-	das_floats2csv(pValues, nItems, sVal, nItems*50);
+	dascsv_fromFloats(pValues, nItems, sVal, nItems*50);
 	
 	das_errcode nRet = DasDesc_flexSet(
 		pThis, NULL, DASPROP_REAL|DASPROP_SET, sName, sVal, ',', NULL, DASPROP_DAS3
@@ -922,18 +922,18 @@ void DasDesc_copyIn(DasDesc* pThis, const DasDesc* pOther)
 {
 	const DasAry* pSrc = &(pOther->properties);
 	
-	size_t uProps = DasAry_lengthIn(pSrc, DIM0);
+	size_t uProps = DasAry_lengthIn(pSrc, DAS_ADDR0);
 	const DasProp* pProp = NULL;
 
 	for(size_t u = 0; u < uProps; ++u){
 		size_t uNewLen = 0;
-		pProp = (const DasProp*) DasAry_getBytesIn(pSrc, DIM1_AT(u), &uNewLen);
+		pProp = (const DasProp*) DasAry_bytesIn(pSrc, DAS_ADDR1(u), &uNewLen);
 		if(!DasProp_isValid(pProp))
 			continue;
 
 		/* setProp reuses a same-named slot that's big enough, otherwise it
 		   invalidates the old one and appends */
-		if(DasDesc_setProp(pThis, pProp) != DAS_OKAY)
+		if(DasDesc_copyProp(pThis, pProp) != DAS_OKAY)
 			return;
 	}
 }
@@ -941,11 +941,11 @@ void DasDesc_copyIn(DasDesc* pThis, const DasDesc* pOther)
 /* ************************************************************************* */
 /* Removing Properties */
 
-bool DasDesc_remove(DasDesc* pThis, const char* sName)
+bool DasDesc_rmProp(DasDesc* pThis, const char* sName)
 {
 	/* properties aren't removed, just marked invalid */
 	size_t uPropSz;
-	ubyte* pBuf = _DasDesc_getPropBuf(pThis, sName, &uPropSz, NULL);
+	uint8_t* pBuf = _DasDesc_getPropBuf(pThis, sName, &uPropSz, NULL);
 	if(pBuf == NULL)
 		return false;
 
@@ -998,9 +998,9 @@ static das_errcode _DasDesc_encodeMaybeWrap(
 #define _STACK_BUF_LEN 256
 	char sStaticBuf[_STACK_BUF_LEN] = {'\0'};
 
-	size_t u, uProps = DasAry_lengthIn(pProps, DIM0);
+	size_t u, uProps = DasAry_lengthIn(pProps, DAS_ADDR0);
 
-	if(DasDesc_length(pThis) == 0)
+	if(DasDesc_numProps(pThis) == 0)
 		return DAS_OKAY;
 
 	if(bWrap){
@@ -1014,7 +1014,7 @@ static das_errcode _DasDesc_encodeMaybeWrap(
 	das_errcode nRet = DAS_OKAY; 
 	for(u = 0; u < uProps; ++u){
 		size_t uPropLen = 0;
-		pProp = (const DasProp*) DasAry_getBytesIn(pProps, DIM1_AT(u), &uPropLen);
+		pProp = (const DasProp*) DasAry_bytesIn(pProps, DAS_ADDR1(u), &uPropLen);
 		if(!DasProp_isValid(pProp))
 			continue;
 
@@ -1024,7 +1024,7 @@ static das_errcode _DasDesc_encodeMaybeWrap(
 		   names such as label(1), but don't write things like this to disk*/
 		for(int j = 0; j < strlen(sName); j++) 
 			if(!isalnum(sName[j]) && (sName[j] != '_') && (sName[j] != ':'))
-				return das_error(DASERR_DESC, "Invalid property name '%s'", sName);
+				return daserrf(DASERR_DESC, "Invalid property name '%s'", sName);
 		
 		//const char* sType = DasProp_type2(pProp);
 
@@ -1052,8 +1052,8 @@ static das_errcode _DasDesc_encodeMaybeWrap(
 			DasBuf_puts(pBuf, " name=\"");
 			DasBuf_puts(pBuf, sName);
 			DasBuf_puts(pBuf, "\"");
-			if(pProp->units != UNIT_DIMENSIONLESS){
-				DasBuf_printf(pBuf, " units=\"%s\"", Units_toStr(pProp->units));
+			if(pProp->units != DASUNITS_DIMENSIONLESS){
+				DasBuf_printf(pBuf, " units=\"%s\"", DasUnits_toStr(pProp->units));
 			}
 			/* Emit the terminator for sets when it's a non-whitespace byte (whitespace
 			   is the default and needs no attribute); escape non-printables, the
@@ -1090,7 +1090,7 @@ static das_errcode _DasDesc_encodeMaybeWrap(
 				// properties this can be converted to a "high-water-mark" dynabuf
 				char* sDynaBuf = (char*)calloc(uEscapeSz, 1);
 				if(sDynaBuf == NULL)
-					return das_error(DASERR_DESC,
+					return daserrf(DASERR_DESC,
 						"Failed to allocate %zu bytes for XML translation buffer", uEscapeSz
 					);
 				_writePropVal(pBuf, pProp, DasProp_xmlValue(pProp, sDynaBuf, uEscapeSz));
@@ -1106,8 +1106,8 @@ static das_errcode _DasDesc_encodeMaybeWrap(
 			nRet = DasBuf_puts(pBuf, "</p>\n");
 		}
 		else{
-			if(pProp->units != UNIT_DIMENSIONLESS)
-				nRet = DasBuf_printf(pBuf, " %s\"\n", Units_toStr(pProp->units));
+			if(pProp->units != DASUNITS_DIMENSIONLESS)
+				nRet = DasBuf_printf(pBuf, " %s\"\n", DasUnits_toStr(pProp->units));
 			else
 				nRet = DasBuf_puts(pBuf, "\"\n");
 		}

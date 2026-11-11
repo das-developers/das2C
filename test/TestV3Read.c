@@ -44,7 +44,7 @@ typedef int (*info_fn)(const void* pObj, char* sBuf, size_t uLen);
 
 static int _infoDs(const void* p, char* s, size_t u){ return DasDs_info(p, s, u); }
 static int _infoDim(const void* p, char* s, size_t u){ return DasDim_info(p, s, u); }
-static int _infoSd(const void* p, char* s, size_t u){ return DasStream_info(p, s, u); }
+static int _infoSd(const void* p, char* s, size_t u){ return DasStream_toInfoStr(p, s, u); }
 
 /* The _toStr one-liners: the first line of the matching _info, sBuf when it
    fits, NULL when cut, NUL terminated and inside uLen either way. */
@@ -128,7 +128,7 @@ static void checkToStr(const char* sWhat, str_fn fn, const void* pObj, const cha
 
 das_errcode onStream(DasStream* pSd, void* pUser){
 	fputs("\n", stdout);
-	char* sInfo = checkInfo("DasStream_info", _infoSd, pSd);
+	char* sInfo = checkInfo("DasStream_toInfoStr", _infoSd, pSd);
 	checkToStr("DasStream_toStr", _strSd, pSd, sInfo);
 	fputs(sInfo, stdout);
 	free(sInfo);
@@ -140,15 +140,15 @@ das_errcode onDataset(DasDs* pDs, int iPktId, void* pUser)
 	/* The ID handed to the callback has to agree with the stream's own table,
 	   and the dataset must be the active one for it */
 	const DasStream* pSd = (const DasStream*)DasDesc_parent((DasDesc*)pDs);
-	if((pSd == NULL)||(iPktId < 1)||(iPktId != DasStream_getPktId(pSd, (DasDesc*)pDs)))
-		return das_error(DASERR_DS, "Callback gave packet ID %d, the stream table %d",
-			iPktId, (pSd == NULL) ? -1 : DasStream_getPktId(pSd, (DasDesc*)pDs));
+	if((pSd == NULL)||(iPktId < 1)||(iPktId != DasStream_pktId(pSd, (DasDesc*)pDs)))
+		return daserrf(DASERR_DS, "Callback gave packet ID %d, the stream table %d",
+			iPktId, (pSd == NULL) ? -1 : DasStream_pktId(pSd, (DasDesc*)pDs));
 	if(!DasStream_isDescActive(pSd, (DasDesc*)pDs))
-		return das_error(DASERR_DS, "Dataset for packet ID %d is not the active one", iPktId);
+		return daserrf(DASERR_DS, "Dataset for packet ID %d is not the active one", iPktId);
 
-	for(int iType = DASDIM_COORD; iType <= DASDIM_DATA; ++iType){
+	for(int iType = DASDIMTYPE_COORD; iType <= DASDIMTYPE_DATA; ++iType){
 		for(size_t u = 0; u < DasDs_numDims(pDs, iType); ++u){
-			DasDim* pDim = DasDs_getDimByIdx(pDs, u, iType);
+			DasDim* pDim = DasDs_dimAt(pDs, u, iType);
 			char* sDim = checkInfo("DasDim_info", _infoDim, pDim);
 			checkToStr("DasDim_toStr", _strDim, pDim, sDim);
 			free(sDim);
@@ -165,10 +165,10 @@ das_errcode onDataset(DasDs* pDs, int iPktId, void* pUser)
 static void prnShape(int iPktId, DasDs* pDs)
 {
 	char sBuf[128] = {'\0'};
-	ptrdiff_t aShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
+	ptrdiff_t aShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
 
 	int nRank = DasDs_shape(pDs, aShape);
-	das_shape_info(aShape, nRank, nRank, sBuf, 127);
+	dasshape_info(aShape, nRank, nRank, sBuf, 127);
 
 	printf("Dataset %d shape is now: %s\n", iPktId, sBuf);
 }
@@ -245,7 +245,7 @@ static const char* xfailReason(const char* sPath){
 int main(int argc, char** argv)
 {
    /* Exit on errors, log info messages and above */
-	das_init(argv[0], DASERR_DIS_EXIT, DASLOG_INFO, NULL);
+	daslib_init(argv[0], DASERRDISP_EXIT, DASLOG_INFO, NULL);
 
 	/* Streams to read are given on the command line (caller globs them) */
 	if(argc < 2){
@@ -269,17 +269,17 @@ int main(int argc, char** argv)
 		}
 
 		DasIO* pIn = new_DasIO("TestV3Read", new_DasXport_cfile(pFile, "r"), NULL);
-		DasIO_setModel(pIn, STREAM_MODEL_MIXED); /* das1/2/3 auto-detect */
+		DasIO_setModel(pIn, DASIOMODEL_MIXED); /* das1/2/3 auto-detect */
 		DasIO_setAccum(pIn, true);  /* exercise multi-packet growth, the shape
 		                               lines below track it */
 
-		das_stream_proc handler;
-		das_stream_proc_init(&handler, NULL);
-		handler.onStreamDesc = onStream;
-		handler.onDsDesc = onDataset;
+		DasIOProc handler;
+		init_DasIOProc(&handler, NULL);
+		handler.onStream = onStream;
+		handler.onDs = onDataset;
 		handler.onDsData = onData;
 		handler.onClose = onClose;
-		DasIO_addProcessor(pIn, &handler);
+		DasIO_addProc(pIn, &handler);
 
 		if(DasIO_readAll(pIn) != 0){
 			printf("ERROR: Couldn't parse %s\n", argv[i]);

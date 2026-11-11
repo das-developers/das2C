@@ -34,24 +34,24 @@
 
 static void _del_DasDim(DasDesc* pDesc);  /* del_DasDesc() target */
 
-const char* DASVAR_CENTER  = "center";   /* The default value */
-const char* DASVAR_MIN     = "min";
-const char* DASVAR_MAX     = "max";
-const char* DASVAR_WIDTH   = "width";
-const char* DASVAR_MEAN    = "mean";
-const char* DASVAR_MEDIAN  = "median";
-const char* DASVAR_MODE    = "mode";
-const char* DASVAR_REF     = "reference"; 
-const char* DASVAR_OFFSET  = "offset"; 
-const char* DASVAR_MAX_ERR = "max_error";
-const char* DASVAR_MIN_ERR = "min_error";
-const char* DASVAR_STD_DEV = "std_dev";
-const char* DASVAR_COUNT   = "count";
-const char* DASVAR_WEIGHT  = "weight";
-const char* DASVAR_NORM    = "norm";
+const char* DASDIM_ROLE_CENTER  = "center";   /* The default value */
+const char* DASDIM_ROLE_MIN     = "min";
+const char* DASDIM_ROLE_MAX     = "max";
+const char* DASDIM_ROLE_WIDTH   = "width";
+const char* DASDIM_ROLE_MEAN    = "mean";
+const char* DASDIM_ROLE_MEDIAN  = "median";
+const char* DASDIM_ROLE_MODE    = "mode";
+const char* DASDIM_ROLE_REF     = "reference"; 
+const char* DASDIM_ROLE_OFFSET  = "offset"; 
+const char* DASDIM_ROLE_MAX_ERR = "max_error";
+const char* DASDIM_ROLE_MIN_ERR = "min_error";
+const char* DASDIM_ROLE_STD_DEV = "std_dev";
+const char* DASDIM_ROLE_COUNT   = "count";
+const char* DASDIM_ROLE_WEIGHT  = "weight";
+const char* DASDIM_ROLE_NORM    = "norm";
 
 /* Held out until we got a formalism for it
- * const char* DASVAR_SPREAD = "point_spread";
+ * const char* DASDIM_ROLE_SPREAD = "point_spread";
  */
 
 
@@ -59,21 +59,21 @@ bool DasDim_isKnownRole(const char* sPurpose)
 {
 	/* Check to see if the value given for the purpose of a variable in a 
 	   dimension is one we know about */
-	if(strcmp(sPurpose, DASVAR_CENTER) == 0) return true;
-	if(strcmp(sPurpose, DASVAR_MAX) == 0) return true;
-	if(strcmp(sPurpose, DASVAR_MIN) == 0) return true;
-	if(strcmp(sPurpose, DASVAR_WIDTH) == 0) return true;
-	if(strcmp(sPurpose, DASVAR_MEAN) == 0) return true;
-	if(strcmp(sPurpose, DASVAR_MEDIAN) == 0) return true;
-	if(strcmp(sPurpose, DASVAR_MODE) == 0) return true;
-	if(strcmp(sPurpose, DASVAR_REF) == 0) return true;
-	if(strcmp(sPurpose, DASVAR_OFFSET) == 0) return true;
-	if(strcmp(sPurpose, DASVAR_MAX_ERR) == 0) return true;
-	if(strcmp(sPurpose, DASVAR_MIN_ERR) == 0) return true;
-	if(strcmp(sPurpose, DASVAR_STD_DEV) == 0) return true;
-	if(strcmp(sPurpose, DASVAR_COUNT) == 0) return true;
-	if(strcmp(sPurpose, DASVAR_WEIGHT) == 0) return true;
-	if(strcmp(sPurpose, DASVAR_NORM) == 0) return true;
+	if(strcmp(sPurpose, DASDIM_ROLE_CENTER) == 0) return true;
+	if(strcmp(sPurpose, DASDIM_ROLE_MAX) == 0) return true;
+	if(strcmp(sPurpose, DASDIM_ROLE_MIN) == 0) return true;
+	if(strcmp(sPurpose, DASDIM_ROLE_WIDTH) == 0) return true;
+	if(strcmp(sPurpose, DASDIM_ROLE_MEAN) == 0) return true;
+	if(strcmp(sPurpose, DASDIM_ROLE_MEDIAN) == 0) return true;
+	if(strcmp(sPurpose, DASDIM_ROLE_MODE) == 0) return true;
+	if(strcmp(sPurpose, DASDIM_ROLE_REF) == 0) return true;
+	if(strcmp(sPurpose, DASDIM_ROLE_OFFSET) == 0) return true;
+	if(strcmp(sPurpose, DASDIM_ROLE_MAX_ERR) == 0) return true;
+	if(strcmp(sPurpose, DASDIM_ROLE_MIN_ERR) == 0) return true;
+	if(strcmp(sPurpose, DASDIM_ROLE_STD_DEV) == 0) return true;
+	if(strcmp(sPurpose, DASDIM_ROLE_COUNT) == 0) return true;
+	if(strcmp(sPurpose, DASDIM_ROLE_WEIGHT) == 0) return true;
+	if(strcmp(sPurpose, DASDIM_ROLE_NORM) == 0) return true;
 
 	return false;
 }
@@ -81,16 +81,16 @@ bool DasDim_isKnownRole(const char* sPurpose)
 int DasDim_shape(const DasDim* pThis, ptrdiff_t* pShape)
 {	
 	int i = 0;
-	for(i = 0; i < VARIDX_MAX; ++i) pShape[i] = VARIDX_UNUSED;
+	for(i = 0; i < DASIDX_MAX; ++i) pShape[i] = DASIDX_UNUSED;
 
-	ptrdiff_t aShape[VARIDX_MAX];
+	ptrdiff_t aShape[DASIDX_MAX];
 	
 	const DasVar* pVar = NULL;
 	for(i = 0; i < pThis->uVars; ++i){
 		pVar = pThis->aVars[i];
 		DasVar_shape(pVar, aShape);
 		
-		das_varindex_merge(pThis->iFirstInternal, pShape, aShape);
+		dasshape_merge(pThis->iFirstInternal, pShape, aShape);
 	}
 	
 	/* Count used indices below the first internal index */
@@ -98,26 +98,26 @@ int DasDim_shape(const DasDim* pThis, ptrdiff_t* pShape)
 	for(i = 0; i < pThis->iFirstInternal; ++i) ++nUsed;
 	
 	/* Mask off anything at or after the first internal index */
-	for(i = pThis->iFirstInternal; i < VARIDX_MAX; ++i) 
-		pShape[i] = VARIDX_UNUSED;
+	for(i = pThis->iFirstInternal; i < DASIDX_MAX; ++i) 
+		pShape[i] = DASIDX_UNUSED;
 	
 	return nUsed;
 }
 
 /* If I only have degenerate variables in this index, whole dim is degenerate */
-bool DasDim_degenerate(const DasDim* pThis, int iIndex)
+bool DasDim_isDegenerate(const DasDim* pThis, int iIndex)
 {
 	for(size_t u = 0; u < pThis->uVars; ++u){
-		if(! DasVar_degenerate(pThis->aVars[u], iIndex))
+		if(! DasVar_isDegenerate(pThis->aVars[u], iIndex))
 			return false;
 	}
 	return true;
 }
 
-ptrdiff_t DasDim_lengthIn(const DasDim* pThis, int nIdx, ptrdiff_t* pLoc)
+ptrdiff_t DasDim_lengthIn(const DasDim* pThis, int nIdx, ptrdiff_t* pAddr)
 {
-	int nLengthIn = VARIDX_UNUSED;
-	int nVarLenIn = VARIDX_UNUSED;
+	int nLengthIn = DASIDX_UNUSED;
+	int nVarLenIn = DASIDX_UNUSED;
 	
 	/* The simple function below fails if only a REFERENCE and OFFSET are
 	 * specified but not the CENTER variable */
@@ -125,19 +125,19 @@ ptrdiff_t DasDim_lengthIn(const DasDim* pThis, int nIdx, ptrdiff_t* pLoc)
 	const DasVar* pVar = NULL;
 	for(int i = 0; i < pThis->uVars; ++i){
 		pVar = pThis->aVars[i];
-		nVarLenIn = DasVar_lengthIn(pVar, nIdx, pLoc);
+		nVarLenIn = DasVar_lengthIn(pVar, nIdx, pAddr);
 		
-		nLengthIn = das_varlength_merge(nLengthIn, nVarLenIn);
+		nLengthIn = dasshape_mergeLen(nLengthIn, nVarLenIn);
 	}
 	return nLengthIn;
 }
 
-const char* das_role_fromStr(const char* sRole)
+const char* DasDim_roleFromStr(const char* sRole)
 {
 	if(sRole == NULL) return NULL;
 
 	/* Substitutions go here for common to canonical names */
-	if(strcmp(sRole, "average") == 0) return DASVAR_MEAN;
+	if(strcmp(sRole, "average") == 0) return DASDIM_ROLE_MEAN;
 
 	/* Roles are free-form, so anything else is returned untouched.  This is a
 	   canonicalizer, not a validator; see DasDim_isKnownRole(). */
@@ -148,21 +148,21 @@ const char* das_role_fromStr(const char* sRole)
    bookkeeping a reducer needs, then the error terms.  Anything unrecognized
    sorts last, which is also where a caller's custom role lands. */
 static int _DasDim_varOrder(const char* sRole){
-	if(strcmp(sRole, DASVAR_CENTER) == 0)    return 0;
-	if(strcmp(sRole, DASVAR_MEAN) == 0)      return 1;
-	if(strcmp(sRole, DASVAR_MEDIAN) == 0)    return 2;
-	if(strcmp(sRole, DASVAR_MODE) == 0)      return 3;
-	if(strcmp(sRole, DASVAR_MIN) == 0)       return 4;
-	if(strcmp(sRole, DASVAR_MAX) == 0)       return 5;
-	if(strcmp(sRole, DASVAR_REF) == 0)       return 6;
-	if(strcmp(sRole, DASVAR_OFFSET) == 0)    return 7;
-	if(strcmp(sRole, DASVAR_WIDTH) == 0)     return 8;
-	if(strcmp(sRole, DASVAR_COUNT) == 0)     return 9;
-	if(strcmp(sRole, DASVAR_WEIGHT) == 0)    return 10;
-	if(strcmp(sRole, DASVAR_MAX_ERR) == 0)   return 11;
-	if(strcmp(sRole, DASVAR_MIN_ERR) == 0)   return 12;
-	if(strcmp(sRole, DASVAR_STD_DEV) == 0)   return 13;
-	if(strcmp(sRole, DASVAR_NORM) == 0)      return 14;
+	if(strcmp(sRole, DASDIM_ROLE_CENTER) == 0)    return 0;
+	if(strcmp(sRole, DASDIM_ROLE_MEAN) == 0)      return 1;
+	if(strcmp(sRole, DASDIM_ROLE_MEDIAN) == 0)    return 2;
+	if(strcmp(sRole, DASDIM_ROLE_MODE) == 0)      return 3;
+	if(strcmp(sRole, DASDIM_ROLE_MIN) == 0)       return 4;
+	if(strcmp(sRole, DASDIM_ROLE_MAX) == 0)       return 5;
+	if(strcmp(sRole, DASDIM_ROLE_REF) == 0)       return 6;
+	if(strcmp(sRole, DASDIM_ROLE_OFFSET) == 0)    return 7;
+	if(strcmp(sRole, DASDIM_ROLE_WIDTH) == 0)     return 8;
+	if(strcmp(sRole, DASDIM_ROLE_COUNT) == 0)     return 9;
+	if(strcmp(sRole, DASDIM_ROLE_WEIGHT) == 0)    return 10;
+	if(strcmp(sRole, DASDIM_ROLE_MAX_ERR) == 0)   return 11;
+	if(strcmp(sRole, DASDIM_ROLE_MIN_ERR) == 0)   return 12;
+	if(strcmp(sRole, DASDIM_ROLE_STD_DEV) == 0)   return 13;
+	if(strcmp(sRole, DASDIM_ROLE_NORM) == 0)      return 14;
 	return 15;
 }
 
@@ -170,7 +170,7 @@ static int _DasDim_varOrder(const char* sRole){
 static int _DasDim_catTitle(const DasDim* pThis, char* sBuf, size_t uLen, int n)
 {
 	const char* sDimType = "Data";
-	if(pThis->dtype == DASDIM_COORD) sDimType = "Coordinate";
+	if(pThis->dtype == DASDIMTYPE_COORD) sDimType = "Coordinate";
 	n = _prn_catf(sBuf, uLen, n, "%s Dimension: %s (%s)",
 	                  sDimType, pThis->sId, pThis->sDim);
 
@@ -183,7 +183,7 @@ static int _DasDim_catTitle(const DasDim* pThis, char* sBuf, size_t uLen, int n)
 				/* the same slot serves both; as with the encoder, only a
 				   coordinate can be a secondary (annotation) axis */
 				const char* sLabel = " | axis: ";
-				if((pThis->dtype == DASDIM_COORD)&&(!pThis->primary))
+				if((pThis->dtype == DASDIMTYPE_COORD)&&(!pThis->primary))
 					sLabel = " | annotation: ";
 				n = _prn_catf(sBuf, uLen, n, "%s", sLabel);
 			}
@@ -245,24 +245,24 @@ bool DasDim_addVar(DasDim* pThis, const char* role, DasVar* pVar)
 	/* All variables in a dimension have to have a role, which is 
 	   just a non-empty string that we may or may not understand */
 	if((role == NULL)||(role[0] == '\0')){
-		das_error(DASERR_DIM,
+		daserrf(DASERR_DIM,
 			"A variable's role in dimension '%s' can't be empty", pThis->sId
 		);
 		return false;
 	}
 	if(pVar == NULL){
-		das_error(DASERR_DIM, "NULL variable for role '%s'", role);
+		daserrf(DASERR_DIM, "NULL variable for role '%s'", role);
 		return false;
 	}
 
 	for(size_t u = 0; u < pThis->uVars; ++u){
 		if(strcasecmp(pThis->aRoles[u], role) == 0){
-			das_error(DASERR_DIM, "Role %s is already defined", role);
+			daserrf(DASERR_DIM, "Role %s is already defined", role);
 			return false;
 		}
 	}
 	if(pThis->uVars == DASDIM_MAXVAR){
-		das_error(
+		daserrf(
 			DASERR_DIM, "Maximum number of variables in a dimension %d exceeded.  "
 			"The limit was chosen arbitrarily and can be changed or even removed "
 			"altogether.  Contact a das2C maintainer", DASDIM_MAXVAR
@@ -279,7 +279,7 @@ bool DasDim_addVar(DasDim* pThis, const char* role, DasVar* pVar)
 }
 
 /* Getting Variables ****************************************************** */
-DasVar* DasDim_getVar(DasDim* pThis, const char* sRole)
+DasVar* DasDim_var(DasDim* pThis, const char* sRole)
 {
 	for(size_t u = 0; u < pThis->uVars; ++u){
 		if(strcasecmp(pThis->aRoles[u], sRole) == 0) return pThis->aVars[u];
@@ -287,7 +287,7 @@ DasVar* DasDim_getVar(DasDim* pThis, const char* sRole)
 	return NULL;
 }
 
-DasVar* DasDim_getPointVar(DasDim* pThis)
+DasVar* DasDim_pointVar(DasDim* pThis)
 {
 	/* Preference order is: 
 	 * 
@@ -298,16 +298,16 @@ DasVar* DasDim_getPointVar(DasDim* pThis)
 	 * 
 	 *  If reference/offset provided could make auto-var for center
 	 */
-	DasVar* pVar = DasDim_getVar(pThis, DASVAR_CENTER);
+	DasVar* pVar = DasDim_var(pThis, DASDIM_ROLE_CENTER);
 	if(pVar != NULL) return pVar;
 	
-	pVar = DasDim_getVar(pThis, DASVAR_MEAN);
+	pVar = DasDim_var(pThis, DASDIM_ROLE_MEAN);
 	if(pVar != NULL) return pVar;
 	
-	pVar = DasDim_getVar(pThis, DASVAR_MEDIAN);
+	pVar = DasDim_var(pThis, DASDIM_ROLE_MEDIAN);
 	if(pVar != NULL) return pVar;
 	
-	pVar = DasDim_getVar(pThis, DASVAR_MODE);
+	pVar = DasDim_var(pThis, DASDIM_ROLE_MODE);
 	
 	/* We can't make new vars here since we are a constant pointer, but 
 	 * a function to do this could be added...*/
@@ -365,23 +365,23 @@ DasVar* DasDim_popVar(DasDim* pThis, const char* role){
 /* Axes (the dim-level frame cascade is gone; frames bind on each set's
    geovec formalism, so multi-axis validity is a verify-level rule now) */
 
-const char* DasDim_dim(const DasDim* pThis){ return pThis->sDim; }
+const char* DasDim_physDim(const DasDim* pThis){ return pThis->sDim; }
 
 const char* DasDim_name(const DasDim* pThis){ return pThis->sId; }
 
-das_dim_type_e DasDim_type(const DasDim* pThis){ return pThis->dtype; }
+das_dimtype DasDim_type(const DasDim* pThis){ return pThis->dtype; }
 
-/* DASDIM_UNK reports as "data", as it always has */
+/* DASDIMTYPE_UNK reports as "data", as it always has */
 const char* DasDim_typeName(const DasDim* pThis)
 {
-	return (pThis->dtype == DASDIM_COORD) ? "coord" : "data";
+	return (pThis->dtype == DASDIMTYPE_COORD) ? "coord" : "data";
 }
 
 void DasDim_setPrimeCoord(DasDim* pThis, bool bPrimary){ pThis->primary = bPrimary; }
 
 bool DasDim_isPrimeCoord(const DasDim* pThis){ return pThis->primary; }
 
-const char* DasDim_getAxis(const DasDim* pThis, int iAxis)
+const char* DasDim_axisSymAt(const DasDim* pThis, int iAxis)
 {
 	if((iAxis < 0)||(iAxis >= DASDIM_NAXES)) return NULL;
 	return (pThis->axes[iAxis][0] != '\0') ? pThis->axes[iAxis] : NULL;
@@ -389,12 +389,12 @@ const char* DasDim_getAxis(const DasDim* pThis, int iAxis)
 
 size_t DasDim_numVars(const DasDim* pThis){ return pThis->uVars; }
 
-DasVar* DasDim_getVarByIdx(const DasDim* pThis, size_t uIdx)
+DasVar* DasDim_varAt(const DasDim* pThis, size_t uIdx)
 {
 	return (uIdx < pThis->uVars) ? pThis->aVars[uIdx] : NULL;
 }
 
-const char* DasDim_getRoleByIdx(const DasDim* pThis, size_t uIdx)
+const char* DasDim_roleAt(const DasDim* pThis, size_t uIdx)
 {
 	return (uIdx < pThis->uVars) ? pThis->aRoles[uIdx] : NULL;
 }
@@ -409,49 +409,49 @@ int DasDim_numAxes(const DasDim* pThis)
 	return nAxes;
 }
 
-das_errcode DasDim_setAxis(DasDim* pThis, int iAxis, const char* sAxis)
+das_errcode DasDim_setAxisSym(DasDim* pThis, int iAxis, const char* sAxis)
 {
 	if((iAxis < 0)||(iAxis >= DASDIM_NAXES))
-		return das_error(DASERR_DIM, "Axis index %d is not valid for a dimension", iAxis);
+		return daserrf(DASERR_DIM, "Axis index %d is not valid for a dimension", iAxis);
 
 	/* Keeps the axes packed from 0, DasDim_numAxes() is a loop bound */
 	if(iAxis > DasDim_numAxes(pThis))
-		return das_error(DASERR_DIM,
+		return daserrf(DASERR_DIM,
 			"Set axis %d of dimension %s before axis %d", iAxis - 1, pThis->sId, iAxis
 		);
 	if((sAxis == NULL)||(sAxis[0] == '\0'))
-		return das_error(DASERR_DIM, "Empty axis name for dimension %s", pThis->sId);
+		return daserrf(DASERR_DIM, "Empty axis name for dimension %s", pThis->sId);
 
-	strncpy(pThis->axes[iAxis], sAxis, DASDIM_AXLEN - 1);
+	strncpy(pThis->axes[iAxis], sAxis, DASDIM_AXIS_SZ - 1);
 	return DAS_OKAY;
 }
 
-void DasDim_setAxes(DasDim* pThis, const DasDim* pOther)
+void DasDim_setAxesFrom(DasDim* pThis, const DasDim* pOther)
 {
 	pThis->primary = pOther->primary;
-	memcpy(pThis->axes, pOther->axes, DASDIM_NAXES*DASDIM_AXLEN);
+	memcpy(pThis->axes, pOther->axes, DASDIM_NAXES*DASDIM_AXIS_SZ);
 }
 
 
 /* Construction / Destruction ********************************************* */
 
-DasDim* new_DasDim(const char* sDim, const char* sId, das_dim_type_e dtype, int nDsRank)
+DasDim* new_DasDim(const char* sDim, const char* sId, das_dimtype dtype, int nDsRank)
 {
 	DasDim* pThis = (DasDim*)calloc(1, sizeof(DasDim));
 	if(pThis == NULL){
-		das_error(DASERR_DIM, "Out of memory"); return NULL;
+		daserrf(DASERR_DIM, "Out of memory"); return NULL;
 	}
 
-	DasDesc_init((DasDesc*)pThis, DASDESC_DIM, _del_DasDim);
+	DasDesc_init((DasDesc*)pThis, DASDESCTYPE_DIM, _del_DasDim);
 	
 	pThis->dtype = dtype;
-	das_assert_valid_id(sDim);
-	strncpy(pThis->sDim, sDim, DAS_MAX_ID_BUFSZ-1);
+	dasid_check(sDim);
+	strncpy(pThis->sDim, sDim, DASID_SZ-1);
 	
 	if(sId && sId[0] != '\0')  /* Just repeat as dim name if no name given */
-		strncpy(pThis->sId, sId, DAS_MAX_ID_BUFSZ-1);
+		strncpy(pThis->sId, sId, DASID_SZ-1);
 	else
-		strncpy(pThis->sId, sDim, DAS_MAX_ID_BUFSZ-1);
+		strncpy(pThis->sId, sDim, DASID_SZ-1);
 
 	pThis->iFirstInternal = nDsRank;
 	
@@ -477,7 +477,7 @@ das_errcode DasDim_encode(DasDim* pThis, DasBuf* pBuf)
 	das_errcode nRet = DAS_OKAY;
 	char sAxis[64] = {'\0'};
 	const char* sType = "data";
-	if(DasDim_type(pThis) == DASDIM_COORD){
+	if(DasDim_type(pThis) == DASDIMTYPE_COORD){
 		sType = "coord";
 		char* pPut = sAxis;
 		size_t uLen = 0;
@@ -492,10 +492,10 @@ das_errcode DasDim_encode(DasDim* pThis, DasBuf* pBuf)
 		}
 	}
 	DasBuf_printf(pBuf, "  <%s physDim=\"%s\" name=\"%s\"",
-		sType, DasDim_dim(pThis), DasDim_name(pThis)
+		sType, DasDim_physDim(pThis), DasDim_name(pThis)
 	);
 
-	if((DasDim_type(pThis) == DASDIM_COORD)&&(sAxis[0] != '\0')){
+	if((DasDim_type(pThis) == DASDIMTYPE_COORD)&&(sAxis[0] != '\0')){
 		if(DasDim_isPrimeCoord(pThis))
 			DasBuf_printf(pBuf, " axis=\"%s\"", sAxis);
 		else
@@ -512,13 +512,13 @@ das_errcode DasDim_encode(DasDim* pThis, DasBuf* pBuf)
 	DasVar* pVar = NULL;
 	const char* sRole = NULL;
 	for(size_t u = 0; u < uVars; ++u){
-		pVar = DasDim_getVarByIdx(pThis, u);
-		sRole = DasDim_getRoleByIdx(pThis, u);
+		pVar = DasDim_varAt(pThis, u);
+		sRole = DasDim_roleAt(pThis, u);
 
 		/* A computed variable has no wire form, this is typically not a
 		   problem, just remind the end user of that fact. */
 		if(DasVar_gen(pVar) == NULL){
-			daslog_info_v(
+			daslog_infof(
 				"Dropping computed variable %s:%s from output.", pThis->sId, sRole
 			);
 			continue;

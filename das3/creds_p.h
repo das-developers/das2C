@@ -45,7 +45,7 @@ extern "C" {
  * done with it.
  */
 int16_t _DasCredMngr_getHttpAuth(
-	DasCredMngr* pThis, const char* sServer, const char* sRealm,
+	DasCredMgr* pThis, const char* sServer, const char* sRealm,
 	const char* sDataset, char* sBuf, size_t uLen
 );
 
@@ -55,7 +55,7 @@ int16_t _DasCredMngr_getHttpAuth(
  * prompt.  Only a 401 means the secret was wrong; 403, 5xx and timeouts say
  * nothing about it and must not come here.
  */
-void _DasCredMngr_authFailed(DasCredMngr* pThis, int16_t nCred, const char* sMsg);
+void _DasCredMngr_authFailed(DasCredMgr* pThis, int16_t nCred, const char* sMsg);
 
 /* Wipe memory that held a secret, in a way the compiler can't drop */
 void _dascred_wipe(void* pMem, size_t uLen);

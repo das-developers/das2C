@@ -29,10 +29,10 @@ extern "C" {
 #endif
 
 /* Widest text field, ascii or time, a das2 encoding may declare.  Formatting
-   buffers are sized DASENC_MAX_WIDTH + 1, daslimit_get() reports it. */
+   buffers are sized DASENC_MAX_WIDTH + 1, DasLimit_lookup() reports it. */
 #define DASENC_MAX_WIDTH 127
 
-struct das_encoding {
+struct das_enc_t {
 	/* The basic encoding category. 
 	 * This may be one of:
 	 *  - @b DAS2DT_BE_REAL Most Significant byte First (big-endian) IEEE-754 reals
@@ -57,14 +57,14 @@ struct das_encoding {
 	 * Non-ASCII encodings do not make use of this string.  In that case
 	 * it is set by new_DasEnc() and new_DasEnc_str() to an empty string
 	 */
-	char sFmt[DASENC_FMT_LEN];
+	char sFmt[DASENC_FMT_SZ];
 	
 	/* The type value for this encoding on a Das2 Stream. 
 	 * For ASCII types the type value width is assumed to be one larger than 
 	 * the actual number of bytes in the formatted output to allow for a field
 	 * separator of some type.
 	 *  */
-	char sType[DASENC_TYPE_LEN];
+	char sType[DASENC_TYPE_SZ];
 	
 };
 

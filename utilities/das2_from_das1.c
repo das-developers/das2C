@@ -72,7 +72,7 @@ const char* g_sIdlBin = NULL;           /* Location of IDL binary, if needed */
 bool requiresInterval(DasDesc* pDsdf)
 {
 	if( ! DasDesc_has(pDsdf, "form") ) return false;
-	if( strcmp(DasDesc_getStr(pDsdf, "form" ), "x_multi_y") != 0 ) return false;
+	if( strcmp(DasDesc_val(pDsdf, "form" ), "x_multi_y") != 0 ) return false;
 	if( ! DasDesc_has(pDsdf, "items") ) return false;
 	
 	return true;
@@ -83,20 +83,20 @@ bool requiresInterval(DasDesc* pDsdf)
 
 /* DSDF units are input.  A missing key takes sDefault (NULL for
    dimensionless), and text that doesn't parse is dimensionless;
-   Units_fromStr() has already said why.  The labels built from the raw text
+   DasUnits_fromStr() has already said why.  The labels built from the raw text
    still carry it.  Das1 X was always time and its units always defaulted to
    seconds, so callers pass "s" for x_unit. */
-static das_units _dsdfUnits(
+static DasUnits _dsdfUnits(
 	const DasDesc* pDsdf, const char* sKey, const char* sDefault
 ){
-	const char* sText = DasDesc_getStr(pDsdf, sKey);
+	const char* sText = DasDesc_val(pDsdf, sKey);
 	if(sText == NULL) sText = sDefault;
-	if(sText == NULL) return UNIT_DIMENSIONLESS;
+	if(sText == NULL) return DASUNITS_DIMENSIONLESS;
 
-	das_units units = Units_fromStr(sText);
+	DasUnits units = DasUnits_fromStr(sText);
 	if(units == NULL){
-		daslog_warn_v("DSDF %s '%s' sent as dimensionless", sKey, sText);
-		return UNIT_DIMENSIONLESS;
+		daslog_warnf("DSDF %s '%s' sent as dimensionless", sKey, sText);
+		return DASUNITS_DIMENSIONLESS;
 	}
 	return units;
 }
@@ -106,31 +106,31 @@ DasPlane* _mkXPlane(DasDesc* pSd, DasDesc* pDsdf, const char* sDsdfFile)
 	const char* pXName = NULL;
 	const char* pXUnit = NULL;
 	DasEnc* pEnc = NULL;
-	das_units     xUnits = NULL;
+	DasUnits     xUnits = NULL;
 	char sXLabel[128] = {'u','n','l','a','b','e','l','e','d','\0'};
 	DasPlane* pX = NULL;
 	
-	if( (pXName = DasDesc_getStr(pDsdf, "x_parameter")) == NULL) pXName = "time";
-	if( (pXUnit = DasDesc_getStr(pDsdf, "x_unit")) == NULL) pXUnit = "s";
+	if( (pXName = DasDesc_val(pDsdf, "x_parameter")) == NULL) pXName = "time";
+	if( (pXUnit = DasDesc_val(pDsdf, "x_unit")) == NULL) pXUnit = "s";
 	
 	if(strcasecmp(pXName, "time") == 0){
 		pEnc = new_DasEnc(DAS2DT_HOST_REAL, 8, NULL);
-		xUnits = UNIT_US2000;
+		xUnits = DASUNITS_US2000;
 		strcpy(sXLabel, "Time");
 	}
 	else{
 		pEnc = new_DasEnc(DAS2DT_HOST_REAL, 4, NULL);
 		xUnits = _dsdfUnits(pDsdf, "x_unit", pXUnit);
-		if(DasDesc_getStr(pDsdf, "x_unit") != NULL)
-			snprintf(sXLabel, 128, "%s (%s)",  pXName, DasDesc_getStr(pDsdf, "x_unit"));
+		if(DasDesc_val(pDsdf, "x_unit") != NULL)
+			snprintf(sXLabel, 128, "%s (%s)",  pXName, DasDesc_val(pDsdf, "x_unit"));
 		else
 			strcpy(sXLabel, pXName);
 	}
 
-	pX = new_DasPlane(DASPLANE_X, NULL, pEnc, xUnits);
+	pX = new_DasPlane(DASPLANETYPE_X, NULL, pEnc, xUnits);
 	
 	sXLabel[0] = toupper(sXLabel[0]);  /* Bill likes initial caps on labels */
-	DasDesc_set(pSd, "String", "xLabel", sXLabel);
+	DasDesc_setProp(pSd, "String", "xLabel", sXLabel);
 	return pX;
 }
 
@@ -176,7 +176,7 @@ DasPkt* createPktDesc(
 	DasEnc* pEnc4 = new_DasEnc(DAS2DT_HOST_REAL, 4, NULL);
 	const char* sForm = NULL;
 	
-	das_units     yUnits = NULL;
+	DasUnits     yUnits = NULL;
 	const char* pYName = NULL;
 	char sYLabel[128] = {'u','n','l','a','b','e','l','e','d','\0'};
 	
@@ -185,7 +185,7 @@ DasPkt* createPktDesc(
 	const char* pLabel = NULL;
 	char sYName[128] = {'\0'};
 	
-	das_units     zUnits = NULL;
+	DasUnits     zUnits = NULL;
 	const char* pZName = NULL;
 	char sZLabel[128] = {'u','n','l','a','b','e','l','e','d','\0'};
 	
@@ -200,54 +200,54 @@ DasPkt* createPktDesc(
 	
 	/* Trigger making the various Y descriptors off the form value */
 	if(!DasDesc_has(pDsdf, "form")){
-		das_error(112, "ERROR: form parameter not specified in %s", sDsdfFile);
+		daserrf(112, "ERROR: form parameter not specified in %s", sDsdfFile);
 		return NULL;
 	}
-	sForm = DasDesc_getStr(pDsdf, "form" );
+	sForm = DasDesc_val(pDsdf, "form" );
 	
 	
 	/* Generic Y Stuff */
 	yUnits = _dsdfUnits(pDsdf, "y_unit", NULL);
-	if((pYName = DasDesc_getStr(pDsdf, "y_parameter")) == NULL) pYName = "y";
-	if(DasDesc_getStr(pDsdf, "y_unit") != NULL)
-		snprintf(sYLabel, 128, "%s (%s)", pYName, DasDesc_getStr(pDsdf, "y_unit"));
+	if((pYName = DasDesc_val(pDsdf, "y_parameter")) == NULL) pYName = "y";
+	if(DasDesc_val(pDsdf, "y_unit") != NULL)
+		snprintf(sYLabel, 128, "%s (%s)", pYName, DasDesc_val(pDsdf, "y_unit"));
 	else
 		strncpy(sYLabel, pYName, 128);
 	sYLabel[0] = toupper(sYLabel[0]);  /* Bill likes initial caps on labels */
-	DasDesc_set(pSd, "String", "yLabel", sYLabel);
+	DasDesc_setProp(pSd, "String", "yLabel", sYLabel);
 	
 	/* X-MULIT-Y */
 	if(strcmp(sForm, "x_multi_y") == 0){
 		if(DasDesc_has( pDsdf, "items" )){
-			nItems = DasDesc_getInt(pDsdf, "items" );
+			nItems = DasDesc_valInt(pDsdf, "items" );
 		} 
 		else{
 			if(DasDesc_has(pDsdf, "ny")){
-	        nItems = DasDesc_getInt( pDsdf, "ny" );
+	        nItems = DasDesc_valInt( pDsdf, "ny" );
 			}
 			else{
-				das_error(112, "[%s] ERROR: Can't determine number of Y vectors from"
+				daserrf(112, "[%s] ERROR: Can't determine number of Y vectors from"
 						     "DSDF file %s", g_sMyName, sDsdfFile);
 				return NULL;
 			}
 	   }
 		
 		if(nItems == 1){
-			pPlane = new_DasPlane(DASPLANE_Y, pYName, DasEnc_copy(pEnc4), yUnits);
+			pPlane = new_DasPlane(DASPLANETYPE_Y, pYName, new_DasEnc_copy(pEnc4), yUnits);
 			DasPkt_addPlane(pPkt, pPlane);
 		}
 		else{
 			for(int i = 0; i < nItems; i++){
 				sprintf(sKey, "label(%d)", i);
-				pLabel = DasDesc_getStr(pDsdf, sKey);
+				pLabel = DasDesc_val(pDsdf, sKey);
 				
 				if(_nameFromLbl(pLabel, sYName, 64) == NULL)
 					snprintf(sYName, 63, "plane_%d", i );
 				
-				pPlane = new_DasPlane(DASPLANE_Y, sYName, DasEnc_copy(pEnc4), yUnits);
+				pPlane = new_DasPlane(DASPLANETYPE_Y, sYName, new_DasEnc_copy(pEnc4), yUnits);
 				
 				if(pLabel != NULL)
-					DasDesc_set((DasDesc*)pPlane, "String", "yLabel", pLabel);
+					DasDesc_setProp((DasDesc*)pPlane, "String", "yLabel", pLabel);
 				
 				DasPkt_addPlane(pPkt, pPlane);
 			}
@@ -258,48 +258,48 @@ DasPkt* createPktDesc(
 	
 	/* Generic Z Stuff */
 	zUnits = _dsdfUnits(pDsdf, "z_unit", NULL);
-	if((pZName = DasDesc_getStr(pDsdf, "z_parameter")) == NULL) pZName = "z";
-	if(DasDesc_getStr(pDsdf, "z_unit") != NULL)
-		snprintf(sZLabel, 128, "%s (%s)", pYName, DasDesc_getStr(pDsdf, "z_unit"));
+	if((pZName = DasDesc_val(pDsdf, "z_parameter")) == NULL) pZName = "z";
+	if(DasDesc_val(pDsdf, "z_unit") != NULL)
+		snprintf(sZLabel, 128, "%s (%s)", pYName, DasDesc_val(pDsdf, "z_unit"));
 	else
 		strncpy(sZLabel, pZName, 128);
 	sZLabel[0] = toupper(sZLabel[0]);  /* Bill likes initial caps on labels */
-	DasDesc_set(pSd, "String", "zLabel", sZLabel);
+	DasDesc_setProp(pSd, "String", "zLabel", sZLabel);
 	
 	/* X-TAGGED-Y-SCAN */
 	if(strcmp(sForm, "x_tagged_y_scan") == 0){	
 		if(!DasDesc_has(pDsdf, "y_coordinate")){
-			das_error(112, "y_coordinate missing in dsdf file %s", sDsdfFile);
+			daserrf(112, "y_coordinate missing in dsdf file %s", sDsdfFile);
 			return NULL;
 		}
-		pYTags = dsdf_valToArray(DasDesc_getStr(pDsdf, "y_coordinate"), &uYTags);
-		pPlane = new_DasPlane_yscan(pZName, DasEnc_copy(pEnc4), zUnits, uYTags, 
+		pYTags = dasdsdf_newDoubles(DasDesc_val(pDsdf, "y_coordinate"), &uYTags);
+		pPlane = new_DasPlane_yscan(pZName, new_DasEnc_copy(pEnc4), zUnits, uYTags, 
 		                             NULL, pYTags, yUnits);
-		DasDesc_set((DasDesc*)pPlane, "String", "yLabel", sYLabel);
-		DasDesc_set((DasDesc*)pPlane, "String", "zLabel", sZLabel);
+		DasDesc_setProp((DasDesc*)pPlane, "String", "yLabel", sYLabel);
+		DasDesc_setProp((DasDesc*)pPlane, "String", "zLabel", sZLabel);
 		DasPkt_addPlane(pPkt, pPlane);
 		return pPkt;
 	}
 	
 	/* X-Y-Z SCATTER */
 	if(strcmp(sForm, "x_y_z") == 0){
-		pPlane = new_DasPlane(DASPLANE_Y, pYName, DasEnc_copy(pEnc4), yUnits);
+		pPlane = new_DasPlane(DASPLANETYPE_Y, pYName, new_DasEnc_copy(pEnc4), yUnits);
 		DasPkt_addPlane(pPkt, pPlane);
 	
-		pPlane = new_DasPlane(DASPLANE_Z, pZName, DasEnc_copy(pEnc4), zUnits);
+		pPlane = new_DasPlane(DASPLANETYPE_Z, pZName, new_DasEnc_copy(pEnc4), zUnits);
 		DasPkt_addPlane(pPkt, pPlane);
 		return pPkt;
 	}
 
-	das_error(112, "Couldn't determine the packet layout: form = '%s'", sForm);
+	daserrf(112, "Couldn't determine the packet layout: form = '%s'", sForm);
 	return NULL;
 }
 
 void addStreamProps(const DasDesc* pDsdf, DasStream* pSdOut)
 {
-	size_t uProps = DasDesc_length(pDsdf);
+	size_t uProps = DasDesc_numProps(pDsdf);
 	const char* sVal = NULL;
-	das_units unit = NULL;
+	DasUnits unit = NULL;
 	DasDesc* pSh = (DasDesc*)pSdOut;
 	
 	const char* psIgnore[20];
@@ -331,7 +331,7 @@ void addStreamProps(const DasDesc* pDsdf, DasStream* pSdOut)
 	bool bIgnore = false;
 	for(u = 0; u < uProps; u++){
 		bIgnore = false;
-		if( (sName = DasDesc_getNameByIdx(pDsdf, u)) == NULL) continue;
+		if( (sName = DasDesc_propNameAt(pDsdf, u)) == NULL) continue;
 		for(v = 0; v < 18; v++){
 			if(strcmp(sName, psIgnore[v]) == 0){
 				bIgnore = true;
@@ -341,35 +341,35 @@ void addStreamProps(const DasDesc* pDsdf, DasStream* pSdOut)
 		
 		if(bIgnore) continue;
 		
-		sVal = DasDesc_getValByIdx(pDsdf, u);
+		sVal = DasDesc_valAt(pDsdf, u);
 		
 		if(strcmp(sName, "x_sample_width") == 0){
 			unit = _dsdfUnits(pDsdf, "x_unit", "s");
-			DasDesc_setDatum(pSh, "xTagWidth", atof(sVal), unit);
+			DasDesc_setValDatum(pSh, "xTagWidth", atof(sVal), unit);
 			continue;
 		}
 		if(strcmp(sName, "y_sample_width") == 0){
-			if( DasDesc_getStr(pDsdf, "y_unit") != NULL){
+			if( DasDesc_val(pDsdf, "y_unit") != NULL){
 				unit = _dsdfUnits(pDsdf, "y_unit", NULL);
-				DasDesc_setDatum(pSh, "yTagWidth", atof(sVal), unit);
+				DasDesc_setValDatum(pSh, "yTagWidth", atof(sVal), unit);
 			}
 			continue;
 		}
 		if(strcmp(sName, "y_fill") == 0){
-			DasDesc_set(pSh, "double", "yFill", sVal);
+			DasDesc_setProp(pSh, "double", "yFill", sVal);
 			continue;
 		}
 		if(strcmp(sName, "z_fill") == 0){
-			DasDesc_set(pSh, "double", "zFill", sVal);
+			DasDesc_setProp(pSh, "double", "zFill", sVal);
 			continue;
 		}
 		if(strcmp(sName, "description") == 0){
-			DasDesc_set(pSh, "String", "title", sVal);
+			DasDesc_setProp(pSh, "String", "title", sVal);
 			continue;
 		}
 		
 		/* And the catch all */
-		DasDesc_set(pSh, "String", sName, sVal);
+		DasDesc_setProp(pSh, "String", sName, sVal);
 	}
 }
 
@@ -382,7 +382,7 @@ void addStreamProps(const DasDesc* pDsdf, DasStream* pSdOut)
 	*/
 int read_n_swap(void* pDest, size_t nItems, size_t szItem, FILE* pFile)
 {
-#ifdef HOST_IS_LSB_FIRST
+#ifdef DASHOST_LSB_FIRST
 	size_t i = 0;
 	size_t j = 0;
 	unsigned char abyte;
@@ -461,11 +461,11 @@ das_errcode das1ToDas2(FILE* pIn, DasPkt* pPkt, DasIO* pIoOut)
 	/* Items to read is sum of all plane's items + 1, get type of X axis while
 	 * we're iterating */
 	uTotItems = 0;
-	for(uPlane = 0; uPlane < DasPkt_getNPlanes(pPkt); uPlane++){
-		pPlane = DasPkt_getPlane(pPkt, uPlane);
-		uTotItems += DasPlane_getNItems(pPlane);
-		if((DasPlane_getType(pPlane) == DASPLANE_X) && 
-		   (strcmp(DasPlane_getUnits(pPlane), UNIT_US2000) == 0) )
+	for(uPlane = 0; uPlane < DasPkt_numPlanes(pPkt); uPlane++){
+		pPlane = DasPkt_planeAt(pPkt, uPlane);
+		uTotItems += DasPlane_numItems(pPlane);
+		if((DasPlane_type(pPlane) == DASPLANETYPE_X) && 
+		   (strcmp(DasPlane_units(pPlane), DASUNITS_US2000) == 0) )
 			g_bXIsTime = true;
 	}
 
@@ -474,17 +474,17 @@ das_errcode das1ToDas2(FILE* pIn, DasPkt* pPkt, DasIO* pIoOut)
 	while(read_n_swap( pVals, uTotItems,  sizeof(float), pIn)){
 		uVal = 0;
 		
-		for(uPlane = 0; uPlane < DasPkt_getNPlanes(pPkt); uPlane++){
-			pPlane = DasPkt_getPlane(pPkt, uPlane);
-			uItems = DasPlane_getNItems(pPlane);
+		for(uPlane = 0; uPlane < DasPkt_numPlanes(pPkt); uPlane++){
+			pPlane = DasPkt_planeAt(pPkt, uPlane);
+			uItems = DasPlane_numItems(pPlane);
 			
-			if((DasPlane_getType(pPlane) == DASPLANE_X)&&(g_bXIsTime)){
-				DasPlane_setValue(pPlane, 0, g_xBaseUs2000 + pVals[uVal] * 1e6);
+			if((DasPlane_type(pPlane) == DASPLANETYPE_X)&&(g_bXIsTime)){
+				DasPlane_setValAt(pPlane, 0, g_xBaseUs2000 + pVals[uVal] * 1e6);
 				uVal++;
 			}
 			else{
 				for(u = 0; u < uItems; u++){
-					DasPlane_setValue(pPlane, u, pVals[uVal]);
+					DasPlane_setValAt(pPlane, u, pVals[uVal]);
 					uVal++;
 				}
 			}
@@ -569,7 +569,7 @@ void parseArgs(
 			exit(0);
 		}
 		if(strcmp(argv[i], "-v") == 0 || strcmp(argv[i], "--version") == 0){
-			printf("das2_from_das1 (das2C %s)\n", das_lib_version());
+			printf("das2_from_das1 (das2C %s)\n", daslib_version());
 			exit(0);
 		}
 
@@ -636,18 +636,18 @@ int main(int argc, char** argv)
 	bool bReqInterval = false;
    
 	/* Exit on errors, log info messages and above */
-	das_init(argv[0], DASERR_DIS_EXIT, DASLOG_INFO, NULL);
+	daslib_init(argv[0], DASERRDISP_EXIT, DASLOG_INFO, NULL);
 
 	parseArgs(argc, argv, sDsdfFile, sBeg, sEnd, sParams); /* May not return */
 	
 	/* Set the location of the IDL binary, if specified */
-	if(g_sIdlBin != NULL) dsdf_setIdlBin(g_sIdlBin);
+	if(g_sIdlBin != NULL) dasdsdf_setIdlBin(g_sIdlBin);
 	
-	if( (pDsdf = dsdf_parse( sDsdfFile )) == NULL) return 112;
+	if( (pDsdf = new_DasDesc_dsdf( sDsdfFile )) == NULL) return 112;
 	
 	/* add extra requirements for Das1 dsdfs */
 	if(!DasDesc_has(pDsdf, "form"))
-		return das_error(112, "Keyword 'form' missing from DSDF file %s", 
+		return daserrf(112, "Keyword 'form' missing from DSDF file %s", 
 				            sDsdfFile);
 	
 	bReqInterval = requiresInterval(pDsdf);
@@ -659,7 +659,7 @@ int main(int argc, char** argv)
 		pEnd = sParams;
 		pParams = sBeg;
 		if(pParams[0] == '\0')
-			return das_error(112, "[%s] ERROR: Interval parameter required for "
+			return daserrf(112, "[%s] ERROR: Interval parameter required for "
 					            "Ephemeris readers", g_sMyName);
 	}
 	else{
@@ -672,30 +672,30 @@ int main(int argc, char** argv)
 	if(strrchr(sDsdfFile, '/')) pSource = strrchr(sDsdfFile,'/') + 1;
 	pOut = new_DasIO(pSource, new_DasXport_stdout(), NULL);
 	pSdOut = new_DasStream();
-	DasDesc_set( (DasDesc*)pSdOut, "Time", "start", pBeg );
-	DasDesc_set( (DasDesc*)pSdOut, "Time", "end", pEnd );
+	DasDesc_setProp( (DasDesc*)pSdOut, "Time", "start", pBeg );
+	DasDesc_setProp( (DasDesc*)pSdOut, "Time", "end", pEnd );
 	
-	das_time dt = {0};
-	if(!dt_parsetime(&dt, pBeg))
-		return das_error(112, "[%s] ERROR: Couldn't parse %s as a date time", g_sMyName, pBeg);
+	DasTime dt = {0};
+	if(!DasTime_fromStr(&dt, pBeg))
+		return daserrf(112, "[%s] ERROR: Couldn't parse %s as a date time", g_sMyName, pBeg);
 	
-   g_xBaseUs2000 = Units_convertFromDt(&dt, UNIT_US2000);
+   g_xBaseUs2000 = DasTime_toPoint(&dt, DASUNITS_US2000);
 
    if( (pPdOut = createPktDesc((DasDesc*)pSdOut, pDsdf, sDsdfFile)) == NULL)
 		return 112;
 	DasStream_addDesc(pSdOut, (DasDesc*)pPdOut, 1);
 	 
 	/* Add in stream properties from command line and DSDF */
-	DasDesc_set((DasDesc*)pSdOut, "Time", "start", pBeg);
-	DasDesc_set((DasDesc*)pSdOut, "Time", "end", pEnd);
+	DasDesc_setProp((DasDesc*)pSdOut, "Time", "start", pBeg);
+	DasDesc_setProp((DasDesc*)pSdOut, "Time", "end", pEnd);
 	
 	addStreamProps(pDsdf, pSdOut);
 	 
 	DasIO_writeStreamDesc(pOut, pSdOut);
 	DasIO_writeDesc(pOut, (DasDesc*)pPdOut, 1);
 	
-	if( (sRdr = DasDesc_getStr(pDsdf,"reader")) == NULL)
-		return das_error(112, "Error in %s, 'reader' value not defined", sDsdfFile);
+	if( (sRdr = DasDesc_val(pDsdf,"reader")) == NULL)
+		return daserrf(112, "Error in %s, 'reader' value not defined", sDsdfFile);
 	
    pPipe = openReader(sRdr, pBeg, pEnd, pParams, bReqInterval);
 	

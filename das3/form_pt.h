@@ -58,14 +58,14 @@ extern "C" {
 #endif
 
 /* Exported so that its address can be compared.  Client code uses the
-   DAS_FORM_PT macro below and has no reason to name this directly. */
-DAS_API extern const DasForm_VTbl das_form_pt_vtbl;
+   DASFORM_PT macro below and has no reason to name this directly. */
+DAS_API extern const DasFormVTable DasFormPt_vtable;
 
 /** A position on a scale measured from an agreed origin, calendar time being
  * the common case.  Two of these subtract to give an interval, but adding two
  * calendar dates means nothing and is refused.
- * @see DasForm_isKind(), DasVar_formIs().  @relates DasForm */
-#define DAS_FORM_PT (&das_form_pt_vtbl)
+ * @see DasForm_isKind(), DasVar_hasForm().  @relates DasForm */
+#define DASFORM_PT (&DasFormPt_vtable)
 
 /** Build a point formalism.  Stateless; the affine rule needs no parameters.
  * @returns a new form with one reference.  @memberof DasForm */

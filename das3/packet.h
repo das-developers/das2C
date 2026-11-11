@@ -29,7 +29,7 @@ extern "C" {
 #endif
 
 /** maximum planes allowed in a packet */
-#define MAXPLANES 100
+#define DASPKT_MAX_PLANES 100
 
 /** @class DasPkt packet.h <das3/packet.h>
  *
@@ -109,7 +109,7 @@ extern "C" {
  *
  * When reading Das2 Streams PacketDescriptors are created automatically 
  * as the input is read by DasIO_readAll() and handed to the onPktDesc
- * callback of each das_stream_proc.
+ * callback of each DasIOProc.
  *
  * <h3>Emitting Packet Data</h3>
  *  
@@ -138,7 +138,7 @@ extern "C" {
  * @nosubgrouping
  * @ingroup streams
  */
-typedef struct das_pkt DasPkt;
+typedef struct das_pkt_t DasPkt;
 
 
 /** Creates a packet descriptor with the default settings.
@@ -160,7 +160,7 @@ DAS_API DasPkt* new_DasPkt(void);
  * @return true if both packet descriptors provide the same definition, false
  *         otherwise
  */
-DAS_API bool DasPkt_equalFormat(const DasPkt* pPd1, const DasPkt* pPd2);
+DAS_API bool DasPkt_isSameFmt(const DasPkt* pPd1, const DasPkt* pPd2);
 
 
 /** Get the size of data records defined by a packet descriptor
@@ -177,7 +177,7 @@ DAS_API size_t DasPkt_recBytes(const DasPkt* pThis);
  * @returns The number of planes defined in this packet.
  * @memberof DasPkt
  */
-DAS_API size_t DasPkt_getNPlanes(const DasPkt* pThis);
+DAS_API size_t DasPkt_numPlanes(const DasPkt* pThis);
 
 /** Get the number of planes of a particular type in a packet
  * 
@@ -186,7 +186,7 @@ DAS_API size_t DasPkt_getNPlanes(const DasPkt* pThis);
  * @return The number of planes of a particular type in this packet descriptor
  * @memberof DasPkt
  */
-DAS_API size_t DasPkt_getNPlanesOfType(const DasPkt* pThis, das_plane_type_e pt);
+DAS_API size_t DasPkt_numPlanesOfType(const DasPkt* pThis, das_planetype pt);
 
 /** Add a plane to a packet
  * 
@@ -226,20 +226,20 @@ DAS_API int DasPkt_addPlane(DasPkt* pThis, DasPlane* pPlane);
  *
  * @param pThis the packet descriptor to query
  * @param iPlane the index in question.  Valid values for this parameter are
- *        0 to MAXPLANES - 1
+ *        0 to DASPKT_MAX_PLANES - 1
  * @returns If the index corresponds to a data plane, then one of the enum
  *          values is return:
- *          <ul><li>DASPLANE_X</li>
- *          <li>DASPLANE_Y</li>
- *          <li>DASPLANE_YSCAN</li>
- *          <li>DASPLANE_Z</li></ul>
+ *          <ul><li>DASPLANETYPE_X</li>
+ *          <li>DASPLANETYPE_Y</li>
+ *          <li>DASPLANETYPE_YSCAN</li>
+ *          <li>DASPLANETYPE_Z</li></ul>
  *          is returned, otherwise:
- *          <ul><li>DASPLANE_INV</li></ul>
+ *          <ul><li>DASPLANETYPE_INV</li></ul>
  *          is returned
  *
  * @memberof DasPkt
  */
-DAS_API das_plane_type_e DasPkt_getPlaneType(const DasPkt* pThis, int iPlane);
+DAS_API das_planetype DasPkt_planeTypeAt(const DasPkt* pThis, int iPlane);
 
 
 /** returns the PlaneDescriptor for plane number @a iplane
@@ -252,7 +252,7 @@ DAS_API das_plane_type_e DasPkt_getPlaneType(const DasPkt* pThis, int iPlane);
  *
  * @memberof DasPkt
  */
-DAS_API DasPlane* DasPkt_getPlane(DasPkt* pThis, int iplane);
+DAS_API DasPlane* DasPkt_planeAt(DasPkt* pThis, int iplane);
 
 
 /** Replace a plane descriptor at a specific index
@@ -274,14 +274,14 @@ DAS_API DasPlane* DasPkt_replaceAt(DasPkt* pThis, int iPlane, DasPlane* pNew);
  * @returns a number from 0 to 99 if successful or -1 if the plane pointed to
  *          by pPlane is not part of this packet description
  */
-DAS_API int DasPkt_getPlaneIdx(DasPkt* pThis, DasPlane* pPlane);
+DAS_API int DasPkt_planeIdx(DasPkt* pThis, DasPlane* pPlane);
 
 /** Get a Plane Descriptor for the plane with the name @a name
  *
  * @returns A pointer to the plane, or NULL if no plane with the 
  *          given name is present in the packet descriptor
  */
-DAS_API DasPlane* DasPkt_getPlaneByName(DasPkt* pThis, const char* name);
+DAS_API DasPlane* DasPkt_planeByName(DasPkt* pThis, const char* name);
 
 /** Get the Ith plane of a given type
  * 
@@ -292,8 +292,8 @@ DAS_API DasPlane* DasPkt_getPlaneByName(DasPkt* pThis, const char* name);
  * @return A pointer to the plane, or NULL if there are not at least iRelIndex + 1
  *          planes of the given type in the packet
  */
-DAS_API DasPlane* DasPkt_getPlaneByType(
-	DasPkt* pThis, das_plane_type_e ptype, int iRelIndex);
+DAS_API DasPlane* DasPkt_planeOfType(
+	DasPkt* pThis, das_planetype ptype, int iRelIndex);
 
 /** Gets the Nth plane of a given type. 
  *
@@ -312,8 +312,8 @@ DAS_API DasPlane* DasPkt_getPlaneByType(
  * 
  * @memberof DasPkt
  */
-DAS_API int DasPkt_getPlaneIdxByType(
-	const DasPkt* pThis, das_plane_type_e ptype, int iRelIndex
+DAS_API int DasPkt_planeIdxOfType(
+	const DasPkt* pThis, das_planetype ptype, int iRelIndex
 );
 
 /** returns the plane number for the named plane.  
@@ -323,14 +323,14 @@ DAS_API int DasPkt_getPlaneIdxByType(
  * Note that typically the 0th plane is typically the \<x\> plane.
  * @memberof DasPkt
  */
-DAS_API int DasPkt_getPlaneIdxByName(
-	DasPkt* pThis, const char* name, das_plane_type_e planeType
+DAS_API int DasPkt_planeIdxByName(
+	DasPkt* pThis, const char* name, das_planetype planeType
 );
 
 /** returns the PlaneDescriptor for the 1st X Tag plane.  
  * @memberof DasPkt
  */
-DAS_API DasPlane* DasPkt_getXPlane(DasPkt* pThis);
+DAS_API DasPlane* DasPkt_xPlane(DasPkt* pThis);
 
 /** Serialize a packet descriptor as XML data
  * 
@@ -340,7 +340,7 @@ DAS_API DasPlane* DasPkt_getXPlane(DasPkt* pThis);
  * 
  * @memberof DasPkt
  */
-DAS_API das_errcode DasPkt_encode(const DasPkt* pThis, DasBuf* pBuf);
+DAS_API das_errcode DasPkt_encodeHdr(const DasPkt* pThis, DasBuf* pBuf);
 
 /** Serialize a packet's current data
  * In addition to holding the format information for Das2 Stream packets
@@ -359,8 +359,8 @@ DAS_API das_errcode DasPkt_encodeData(const DasPkt* pThis, DasBuf* pBuf);
 /** Convenience function for setting a single value in a plane
  * This is just a shortcut for:
  * @code
- * DasPlane* pPlane = DasPkt_getPlane(pPkt, uPlane);
- * DasPlane_setValue(pPlane, uItem, value);
+ * DasPlane* pPlane = DasPkt_planeAt(pPkt, uPlane);
+ * DasPlane_setValAt(pPlane, uItem, value);
  * @endcode
  * @param pThis The packet descriptor in question.
  * @param uPlane The index of the plane to receive the values
@@ -369,15 +369,15 @@ DAS_API das_errcode DasPkt_encodeData(const DasPkt* pThis, DasBuf* pBuf);
  * @return 0 on success or a positive error code if there is a problem
  * @memberof DasPkt
  */
-DAS_API das_errcode DasPkt_setValue(
+DAS_API das_errcode DasPkt_setValAt(
 	DasPkt* pThis, size_t uPlane, size_t uItem, double val
 );
 
 /** Convenience function for setting an array of values in a plane
  * This is just a shortcut for:
  * @code
- * DasPlane* pPlane = DasPkt_getPlane(pPkt, uPlane);
- * DasPlane_setValues(pPlane, pVals);
+ * DasPlane* pPlane = DasPkt_planeAt(pPkt, uPlane);
+ * DasPlane_setVals(pPlane, pVals);
  * @endcode
  * @param pThis The packet descriptor in question.
  * @param uPlane The index of the plane to receive the values
@@ -386,7 +386,7 @@ DAS_API das_errcode DasPkt_setValue(
  * @return 0 on success or a positive error code if there is a problem
  * @memberof DasPkt
  */
-DAS_API das_errcode DasPkt_setValues(
+DAS_API das_errcode DasPkt_setVals(
 	DasPkt* pThis, size_t uPlane, const double* pVals
 );
 

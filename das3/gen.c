@@ -38,7 +38,7 @@
 /* var.h and has no business knowing what a variable is.  Callers apply */
 /* own policy (exact rank, whether a flag token is legal here, item counts).  */
 
-das_errcode das_shape_fromStr(
+das_errcode dasshape_fromStr(
 	const char* sShape, int nMaxRank, bool bAllowFlags, const char* sWhere,
 	ptrdiff_t* pShape, int* pnRank
 ){
@@ -46,17 +46,17 @@ das_errcode das_shape_fromStr(
 	int nRank = 0;
 
 	if((sShape == NULL)||(pShape == NULL)||(pnRank == NULL))
-		return das_error(DASERR_GEN, "Null argument to das_shape_fromStr");
+		return daserrf(DASERR_GEN, "Null argument to dasshape_fromStr");
 
 	while(*sBeg != '\0'){
 		if(nRank >= nMaxRank)
-			return das_error(DASERR_SERIAL,
+			return daserrf(DASERR_SERIAL,
 				"More than %d index entries in \"%s\" for %s", nMaxRank, sShape,
 				sWhere
 			);
 
 		if(*sBeg == '*'){
-			pShape[nRank] = VARIDX_RAGGED;
+			pShape[nRank] = DASIDX_RAGGED;
 			++sBeg;
 		}
 		else if((*sBeg == '^')||(*sBeg == '-')){
@@ -64,10 +64,10 @@ das_errcode das_shape_fromStr(
 			   container's index space.  A dataset is that container, so it can
 			   neither borrow an extent nor decline one. */
 			if(!bAllowFlags)
-				return das_error(DASERR_SERIAL,
+				return daserrf(DASERR_SERIAL,
 					"'%c' is not allowed in \"%s\" for %s", *sBeg, sShape, sWhere
 				);
-			pShape[nRank] = (*sBeg == '^') ? VARIDX_BORROW : VARIDX_UNUSED;
+			pShape[nRank] = (*sBeg == '^') ? DASIDX_BORROW : DASIDX_UNUSED;
 			++sBeg;
 		}
 		else{
@@ -75,14 +75,14 @@ das_errcode das_shape_fromStr(
 			int nDigits = 0;
 			while((*sBeg >= '0')&&(*sBeg <= '9')){
 				if(++nDigits > 9)      /* keeps nExtent well inside ptrdiff_t */
-					return das_error(DASERR_SERIAL,
+					return daserrf(DASERR_SERIAL,
 						"Absurd extent in \"%s\" for %s", sShape, sWhere
 					);
 				nExtent = nExtent*10 + (*sBeg - '0');
 				++sBeg;
 			}
 			if(nDigits == 0)
-				return das_error(DASERR_SERIAL,
+				return daserrf(DASERR_SERIAL,
 					"Unexpected '%c' in \"%s\" for %s", *sBeg, sShape, sWhere
 				);
 			pShape[nRank] = nExtent;
@@ -92,20 +92,20 @@ das_errcode das_shape_fromStr(
 		if(*sBeg == '\0')
 			break;
 		if(*sBeg != ';')
-			return das_error(DASERR_SERIAL,
+			return daserrf(DASERR_SERIAL,
 				"Unexpected '%c' in \"%s\" for %s", *sBeg, sShape, sWhere
 			);
 		++sBeg;
 	}
 
 	if(nRank < 1)
-		return das_error(DASERR_SERIAL, "Empty shape string for %s", sWhere);
+		return daserrf(DASERR_SERIAL, "Empty shape string for %s", sWhere);
 
 	*pnRank = nRank;
 	return DAS_OKAY;
 }
 
-char* das_shape_toStr(const ptrdiff_t* pShape, int nRank, char* sBuf, size_t uLen)
+char* dasshape_toStr(const ptrdiff_t* pShape, int nRank, char* sBuf, size_t uLen)
 {
 	if(uLen > 0) sBuf[0] = '\0';
 	int n = 0;
@@ -113,9 +113,9 @@ char* das_shape_toStr(const ptrdiff_t* pShape, int nRank, char* sBuf, size_t uLe
 	for(int i = 0; i < nRank; ++i){
 		const char* sSep = (i > 0) ? ";" : "";
 		switch(pShape[i]){
-		case VARIDX_UNUSED: n = _prn_catf(sBuf, uLen, n, "%s-", sSep); break;
-		case VARIDX_BORROW: n = _prn_catf(sBuf, uLen, n, "%s^", sSep); break;
-		case VARIDX_RAGGED: n = _prn_catf(sBuf, uLen, n, "%s*", sSep); break;
+		case DASIDX_UNUSED: n = _prn_catf(sBuf, uLen, n, "%s-", sSep); break;
+		case DASIDX_BORROW: n = _prn_catf(sBuf, uLen, n, "%s^", sSep); break;
+		case DASIDX_RAGGED: n = _prn_catf(sBuf, uLen, n, "%s*", sSep); break;
 		default:
 			n = _prn_catf(sBuf, uLen, n, "%s%td", sSep, pShape[i]);
 		}
@@ -125,16 +125,16 @@ char* das_shape_toStr(const ptrdiff_t* pShape, int nRank, char* sBuf, size_t uLe
 
 /* ************************************************************************* */
 /* The shape lattice.  These merge extents in the MODEL's index space, which  */
-/* has BORROW and UNUSED extents and marks ragged with VARIDX_RAGGED (-1).    */
+/* has BORROW and UNUSED extents and marks ragged with DASIDX_RAGGED (-1).    */
 /*                                                                            */
 /* They are NOT for array storage shapes.  An array marks an unset extent with */
-/* ARYIDX_UNBOUND (0), which this lattice would read as a real extent of zero  */
+/* DASIDX_UNBOUND (0), which this lattice would read as a real extent of zero  */
 /* and silently propagate as the minimum.                                     */
 
-void das_varindex_merge(int nRank, ptrdiff_t* pDest, ptrdiff_t* pSrc)
+void dasshape_merge(int nRank, ptrdiff_t* pDest, ptrdiff_t* pSrc)
 {
 	
-	for(size_t u = 0; u < nRank && u < VARIDX_MAX; ++u){
+	for(size_t u = 0; u < nRank && u < DASIDX_MAX; ++u){
 		
 		/* Here's the order of shape merge precedence
 		 *
@@ -153,8 +153,8 @@ void das_varindex_merge(int nRank, ptrdiff_t* pDest, ptrdiff_t* pSrc)
 		 */
 		
 		/* If either is ragged, the result is ragged */
-		if((pDest[u] == VARIDX_RAGGED) || (pSrc[u] == VARIDX_RAGGED)){ 
-			pDest[u] = VARIDX_RAGGED;
+		if((pDest[u] == DASIDX_RAGGED) || (pSrc[u] == DASIDX_RAGGED)){ 
+			pDest[u] = DASIDX_RAGGED;
 			continue;
 		}
 		
@@ -171,8 +171,8 @@ void das_varindex_merge(int nRank, ptrdiff_t* pDest, ptrdiff_t* pSrc)
 		}
 		
 		/* All that's left is a borrowed extent or unused; borrow beats unused */
-		if((pDest[u] == VARIDX_BORROW)||(pSrc[u] == VARIDX_BORROW)){
-			pDest[u] = VARIDX_BORROW;
+		if((pDest[u] == DASIDX_BORROW)||(pSrc[u] == DASIDX_BORROW)){
+			pDest[u] = DASIDX_BORROW;
 			continue;
 		}
 		
@@ -180,7 +180,7 @@ void das_varindex_merge(int nRank, ptrdiff_t* pDest, ptrdiff_t* pSrc)
 	}
 }
 
-ptrdiff_t das_varlength_merge(ptrdiff_t nLeft, ptrdiff_t nRight)
+ptrdiff_t dasshape_mergeLen(ptrdiff_t nLeft, ptrdiff_t nRight)
 {
 	/* Two real lengths -> the smaller, on purpose: during a live read variables
 	 * fill in different-sized blocks, so the extent usable across all of them is
@@ -216,31 +216,31 @@ static bool _catf(char** ppWrite, size_t* puLen, const char* sFmt, ...)
 /* One element as text: ISO for a time, integers as integers, reals in %g at
    the precision of their own type so a float slope of 0.01 does not print
    as 0.0099999998 */
-static char* _DasGen_prnElem(das_elem_type et, const ubyte* p, char* sBuf, size_t uLen)
+static char* _DasGen_prnElem(das_et et, const uint8_t* p, char* sBuf, size_t uLen)
 {
 	double r = 0.0;
 	switch(et){
-	case etTime: {
-		const das_time* pDt = (const das_time*)p;
+	case DASET_TIME: {
+		const DasTime* pDt = (const DasTime*)p;
 		int nFrac = (pDt->second == (double)((int)pDt->second)) ? 0 : 6;
-		return dt_isoc(pDt, nFrac, sBuf, uLen);
+		return DasTime_toIsoC(pDt, nFrac, sBuf, uLen);
 	}
-	case etLong:
+	case DASET_LONG:
 		snprintf(sBuf, uLen, "%lld", (long long)*((const int64_t*)p));
 		return sBuf;
-	case etULong:
+	case DASET_ULONG:
 		snprintf(sBuf, uLen, "%llu", (unsigned long long)*((const uint64_t*)p));
 		return sBuf;
-	case etFloat:
-		das_elem_asDouble(et, p, &r);
+	case DASET_FLOAT:
+		daset_toDouble(et, p, &r);
 		snprintf(sBuf, uLen, "%.7g", r);
 		return sBuf;
-	case etDouble:
-		das_elem_asDouble(et, p, &r);
+	case DASET_DOUBLE:
+		daset_toDouble(et, p, &r);
 		snprintf(sBuf, uLen, "%.15g", r);
 		return sBuf;
 	default:
-		if(das_elem_asDouble(et, p, &r))
+		if(daset_toDouble(et, p, &r))
 			snprintf(sBuf, uLen, "%.0f", r);
 		else
 			snprintf(sBuf, uLen, "?");
@@ -282,8 +282,8 @@ char* DasGen_expression(const DasGen* pThis, char* sBuf, size_t uLen)
 
 	case gtSeq: {
 		const DasGenSeq* pSeq = (const DasGenSeq*)pThis;
-		das_elem_type et = pThis->elem;
-		das_elem_type etSlope = (et == etTime) ? etDouble : et;   /* seconds */
+		das_et et = pThis->elem;
+		das_et etSlope = (et == DASET_TIME) ? DASET_DOUBLE : et;   /* seconds */
 
 		_catf(&pWrite, &uLen, "(");
 		for(int c = 0; c < pSeq->nComps; ++c){
@@ -293,9 +293,9 @@ char* DasGen_expression(const DasGen* pThis, char* sBuf, size_t uLen)
 			_catf(&pWrite, &uLen, "%s", sVal);
 
 			for(int i = 0; i < pSeq->nExtRank; ++i){
-				const ubyte* pSlope = DasGenSeq_interval(pSeq, c, i);
+				const uint8_t* pSlope = DasGenSeq_interval(pSeq, c, i);
 				double r = 0.0;
-				das_elem_asDouble(etSlope, pSlope, &r);
+				daset_toDouble(etSlope, pSlope, &r);
 				if(r == 0.0) continue;    /* this index does not move the value */
 
 				_DasGen_prnElem(etSlope, pSlope, sVal, sizeof(sVal));
@@ -304,7 +304,7 @@ char* DasGen_expression(const DasGen* pThis, char* sBuf, size_t uLen)
 				else
 					_catf(&pWrite, &uLen, " + %s*%c", sVal, g_sIdxLower[i]);
 			}
-			if(et == etTime) _catf(&pWrite, &uLen, " s");
+			if(et == DASET_TIME) _catf(&pWrite, &uLen, " s");
 		}
 		_catf(&pWrite, &uLen, ")");
 		return sBuf;
@@ -371,29 +371,29 @@ int DasGen_decRef(DasGen* pThis)
 }
 
 int DasGen_eval(
-	const DasGen* pThis, const ptrdiff_t* pExtLoc, ubyte* pRun, size_t uRunMax
+	const DasGen* pThis, const ptrdiff_t* pExtAddr, uint8_t* pRun, size_t uRunMax
 ){
-	return pThis->pVTbl->eval(pThis, pExtLoc, pRun, uRunMax);
+	return pThis->pVTbl->eval(pThis, pExtAddr, pRun, uRunMax);
 }
 
 int DasGen_extShape(const DasGen* pThis, ptrdiff_t* pShape)
 {
 	/* Filled here as well as in DasVar_shape(), since a generator can be asked
 	   directly and the two entry points owe the caller the same thing. */
-	for(int i = 0; i < VARIDX_MAX; ++i) pShape[i] = VARIDX_UNUSED;
+	for(int i = 0; i < DASIDX_MAX; ++i) pShape[i] = DASIDX_UNUSED;
 
 	return pThis->pVTbl->extShape(pThis, pShape);
 }
 
-ptrdiff_t DasGen_lengthIn(const DasGen* pThis, int nIdx, ptrdiff_t* pLoc)
+ptrdiff_t DasGen_lengthIn(const DasGen* pThis, int nIdx, ptrdiff_t* pAddr)
 {
-	return pThis->pVTbl->lengthIn(pThis, nIdx, pLoc);
+	return pThis->pVTbl->lengthIn(pThis, nIdx, pAddr);
 }
 
-const ubyte* DasGen_at(
-	const DasGen* pThis, const ptrdiff_t* pExtLoc, size_t* pCount
+const uint8_t* DasGen_at(
+	const DasGen* pThis, const ptrdiff_t* pExtAddr, size_t* pCount
 ){
-	return pThis->pVTbl->at(pThis, pExtLoc, pCount);
+	return pThis->pVTbl->at(pThis, pExtAddr, pCount);
 }
 
 DasAry* DasGen_subsetView(
@@ -404,15 +404,15 @@ DasAry* DasGen_subsetView(
 
 int DasGen_subsetInto(
 	const DasGen* pThis, int nExtRank, const ptrdiff_t* pMin,
-	const ptrdiff_t* pMax, ubyte* pBuf, size_t uBufLen
+	const ptrdiff_t* pMax, uint8_t* pBuf, size_t uBufLen
 ){
 	return pThis->pVTbl->subsetInto(pThis, nExtRank, pMin, pMax, pBuf, uBufLen);
 }
 
-const ubyte* DasGen_getFill(const DasGen* pThis)
+const uint8_t* DasGen_getFill(const DasGen* pThis)
 {
 	if(pThis->kind != gtArray) return NULL;
-	return DasAry_getFill(((const DasGenAry*)pThis)->pAry);
+	return DasAry_fill(((const DasGenAry*)pThis)->pAry);
 }
 
 size_t DasGen_itemElems(const DasGen* pThis)
@@ -444,8 +444,8 @@ DasGen* DasGen_copy(const DasGen* pThis)
 		DasGenSeq* pOut = (DasGenSeq*)calloc(1, sizeof(DasGenSeq));
 		*pOut = *pIn;
 		pOut->base.nRef = 1;
-		size_t uBlock = (size_t)pIn->nComps * (1 + VARIDX_MAX) * DASGEN_SEQ_SLOT;
-		pOut->pIntercept = (ubyte*)malloc(uBlock);
+		size_t uBlock = (size_t)pIn->nComps * (1 + DASIDX_MAX) * DASGEN_SEQ_SLOT;
+		pOut->pIntercept = (uint8_t*)malloc(uBlock);
 		memcpy(pOut->pIntercept, pIn->pIntercept, uBlock);
 		pOut->pInterval = pOut->pIntercept + (size_t)pIn->nComps * DASGEN_SEQ_SLOT;
 		return (DasGen*)pOut;
@@ -466,7 +466,7 @@ DasGen* DasGen_copy(const DasGen* pThis)
 		return (DasGen*)pOut;
 	}
 	}
-	das_error(DASERR_ARRAY, "Unknown generator kind %d", (int)pThis->kind);
+	daserrf(DASERR_ARRAY, "Unknown generator kind %d", (int)pThis->kind);
 	return NULL;
 }
 
@@ -479,7 +479,7 @@ DasAry* DasGen_getArray(const DasGen* pThis)
 bool DasGen_setArray(DasGen* pThis, DasAry* pNew)
 {
 	if(pThis->kind != gtArray){
-		das_error(DASERR_ARRAY, "Only array-backed generators hold an array");
+		daserrf(DASERR_ARRAY, "Only array-backed generators hold an array");
 		return false;
 	}
 	DasGenAry* pGa = (DasGenAry*)pThis;
@@ -487,7 +487,7 @@ bool DasGen_setArray(DasGen* pThis, DasAry* pNew)
 	/* The index map is preserved, so the replacement has to have the same
 	   index structure as the array it stands in for. */
 	if(DasAry_rank(pNew) != DasAry_rank(pGa->pAry)){
-		das_error(DASERR_ARRAY,
+		daserrf(DASERR_ARRAY,
 			"Replacement array '%s' is rank %d, but '%s' is rank %d",
 			DasAry_id(pNew), DasAry_rank(pNew), DasAry_id(pGa->pAry),
 			DasAry_rank(pGa->pAry)
@@ -496,14 +496,14 @@ bool DasGen_setArray(DasGen* pThis, DasAry* pNew)
 	}
 
 	/* Simple storage swaps only (the common one being an epoch integer/real
-	   array traded for a das_time array on the way to ISO-8601 text).  Byte
+	   array traded for a DasTime array on the way to ISO-8601 text).  Byte
 	   runs carry sentinel structure this function does not re-derive. */
-	das_val_type vtNew = DasAry_valType(pNew);
-	if((vtNew == vtUByte)||(vtNew == vtByte)||
-	   (vtNew < VT_MIN_SIMPLE)||(vtNew > VT_MAX_SIMPLE)){
-		das_error(DASERR_ARRAY,
+	das_vt vtNew = DasAry_vt(pNew);
+	if((vtNew == DASVT_UBYTE)||(vtNew == DASVT_BYTE)||
+	   (vtNew < DASVT_MIN_SIMPLE)||(vtNew > DASVT_MAX_SIMPLE)){
+		daserrf(DASERR_ARRAY,
 			"DasGen_setArray only handles simple value types, not %s",
-			das_vt_toStr(vtNew)
+			dasvt_name(vtNew)
 		);
 		return false;
 	}
@@ -511,15 +511,15 @@ bool DasGen_setArray(DasGen* pThis, DasAry* pNew)
 	inc_DasAry(pNew);
 	dec_DasAry(pGa->pAry);
 	pGa->pAry = pNew;
-	pThis->elem = (das_elem_type)vtNew;
+	pThis->elem = (das_et)vtNew;
 	return true;
 }
 
 /* computed sources have no storage to point at */
-static const ubyte* _DasGen_atNone(
-	const DasGen* pThis, const ptrdiff_t* pExtLoc, size_t* pCount
+static const uint8_t* _DasGen_atNone(
+	const DasGen* pThis, const ptrdiff_t* pExtAddr, size_t* pCount
 ){
-	(void)pThis; (void)pExtLoc;
+	(void)pThis; (void)pExtAddr;
 	if(pCount != NULL) *pCount = 0;
 	return NULL;
 }
@@ -530,23 +530,23 @@ static const ubyte* _DasGen_atNone(
    ask is refused rather than answered with a number the stream never claimed
    to have.
 
-   Only a NON-NEGATIVE extent bounds anything.  VARIDX_RAGGED takes its size
-   from the data, VARIDX_BORROW from elsewhere in the dataset, and neither is
+   Only a NON-NEGATIVE extent bounds anything.  DASIDX_RAGGED takes its size
+   from the data, DASIDX_BORROW from elsewhere in the dataset, and neither is
    knowable here, so those indices are defined for every location the caller
-   asks about.  VARIDX_UNUSED does not move the value at all.  That is the
+   asks about.  DASIDX_UNUSED does not move the value at all.  That is the
    ragged case where arrays and sequences genuinely cannot match.
 
    Returns DAS_OKAY, or a negative das error code naming the offending index. */
 static int _DasGen_checkExtent(
-	const ptrdiff_t* pExtShape, int nExtRank, const ptrdiff_t* pExtLoc
+	const ptrdiff_t* pExtShape, int nExtRank, const ptrdiff_t* pExtAddr
 ){
 	for(int i = 0; i < nExtRank; ++i){
 		if(pExtShape[i] < 0) continue;
 
-		if((pExtLoc[i] < 0)||(pExtLoc[i] >= pExtShape[i]))
-			return -1 * das_error(DASERR_GEN,
+		if((pExtAddr[i] < 0)||(pExtAddr[i] >= pExtShape[i]))
+			return -1 * daserrf(DASERR_GEN,
 				"Index %td on dimension %d is outside the declared extent of "
-				"%td", pExtLoc[i], i, pExtShape[i]
+				"%td", pExtAddr[i], i, pExtShape[i]
 			);
 	}
 	return DAS_OKAY;
@@ -570,30 +570,30 @@ static DasAry* _DasGen_subsetViewNone(
    a miss must become fill rather than an error. */
 static int _DasGen_subsetIntoEval(
 	const DasGen* pThis, int nExtRank, const ptrdiff_t* pMin,
-	const ptrdiff_t* pMax, ubyte* pBuf, size_t uBufLen
+	const ptrdiff_t* pMax, uint8_t* pBuf, size_t uBufLen
 ){
 	size_t uItemElems = DasGen_itemElems(pThis);
 	if(uItemElems == 0)
-		return -1 * das_error(DASERR_NOTIMP,
+		return -1 * daserrf(DASERR_NOTIMP,
 			"Ragged item runs have no fixed width to subset; use DasGen_at"
 		);
 
-	size_t uItemSz = uItemElems * das_vt_size((das_val_type)pThis->elem);
+	size_t uItemSz = uItemElems * dasvt_size((das_vt)pThis->elem);
 
-	ptrdiff_t aLoc[VARIDX_MAX];
-	for(int d = 0; d < nExtRank; ++d) aLoc[d] = pMin[d];
+	ptrdiff_t aAddr[DASIDX_MAX];
+	for(int d = 0; d < nExtRank; ++d) aAddr[d] = pMin[d];
 
-	ubyte* pWrite = pBuf;
+	uint8_t* pWrite = pBuf;
 	size_t uWrote = 0, uRemain = uBufLen;
-	while(aLoc[0] < pMax[0]){
+	while(aAddr[0] < pMax[0]){
 
 		if(uRemain < uItemSz)
-			return -1 * das_error(DASERR_ARRAY,
+			return -1 * daserrf(DASERR_ARRAY,
 				"Subset buffer of %zu bytes is short for the requested range",
 				uBufLen
 			);
 
-		int nRet = pThis->pVTbl->eval(pThis, aLoc, pWrite, uRemain);
+		int nRet = pThis->pVTbl->eval(pThis, aAddr, pWrite, uRemain);
 		if(nRet < 0) return nRet;
 
 		pWrite  += uItemSz;
@@ -602,9 +602,9 @@ static int _DasGen_subsetIntoEval(
 
 		/* row-major roll: last external index moves fastest */
 		for(int d = nExtRank - 1; d > -1; --d){
-			aLoc[d] += 1;
-			if((d > 0) && (aLoc[d] == pMax[d]))
-				aLoc[d] = pMin[d];
+			aAddr[d] += 1;
+			if((d > 0) && (aAddr[d] == pMax[d]))
+				aAddr[d] = pMin[d];
 			else
 				break;
 		}
@@ -613,12 +613,12 @@ static int _DasGen_subsetIntoEval(
 	return (int)uWrote;
 }
 
-/* Sequence and constant elements are computed in 8-byte slots; etTime does
+/* Sequence and constant elements are computed in 8-byte slots; DASET_TIME does
    not fit and arrives with the var_seq.c migration, not before. */
-static bool _gen_elemOk(das_elem_type et)
+static bool _gen_elemOk(das_et et)
 {
 	switch(et){
-	case etLong: case etFloat: case etDouble: return true;
+	case DASET_LONG: case DASET_FLOAT: case DASET_DOUBLE: return true;
 	default: return false;
 	}
 }
@@ -627,25 +627,25 @@ static bool _gen_elemOk(das_elem_type et)
 /* gtArray: a lookup into a backing DasAry                                   */
 
 static int _DasGenAry_eval(
-	const DasGen* pBase, const ptrdiff_t* pExtLoc, ubyte* pRun, size_t uRunMax
+	const DasGen* pBase, const ptrdiff_t* pExtAddr, uint8_t* pRun, size_t uRunMax
 ){
 	const DasGenAry* pThis = (const DasGenAry*)pBase;
 
-	ptrdiff_t aAryLoc[VARIDX_MAX] = VARIDX_INIT_BEGIN;
+	ptrdiff_t aAryAddr[DASIDX_MAX] = DASIDX_INIT_BEGIN;
 	int nAryRank = DasAry_rank(pThis->pAry);
 
 	for(int i = 0; i < pThis->nExtRank; ++i){
-		if(pThis->idxmap[i] == VARIDX_UNUSED) continue;
-		aAryLoc[(int)pThis->idxmap[i]] = pExtLoc[i];
+		if(pThis->idxmap[i] == DASIDX_UNUSED) continue;
+		aAryAddr[(int)pThis->idxmap[i]] = pExtAddr[i];
 	}
 
 	if(pThis->uItemElems == 0)
-		return -1 * das_error(DASERR_NOTIMP,
+		return -1 * daserrf(DASERR_NOTIMP,
 			"Ragged item runs don't fit fixed-size eval; use DasGen_at");
 
-	size_t uElemSz = das_vt_size((das_val_type)pBase->elem);
+	size_t uElemSz = dasvt_size((das_vt)pBase->elem);
 	if(pThis->uItemElems * uElemSz > uRunMax)
-		return -1 * das_error(DASERR_ARRAY,
+		return -1 * daserrf(DASERR_ARRAY,
 			"Run buffer of %zu bytes can't hold a %zu element item",
 			uRunMax, pThis->uItemElems
 		);
@@ -653,11 +653,11 @@ static int _DasGenAry_eval(
 	/* The item run is contiguous in the trailing (internal) indices, so one
 	   getAt on the leading corner covers the whole item for a cubic internal
 	   shape. */
-	const ubyte* pSrc = DasAry_getAt(
-		pThis->pAry, (das_val_type)pBase->elem, nAryRank, aAryLoc
+	const uint8_t* pSrc = DasAry_valAt(
+		pThis->pAry, (das_vt)pBase->elem, nAryRank, aAryAddr
 	);
 	if(pSrc == NULL)
-		return -1 * das_error(DASERR_ARRAY, "Invalid index for backing array");
+		return -1 * daserrf(DASERR_ARRAY, "Invalid index for backing array");
 
 	memcpy(pRun, pSrc, pThis->uItemElems * uElemSz);
 	return (int)pThis->uItemElems;
@@ -667,12 +667,12 @@ static int _DasGenAry_extShape(const DasGen* pBase, ptrdiff_t* pShape)
 {
 	const DasGenAry* pThis = (const DasGenAry*)pBase;
 
-	ptrdiff_t aAryShape[VARIDX_MAX];
+	ptrdiff_t aAryShape[DASIDX_MAX];
 	DasAry_shape(pThis->pAry, aAryShape);
 
 	for(int i = 0; i < pThis->nExtRank; ++i){
-		if(pThis->idxmap[i] == VARIDX_UNUSED)
-			pShape[i] = VARIDX_UNUSED;
+		if(pThis->idxmap[i] == DASIDX_UNUSED)
+			pShape[i] = DASIDX_UNUSED;
 		else
 			pShape[i] = aAryShape[(int)pThis->idxmap[i]];
 	}
@@ -680,45 +680,45 @@ static int _DasGenAry_extShape(const DasGen* pBase, ptrdiff_t* pShape)
 }
 
 static ptrdiff_t _DasGenAry_lengthIn(
-	const DasGen* pBase, int nIdx, ptrdiff_t* pLoc
+	const DasGen* pBase, int nIdx, ptrdiff_t* pAddr
 ){
 	const DasGenAry* pThis = (const DasGenAry*)pBase;
 
 	/* lock down the indices BEFORE nIdx, then report the count along nIdx */
-	ptrdiff_t aAryLoc[VARIDX_MAX] = VARIDX_INIT_BEGIN;
+	ptrdiff_t aAryAddr[DASIDX_MAX] = DASIDX_INIT_BEGIN;
 	int nIndexes = 0;
 	for(int i = 0; i < nIdx; ++i){
 		if(pThis->idxmap[i] < 0) continue;
-		aAryLoc[(int)pThis->idxmap[i]] = pLoc[i];
+		aAryAddr[(int)pThis->idxmap[i]] = pAddr[i];
 		++nIndexes;
 	}
 
 	/* a source that does not run along index nIdx has no length there, and
 	   must say so rather than answer for an index it does not own */
 	if((nIdx >= pThis->nExtRank)||(pThis->idxmap[nIdx] < 0))
-		return VARIDX_UNUSED;
+		return DASIDX_UNUSED;
 
-	return (ptrdiff_t)DasAry_lengthIn(pThis->pAry, nIndexes, aAryLoc);
+	return (ptrdiff_t)DasAry_lengthIn(pThis->pAry, nIndexes, aAryAddr);
 }
 
-static const ubyte* _DasGenAry_at(
-	const DasGen* pBase, const ptrdiff_t* pExtLoc, size_t* pCount
+static const uint8_t* _DasGenAry_at(
+	const DasGen* pBase, const ptrdiff_t* pExtAddr, size_t* pCount
 ){
 	const DasGenAry* pThis = (const DasGenAry*)pBase;
 
-	ptrdiff_t aAryLoc[VARIDX_MAX] = VARIDX_INIT_BEGIN;
+	ptrdiff_t aAryAddr[DASIDX_MAX] = DASIDX_INIT_BEGIN;
 	int nMapped = 0;
 	for(int i = 0; i < pThis->nExtRank; ++i){
-		if(pThis->idxmap[i] == VARIDX_UNUSED) continue;
-		aAryLoc[(int)pThis->idxmap[i]] = pExtLoc[i];
+		if(pThis->idxmap[i] == DASIDX_UNUSED) continue;
+		aAryAddr[(int)pThis->idxmap[i]] = pExtAddr[i];
 		if(pThis->idxmap[i] >= nMapped) nMapped = pThis->idxmap[i] + 1;
 	}
 	/* getAt validates the location; the run is the trailing extents.  Cubic
 	   internal shapes have a fixed count, ragged ones ask the array at this
 	   location. */
-	const ubyte* pSrc = DasAry_getAt(
-		pThis->pAry, DasAry_valType(pThis->pAry), DasAry_rank(pThis->pAry),
-		aAryLoc
+	const uint8_t* pSrc = DasAry_valAt(
+		pThis->pAry, DasAry_vt(pThis->pAry), DasAry_rank(pThis->pAry),
+		aAryAddr
 	);
 	if(pCount != NULL){
 		if(pSrc == NULL)
@@ -726,7 +726,7 @@ static const ubyte* _DasGenAry_at(
 		else if(pThis->uItemElems > 0)
 			*pCount = pThis->uItemElems;
 		else
-			*pCount = DasAry_lengthIn(pThis->pAry, nMapped, aAryLoc);
+			*pCount = DasAry_lengthIn(pThis->pAry, nMapped, aAryAddr);
 	}
 	return pSrc;
 }
@@ -737,7 +737,7 @@ static int _DasGenAry_numMapped(const DasGenAry* pThis)
 {
 	int nMapped = 0;
 	for(int i = 0; i < pThis->nExtRank; ++i){
-		if(pThis->idxmap[i] == VARIDX_UNUSED) continue;
+		if(pThis->idxmap[i] == DASIDX_UNUSED) continue;
 		if(pThis->idxmap[i] >= nMapped) nMapped = pThis->idxmap[i] + 1;
 	}
 	return nMapped;
@@ -754,12 +754,12 @@ static DasAry* _DasGenAry_subsetView(
 	const DasGenAry* pThis = (const DasGenAry*)pBase;
 	if(nExtRank != pThis->nExtRank) return NULL;
 
-	ptrdiff_t aAryMin[VARIDX_MAX] = VARIDX_INIT_BEGIN;
-	ptrdiff_t aAryMax[VARIDX_MAX] = VARIDX_INIT_BEGIN;
+	ptrdiff_t aAryMin[DASIDX_MAX] = DASIDX_INIT_BEGIN;
+	ptrdiff_t aAryMax[DASIDX_MAX] = DASIDX_INIT_BEGIN;
 
 	for(int d = 0; d < pThis->nExtRank; ++d){
 		ptrdiff_t nSz = pMax[d] - pMin[d];
-		if(pThis->idxmap[d] == VARIDX_UNUSED){
+		if(pThis->idxmap[d] == DASIDX_UNUSED){
 			/* A degenerate index has one value to give; asking for a run of
 			   them means replication, which a view cannot express. */
 			if(nSz != 1) return NULL;
@@ -770,12 +770,12 @@ static DasAry* _DasGenAry_subsetView(
 		}
 	}
 
-	ptrdiff_t aAryShape[VARIDX_MAX];
+	ptrdiff_t aAryShape[DASIDX_MAX];
 	int nAryRank = DasAry_shape(pThis->pAry, aAryShape);
 	int nMapped  = _DasGenAry_numMapped(pThis);
 
-	ptrdiff_t aLoc[VARIDX_MAX];
-	int nLocSz = 0;
+	ptrdiff_t aAddr[DASIDX_MAX];
+	int nAddrLen = 0;
 	int iBegFullRng = -1;
 
 	for(int d = 0; d < nMapped; ++d){
@@ -786,7 +786,7 @@ static DasAry* _DasGenAry_subsetView(
 		   applicable" -- it has no business raising errors the caller recovers
 		   from by copying. */
 		if((aAryMin[d] < 0)||((aAryShape[d] >= 0)&&(aAryMax[d] > aAryShape[d]))){
-			das_error(DASERR_ARRAY, "Invalid subset request");
+			daserrf(DASERR_ARRAY, "Invalid subset request");
 			return NULL;
 		}
 
@@ -794,8 +794,8 @@ static DasAry* _DasGenAry_subsetView(
 			/* Once full ranges start, single items can't resume: the result
 			   would not be contiguous. */
 			if(iBegFullRng != -1) return NULL;
-			aLoc[nLocSz] = aAryMin[d];
-			++nLocSz;
+			aAddr[nAddrLen] = aAryMin[d];
+			++nAddrLen;
 		}
 		else{
 			if((aAryMin[d] == 0)&&(aAryMax[d] == aAryShape[d])){
@@ -806,9 +806,9 @@ static DasAry* _DasGenAry_subsetView(
 		}
 	}
 
-	if(nLocSz >= nAryRank) return NULL;
+	if(nAddrLen >= nAryRank) return NULL;
 
-	return DasAry_subSetIn(pThis->pAry, NULL, nLocSz, aLoc);
+	return new_DasAry_slice(pThis->pAry, NULL, nAddrLen, aAddr);
 }
 
 /* Can the copy be done by pointer arithmetic?  Striding assumes a constant
@@ -817,7 +817,7 @@ static DasAry* _DasGenAry_subsetView(
 static bool _DasGenAry_canStride(
 	const DasGenAry* pThis, const ptrdiff_t* pMin, const ptrdiff_t* pMax
 ){
-	ptrdiff_t aShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
+	ptrdiff_t aShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
 	DasAry_shape(pThis->pAry, aShape);
 
 	int iFirstUsed = -1;
@@ -825,16 +825,16 @@ static bool _DasGenAry_canStride(
 	int iFirstRagged = -1;
 
 	for(int d = 0; d < pThis->nExtRank; ++d){
-		if(pThis->idxmap[d] == VARIDX_UNUSED) continue;
+		if(pThis->idxmap[d] == DASIDX_UNUSED) continue;
 
-		int iLoc = pThis->idxmap[d];
+		int iIdx = pThis->idxmap[d];
 		if(iFirstUsed == -1){
-			iFirstUsed = iLoc;
+			iFirstUsed = iIdx;
 			nSzFirstUsed = pMax[d] - pMin[d];
 			continue;
 		}
-		if((aShape[iLoc] == VARIDX_RAGGED)&&(iFirstRagged == -1)){
-			iFirstRagged = iLoc;
+		if((aShape[iIdx] == DASIDX_RAGGED)&&(iFirstRagged == -1)){
+			iFirstRagged = iIdx;
 			break;
 		}
 	}
@@ -853,18 +853,18 @@ static bool _DasGenAry_canStride(
    the copy by one would give a ragged run the wrong width on the slow path. */
 static int _DasGenAry_subsetInto(
 	const DasGen* pBase, int nExtRank, const ptrdiff_t* pMin,
-	const ptrdiff_t* pMax, ubyte* pBuf, size_t uBufLen
+	const ptrdiff_t* pMax, uint8_t* pBuf, size_t uBufLen
 ){
 	const DasGenAry* pThis = (const DasGenAry*)pBase;
 
 	if(nExtRank != pThis->nExtRank)
-		return -1 * das_error(DASERR_ARRAY,
+		return -1 * daserrf(DASERR_ARRAY,
 			"Generator is external rank %d, but subset request is rank %d",
 			pThis->nExtRank, nExtRank
 		);
 
 	if(pThis->uItemElems == 0)
-		return -1 * das_error(DASERR_NOTIMP,
+		return -1 * daserrf(DASERR_NOTIMP,
 			"Ragged item runs have no fixed width to subset; use DasGen_at"
 		);
 
@@ -876,14 +876,14 @@ static int _DasGenAry_subsetInto(
 	   returning NULL now means only "not applicable", so nothing upstream
 	   would catch an out of range ask before the stride walk trusted it. */
 	{
-		ptrdiff_t aAryShape[VARIDX_MAX];
+		ptrdiff_t aAryShape[DASIDX_MAX];
 		DasAry_shape(pThis->pAry, aAryShape);
 		for(int d = 0; d < nExtRank; ++d){
-			if(pThis->idxmap[d] == VARIDX_UNUSED) continue;
+			if(pThis->idxmap[d] == DASIDX_UNUSED) continue;
 			ptrdiff_t nLen = aAryShape[(int)pThis->idxmap[d]];
 			if(nLen < 0) continue;                  /* ragged, fill applies */
 			if((pMin[d] < 0)||(pMax[d] > nLen))
-				return -1 * das_error(DASERR_ARRAY,
+				return -1 * daserrf(DASERR_ARRAY,
 					"Subset range %td to %td on index %d is outside array "
 					"'%s', which is %td long there",
 					pMin[d], pMax[d], d, DasAry_id(pThis->pAry), nLen
@@ -891,37 +891,37 @@ static int _DasGenAry_subsetInto(
 		}
 	}
 
-	das_val_type vtEl = (das_val_type)pBase->elem;
-	size_t uElemSz = das_vt_size(vtEl);
+	das_vt vtEl = (das_vt)pBase->elem;
+	size_t uElemSz = dasvt_size(vtEl);
 	size_t uItemSz = pThis->uItemElems * uElemSz;
-	const ubyte* pFill = DasAry_getFill(pThis->pAry);
+	const uint8_t* pFill = DasAry_fill(pThis->pAry);
 
-	ptrdiff_t aLoc[VARIDX_MAX];
-	for(int d = 0; d < nExtRank; ++d) aLoc[d] = pMin[d];
+	ptrdiff_t aAddr[DASIDX_MAX];
+	for(int d = 0; d < nExtRank; ++d) aAddr[d] = pMin[d];
 
-	ubyte* pWrite = pBuf;
+	uint8_t* pWrite = pBuf;
 	size_t uWrote = 0, uRemain = uBufLen;
 
 	/* Fast path: one base pointer plus a per-index byte stride. */
 	bool bStride = _DasGenAry_canStride(pThis, pMin, pMax);
-	const ubyte* pBaseRead = NULL;
-	ptrdiff_t aVarStride[VARIDX_MAX] = {0};
+	const uint8_t* pBaseRead = NULL;
+	ptrdiff_t aVarStride[DASIDX_MAX] = {0};
 
 	if(bStride){
-		ptrdiff_t aBaseIdx[VARIDX_MAX] = {0};
+		ptrdiff_t aBaseIdx[DASIDX_MAX] = {0};
 		for(int d = 0; d < nExtRank; ++d){
-			if(pThis->idxmap[d] == VARIDX_UNUSED) continue;
+			if(pThis->idxmap[d] == DASIDX_UNUSED) continue;
 			aBaseIdx[(int)pThis->idxmap[d]] = pMin[d];
 		}
 		size_t uAvail = 0;
-		pBaseRead = DasAry_getIn(
+		pBaseRead = DasAry_valsIn(
 			pThis->pAry, vtEl, DasAry_rank(pThis->pAry), aBaseIdx, &uAvail
 		);
 		if(pBaseRead == NULL)
 			bStride = false;   /* fall through to the safe walk */
 		else{
-			ptrdiff_t aAryShape[VARIDX_MAX];
-			ptrdiff_t aAryStride[VARIDX_MAX];
+			ptrdiff_t aAryShape[DASIDX_MAX];
+			ptrdiff_t aAryStride[DASIDX_MAX];
 			if(DasAry_stride(pThis->pAry, aAryShape, aAryStride) < 1)
 				bStride = false;
 			else{
@@ -930,38 +930,38 @@ static int _DasGenAry_subsetInto(
 
 				for(int d = 0; d < nExtRank; ++d){
 					if((pMax[d] - pMin[d]) == 1) continue;  /* pinned, no step */
-					if(pThis->idxmap[d] == VARIDX_UNUSED) continue;
+					if(pThis->idxmap[d] == DASIDX_UNUSED) continue;
 					aVarStride[d] = aAryStride[(int)pThis->idxmap[d]];
 				}
 			}
 		}
 	}
 
-	while(aLoc[0] < pMax[0]){
+	while(aAddr[0] < pMax[0]){
 
 		if(uRemain < uItemSz)
-			return -1 * das_error(DASERR_ARRAY,
+			return -1 * daserrf(DASERR_ARRAY,
 				"Subset buffer of %zu bytes is short for the requested range",
 				uBufLen
 			);
 
 		if(bStride){
-			const ubyte* pRead = pBaseRead;
-			for(int d = 0; d < nExtRank; ++d) pRead += aLoc[d]*aVarStride[d];
+			const uint8_t* pRead = pBaseRead;
+			for(int d = 0; d < nExtRank; ++d) pRead += aAddr[d]*aVarStride[d];
 			memcpy(pWrite, pRead, uItemSz);
 		}
 		else{
-			ptrdiff_t aAryLoc[VARIDX_MAX] = VARIDX_INIT_BEGIN;
+			ptrdiff_t aAryAddr[DASIDX_MAX] = DASIDX_INIT_BEGIN;
 			for(int d = 0; d < nExtRank; ++d){
-				if(pThis->idxmap[d] == VARIDX_UNUSED) continue;
-				aAryLoc[(int)pThis->idxmap[d]] = aLoc[d];
+				if(pThis->idxmap[d] == DASIDX_UNUSED) continue;
+				aAryAddr[(int)pThis->idxmap[d]] = aAddr[d];
 			}
 
 			/* An invalid location is not an error here: this is how a subset
 			   of a ragged array comes back rectangular. */
-			if(!DasAry_validAt(pThis->pAry, DasAry_rank(pThis->pAry), aAryLoc)){
+			if(!DasAry_isValidAt(pThis->pAry, DasAry_rank(pThis->pAry), aAryAddr)){
 				if(pFill == NULL)
-					return -1 * das_error(DASERR_ARRAY,
+					return -1 * daserrf(DASERR_ARRAY,
 						"Array '%s' has no fill value, so a ragged range "
 						"cannot be squared off", DasAry_id(pThis->pAry)
 					);
@@ -969,11 +969,11 @@ static int _DasGenAry_subsetInto(
 					memcpy(pWrite + u*uElemSz, pFill, uElemSz);
 			}
 			else{
-				const ubyte* pRead = DasAry_getAt(
-					pThis->pAry, vtEl, DasAry_rank(pThis->pAry), aAryLoc
+				const uint8_t* pRead = DasAry_valAt(
+					pThis->pAry, vtEl, DasAry_rank(pThis->pAry), aAryAddr
 				);
 				if(pRead == NULL)
-					return -1 * das_error(DASERR_ARRAY,
+					return -1 * daserrf(DASERR_ARRAY,
 						"Invalid index for backing array '%s'",
 						DasAry_id(pThis->pAry)
 					);
@@ -986,9 +986,9 @@ static int _DasGenAry_subsetInto(
 		++uWrote;
 
 		for(int d = nExtRank - 1; d > -1; --d){
-			aLoc[d] += 1;
-			if((d > 0) && (aLoc[d] == pMax[d]))
-				aLoc[d] = pMin[d];
+			aAddr[d] += 1;
+			if((d > 0) && (aAddr[d] == pMax[d]))
+				aAddr[d] = pMin[d];
 			else
 				break;
 		}
@@ -1011,29 +1011,29 @@ static const DasGen_VTbl g_vtblGenAry = {
 
 DasGen* new_DasGenAry(DasAry* pAry, int nExtRank, const int8_t* pIdxMap)
 {
-	if((pAry == NULL)||(nExtRank < 1)||(nExtRank > VARIDX_MAX)||(pIdxMap == NULL)){
-		das_error(DASERR_ARRAY, "Invalid arguments to new_DasGenAry");
+	if((pAry == NULL)||(nExtRank < 1)||(nExtRank > DASIDX_MAX)||(pIdxMap == NULL)){
+		daserrf(DASERR_ARRAY, "Invalid arguments to new_DasGenAry");
 		return NULL;
 	}
 
-	das_val_type vt = DasAry_valType(pAry);
-	if((vt < VT_MIN_SIMPLE)||(vt > VT_MAX_SIMPLE)){
-		das_error(DASERR_ARRAY,
+	das_vt vt = DasAry_vt(pAry);
+	if((vt < DASVT_MIN_SIMPLE)||(vt > DASVT_MAX_SIMPLE)){
+		daserrf(DASERR_ARRAY,
 			"Array %s holds %s items, not a generator element type",
-			DasAry_id(pAry), DasAry_valTypeStr(pAry)
+			DasAry_id(pAry), DasAry_vtName(pAry)
 		);
 		return NULL;
 	}
 
-	ptrdiff_t aAryShape[VARIDX_MAX];
+	ptrdiff_t aAryShape[DASIDX_MAX];
 	int nAryRank = DasAry_shape(pAry, aAryShape);
 
 	/* which array indices are consumed by the external map? */
-	bool aUsed[VARIDX_MAX] = {false};
+	bool aUsed[DASIDX_MAX] = {false};
 	for(int i = 0; i < nExtRank; ++i){
-		if(pIdxMap[i] == VARIDX_UNUSED) continue;
+		if(pIdxMap[i] == DASIDX_UNUSED) continue;
 		if((pIdxMap[i] < 0)||(pIdxMap[i] >= nAryRank)){
-			das_error(DASERR_ARRAY, "Index map entry %d out of range", i);
+			daserrf(DASERR_ARRAY, "Index map entry %d out of range", i);
 			return NULL;
 		}
 		aUsed[(int)pIdxMap[i]] = true;
@@ -1052,7 +1052,7 @@ DasGen* new_DasGenAry(DasAry* pAry, int nExtRank, const int8_t* pIdxMap)
 	DasGenAry* pThis = (DasGenAry*)calloc(1, sizeof(DasGenAry));
 	pThis->base.kind = gtArray;
 	pThis->base.pVTbl   = &g_vtblGenAry;
-	pThis->base.elem = (das_elem_type)vt;
+	pThis->base.elem = (das_et)vt;
 	pThis->base.nRef = 1;
 	pThis->pAry      = pAry;
 	inc_DasAry(pAry);
@@ -1067,55 +1067,55 @@ DasGen* new_DasGenAry(DasAry* pAry, int nExtRank, const int8_t* pIdxMap)
 /* gtSeq: intercept + interval, computed on demand                           */
 
 static int _DasGenSeq_eval(
-	const DasGen* pBase, const ptrdiff_t* pExtLoc, ubyte* pRun, size_t uRunMax
+	const DasGen* pBase, const ptrdiff_t* pExtAddr, uint8_t* pRun, size_t uRunMax
 ){
 	const DasGenSeq* pThis = (const DasGenSeq*)pBase;
 
-	int nRet = _DasGen_checkExtent(pThis->aExtShape, pThis->nExtRank, pExtLoc);
+	int nRet = _DasGen_checkExtent(pThis->aExtShape, pThis->nExtRank, pExtAddr);
 	if(nRet != DAS_OKAY) return nRet;
 
-	size_t uElemSz = das_vt_size((das_val_type)pBase->elem);
+	size_t uElemSz = dasvt_size((das_vt)pBase->elem);
 	if(uElemSz * (size_t)pThis->nComps > uRunMax)
-		return -1 * das_error(DASERR_ARRAY, "Run buffer too small for sequence");
+		return -1 * daserrf(DASERR_ARRAY, "Run buffer too small for sequence");
 
 	for(int c = 0; c < pThis->nComps; ++c){
-		ubyte* pOut = pRun + (size_t)c * uElemSz;
+		uint8_t* pOut = pRun + (size_t)c * uElemSz;
 
 		switch(pBase->elem){
-		case etDouble: case etFloat: {
-			double r = (pBase->elem == etDouble) ?
+		case DASET_DOUBLE: case DASET_FLOAT: {
+			double r = (pBase->elem == DASET_DOUBLE) ?
 				*((const double*)DasGenSeq_intercept(pThis, c)) :
 				(double)*((const float*)DasGenSeq_intercept(pThis, c));
 			for(int i = 0; i < pThis->nExtRank; ++i){
-				double rSlope = (pBase->elem == etDouble) ?
+				double rSlope = (pBase->elem == DASET_DOUBLE) ?
 					*((const double*)DasGenSeq_interval(pThis, c, i)) :
 					(double)*((const float*)DasGenSeq_interval(pThis, c, i));
-				r += rSlope * (double)pExtLoc[i];
+				r += rSlope * (double)pExtAddr[i];
 			}
-			if(pBase->elem == etDouble) *((double*)pOut) = r;
+			if(pBase->elem == DASET_DOUBLE) *((double*)pOut) = r;
 			else                        *((float*)pOut)  = (float)r;
 			break;
 		}
-		case etLong: {
+		case DASET_LONG: {
 			int64_t n = *((const int64_t*)DasGenSeq_intercept(pThis, c));
 			for(int i = 0; i < pThis->nExtRank; ++i)
-				n += *((const int64_t*)DasGenSeq_interval(pThis, c, i)) * (int64_t)pExtLoc[i];
+				n += *((const int64_t*)DasGenSeq_interval(pThis, c, i)) * (int64_t)pExtAddr[i];
 			*((int64_t*)pOut) = n;
 			break;
 		}
-		case etTime: {
-			/* das_time intercept, DOUBLE slopes in seconds */
-			das_time dt = *((const das_time*)DasGenSeq_intercept(pThis, c));
+		case DASET_TIME: {
+			/* DasTime intercept, DOUBLE slopes in seconds */
+			DasTime dt = *((const DasTime*)DasGenSeq_intercept(pThis, c));
 			double rSpan = 0.0;
 			for(int i = 0; i < pThis->nExtRank; ++i)
-				rSpan += *((const double*)DasGenSeq_interval(pThis, c, i)) * (double)pExtLoc[i];
+				rSpan += *((const double*)DasGenSeq_interval(pThis, c, i)) * (double)pExtAddr[i];
 			dt.second += rSpan;
-			dt_tnorm(&dt);
-			memcpy(pOut, &dt, sizeof(das_time));
+			DasTime_normalize(&dt);
+			memcpy(pOut, &dt, sizeof(DasTime));
 			break;
 		}
 		default:
-			return -1 * das_error(DASERR_NOTIMP,
+			return -1 * daserrf(DASERR_NOTIMP,
 				"Sequence element type %d not yet implemented", (int)pBase->elem
 			);
 		}
@@ -1131,11 +1131,11 @@ static int _DasGenSeq_extShape(const DasGen* pBase, ptrdiff_t* pShape)
 }
 
 static ptrdiff_t _DasGenSeq_lengthIn(
-	const DasGen* pBase, int nIdx, ptrdiff_t* pLoc
+	const DasGen* pBase, int nIdx, ptrdiff_t* pAddr
 ){
 	const DasGenSeq* pThis = (const DasGenSeq*)pBase;
-	(void)pLoc;
-	if((nIdx < 0)||(nIdx >= pThis->nExtRank)) return VARIDX_UNUSED;
+	(void)pAddr;
+	if((nIdx < 0)||(nIdx >= pThis->nExtRank)) return DASIDX_UNUSED;
 	return pThis->aExtShape[nIdx];
 }
 
@@ -1151,24 +1151,24 @@ static const DasGen_VTbl g_vtblGenSeq = {
 };
 
 DasGen* new_DasGenSeqN(
-	das_elem_type et, int nComps, const ubyte* pMinVals, int nExtRank,
-	const ubyte* pInterVals, const ptrdiff_t* pExtShape
+	das_et et, int nComps, const uint8_t* pMinVals, int nExtRank,
+	const uint8_t* pInterVals, const ptrdiff_t* pExtShape
 ){
 	if((pMinVals==NULL)||(pInterVals==NULL)||(pExtShape==NULL)||
-	   (nExtRank < 1)||(nExtRank > VARIDX_MAX)||(nComps < 1)){
-		das_error(DASERR_ARRAY, "Invalid arguments to new_DasGenSeqN");
+	   (nExtRank < 1)||(nExtRank > DASIDX_MAX)||(nComps < 1)){
+		daserrf(DASERR_ARRAY, "Invalid arguments to new_DasGenSeqN");
 		return NULL;
 	}
-	if(!_gen_elemOk(et) && (et != etTime)){
-		das_error(DASERR_NOTIMP,
+	if(!_gen_elemOk(et) && (et != DASET_TIME)){
+		daserrf(DASERR_NOTIMP,
 			"Sequence element type %d not yet implemented", (int)et
 		);
 		return NULL;
 	}
 
-	size_t uElemSz  = das_vt_size((das_val_type)et);
-	/* etTime slopes are doubles in seconds */
-	size_t uSlopeSz = (et == etTime) ? sizeof(double) : uElemSz;
+	size_t uElemSz  = dasvt_size((das_vt)et);
+	/* DASET_TIME slopes are doubles in seconds */
+	size_t uSlopeSz = (et == DASET_TIME) ? sizeof(double) : uElemSz;
 
 	DasGenSeq* pThis = (DasGenSeq*)calloc(1, sizeof(DasGenSeq));
 	pThis->base.kind = gtSeq;
@@ -1176,7 +1176,7 @@ DasGen* new_DasGenSeqN(
 	pThis->base.elem = et;
 	pThis->base.nRef = 1;
 	pThis->nComps = nComps;
-	pThis->pIntercept = (ubyte*)calloc((size_t)nComps * (1 + VARIDX_MAX), DASGEN_SEQ_SLOT);
+	pThis->pIntercept = (uint8_t*)calloc((size_t)nComps * (1 + DASIDX_MAX), DASGEN_SEQ_SLOT);
 	pThis->pInterval  = pThis->pIntercept + (size_t)nComps * DASGEN_SEQ_SLOT;
 	for(int c = 0; c < nComps; ++c){
 		memcpy(DasGenSeq_intercept(pThis, c), pMinVals + (size_t)c*uElemSz, uElemSz);
@@ -1192,8 +1192,8 @@ DasGen* new_DasGenSeqN(
 }
 
 DasGen* new_DasGenSeq(
-	das_elem_type et, const ubyte* pMinVal, int nExtRank,
-	const ubyte* pInterVal, const ptrdiff_t* pExtShape
+	das_et et, const uint8_t* pMinVal, int nExtRank,
+	const uint8_t* pInterVal, const ptrdiff_t* pExtShape
 ){
 	return new_DasGenSeqN(et, 1, pMinVal, nExtRank, pInterVal, pExtShape);
 }
@@ -1202,16 +1202,16 @@ DasGen* new_DasGenSeq(
 /* gtConst: one value, everywhere                                            */
 
 static int _DasGenConst_eval(
-	const DasGen* pBase, const ptrdiff_t* pExtLoc, ubyte* pRun, size_t uRunMax
+	const DasGen* pBase, const ptrdiff_t* pExtAddr, uint8_t* pRun, size_t uRunMax
 ){
 	const DasGenConst* pThis = (const DasGenConst*)pBase;
 
-	int nRet = _DasGen_checkExtent(pThis->aExtShape, pThis->nExtRank, pExtLoc);
+	int nRet = _DasGen_checkExtent(pThis->aExtShape, pThis->nExtRank, pExtAddr);
 	if(nRet != DAS_OKAY) return nRet;
 
-	size_t uElemSz = das_vt_size((das_val_type)pBase->elem);
+	size_t uElemSz = dasvt_size((das_vt)pBase->elem);
 	if(uElemSz > uRunMax)
-		return -1 * das_error(DASERR_ARRAY, "Run buffer too small for constant");
+		return -1 * daserrf(DASERR_ARRAY, "Run buffer too small for constant");
 	memcpy(pRun, pThis->aValue, uElemSz);
 	return 1;
 }
@@ -1224,11 +1224,11 @@ static int _DasGenConst_extShape(const DasGen* pBase, ptrdiff_t* pShape)
 }
 
 static ptrdiff_t _DasGenConst_lengthIn(
-	const DasGen* pBase, int nIdx, ptrdiff_t* pLoc
+	const DasGen* pBase, int nIdx, ptrdiff_t* pAddr
 ){
 	const DasGenConst* pThis = (const DasGenConst*)pBase;
-	(void)pLoc;
-	if((nIdx < 0)||(nIdx >= pThis->nExtRank)) return VARIDX_UNUSED;
+	(void)pAddr;
+	if((nIdx < 0)||(nIdx >= pThis->nExtRank)) return DASIDX_UNUSED;
 	return pThis->aExtShape[nIdx];
 }
 
@@ -1241,14 +1241,14 @@ static const DasGen_VTbl g_vtblGenConst = {
 };
 
 DasGen* new_DasGenConst(
-	das_elem_type et, const ubyte* pVal, int nExtRank, const ptrdiff_t* pExtShape
+	das_et et, const uint8_t* pVal, int nExtRank, const ptrdiff_t* pExtShape
 ){
-	if((pVal==NULL)||(pExtShape==NULL)||(nExtRank < 1)||(nExtRank > VARIDX_MAX)){
-		das_error(DASERR_ARRAY, "Invalid arguments to new_DasGenConst");
+	if((pVal==NULL)||(pExtShape==NULL)||(nExtRank < 1)||(nExtRank > DASIDX_MAX)){
+		daserrf(DASERR_ARRAY, "Invalid arguments to new_DasGenConst");
 		return NULL;
 	}
 	if(!_gen_elemOk(et)){
-		das_error(DASERR_NOTIMP,
+		daserrf(DASERR_NOTIMP,
 			"Constant element type %d not yet implemented", (int)et
 		);
 		return NULL;
@@ -1259,7 +1259,7 @@ DasGen* new_DasGenConst(
 	pThis->base.pVTbl   = &g_vtblGenConst;
 	pThis->base.elem = et;
 	pThis->base.nRef = 1;
-	memcpy(pThis->aValue, pVal, das_vt_size((das_val_type)et));
+	memcpy(pThis->aValue, pVal, dasvt_size((das_vt)et));
 	pThis->nExtRank = nExtRank;
 	memcpy(pThis->aExtShape, pExtShape, sizeof(ptrdiff_t)*(size_t)nExtRank);
 
@@ -1271,38 +1271,38 @@ DasGen* new_DasGenConst(
 /* gtBinop: an operation over two child generators                           */
 
 static int _DasGenOp_eval(
-	const DasGen* pBase, const ptrdiff_t* pExtLoc, ubyte* pRun, size_t uRunMax
+	const DasGen* pBase, const ptrdiff_t* pExtAddr, uint8_t* pRun, size_t uRunMax
 ){
 	const DasGenOp* pThis = (const DasGenOp*)pBase;
 
-	ubyte aL[sizeof(das_time)], aR[sizeof(das_time)];
-	int nL = DasGen_eval(pThis->pLeft, pExtLoc, aL, sizeof(aL));
+	uint8_t aL[sizeof(DasTime)], aR[sizeof(DasTime)];
+	int nL = DasGen_eval(pThis->pLeft, pExtAddr, aL, sizeof(aL));
 	if(nL < 0) return nL;
-	int nR = DasGen_eval(pThis->pRight, pExtLoc, aR, sizeof(aR));
+	int nR = DasGen_eval(pThis->pRight, pExtAddr, aR, sizeof(aR));
 	if(nR < 0) return nR;
 	if((nL != 1)||(nR != 1))
-		return -1 * das_error(DASERR_NOTIMP,
+		return -1 * daserrf(DASERR_NOTIMP,
 			"Operations are scalar-only in v1, refusing a %d x %d item pairing",
 			nL, nR
 		);
 
-	if(das_vt_size((das_val_type)pBase->elem) > uRunMax)
-		return -1 * das_error(DASERR_ARRAY, "Run buffer too small for op result");
+	if(dasvt_size((das_vt)pBase->elem) > uRunMax)
+		return -1 * daserrf(DASERR_ARRAY, "Run buffer too small for op result");
 
 	/* a right-scale factor promotes the right operand to double */
-	das_elem_type etR = DasGen_elemType(pThis->pRight);
+	das_et etR = DasGen_elemType(pThis->pRight);
 	if(pThis->rRightScale != 1.0){
 		double rVal;
-		if(!das_elem_asDouble(etR, aR, &rVal))
-			return -1 * das_error(DASERR_GEN,
+		if(!daset_toDouble(etR, aR, &rVal))
+			return -1 * daserrf(DASERR_GEN,
 				"Can't scale element type %d for the operation", (int)etR);
 		rVal *= pThis->rRightScale;
 		memcpy(aR, &rVal, sizeof(double));
-		etR = etDouble;
+		etR = DASET_DOUBLE;
 	}
 
 	if(!pThis->apply(DasGen_elemType(pThis->pLeft), etR, aL, aR, pRun))
-		return -1 * das_error(DASERR_GEN, "Operand elements not supported");
+		return -1 * daserrf(DASERR_GEN, "Operand elements not supported");
 	return 1;
 }
 
@@ -1310,23 +1310,23 @@ static int _DasGenOp_extShape(const DasGen* pBase, ptrdiff_t* pShape)
 {
 	const DasGenOp* pThis = (const DasGenOp*)pBase;
 
-	ptrdiff_t aRight[VARIDX_MAX];
+	ptrdiff_t aRight[DASIDX_MAX];
 
 	int nRank = DasGen_extShape(pThis->pLeft, pShape);
 	int nRankR = DasGen_extShape(pThis->pRight, aRight);
 	if(nRankR > nRank) nRank = nRankR;
 
-	das_varindex_merge(nRank, pShape, aRight);
+	dasshape_merge(nRank, pShape, aRight);
 	return nRank;
 }
 
 static ptrdiff_t _DasGenOp_lengthIn(
-	const DasGen* pBase, int nIdx, ptrdiff_t* pLoc
+	const DasGen* pBase, int nIdx, ptrdiff_t* pAddr
 ){
 	const DasGenOp* pThis = (const DasGenOp*)pBase;
-	return das_varlength_merge(
-		DasGen_lengthIn(pThis->pLeft, nIdx, pLoc),
-		DasGen_lengthIn(pThis->pRight, nIdx, pLoc)
+	return dasshape_mergeLen(
+		DasGen_lengthIn(pThis->pLeft, nIdx, pAddr),
+		DasGen_lengthIn(pThis->pRight, nIdx, pAddr)
 	);
 }
 
@@ -1344,11 +1344,11 @@ static const DasGen_VTbl g_vtblGenOp = {
 };
 
 DasGen* new_DasGenBinop(
-	das_gen_applyfn apply, das_elem_type etOut, DasGen* pLeft, DasGen* pRight,
+	das_gen_applyfn apply, das_et etOut, DasGen* pLeft, DasGen* pRight,
 	double rRightScale
 ){
 	if((apply == NULL)||(pLeft == NULL)||(pRight == NULL)){
-		das_error(DASERR_GEN, "Invalid arguments to new_DasGenBinop");
+		daserrf(DASERR_GEN, "Invalid arguments to new_DasGenBinop");
 		return NULL;
 	}
 	DasGenOp* pThis = (DasGenOp*)calloc(1, sizeof(DasGenOp));

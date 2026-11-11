@@ -77,36 +77,36 @@ extern "C" {
  *
  * | Call                                   | Answers                           |
  * |----------------------------------------|-----------------------------------|
- * | DasForm_getParam(), DasForm_paramAt()  | its parameters, by name or index  |
- * | DasForm_compSym(), DasForm_prnRun()    | component symbols and value text  |
+ * | DasForm_param(), DasForm_paramAt()  | its parameters, by name or index  |
+ * | DasForm_compSym(), DasForm_valToStr()    | component symbols and value text  |
  * | DasForm_toStr()                        | the kind and parameters, one line |
  * | DasForm_isKind()                       | which kind it is                  |
  *
  * Use DasForm_isKind() when the answer really depends on the kind: before
- * calling a kind's own accessors (DasFormVec_sysType() and friends), when
+ * calling a kind's own accessors (DasFormVec_sysId() and friends), when
  * mapping kinds onto another format's vocabulary, or when an operation is
  * only defined for one kind.  A kind added to das2C later answers false
  * there, which is what those uses want.  When the question is about a
- * parameter, such as "does this have a frame?", ask DasForm_getParam()
+ * parameter, such as "does this have a frame?", ask DasForm_param()
  * instead, so that kinds added later answer it too.
  */
-typedef struct das_form DasForm;
+typedef struct das_form_t DasForm;
 
 /** A formalism kind token
  *
  * Each kind has exactly one, so tokens are compared by address and never
- * looked inside.  The kind headers name them: DAS_FORM_VEC, DAS_FORM_POS,
- * DAS_FORM_ROT and so on, plus DAS_FORM_EXT below.  das_form_lookup() finds
+ * looked inside.  The kind headers name them: DASFORM_VEC, DASFORM_POS,
+ * DASFORM_ROT and so on, plus DASFORM_EXT below.  DasForm_lookup() finds
  * one from a kind= name.
  * @relates DasForm
  */
-typedef struct DasForm_VTbl DasForm_VTbl;
+typedef struct das_formvtable_t DasFormVTable;
 
 
 /** The kind= name of a formalism, "linear", "point", "vector" and so on,
  * as written in a stream header
  *
- * For a kind das2C does not know, DAS_FORM_EXT, this is the name as it
+ * For a kind das2C does not know, DASFORM_EXT, this is the name as it
  * arrived in the stream.  To test for a kind das2C knows, use
  * DasForm_isKind() rather than comparing names.
  *
@@ -118,29 +118,29 @@ DAS_API const char* DasForm_kind(const DasForm* pThis);
 /** Is this formalism of the given kind?
  *
  * @code
- *     if(DasForm_isKind(pForm, DAS_FORM_POS)) // ...
+ *     if(DasForm_isKind(pForm, DASFORM_POS)) // ...
  * @endcode
  * See the DasForm description for when a kind test is the right question.
  *
  * @param pThis the formalism, which may be NULL
- * @param pKind a kind token, DAS_FORM_VEC etc., or one from das_form_lookup()
+ * @param pKind a kind token, DASFORM_VEC etc., or one from DasForm_lookup()
  * @returns true if pThis is of that kind, false for a NULL form
  * @memberof DasForm
  */
-DAS_API bool DasForm_isKind(const DasForm* pThis, const DasForm_VTbl* pKind);
+DAS_API bool DasForm_isKind(const DasForm* pThis, const DasFormVTable* pKind);
 
-/* Named only by the DAS_FORM_EXT macro below */
-DAS_API extern const DasForm_VTbl das_form_generic_vtbl;
+/* Named only by the DASFORM_EXT macro below */
+DAS_API extern const DasFormVTable DasFormExt_vtable;
 
 /** The kind of a formalism das2C does not know
  *
- * Its parameters are carried through, see DasForm_getParam(), and written
+ * Its parameters are carried through, see DasForm_param(), and written
  * back out, but it defines no operations and names no components.  An
  * application that knows the kind does its own math on the values.
  *
- * @see DasForm_isKind(), DasVar_formIs().  @relates DasForm
+ * @see DasForm_isKind(), DasVar_hasForm().  @relates DasForm
  */
-#define DAS_FORM_EXT (&das_form_generic_vtbl)
+#define DASFORM_EXT (&DasFormExt_vtable)
 
 /** Release a formalism
  *
@@ -154,7 +154,7 @@ DAS_API void     del_DasForm(DasForm* pThis);
 /** An independent duplicate of a formalism
  * @returns a new form the caller owns, or NULL if handed NULL
  * @memberof DasForm */
-DAS_API DasForm* DasForm_copy(const DasForm* pThis);
+DAS_API DasForm* new_DasForm_copy(const DasForm* pThis);
 
 /** Read one parameter by its attribute name
  *
@@ -173,11 +173,11 @@ DAS_API DasForm* DasForm_copy(const DasForm* pThis);
  *          question.
  * @memberof DasForm
  */
-DAS_API const char* DasForm_getParam(
-	const DasForm* pThis, const char* sName, ubyte* pType
+DAS_API const char* DasForm_param(
+	const DasForm* pThis, const char* sName, uint8_t* pType
 );
 
-/** Bytes in a das_form_param_buf, enough for any one parameter as a DasProp */
+/** Bytes in a DasFormParamBuf, enough for any one parameter as a DasProp */
 #define DASFORM_PARAM_SZ 128
 
 /** How many parameters this form holds, kind= excluded
@@ -196,10 +196,10 @@ DAS_API int DasForm_numParams(const DasForm* pThis);
  * Declare one of these rather than a byte array; the union keeps the
  * property inside it aligned.  The DasProp pointer returned points into it.
  */
-typedef union das_form_param_buf {
+typedef union das_formparambuf_t {
 	uint64_t uAlign;
-	ubyte    aBytes[DASFORM_PARAM_SZ];
-} das_form_param_buf;
+	uint8_t    aBytes[DASFORM_PARAM_SZ];
+} DasFormParamBuf;
 
 /** One parameter as a typed property, by index
  *
@@ -212,18 +212,18 @@ typedef union das_form_param_buf {
  * @param pBuf storage for the property, which the returned pointer refers
  *        into; keep it as long as you use the property
  * @returns the property, or NULL past the end.  For a kind das2C knows it
- *          has the parameter's real type; for DAS_FORM_EXT every parameter
+ *          has the parameter's real type; for DASFORM_EXT every parameter
  *          is a string, since das2C cannot know better.
  * @memberof DasForm */
 DAS_API const DasProp* DasForm_paramAt(
-	const DasForm* pThis, int iParam, das_form_param_buf* pBuf
+	const DasForm* pThis, int iParam, DasFormParamBuf* pBuf
 );
 
 /** Build a form from attribute name, value pairs, as expat delivers them
  *
  * kind= is required.  A stream element with no \<ops\> means linear, but
  * that default belongs to the stream reader, not to this call.  A kind das2C
- * does not know is not an error: the result is a DAS_FORM_EXT form that
+ * does not know is not an error: the result is a DASFORM_EXT form that
  * carries the parameters for application code and writes them back out, but
  * takes part in no arithmetic.  A parameter that a known kind does not
  * recognize is an error.
@@ -264,9 +264,9 @@ DAS_API const char* DasForm_compSym(const DasForm* pThis, int iComp);
  * @returns sBuf, or NULL when this kind has no rendering of its own and the
  *          caller should print the elements as plain numbers
  * @memberof DasForm */
-DAS_API char* DasForm_prnRun(
-	const DasForm* pThis, const ubyte* pRun, uint32_t nElems,
-	das_val_type et, char* sBuf, size_t uLen
+DAS_API char* DasForm_valToStr(
+	const DasForm* pThis, const uint8_t* pRun, uint32_t nElems,
+	das_vt et, char* sBuf, size_t uLen
 );
 
 /** The kind and parameters of a formalism on one line
@@ -295,7 +295,7 @@ DAS_API char* DasForm_toStr(const DasForm* pThis, char* sBuf, size_t uLen);
  *
  * @param pThis the formalism; NULL is accepted and is always okay
  * @param nIntRank the internal rank, 0 for a scalar
- * @param pIntShape the internal extents, VARIDX_RAGGED for a ragged level.
+ * @param pIntShape the internal extents, DASIDX_RAGGED for a ragged level.
  *        May be NULL when nIntRank is 0.
  * @returns DAS_OKAY, or an error saying why the form cannot describe values
  *          of that shape
@@ -308,12 +308,12 @@ DAS_API das_errcode DasForm_validate(
 /** The kind token for a kind= name, such as "vector"
  *
  * For comparing a form against a kind known only by name:
- * DasForm_isKind(pForm, das_form_lookup(sKind)).
+ * DasForm_isKind(pForm, DasForm_lookup(sKind)).
  *
  * @returns the token, or NULL for a name das2C does not know.  Forms of
- *          unknown kinds are DAS_FORM_EXT.
+ *          unknown kinds are DASFORM_EXT.
  * @relates DasForm */
-DAS_API const DasForm_VTbl* das_form_lookup(const char* sKind);
+DAS_API const DasFormVTable* DasForm_lookup(const char* sKind);
 
 /** @} */
 

@@ -48,13 +48,13 @@ void del_DasForm(DasForm* pThis)
 }
 
 /* NULL tolerant for the same reason del_DasForm is. */
-DasForm* DasForm_copy(const DasForm* pThis)
+DasForm* new_DasForm_copy(const DasForm* pThis)
 {
 	if(pThis == NULL) return NULL;
 	return pThis->pVTbl->copy(pThis);
 }
 
-/* A recipe IS reference counted, unlike the form above it.  DasVar_copy()
+/* A recipe IS reference counted, unlike the form above it.  new_DasVar_copy()
    hands the copy the original's recipe rather than re-resolving it, because
    resolution is a construction-time decision and two copies of one variable
    must not disagree about their on-demand value creation rules. */
@@ -71,9 +71,9 @@ int DasBinOp_decRef(DasBinOp* pThis)
 	return 0;
 }
 
-char* DasForm_prnRun(
-	const DasForm* pThis, const ubyte* pRun, uint32_t nElems,
-	das_val_type et, char* sBuf, size_t uLen
+char* DasForm_valToStr(
+	const DasForm* pThis, const uint8_t* pRun, uint32_t nElems,
+	das_vt et, char* sBuf, size_t uLen
 ){
 	if((pThis == NULL)||(pThis->pVTbl->prnRun == NULL)) return NULL;
 	return pThis->pVTbl->prnRun(pThis, pRun, nElems, et, sBuf, uLen);
@@ -131,8 +131,8 @@ const char* DasForm_compSym(const DasForm* pThis, int iComp)
 	return pThis->pVTbl->compSym(pThis, iComp);
 }
 
-const char* DasForm_getParam(
-	const DasForm* pThis, const char* sName, ubyte* pType
+const char* DasForm_param(
+	const DasForm* pThis, const char* sName, uint8_t* pType
 ){
 	if(pType != NULL) *pType = 0;   /* 0 is not a valid DASPROP_ type */
 	/* Silent on a miss, unlike setParam's duty to refuse an unknown name.
@@ -149,7 +149,7 @@ const char* DasForm_getParam(
    the i'th parameter is the i'th name that has a value.  Walking from 0 on
    every call is quadratic in a list that never passes ten entries. */
 static const char* _DasForm_paramSet(
-	const DasForm* pThis, int iParam, const char** psName, ubyte* pType
+	const DasForm* pThis, int iParam, const char** psName, uint8_t* pType
 ){
 	if((pThis == NULL)||(iParam < 0)) return NULL;
 	if((pThis->pVTbl->paramName == NULL)||(pThis->pVTbl->getParam == NULL))
@@ -172,19 +172,19 @@ static const char* _DasForm_paramSet(
 int DasForm_numParams(const DasForm* pThis)
 {
 	const char* sName = NULL;
-	ubyte uType = 0;
+	uint8_t uType = 0;
 	int n = 0;
 	while(_DasForm_paramSet(pThis, n, &sName, &uType) != NULL) ++n;
 	return n;
 }
 
 const DasProp* DasForm_paramAt(
-	const DasForm* pThis, int iParam, das_form_param_buf* pBuf
+	const DasForm* pThis, int iParam, DasFormParamBuf* pBuf
 ){
 	if(pBuf == NULL) return NULL;
 
 	const char* sName = NULL;
-	ubyte uType = 0;
+	uint8_t uType = 0;
 	const char* sVal = _DasForm_paramSet(pThis, iParam, &sName, &uType);
 	if(sVal == NULL) return NULL;
 
@@ -192,7 +192,7 @@ const DasProp* DasForm_paramAt(
 	   sysorder being the one that exists today.  It rides inside the
 	   property so no caller has to know it.  A failure here is a library
 	   bug (an over-long or misspelled name in a parameter table), and
-	   das_error has already said so. */
+	   daserrf has already said so. */
 	if(init_DasProp(
 		pBuf->aBytes, sizeof(pBuf->aBytes), NULL, uType, sName, sVal, ';',
 		NULL, DASPROP_DAS3
@@ -235,14 +235,14 @@ typedef struct das_form_generic {
 	struct { char sName[16]; char sVal[48]; } aParam[DASFORM_MAX_PARAMS];
 } DasFormGeneric;
 
-/* No forward declaration here: form.h publishes this one, since DAS_FORM_EXT
+/* No forward declaration here: form.h publishes this one, since DASFORM_EXT
    needs its address and a second decl without DAS_API would disagree about
    linkage on Windows. */
 
 static DasForm* _new_DasFormGeneric_empty(void)
 {
 	DasFormGeneric* pThis = (DasFormGeneric*)calloc(1, sizeof(DasFormGeneric));
-	pThis->base.pVTbl = &das_form_generic_vtbl;
+	pThis->base.pVTbl = &DasFormExt_vtable;
 	return &(pThis->base);
 }
 
@@ -256,14 +256,14 @@ static das_errcode _DasFormGeneric_setParam(
 	   so it cannot know which names are legal; keeping them all is the only
 	   way to write back what arrived. */
 	if(pThis->nParams >= DASFORM_MAX_PARAMS)
-		return das_error(DASERR_FORM,
+		return daserrf(DASERR_FORM,
 			"<ops kind=\"%s\"> has more than %d parameters",
 			pThis->sKind, DASFORM_MAX_PARAMS
 		);
 	if(strlen(sName) >= sizeof(pThis->aParam[0].sName))
-		return das_error(DASERR_FORM, "Parameter name '%s' too long", sName);
+		return daserrf(DASERR_FORM, "Parameter name '%s' too long", sName);
 	if(strlen(sVal) >= sizeof(pThis->aParam[0].sVal))
-		return das_error(DASERR_FORM, "Parameter value '%s' too long", sVal);
+		return daserrf(DASERR_FORM, "Parameter value '%s' too long", sVal);
 
 	strncpy(pThis->aParam[pThis->nParams].sName, sName,
 	        sizeof(pThis->aParam[0].sName) - 1);
@@ -292,7 +292,7 @@ static das_errcode _DasFormGeneric_encode(const DasForm* pBase, DasBuf* pBuf)
    arrived as, so its getParam is a plain lookup with nothing to reconstruct.
    Every other form decodes into typed fields and renders back on demand. */
 static const char* _DasFormGeneric_getParam(
-	const DasForm* pBase, const char* sName, ubyte* pType
+	const DasForm* pBase, const char* sName, uint8_t* pType
 ){
 	const DasFormGeneric* pThis = (const DasFormGeneric*)pBase;
 
@@ -321,7 +321,7 @@ static const char* _DasFormGeneric_paramName(const DasForm* pBase, int iParam)
    here, where the generic form lives, keeps the downcast out of client code. */
 /* Each kind's vtable is one object in the program, so its address is the
    kind's identity; no enum or string to keep in sync with it. */
-bool DasForm_isKind(const DasForm* pThis, const DasForm_VTbl* pKind)
+bool DasForm_isKind(const DasForm* pThis, const DasFormVTable* pKind)
 {
 	return ((pThis != NULL) && (pThis->pVTbl == pKind));
 }
@@ -329,29 +329,29 @@ bool DasForm_isKind(const DasForm* pThis, const DasForm_VTbl* pKind)
 const char* DasForm_kind(const DasForm* pThis)
 {
 	if(pThis == NULL) return NULL;
-	if(DasForm_isKind(pThis, DAS_FORM_EXT))
+	if(DasForm_isKind(pThis, DASFORM_EXT))
 		return ((const DasFormGeneric*)pThis)->sKind;
 	return pThis->pVTbl->sKind;
 }
 
 static bool _DasFormGeneric_pack(
-	const DasForm* pBase, const das_operand* pOp, const ubyte* pRun,
-	das_datum* pOut
+	const DasForm* pBase, const das_operand* pOp, const uint8_t* pRun,
+	DasDatum* pOut
 ){
 	/* The library does not know what these numbers mean, but it can carry them.
 	   Generic composite datum boxes the run with this form pointer attached.
 	   Preserves symmetry between DasVar::subset and DasVar::get */
 	if(pOp->nIntRank > 0)
-		return das_datum_box(
+		return DasDatum_wrapElems(
 			pOut, pBase, pRun, pOp->nIntRank, pOp->aIntShape, pOp->vtElem,
 			pOp->units
 		);
 
-	das_datum_init(pOut, pRun, pOp->vtElem, 0, pOp->units);
+	DasDatum_set(pOut, pRun, pOp->vtElem, 0, pOp->units);
 	return true;
 }
 
-static das_val_type _DasFormGeneric_datumType(const DasForm* pBase){ return vtUnknown; }
+static das_vt _DasFormGeneric_datumType(const DasForm* pBase){ return DASVT_UNK; }
 
 static DasForm* _DasFormGeneric_copy(const DasForm* pBase)
 {
@@ -362,7 +362,7 @@ static DasForm* _DasFormGeneric_copy(const DasForm* pBase)
 
 static void _DasFormGeneric_release(DasForm* pBase){ free(pBase); }
 
-const DasForm_VTbl das_form_generic_vtbl = {
+const DasFormVTable DasFormExt_vtable = {
 	"",                /* no wire kind of its own; sKind holds what arrived */
 	_new_DasFormGeneric_empty,
 	_DasFormGeneric_setParam,
@@ -386,7 +386,7 @@ static DasForm* _new_DasFormGeneric_kind(const char* sKind)
 {
 	DasFormGeneric* pThis = (DasFormGeneric*)_new_DasFormGeneric_empty();
 	if(strlen(sKind) >= sizeof(pThis->sKind)){
-		das_error(DASERR_FORM, "Formalism kind '%s' too long", sKind);
+		daserrf(DASERR_FORM, "Formalism kind '%s' too long", sKind);
 		free(pThis);
 		return NULL;
 	}
@@ -398,26 +398,26 @@ static DasForm* _new_DasFormGeneric_kind(const char* sKind)
 /* The kind table.  ONE line per formalism, and that line is the entire       */
 /* footprint of a new formalism outside its own file.                        */
 
-extern const DasForm_VTbl das_form_lin_vtbl;   /* form_lin.c    */
-extern const DasForm_VTbl das_form_pt_vtbl;    /* form_pt.c     */
-extern const DasForm_VTbl das_form_cplx_vtbl;     /* form_cplx.c   */
-extern const DasForm_VTbl das_form_vec_vtbl;   /* form_vec.c    */
-extern const DasForm_VTbl das_form_pos_vtbl;      /* form_pos.c    */
-extern const DasForm_VTbl das_form_rot_vtbl;   /* form_rot.c    */
+extern const DasFormVTable DasFormLin_vtable;   /* form_lin.c    */
+extern const DasFormVTable DasFormPt_vtable;    /* form_pt.c     */
+extern const DasFormVTable DasFormCplx_vtable;     /* form_cplx.c   */
+extern const DasFormVTable DasFormVec_vtable;   /* form_vec.c    */
+extern const DasFormVTable DasFormPos_vtable;      /* form_pos.c    */
+extern const DasFormVTable DasFormRot_vtable;   /* form_rot.c    */
 
-static const DasForm_VTbl* g_kindTable[] = {
-	&das_form_lin_vtbl,
-	&das_form_pt_vtbl,
-	&das_form_cplx_vtbl,
-	&das_form_vec_vtbl,
-	&das_form_pos_vtbl,
-	&das_form_rot_vtbl,
+static const DasFormVTable* g_kindTable[] = {
+	&DasFormLin_vtable,
+	&DasFormPt_vtable,
+	&DasFormCplx_vtable,
+	&DasFormVec_vtable,
+	&DasFormPos_vtable,
+	&DasFormRot_vtable,
 	NULL
 };
 
 /* A pure lookup: it answers what a token names and nothing else.  "Absence
    means linear" is resolved once, at the wire boundary in new_DasForm_pairs. */
-const DasForm_VTbl* das_form_lookup(const char* sKind)
+const DasFormVTable* DasForm_lookup(const char* sKind)
 {
 	if((sKind == NULL)||(sKind[0] == '\0')) return NULL;
 
@@ -434,7 +434,7 @@ const DasForm_VTbl* das_form_lookup(const char* sKind)
    standing in for, and create() takes no arguments. */
 static DasForm* _dasform_create(const char* sKind)
 {
-	const DasForm_VTbl* pVTbl = das_form_lookup(sKind);
+	const DasFormVTable* pVTbl = DasForm_lookup(sKind);
 
 	if(pVTbl == NULL)
 		return _new_DasFormGeneric_kind(sKind);   /* unknown kind, never an error */
@@ -445,7 +445,7 @@ static DasForm* _dasform_create(const char* sKind)
 DasForm* new_DasForm_pairs(const char** psAttr)
 {
 	if(psAttr == NULL){
-		das_error(DASERR_FORM, "No attributes for an <ops> element");
+		daserrf(DASERR_FORM, "No attributes for an <ops> element");
 		return NULL;
 	}
 
@@ -459,7 +459,7 @@ DasForm* new_DasForm_pairs(const char** psAttr)
 	}
 
 	if((sKind == NULL)||(sKind[0] == '\0')){
-		das_error(DASERR_FORM,
+		daserrf(DASERR_FORM,
 			"<ops> is missing its kind attribute; an operations element that "
 			"does not say what kind of math it describes has no meaning"
 		);
@@ -497,11 +497,11 @@ das_errcode DasForm_validate(
 }
 
 void _dasform_fmtOrder(
-	char* sBuf, size_t uLen, const ubyte* pOrder, ubyte uComps
+	char* sBuf, size_t uLen, const uint8_t* pOrder, uint8_t uComps
 ){
 	int n = 0;
 	if(uLen > 0) sBuf[0] = '\0';
-	for(ubyte u = 0; u < uComps; ++u)
+	for(uint8_t u = 0; u < uComps; ++u)
 		n = _prn_catf(sBuf, uLen, n, "%s%hhu", (u > 0) ? ";" : "", pOrder[u]);
 }
 
@@ -514,20 +514,20 @@ void _dasform_fmtOrder(
  * validate() saw; 0 means the form was never validated, so there is no count
  * to trust and nothing is written. */
 das_errcode _dasform_prnOrder(
-	DasBuf* pBuf, const ubyte* pOrder, ubyte uComps
+	DasBuf* pBuf, const uint8_t* pOrder, uint8_t uComps
 ){
 	if((pOrder == NULL)||(uComps < 1)) return DAS_OKAY;
 
-	const ubyte* aDir = pOrder;
+	const uint8_t* aDir = pOrder;
 
 	bool bCanon = true;
-	for(ubyte u = 0; u < uComps; ++u)
+	for(uint8_t u = 0; u < uComps; ++u)
 		if(aDir[u] != u){ bCanon = false; break; }
 
 	if(bCanon) return DAS_OKAY;
 
 	das_errcode nRet = DasBuf_puts(pBuf, " sysorder=\"");
-	for(ubyte u = 0; (u < uComps)&&(nRet == DAS_OKAY); ++u)
+	for(uint8_t u = 0; (u < uComps)&&(nRet == DAS_OKAY); ++u)
 		nRet = DasBuf_printf(pBuf, "%s%hhu", (u > 0) ? ";" : "", aDir[u]);
 
 	if(nRet != DAS_OKAY) return nRet;

@@ -37,8 +37,8 @@ extern "C" {
    is unlikely to occur by accident and reads plainly in a hex dump. */
 #define DASDESC_MAGIC 0x44445343u
 
-struct das_descriptor {
-	das_desc_type_e type;
+struct das_desc_t {
+	das_desctype type;
 
 	/* DASDESC_MAGIC, set by DasDesc_init() and new_DasDesc().  del_DasDesc()
 	   checks it because callers reach it through a pointer cast the compiler
@@ -78,10 +78,10 @@ struct das_descriptor {
 	/* Number of invalid properties (saved to make length cals faster) */
 	size_t uInvalid;
 
-	struct das_descriptor* parent;
+	struct das_desc_t* parent;
 	bool bLooseParsing;
 
-	/* This descriptor does NOT inherit properties: DasDesc_getProp stops
+	/* This descriptor does NOT inherit properties: DasDesc_prop stops
 	   its parent walk here even when parent is set. */
 	bool bNoInherit;
 
@@ -97,7 +97,7 @@ struct das_descriptor {
  *
  * pfDel is the derived type's destructor for del_DasDesc(), or NULL when the
  * descriptor is not a heap object of its own. */
-void DasDesc_init(DasDesc* pThis, das_desc_type_e type, void (*pfDel)(DasDesc*));
+void DasDesc_init(DasDesc* pThis, das_desctype type, void (*pfDel)(DasDesc*));
 
 /* For use in derived destructors, frees the property array.  After calling
  * this function, no new properties can be added. */

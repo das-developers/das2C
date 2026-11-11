@@ -25,13 +25,13 @@
 #include "codex_p.h"
 
 /* No codec is ever registered in v3.0. */
-bool das_codex_supported(const char* sMime)
+bool DasCodex_isSupported(const char* sMime)
 {
 	return false;
 }
 
 /* No registry, so no path to report. */
-const char* das_codex_path(const char* sMime)
+const char* DasCodex_regPath(const char* sMime)
 {
 	return NULL;
 }
@@ -39,7 +39,7 @@ const char* das_codex_path(const char* sMime)
 /* Never an instance to make yet; the caller treats NULL as "no extension" and
  * fails loud with the mime in hand. */
 DasCodex* new_DasCodex(
-	const char* sMime, das_val_type vtStore, int nRank, const ptrdiff_t* pShape
+	const char* sMime, das_vt vtStore, int nRank, const ptrdiff_t* pShape
 ){
 	return NULL;
 }
@@ -47,7 +47,7 @@ DasCodex* new_DasCodex(
 /* ------------------------------------------------------------------------- */
 /* Member dispatch.  No instance can exist in v3.0, these are the interface */
 
-das_val_type DasCodex_storage(const DasCodex* pThis)
+das_vt DasCodex_storage(const DasCodex* pThis)
 {
 	return pThis->storage(pThis);
 }
@@ -62,24 +62,24 @@ das_errcode DasCodex_mime(const DasCodex* pThis, char* sBuf, size_t uLen)
 	return pThis->mime(pThis, sBuf, uLen);
 }
 
-das_errcode DasCodex_properties(
+das_errcode DasCodex_descProps(
 	const DasCodex* pThis, DasAry* pOut, size_t* pPropsOut
 ){
 	return pThis->properties(pThis, pOut, pPropsOut);
 }
 
 das_errcode DasCodex_decode(
-	DasCodex* pThis, const ubyte* pBlob, size_t uLen, DasAry* pAry,
+	DasCodex* pThis, const uint8_t* pBlob, size_t uLen, DasAry* pAry,
 	size_t* pAppended
 ){
 	return pThis->decode(pThis, pBlob, uLen, pAry, pAppended);
 }
 
 das_errcode DasCodex_encode(
-	DasCodex* pThis, const DasAry* pItems, const ptrdiff_t* pLoc,
+	DasCodex* pThis, const DasAry* pItems, const ptrdiff_t* pAddr,
 	DasBuf* pBuf, size_t* pAppended
 ){
-	return pThis->encode(pThis, pItems, pLoc, pBuf, pAppended);
+	return pThis->encode(pThis, pItems, pAddr, pBuf, pAppended);
 }
 
 void del_DasCodex(DasCodex* pThis)

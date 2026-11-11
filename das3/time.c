@@ -105,7 +105,7 @@ static const int days_in_month[2][14] = {
 
 
 /* ************************************************************************* */
-void dt_null(das_time* pDt)
+void DasTime_clear(DasTime* pDt)
 {
 	pDt->year = 0; pDt->month = 0; pDt->mday = 0; pDt->yday = 0;
 	pDt->yday = 0; pDt->hour = 0; pDt->minute = 0; pDt->second = 0.0;
@@ -400,7 +400,7 @@ static int _parsetime (
 
 
 /* ************************************************************************* */
-bool dt_parsetime(das_time* dt, const char* sTime)
+bool DasTime_fromStr(DasTime* dt, const char* sTime)
 {
 	int nRet = _parsetime(sTime,  &(dt->year), &(dt->month), &(dt->mday),
 			               &(dt->yday), &(dt->hour), &(dt->minute),
@@ -415,7 +415,7 @@ bool dt_parsetime(das_time* dt, const char* sTime)
  * Y, Y-M, Y-M-D, Y-DOY, each optionally followed by T or space and
  * h, h:m, h:m:s, with an optional trailing Z.  Anything else, including
  * fractional seconds, is refused. */
-bool dt_parsespan(const char* sTime, das_time* pBeg, das_time* pEnd)
+bool DasTime_strToSpan(const char* sTime, DasTime* pBeg, DasTime* pEnd)
 {
 	if(sTime == NULL) return false;
 	char sBuf[64];
@@ -472,8 +472,8 @@ bool dt_parsespan(const char* sTime, das_time* pBeg, das_time* pEnd)
 		nUnit = bDoy ? 2 : nDate - 1;
 	}
 
-	das_time dt;
-	dt_null(&dt);
+	DasTime dt;
+	DasTime_clear(&dt);
 	if(nUnit == 0){
 		/* _parsetime() refuses a bare year */
 		dt.year = atoi(pS);
@@ -488,11 +488,11 @@ bool dt_parsespan(const char* sTime, das_time* pBeg, das_time* pEnd)
 	}
 	else{
 		if(pTod != NULL) *(pTod - 1) = 'T';   /* put the string back together */
-		if(!dt_parsetime(&dt, pS)) return false;
+		if(!DasTime_fromStr(&dt, pS)) return false;
 	}
-	dt_tnorm(&dt);
+	DasTime_normalize(&dt);
 
-	das_time dtEnd = dt;
+	DasTime dtEnd = dt;
 	switch(nUnit){
 	case 0: dtEnd.year += 1;   break;
 	case 1: dtEnd.month += 1;  break;
@@ -501,7 +501,7 @@ bool dt_parsespan(const char* sTime, das_time* pBeg, das_time* pEnd)
 	case 4: dtEnd.minute += 1; break;
 	default: dtEnd.second += 1.0; break;
 	}
-	dt_tnorm(&dtEnd);
+	DasTime_normalize(&dtEnd);
 
 	if(pBeg) *pBeg = dt;
 	if(pEnd) *pEnd = dtEnd;
@@ -509,7 +509,7 @@ bool dt_parsespan(const char* sTime, das_time* pBeg, das_time* pEnd)
 }
 
 /* ************************************************************************* */
-bool dt_now(das_time* pDt)
+bool DasTime_now(DasTime* pDt)
 {
 	if(pDt == NULL) return false;
 
@@ -544,17 +544,17 @@ bool dt_now(das_time* pDt)
 	
 #endif
 	
-	dt_tnorm(pDt);
+	DasTime_normalize(pDt);
 	return true;
 }
 
 /* ************************************************************************* */
 
-void dt_set(
-	das_time* pDt, int year, int month, int mday, int yday, int hour, 
+void DasTime_set(
+	DasTime* pDt, int year, int month, int mday, int yday, int hour, 
 	int minute, double second
 ){
-	/* Never call das_error from here!  It could trigger deadlocs in
+	/* Never call daserrf from here!  It could trigger deadlocs in
 	   LoadLeapSecondsTable() and LoadLeapNanoSecondsTable() */
 	
 	pDt->year = year;
@@ -566,7 +566,7 @@ void dt_set(
 	pDt->second = second;
 }
 
-int dt_compare(const das_time* pA, const das_time* pB)
+int DasTime_compare(const DasTime* pA, const DasTime* pB)
 {	
 	if(pA->year != pB->year) return pA->year - pB->year;
 	if(pA->month != pB->month) return pA->month - pB->month;
@@ -580,13 +580,13 @@ int dt_compare(const das_time* pA, const das_time* pB)
 }
 
 
-bool dt_in_range(
-	const das_time* test, const das_time* begin, const das_time* end
+bool DasTime_isInRange(
+	const DasTime* test, const DasTime* begin, const DasTime* end
 ){
-	return ( (dt_compare(test, begin) >= 0 ) && (dt_compare(test, end) < 0));
+	return ( (DasTime_compare(test, begin) >= 0 ) && (DasTime_compare(test, end) < 0));
 }
 
-static int _date_to_jday(const das_time* pDt)
+static int _date_to_jday(const DasTime* pDt)
 {
 	int y = pDt->year;
 	int m = pDt->month;
@@ -601,7 +601,7 @@ static int _date_to_jday(const das_time* pDt)
 
 
 /* Adapted from similar algorithm in dastime.py */
-double dt_diff(const das_time* pA, const das_time* pB)
+double DasTime_diff(const DasTime* pA, const DasTime* pB)
 {
 	double fDiff = 0;
 	
@@ -624,7 +624,7 @@ static char* _dt_fit(char* sBuf, size_t uLen, int n)
 	return ((n >= 0)&&((size_t)n < uLen)) ? sBuf : NULL;
 }
 
-char* dt_isoc(const das_time* pDt, int nFracSec, char* sBuf, size_t uLen)
+char* DasTime_toIsoC(const DasTime* pDt, int nFracSec, char* sBuf, size_t uLen)
 {
 	int n = 0;
 	char sFmt[48] = {'\0'};
@@ -648,7 +648,7 @@ char* dt_isoc(const das_time* pDt, int nFracSec, char* sBuf, size_t uLen)
 	return _dt_fit(sBuf, uLen, n);
 }
 
-char* dt_isod(const das_time* pDt, int nFracSec, char* sBuf, size_t uLen)
+char* DasTime_toIsoD(const DasTime* pDt, int nFracSec, char* sBuf, size_t uLen)
 {
 	int n = 0;
 	char sFmt[48] = {'\0'};
@@ -672,7 +672,7 @@ char* dt_isod(const das_time* pDt, int nFracSec, char* sBuf, size_t uLen)
 	return _dt_fit(sBuf, uLen, n);
 }
 
-char* dt_dual_str(const das_time* pDt, int nFracSec, char* sBuf, size_t uLen)
+char* DasTime_toIsoDual(const DasTime* pDt, int nFracSec, char* sBuf, size_t uLen)
 {
 	int n = 0;
 	char sFmt[64] = {'\0'};
@@ -752,7 +752,7 @@ static double _ttime (
   _tnorm (year, month, mday, yday, hour, minute, second);
 
   /* Use the difference of Julian Days from the arbitrary epoch */
-  sjd = (double)(das_julian_day(*year, *month, *mday) - DAS_MJ1958_EPOCH) * 86400.0;
+  sjd = (double)(DasTime_utcToJdn(*year, *month, *mday) - DAS_MJ1958_EPOCH) * 86400.0;
 
   s = *second + (double)(*minute) * 60.0 + (double)(*hour) * 3600.0 + sjd;
 
@@ -761,9 +761,9 @@ static double _ttime (
 } /* ttime - convert time to double seconds */
 
 
-double dt_ttime(const das_time* dt){
+double DasTime_toSec1958(const DasTime* dt){
 	
-	das_time _dt = *dt;
+	DasTime _dt = *dt;
 	
 	return _ttime(&(_dt.year), &(_dt.month), &(_dt.mday), &(_dt.yday),
 			       &(_dt.hour), &(_dt.minute), &(_dt.second) );
@@ -790,7 +790,7 @@ static void _emitt (
   /* approximate year */
   *year = id / 365 + 1958;
 
-  jd = das_julian_day (*year, 1, 1) - DAS_MJ1958_EPOCH;
+  jd = DasTime_utcToJdn (*year, 1, 1) - DAS_MJ1958_EPOCH;
 
   *month = 1;
   *mday = id - jd + 1;
@@ -798,7 +798,7 @@ static void _emitt (
 
 } /* emitt - convert double clock to components */
 
-void dt_emitt(das_time* dt, double tt){
+void DasTime_fromSec1958(DasTime* dt, double tt){
 	_emitt(tt, &(dt->year), &(dt->month), &(dt->mday), &(dt->yday),
 			       &(dt->hour), &(dt->minute), &(dt->second) );
 }
@@ -895,24 +895,24 @@ _tnorm (int *year, int *month, int *mday, int *yday,
 } /* tnorm - normalize date and time components */
 
 
-void dt_tnorm(das_time* dt){
+void DasTime_normalize(DasTime* dt){
 	_tnorm(&(dt->year), &(dt->month), &(dt->mday), &(dt->yday), &(dt->hour), 
 			&(dt->minute), &(dt->second) );
 }
 
-void dt_from_1958(
-	das_time* pDt, unsigned short int daysSince1958, unsigned int msOfDay
+void DasTime_fromDays1958(
+	DasTime* pDt, unsigned short int daysSince1958, unsigned int msOfDay
 ){
 	/* Normalization carries the days into months and years and the seconds
 	   into hours and minutes, so no table of year starts is needed */
-	dt_set(pDt, 1958, 1, 1 + (int)daysSince1958, 0, 0, 0, msOfDay / 1000.0);
-	dt_tnorm(pDt);
+	DasTime_set(pDt, 1958, 1, 1 + (int)daysSince1958, 0, 0, 0, msOfDay / 1000.0);
+	DasTime_normalize(pDt);
 }
 
 
 /*---------------------------------------------------------------------------
 
-  das_julian_day -- calculate Julian Day number given Year, Month, Day
+  DasTime_utcToJdn -- calculate Julian Day number given Year, Month, Day
 
   This was adapted from JHU IDL procedure ymd2jd.pro and
   should be accurate for years after adoption of the Gregorian calendar.
@@ -922,21 +922,21 @@ void dt_from_1958(
   ---------------------------------------------------------------------------*/
 
 int
-das_julian_day (int year, int month, int day)
+DasTime_utcToJdn (int year, int month, int day)
 {
   return 367 * year - 7 * (year + (month + 9) / 12) / 4 -
          3 * ((year + (month - 9) / 7) / 100 + 1) / 4 +
          275 * month / 9 + day + 1721029;
 
-} /* das_julian_day - calculate Julian Day number given Year, Month, Day */
+} /* DasTime_utcToJdn - calculate Julian Day number given Year, Month, Day */
 
 
-int64_t dt_nano_1970(const das_time* pThis)
+int64_t DasTime_toNs1970(const DasTime* pThis)
 {
 	/* Days since 1970, if abs is greater than 290 years (rounded down from
 	 * the absolute max quoted on docs.scipy.org of 292) raise an error */
 	
-	das_time dt = *(pThis);  /* avoid constant pointer indirections */
+	DasTime dt = *(pThis);  /* avoid constant pointer indirections */
 	
 	/* From: http://howardhinnant.github.io/date_algorithms.html Thanks! */
 	dt.year -= dt.month <= 2;
@@ -948,7 +948,7 @@ int64_t dt_nano_1970(const das_time* pThis)
 	 
 	if( abs(epoch_days) > 105922 /* ~ 290 * 365.25 */ ){
 		
-		/* This is a das1 function, can't use das_error here!1 */
+		/* This is a das1 function, can't use daserrf here!1 */
 		fprintf(stderr, 
 			"WARNING: Date %04d-%02d-%02d is not representable in the ns1970 time system\n", 
 			dt.year, dt.month, dt.mday
@@ -994,7 +994,7 @@ static int64_t _tt2k_fromFields(
 	);
 }
 
-int64_t dt_to_tt2k(const das_time* pThis){
+int64_t DasTime_toTt2k(const DasTime* pThis){
 
 	/* Round to the nanosecond once, then split.  Truncating each field in
 	   turn dropped the last nanosecond of about half of all ns-resolution
@@ -1012,16 +1012,16 @@ int64_t dt_to_tt2k(const das_time* pThis){
 	);
 }
 
-das_errcode tt2k_from_parts(
+das_errcode DasTime_utcToTt2k(
 	int year, int month, int mday, int hour, int minute, int second,
 	int32_t nanosec, int64_t* pTT
 ){
 	if(pTT == NULL)
-		return das_error(DASERR_TIME, "No location given for the TT2000 value");
+		return daserrf(DASERR_TIME, "No location given for the TT2000 value");
 
 	int64_t nTT = _tt2k_fromFields(year, month, mday, hour, minute, second, nanosec);
-	if(nTT == DAS_TT2000_ILLEGAL)
-		return das_error(DASERR_TIME, 
+	if(nTT == DASTIME_TT2K_ILLEGAL)
+		return daserrf(DASERR_TIME, 
 			"Can't express %04d-%02d-%02dT%02d:%02d:%02d + %d ns as TT2000, a field "
 			"is negative or the time is outside 1707 to 2292", 
 			year, month, mday, hour, minute, second, (int)nanosec
@@ -1030,7 +1030,7 @@ das_errcode tt2k_from_parts(
 	return DAS_OKAY;
 }
 
-void tt2k_to_parts(
+void DasTime_tt2kToUtc(
 	int64_t nTT, int* pYear, int* pMonth, int* pMday, int* pHour,
 	int* pMinute, int* pSecond, int32_t* pNanosec
 ){
@@ -1047,18 +1047,18 @@ void tt2k_to_parts(
 	if(pNanosec) *pNanosec = (int32_t)ms*1000000 + (int32_t)us*1000 + (int32_t)ns;
 }
 
-void dt_from_tt2k(das_time* pThis, int64_t nTime)
+void DasTime_fromTt2k(DasTime* pThis, int64_t nTime)
 {
 	int nSec;
 	int32_t nNano;
-	tt2k_to_parts(
+	DasTime_tt2kToUtc(
 		nTime, &(pThis->year), &(pThis->month), &(pThis->mday), &(pThis->hour),
 		&(pThis->minute), &nSec, &nNano
 	);
 
-	/* A leap second stays :60, as in Units_convertToDt().  The calendar
+	/* A leap second stays :60, as in DasTime_fromPoint().  The calendar
 	   fields come back normalized, so only yday needs filling in, and that is
-	   done by table rather than by dt_tnorm(): dt_tnorm() is NOT leap second
+	   done by table rather than by DasTime_normalize(): DasTime_normalize() is NOT leap second
 	   aware and rolls :60.5 forward to :00.5 of the next minute, which
 	   collides with a real time.  The old clamp to :59 avoided that roll by
 	   colliding with :59 instead. */

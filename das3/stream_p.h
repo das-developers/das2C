@@ -25,7 +25,7 @@
 
 #include <das3/stream.h>
 #include <das3/desc_p.h>
-#include <das3/io.h>      /* das_stream_model */
+#include <das3/io.h>      /* das_iomodel */
 
 #ifdef __cplusplus
 extern "C" {
@@ -39,7 +39,7 @@ extern "C" {
    rarely have more than 10 packet IDs. */
 #define DASSTREAM_LOC_DESC 16
 
-struct das_stream {
+struct das_stream_t {
 	/* The base structure */
 	DasDesc base;
 
@@ -71,7 +71,7 @@ struct das_stream {
 
 	/* Reader opt-in: recover an undecodable embedded format (a mime'd blob with no
 	   registered codec extension) as opaque per-record bytes instead of failing.
-	   Set from DasIO_embedAsBytes() when the stream descriptor is decoded; the
+	   Set from DasIO_setEmbedAsBytes() when the stream descriptor is decoded; the
 	   dataset parser reads it via DasStream_getEmbedAsBytes(). */
 	bool bEmbedAsBytes;
 };
@@ -81,7 +81,7 @@ struct das_stream {
 
 /* True if embedded formats with no registered codec are kept as opaque
    bytes instead of failing.  May change the shape of the variables it
-   applies to.  The option is set on DasIO (DasIO_embedAsBytes), copied in
+   applies to.  The option is set on DasIO (DasIO_setEmbedAsBytes), copied in
    when the stream is created. */
 bool DasStream_getEmbedAsBytes(const DasStream* pThis);
 
@@ -94,7 +94,7 @@ bool DasStream_getEmbedAsBytes(const DasStream* pThis);
  * @param nPktId - The packet tag ID number corresponding to this top-level descriptor
  * 
  * @param nModel - The expected data model to parse into, one of 
- *             STREAM_MODEL_MIXED, STREAM_MODEL_V2, or STREAM_MODEL_V3
+ *             DASIOMODEL_MIXED, DASIOMODEL_V2, or DASIOMODEL_V3
  * 
  * @returns Either a top level Descriptor object.  The specific type dependings
  *          on the data received, or NULL if the input could not be parsed.
@@ -133,7 +133,7 @@ das_errcode DasStream_encode3(DasStream* pThis, DasBuf* pBuf);
  *          are in use
  * @memberof DasStream
  */
-DasPkt* DasStream_clonePkt(DasStream* pThis, const DasPkt* pd);
+DasPkt* _DasStream_clonePkt(DasStream* pThis, const DasPkt* pd);
 
 /** Detach a packet descriptor from this stream.  
  * 
@@ -155,7 +155,7 @@ das_errcode DasStream_rmDesc(DasStream* pThis, DasDesc* pDesc);
 
 /** The active descriptor for a packet ID, for DasIO's per-packet lookup
  *
- * Same answer as DasStream_getDesc(), but remembers the last hit so a run
+ * Same answer as DasStream_desc(), but remembers the last hit so a run
  * of packets with one ID costs one compare each, and logs nothing for an
  * out of range ID (the framing parser has already checked it).
  *
@@ -182,7 +182,7 @@ DasDesc* DasStream_findDesc(DasStream* pThis, int nPktId);
  */
 das_errcode DasStream_cacheShapes(DasStream* pThis, bool bCache);
 
-DasStream* new_DasStream_str(DasBuf* pBuf, das_stream_model nModel);
+DasStream* new_DasStream_str(DasBuf* pBuf, das_iomodel nModel);
 
 #ifdef __cplusplus
 }

@@ -60,8 +60,8 @@
 #define DASCDF_COMP_STR_SZ 32  /* room for one component label or units string */
 #define DASCDF_MAX_ATTR_MAP 16 /* --prop-map entries */
 
-#define CRED_FILE     "servers"    /* under das_userdir() */
-#define DEF_TEMP_DIR  "cdftmp"     /* under das_userdir(), so one rm -r clears it */
+#define CRED_FILE     "servers"    /* under dasfs_userDir() */
+#define DEF_TEMP_DIR  "cdftmp"     /* under dasfs_userDir(), so one rm -r clears it */
 
 #define LOC_PATH_LEN 256
 
@@ -69,13 +69,13 @@
 
 #define VAR_MAP_MAX_LINE 256
 
-/* For help text only, das_userdir() does the lookup */
+/* For help text only, dasfs_userDir() does the lookup */
 #ifdef _WIN32
 #define HELP_USERDIR  "%USERPROFILE%\\.das"
 #else
 #define HELP_USERDIR  "$HOME/.das"
 #endif
-#define HELP_TEMP_DIR HELP_USERDIR DAS_DSEPS DEF_TEMP_DIR
+#define HELP_TEMP_DIR HELP_USERDIR DASFS_SEPS DEF_TEMP_DIR
 
 /* Add a little user-flag for arrays so we know which ones to clear after 
    a batch write */
@@ -85,10 +85,10 @@
 
    LLONG_MIN is -9223372036854775807, but we need -9223372036854775808
 */
-#ifdef HOST_IS_LSB_FIRST
-const ubyte g_tt2kfill[8] = {0,   0,0,0, 0,0,0,0x80};
+#ifdef DASHOST_LSB_FIRST
+const uint8_t g_tt2kfill[8] = {0,   0,0,0, 0,0,0,0x80};
 #else
-const ubyte g_tt2kfill[8] = {0x80,0,0,0, 0,0,0,   0};
+const uint8_t g_tt2kfill[8] = {0x80,0,0,0, 0,0,0,   0};
 #endif
 
 /* Handle lack of const qualifier in cdf lib that should really be there */
@@ -116,7 +116,7 @@ size_t g_uNextVar = 0;
 
 var_cdf_info_t* nextVarInfo(){
 	if(g_uNextVar >= g_uMaxVars){
-		das_error(PERR, "At present only %zu variables are supported in a CDF"
+		daserrf(PERR, "At present only %zu variables are supported in a CDF"
 			" but that's easy to change.", g_uMaxVars
 		);
 		return NULL;
@@ -127,11 +127,11 @@ var_cdf_info_t* nextVarInfo(){
 }
 
 #define DasVar_addCdfInfo(P)  DasDesc_setUser((DasDesc*)(P), nextVarInfo())
-#define DasVar_cdfId(P)       ( ( (var_cdf_info_t*)DasDesc_getUser((DasDesc*)(P)) )->iCdfId)
-#define DasVar_cdfIdPtr(P)   &( ( (var_cdf_info_t*)DasDesc_getUser((DasDesc*)(P)) )->iCdfId)
-#define DasVar_cdfStart(P)    ( ( (var_cdf_info_t*)DasDesc_getUser((DasDesc*)(P)) )->nRecsWritten)
-#define DasVar_cdfIncStart(P, S)  ( ( (var_cdf_info_t*)DasDesc_getUser((DasDesc*)(P)) )->nRecsWritten += S)
-#define DasVar_cdfPadLen(P)   ( ( (var_cdf_info_t*)DasDesc_getUser((DasDesc*)(P)) )->nPadLen)
+#define DasVar_cdfId(P)       ( ( (var_cdf_info_t*)DasDesc_user((DasDesc*)(P)) )->iCdfId)
+#define DasVar_cdfIdPtr(P)   &( ( (var_cdf_info_t*)DasDesc_user((DasDesc*)(P)) )->iCdfId)
+#define DasVar_cdfStart(P)    ( ( (var_cdf_info_t*)DasDesc_user((DasDesc*)(P)) )->nRecsWritten)
+#define DasVar_cdfIncStart(P, S)  ( ( (var_cdf_info_t*)DasDesc_user((DasDesc*)(P)) )->nRecsWritten += S)
+#define DasVar_cdfPadLen(P)   ( ( (var_cdf_info_t*)DasDesc_user((DasDesc*)(P)) )->nPadLen)
 
 #define DROP_VAR_ID -1
 #define DasVar_cdfDrop(P)     (DasVar_cdfId(P) == DROP_VAR_ID)
@@ -262,7 +262,7 @@ void prnHelp()
 "\n"
 "   -a FILE,--auth-toks=FILE\n"
 "                 Read saved server credentials from FILE.  Defaults to\n"
-"                 " HELP_USERDIR DAS_DSEPS CRED_FILE ", or the same file under DAS_USERDIR if that\n"
+"                 " HELP_USERDIR DASFS_SEPS CRED_FILE ", or the same file under DAS_USERDIR if that\n"
 "                 environment variable is set.\n"
 "\n"
 "   -i URL,--input=URL\n"
@@ -430,15 +430,15 @@ int parseArgs(int argc, char** argv, popts_t* pOpts)
 
 	/* Set a few defaults */
 	snprintf(
-		pOpts->aCredFile, DAS_FIELD_SZ(popts_t, aCredFile) - 1, "%s" DAS_DSEPS CRED_FILE,
-		das_userdir()
+		pOpts->aCredFile, DAS_FIELD_SZ(popts_t, aCredFile) - 1, "%s" DASFS_SEPS CRED_FILE,
+		dasfs_userDir()
 	);
 
 	strcpy(pOpts->aLevel, "info");
 
 	snprintf(
-		pOpts->aTmpDir, DAS_FIELD_SZ(popts_t, aTmpDir) - 1, "%s" DAS_DSEPS DEF_TEMP_DIR,
-		das_userdir()
+		pOpts->aTmpDir, DAS_FIELD_SZ(popts_t, aTmpDir) - 1, "%s" DASFS_SEPS DEF_TEMP_DIR,
+		dasfs_userDir()
 	);
 
 	int i = 0;
@@ -446,77 +446,77 @@ int parseArgs(int argc, char** argv, popts_t* pOpts)
 		++i;  /* 1st time, skip past the program name */
 
 		if(argv[i][0] == '-'){
-			if(dascmd_isArg(argv[i], "-h", "--help", NULL)){
+			if(dasarg_isOpt(argv[i], "-h", "--help", NULL)){
 				prnHelp();
 				exit(0);
 			}
-			if(dascmd_isArg(argv[i], "-r", "--remove", NULL)){
+			if(dasarg_isOpt(argv[i], "-r", "--remove", NULL)){
 				pOpts->bRmFirst = true;
 				continue;
 			}
-			if(dascmd_isArg(argv[i], "-c", "--clean", NULL)){
+			if(dasarg_isOpt(argv[i], "-c", "--clean", NULL)){
 				pOpts->bCleanUp = true;
 				continue;
 			}
-			if(dascmd_isArg(argv[i], "-n", "--no-istp", NULL)){
+			if(dasarg_isOpt(argv[i], "-n", "--no-istp", NULL)){
 				pOpts->bNoIstp = true;
 				continue;
 			}
-			if(dascmd_isArg(argv[i], "-k", "--keep-lower", NULL)){
+			if(dasarg_isOpt(argv[i], "-k", "--keep-lower", NULL)){
 				pOpts->bKeepLower = true;
 				continue;
 			}
-			if(dascmd_isArg(argv[i], "-u", "--uncompressed", NULL)){
+			if(dasarg_isOpt(argv[i], "-u", "--uncompressed", NULL)){
 				pOpts->bUncompressed = true;
 				continue;
 			}
-			if(dascmd_isArg(argv[i], "-f", "--filter-vars", NULL)){
+			if(dasarg_isOpt(argv[i], "-f", "--filter-vars", NULL)){
 				pOpts->bFilterVars = true;
 				continue;
 			}
-			if(dascmd_getArgVal(
+			if(dasarg_getOptVal(
 				argv, argc, "-b", "--buffer=", &i, sMemThresh, 32
 			))
 				continue;
-			if(dascmd_getArgVal(
+			if(dasarg_getOptVal(
 				argv, argc, "-s", "--skeleton=", &i, pOpts->aTpltFile, DAS_FIELD_SZ(popts_t,aTpltFile)
 			))
 				continue;
-			if(dascmd_getArgVal(
+			if(dasarg_getOptVal(
 				argv, argc, "-i", "--input=", &i, pOpts->aSource, DAS_FIELD_SZ(popts_t,aSource)
 			))
 				continue;
-			if(dascmd_getArgVal(
+			if(dasarg_getOptVal(
 				argv, argc, "-o", "--output=", &i, pOpts->aOutFile, DAS_FIELD_SZ(popts_t,aOutFile)
 			))
 				continue;
-			if(dascmd_getArgVal(
+			if(dasarg_getOptVal(
 				argv, argc, "-t", "--temp-dir=", &i, pOpts->aTmpDir, DAS_FIELD_SZ(popts_t,aTmpDir)
 			))
 				continue;
-			if(dascmd_getArgVal(
+			if(dasarg_getOptVal(
 				argv, argc, "-m", "--map-vars=", &i, pOpts->aMapFile, DAS_FIELD_SZ(popts_t,aMapFile)
 			))
 				continue;
-			if(dascmd_getArgVal(
+			if(dasarg_getOptVal(
 				argv, argc, "-l", "--log=", &i, pOpts->aLevel, DAS_FIELD_SZ(popts_t,aLevel)
 			))
 				continue;
-			if(dascmd_getArgVal(
+			if(dasarg_getOptVal(
 				argv, argc, "-a", "--auth-toks=", &i, pOpts->aCredFile, DAS_FIELD_SZ(popts_t,aCredFile)
 			))
 				continue;
-			if(dascmd_getArgVal(
+			if(dasarg_getOptVal(
 				argv, argc, "-g", "--global=", &i, pOpts->aGlobAttr, DAS_FIELD_SZ(popts_t,aGlobAttr)
 			))
 				continue;
-			if(dascmd_getArgVal(
+			if(dasarg_getOptVal(
 				argv, argc, "-p", "--prop-map=", &i, pOpts->aPropMap, DAS_FIELD_SZ(popts_t,aPropMap)
 			))
 				continue;
-			return das_error(PERR, "Unknown command line argument %s", argv[i]);
+			return daserrf(PERR, "Unknown command line argument %s", argv[i]);
 		}
-		return das_error(PERR, "Malformed command line argument %s", argv[i]);
+		return daserrf(PERR, "Malformed command line argument %s", argv[i]);
 	}
 
 	float fMemUse;
@@ -526,14 +526,14 @@ int parseArgs(int argc, char** argv, popts_t* pOpts)
 		}
 		else{
 			if((sscanf(sMemThresh, "%f", &fMemUse) != 1)||(fMemUse < 1))
-				return das_error(PERR, "Invalid memory usage argument, '%s' MB", sMemThresh);
+				return daserrf(PERR, "Invalid memory usage argument, '%s' MB", sMemThresh);
 			else
 				pOpts->uMemThreshold = ((size_t)fMemUse) * 1048576ull ;
 		}
 	}
 
 	if(pOpts->bFilterVars && (pOpts->aMapFile[0] = '\0')){
-		return das_error(PERR, "Filtering out \"data\" varibles via '-f', requires a map file, '-m'.");
+		return daserrf(PERR, "Filtering out \"data\" varibles via '-f', requires a map file, '-m'.");
 	}
 
 	return DAS_OKAY;
@@ -544,7 +544,7 @@ int parseArgs(int argc, char** argv, popts_t* pOpts)
 
 typedef struct var_name_map {
 	int  nPktId;
-	char sDimName[DAS_MAX_ID_BUFSZ];  /* or cdfName can be used for user overrides */
+	char sDimName[DASID_SZ];  /* or cdfName can be used for user overrides */
 	char sVarRole[DASDIM_ROLE_SZ];
 	/* char sOldCdfName[MAX_VAR_NAME_LEN]; */
 	char sOutName[MAX_VAR_NAME_LEN];
@@ -560,14 +560,14 @@ typedef struct var_name_map {
  */
 var_name_map_t* loadVarMap(const char* sFile)
 {
-	daslog_info_v("Reading variable name map from %s", sFile);
+	daslog_infof("Reading variable name map from %s", sFile);
 
 	FILE* pIn = fopen(sFile, "r");
 	if(pIn == NULL){
-		das_error(PERR, "Couldn't open variable name map file '%s'.", sFile);
+		daserrf(PERR, "Couldn't open variable name map file '%s'.", sFile);
 		return NULL;
 	}
-	daslog_debug_v("Reading variable map from '%s'", sFile);
+	daslog_debugf("Reading variable map from '%s'", sFile);
 
 	var_name_map_t* pMap = NULL; /* Can now use the error goto */
 
@@ -582,18 +582,18 @@ var_name_map_t* loadVarMap(const char* sFile)
 		++iLine;
 
 		if(aBuf[VAR_MAP_MAX_LINE - 3] != '\0'){
-			das_error(PERR, 
+			daserrf(PERR, 
 				"%s,line %d: Line greater then %d octets.",sFile, iLine, VAR_MAP_MAX_LINE-3
 			);
 			goto VAR_MAP_ERROR;
 		}
 
-		if((pStrip = das_strip(aBuf, '#')) == NULL) 
+		if((pStrip = dasstr_strip(aBuf, '#')) == NULL) 
 			continue;
 
 		uLen = strlen(pStrip);
 		if((uLen < 3) || ((pSep = strchr(pStrip+1, '=')) == NULL) || (pStrip[uLen - 1] == '=')){
-			das_error(PERR, "%s, line %d: Syntax error, missing `=` as separator",sFile,iLine);
+			daserrf(PERR, "%s, line %d: Syntax error, missing `=` as separator",sFile,iLine);
 			goto VAR_MAP_ERROR;
 		}
 
@@ -601,7 +601,7 @@ var_name_map_t* loadVarMap(const char* sFile)
 	}
 
 	if(nMaps == 0){
-		das_error(PERR, 
+		daserrf(PERR, 
 			"Variable map file '%s' doesn't have any 'CDF_NAME = DAS_NAME pairs", sFile
 		);
 		goto VAR_MAP_ERROR;
@@ -619,16 +619,16 @@ var_name_map_t* loadVarMap(const char* sFile)
 	while(fgets(aBuf, VAR_MAP_MAX_LINE - 1, pIn) != NULL){
 		++iLine;
 
-		if((pCdfName = das_strip(aBuf, '#')) == NULL)
+		if((pCdfName = dasstr_strip(aBuf, '#')) == NULL)
 			continue;
 
 		pSep = strchr(pCdfName, '=');
 		*pSep = '\0';
-		pCdfName = das_strip(pCdfName, '\0');
+		pCdfName = dasstr_strip(pCdfName, '\0');
 		strncpy(pMap[iMap].sOutName, pCdfName, MAX_VAR_NAME_LEN-1);
 
 		/* This can have up to four sub fields */
-		pDasPath = das_strip(pSep + 1, '\0'); 
+		pDasPath = dasstr_strip(pSep + 1, '\0'); 
 
 		/* See if the value starts with a digit.  If so assume it's a packet ID */
 		if(pDasPath[0] == '*'){
@@ -637,14 +637,14 @@ var_name_map_t* loadVarMap(const char* sFile)
 		}
 		else{
 			if(!isdigit(pDasPath[0]) ){
-				das_error(PERR, 
+				daserrf(PERR, 
 					"%s, line %d: Packet ID is not `*` or an integer", sFile, iLine
 				);
 				goto VAR_MAP_ERROR;
 			}
 
 			if((pSep = strchr(pDasPath, ' ')) == NULL){
-				das_error(PERR, 
+				daserrf(PERR, 
 					"%s, line %d: Packet ID not followed by a dimension name", sFile, iLine
 				);
 				goto VAR_MAP_ERROR;
@@ -652,7 +652,7 @@ var_name_map_t* loadVarMap(const char* sFile)
 			*pSep = '\0';
 			
 			if( (sscanf(pDasPath, "%hu", &uDasId) != 1) ||(uDasId == 0)){
-				das_error(PERR, 
+				daserrf(PERR, 
 					"%s, line %d: Could not convert '%s' to a packet ID (aka 16-bit integer > 0).",
 					sFile, iLine, pDasPath
 				);
@@ -661,24 +661,24 @@ var_name_map_t* loadVarMap(const char* sFile)
 			pMap[iMap].nPktId = uDasId;
 		}
 
-		pDasPath = das_strip(pSep + 1, '\0');
+		pDasPath = dasstr_strip(pSep + 1, '\0');
 
 		/* Split off role if appended at the end, or just use 'center' */
 		if((pSep = strchr(pDasPath, ' ')) != NULL){
 			*pSep = '\0';
-			pDasPath = das_strip(pDasPath, '\0');
-			strncpy(pMap[iMap].sDimName, pDasPath, DAS_MAX_ID_BUFSZ-1);
+			pDasPath = dasstr_strip(pDasPath, '\0');
+			strncpy(pMap[iMap].sDimName, pDasPath, DASID_SZ-1);
 
-			pDasPath = das_strip(pSep + 1, '\0'); // Advance to role
+			pDasPath = dasstr_strip(pSep + 1, '\0'); // Advance to role
 		}
 		else{
-			strncpy(pMap[iMap].sDimName, pDasPath, DAS_MAX_ID_BUFSZ-1);
+			strncpy(pMap[iMap].sDimName, pDasPath, DASID_SZ-1);
 			pDasPath = NULL;			
 		}
 
 		/* Set role or default to center */
 		if(pDasPath){
-			pDasPath = das_strip(pDasPath, '\0');
+			pDasPath = dasstr_strip(pDasPath, '\0');
 			if(pDasPath)
 				strncpy(pMap[iMap].sVarRole, pDasPath, DASDIM_ROLE_SZ-1);
 		}
@@ -686,7 +686,7 @@ var_name_map_t* loadVarMap(const char* sFile)
 		if(pDasPath == NULL)
 			strncpy(pMap[iMap].sVarRole, "center", DASDIM_ROLE_SZ-1);
 		
-		daslog_debug_v("Var Name Map: (%d %s %s) => %s",
+		daslog_debugf("Var Name Map: (%d %s %s) => %s",
 			pMap[iMap].nPktId,
 			pMap[iMap].sDimName,
 			pMap[iMap].sVarRole,
@@ -714,17 +714,17 @@ const char* _VarNameMap_getName(
 	if(pDim == NULL)
 		return NULL;
 
-	assert( DasDesc_type((const DasDesc*)pDim) == DASDESC_DIM);
+	assert( DasDesc_type((const DasDesc*)pDim) == DASDESCTYPE_DIM);
 
 	const char* sRole = NULL;
 	for(size_t u = 0; u < DasDim_numVars(pDim); ++u){
-		if(DasDim_getVarByIdx(pDim, u) == pVar){
-			sRole = DasDim_getRoleByIdx(pDim, u);
+		if(DasDim_varAt(pDim, u) == pVar){
+			sRole = DasDim_roleAt(pDim, u);
 			break;
 		}
 	}
 	if(sRole == NULL){
-		das_error(PERR, "Couldn't find var 0x%" PRIxPTR " in dimension %s", (uintptr_t)pVar, DasDim_name(pDim));
+		daserrf(PERR, "Couldn't find var 0x%" PRIxPTR " in dimension %s", (uintptr_t)pVar, DasDim_name(pDim));
 		return NULL;
 	}
 
@@ -739,9 +739,9 @@ const char* _VarNameMap_getName(
 
 			/*
 			if(pIter->sOldCdfName[0] != '\0'){
-				const char* sPropVal = DasDesc_getStr((const DasDesc*)pVar, "cdfName");
+				const char* sPropVal = DasDesc_val((const DasDesc*)pVar, "cdfName");
 				if( (sPropVal != NULL )&&( strcmp(pIter->sOldCdfName, sPropVal) == 0) ) {
-					daslog_info_v("Mapping variable %s %s:%s [%s] -to-> %s",
+					daslog_infof("Mapping variable %s %s:%s [%s] -to-> %s",
 						(pIter->nPktId == 0) ? "for all packets with" : "for matching packet IDs",
 						pIter->sDimName, pIter->sVarRole, pIter->sOldCdfName, pIter->sOutName
 					);
@@ -752,11 +752,11 @@ const char* _VarNameMap_getName(
 			*/
 
 			if(pIter->nPktId > 0)
-				daslog_info_v("For dataset ID %02d, mapping \"%s:%s\" -to-> \"%s\"",
+				daslog_infof("For dataset ID %02d, mapping \"%s:%s\" -to-> \"%s\"",
 					nPktId, pIter->sDimName, pIter->sVarRole, pIter->sOutName
 				);
 			else
-				daslog_info_v("For all datasets, mapping  \"%s:%s\" -to-> \"%s\"",
+				daslog_infof("For all datasets, mapping  \"%s:%s\" -to-> \"%s\"",
 					pIter->sDimName, pIter->sVarRole, pIter->sOutName
 				);
 			return pIter->sOutName;
@@ -768,7 +768,7 @@ const char* _VarNameMap_getName(
 
 	/* That was a flop. See if the variable (or it's dimension) have 
 	   a cdfName property, if so, use that for the matching source */
-	const char* sPropVal = DasDesc_getStr((const DasDesc*)pVar, "cdfName");
+	const char* sPropVal = DasDesc_val((const DasDesc*)pVar, "cdfName");
 	if(sPropVal == NULL) 
 		return NULL;
 
@@ -778,12 +778,12 @@ const char* _VarNameMap_getName(
 		/* Here dim-name is over-ridden to hold the cdfName if the that was used in
 		   the mapping read from disk */
 		if(strcmp(pIter->sDimName, sPropVal) == 0){
-			daslog_info_v("Mapping variable name %s to %s", sPropVal, pIter->sDimName);
+			daslog_infof("Mapping variable name %s to %s", sPropVal, pIter->sDimName);
 			return pIter->sOutName;
 		}
 		++pIter;
 	}
-	daslog_debug_v("No remapping for var: %s:%s", DasDim_name(pDim), sRole);
+	daslog_debugf("No remapping for var: %s:%s", DasDim_name(pDim), sRole);
 	return NULL;
 }
 
@@ -833,9 +833,9 @@ static das_errcode _parseAttrMap(struct context* pCtx, const char* sMap)
 	for(char* sPair = strtok(sBuf, ","); sPair != NULL; sPair = strtok(NULL, ",")){
 		char* sColon = strchr(sPair, ':');
 		if((sColon == NULL)||(sColon == sPair)||(sColon[1] == '\0'))
-			return das_error(PERR, "Expected FROM:TO in --prop-map, got '%s'", sPair);
+			return daserrf(PERR, "Expected FROM:TO in --prop-map, got '%s'", sPair);
 		if(pCtx->nAttrMap >= DASCDF_MAX_ATTR_MAP)
-			return das_error(PERR, "More than %d --prop-map entries", DASCDF_MAX_ATTR_MAP);
+			return daserrf(PERR, "More than %d --prop-map entries", DASCDF_MAX_ATTR_MAP);
 		*sColon = '\0';
 		strncpy(pCtx->aAttrMap[pCtx->nAttrMap].sFrom, sPair, 63);
 		strncpy(pCtx->aAttrMap[pCtx->nAttrMap].sTo, sColon + 1, 63);
@@ -856,15 +856,15 @@ bool _cdfOkayish(CDFstatus iStatus){
 	CDFgetStatusText(iStatus, sMsg);
 
 	if(iStatus < CDF_WARN){	
-		daslog_error_v("from cdflib, %s", sMsg);
+		daslog_errorf("from cdflib, %s", sMsg);
 		return false;
 	}
 
 	if(iStatus < CDF_OK) 
-		daslog_warn_v("from cdflib, %s", sMsg);
+		daslog_warnf("from cdflib, %s", sMsg);
   	
   	else if(iStatus > CDF_OK)
-		daslog_info_v("from cdflib, %s", sMsg);
+		daslog_infof("from cdflib, %s", sMsg);
 
 	return true;
 }
@@ -880,7 +880,7 @@ bool _cdfOkayish(CDFstatus iStatus){
 
 #define PROP_XFORM_SZ 65536  /* 64K */
 
-ubyte g_propBuf[PROP_XFORM_SZ];
+uint8_t g_propBuf[PROP_XFORM_SZ];
 
 const char* DasProp_cdfName(const DasProp* pProp)
 {
@@ -997,7 +997,7 @@ long DasProp_cdfEntries(const DasProp* pProp)
 
 long DasProp_cdfType(const DasProp* pProp)
 {
-	ubyte uType = DasProp_type(pProp) & DASPROP_TYPE_MASK;
+	uint8_t uType = DasProp_type(pProp) & DASPROP_TYPE_MASK;
 	switch(uType){
 	case DASPROP_STRING: return CDF_CHAR;
 
@@ -1046,7 +1046,7 @@ long DasProp_cdfEntLen(const DasProp* pProp, long iEntry, bool bAsString)
 	/* Non-strings only have one entry */
 	if( (!bAsString) && (! DasProp_isType(pProp, DASPROP_STRING))){
 		if(iEntry == 0)
-			return DasProp_items(pProp);
+			return DasProp_numItems(pProp);
 		else
 			return 0;
 	}
@@ -1090,7 +1090,7 @@ void* DasProp_cdfValues(const DasProp* pProp){
 	size_t uBufLen = 0;
 	const char* sValue = NULL;
 
-	ubyte uType = (DasProp_type(pProp) & DASPROP_TYPE_MASK);
+	uint8_t uType = (DasProp_type(pProp) & DASPROP_TYPE_MASK);
 	
 	switch(uType){
 
@@ -1104,28 +1104,28 @@ void* DasProp_cdfValues(const DasProp* pProp){
 	/* Properties don't have fill, so an unsigned byte works */
 	case DASPROP_BOOL:
 		uBufLen = PROP_XFORM_SZ;
-		if(DasProp_convertBool(pProp, g_propBuf, uBufLen) < 1)
+		if(DasProp_toBools(pProp, g_propBuf, uBufLen) < 1)
 			return NULL;
 		else
 			return g_propBuf;
 
 	case DASPROP_INT:
 		uBufLen = PROP_XFORM_SZ / sizeof(int64_t);
-		if(DasProp_convertInt(pProp, (int64_t*)g_propBuf, uBufLen) < 1)
+		if(DasProp_toInts(pProp, (int64_t*)g_propBuf, uBufLen) < 1)
 			return NULL;
 		else
 			return g_propBuf;
 
 	case DASPROP_REAL:     
 		uBufLen = PROP_XFORM_SZ / sizeof(double);
-		if(DasProp_convertReal(pProp, (double*)g_propBuf, uBufLen) < 1)
+		if(DasProp_toDoubles(pProp, (double*)g_propBuf, uBufLen) < 1)
 			return NULL;
 		else
 			return g_propBuf;
 		
 	case DASPROP_DATETIME:
 		uBufLen = PROP_XFORM_SZ / sizeof(int64_t);
-		if(DasProp_convertTt2k(pProp, (int64_t*)g_propBuf, uBufLen) < 1)
+		if(DasProp_toTt2ks(pProp, (int64_t*)g_propBuf, uBufLen) < 1)
 			return NULL;
 		else
 			return g_propBuf;
@@ -1204,19 +1204,19 @@ das_errcode writeGlobalProp(struct context* pCtx, const DasProp* pProp)
 		/* After the rename, so -p can promote a single property */
 		if( !pCtx->bKeepLower && (sName[0] != toupper(sName[0]))
 		    && (strncmp(sName, "spase", 5)!=0) ){
-			daslog_debug_v("Ignoring lower-case property '%s' in global area.", sName);
+			daslog_debugf("Ignoring lower-case property '%s' in global area.", sName);
 			return DAS_OKAY;
 		}
 
 		/* Some props just don't go in the global area */
 		for(int j = 0; sFilterOut[j] != NULL; ++j){
 			if(strcasecmp(sFilterOut[j], sName) == 0){
-				daslog_debug_v("Ignoring property %s is the global area", sName);
+				daslog_debugf("Ignoring property %s is the global area", sName);
 				return DAS_OKAY;
 			}
 		}
 		if((strstr(sName, "ContactEmail") != NULL)||(strstr(sName, "ContactName") != NULL)){
-			daslog_debug_v("Ignoring property %s is the global area", sName);
+			daslog_debugf("Ignoring property %s is the global area", sName);
 			return DAS_OKAY;
 		}
 
@@ -1231,12 +1231,12 @@ das_errcode writeGlobalProp(struct context* pCtx, const DasProp* pProp)
 
 			nType = DasProp_cdfType(pProp);
 			if(pCtx->bIstp && (nType != CDF_CHAR))
-				daslog_info_v(
+				daslog_infof(
 					"Global attribute %s (%s -> CDF_CHAR, use --no-istp to keep type info)",
 					 sName, cdfTypeStr(nType)
 				);
 			else
-				daslog_info_v("Global attribute %s (%s)", sName, cdfTypeStr(nType));
+				daslog_infof("Global attribute %s (%s)", sName, cdfTypeStr(nType));
 
 			if(CDF_MAD(CDFcreateAttr(pCtx->nCdfId, sName, GLOBAL_SCOPE, &iAttr)))
 				return PERR;
@@ -1269,7 +1269,7 @@ das_errcode writeGlobalStrAttr(struct context* pCtx, const char* sKey, const cha
 		sValue = " ";
 
 	if((iAttr = CDFattrId(pCtx->nCdfId, sKey)) < 0){
-		daslog_info_v("Global attribute %s (CDF_CHAR)", sKey);
+		daslog_infof("Global attribute %s (CDF_CHAR)", sKey);
 		if(CDF_MAD(CDFcreateAttr(pCtx->nCdfId, sKey, GLOBAL_SCOPE, &iAttr)))
 			return PERR;
 	}
@@ -1303,7 +1303,7 @@ das_errcode writeVarProp(struct context* pCtx, long iVarNum, const DasProp* pPro
 		if(CDF_MAD(CDFgetAttrScope(pCtx->nCdfId, iAttr, &nScope)))
 			return PERR;
 		if(nScope != VARIABLE_SCOPE){
-			return das_error(PERR, 
+			return daserrf(PERR, 
 				"CDF Limitiation: attribute name '%s' cannot be used for variables"
 				" because it's already a global attribute.", sName
 			);
@@ -1312,7 +1312,7 @@ das_errcode writeVarProp(struct context* pCtx, long iVarNum, const DasProp* pPro
 
 	/* If the attribute doesn't exist in var scope, we'll need to create it first */
 	if((iAttr < 0)){
-		daslog_info_v(
+		daslog_infof(
 			"Auto variable attribute %s (%s)", sName, cdfTypeStr(DasProp_cdfType(pProp))
 		);
 		if(CDF_MAD(CDFcreateAttr(pCtx->nCdfId,sName,VARIABLE_SCOPE,&iAttr)))
@@ -1321,7 +1321,7 @@ das_errcode writeVarProp(struct context* pCtx, long iVarNum, const DasProp* pPro
 	else{
 		// But if it does exist and we're using a template, leave it alone
 		if(Ctx_hasTplt(pCtx)){
-			daslog_info_v(
+			daslog_infof(
 				"Reusing skeleton attribute value %s (%s)", sName, 
 				cdfTypeStr(DasProp_cdfType(pProp))
 			);
@@ -1334,11 +1334,11 @@ das_errcode writeVarProp(struct context* pCtx, long iVarNum, const DasProp* pPro
 	void* pVal = DasProp_cdfValues(pProp);
 
 	/* Handle an asymmetry in CDF attributes */
-	long nElements = DasProp_items(pProp);
+	long nElements = DasProp_numItems(pProp);
 	if(DasProp_cdfType(pProp) == CDF_CHAR)
 		nElements = strlen(DasProp_cdfValues(pProp));
 
-	daslog_debug_v("New attribute entry for varible #%ld, %s (attrid: %ld attrtype %ld)",
+	daslog_debugf("New attribute entry for varible #%ld, %s (attrid: %ld attrtype %ld)",
 		iVarNum, sName, iAttr, nType
 	);
 
@@ -1369,19 +1369,19 @@ das_errcode writeVarStrAttr(
 	/* If the attribute doesn't exist, we'll need to create it first */
 	long iAttr;
 	if((iAttr = CDFattrId(pCtx->nCdfId, sAttrName)) < 0){
-		daslog_info_v("Auto variable attribute %s (%s)", sAttrName, cdfTypeStr(CDF_CHAR));
+		daslog_infof("Auto variable attribute %s (%s)", sAttrName, cdfTypeStr(CDF_CHAR));
 		if(CDF_MAD(CDFcreateAttr(pCtx->nCdfId, sAttrName, VARIABLE_SCOPE, &iAttr )))
 			return PERR;
 	}
 	else{
 		/* Though if it does exist and I'm working from a template, don't overwrite it */
 		if(Ctx_hasTplt(pCtx)){
-			daslog_info_v("Reusing skeleton attribute value %s (%s)", sAttrName, cdfTypeStr(CDF_CHAR));
+			daslog_infof("Reusing skeleton attribute value %s (%s)", sAttrName, cdfTypeStr(CDF_CHAR));
 			return DAS_OKAY;
 		}
 	}
 
-	daslog_debug_v("Writing attribute %s (attrid: %ld attrtype:%ld) for variable #%ld", 
+	daslog_debugf("Writing attribute %s (attrid: %ld attrtype:%ld) for variable #%ld", 
 		sAttrName, iAttr, CDF_CHAR, iVarNum
 	);
 
@@ -1400,16 +1400,16 @@ das_errcode writeVarStrAttr(
 
 das_errcode writeVarAttr(
 	struct context* pCtx, long iVarNum, const char* sAttrName, long nCdfType,
-	const ubyte* pValue
+	const uint8_t* pValue
 ){
 	CDFstatus iStatus; /* Used by CDF_MAD macro */
 	sAttrName = _mapAttr(pCtx, sAttrName);
 
 	if(pValue == NULL)
-		return das_error(PERR, "No fill value supplied");
+		return daserrf(PERR, "No fill value supplied");
 
 	if((nCdfType == CDF_CHAR)||(nCdfType == CDF_UCHAR))
-		return das_error(PERR, "Call writeVarStrAttr for the string attribute '%s'", sAttrName);
+		return daserrf(PERR, "Call writeVarStrAttr for the string attribute '%s'", sAttrName);
 
 	/* If the attribute doesn't exist, we'll need to create it first */
 	long iAttr;
@@ -1420,12 +1420,12 @@ das_errcode writeVarAttr(
 	else{
 		/* Though if it does exist and I'm working from a template, don't overwrite it */
 		if(Ctx_hasTplt(pCtx)){
-			daslog_info_v("Reusing skeleton attribute value %s (%s)", sAttrName, cdfTypeStr(nCdfType));
+			daslog_infof("Reusing skeleton attribute value %s (%s)", sAttrName, cdfTypeStr(nCdfType));
 			return DAS_OKAY;
 		}
 	}
 
-	daslog_debug_v("Writing attribute %s (attrid: %ld attrtype:%ld) for variable #%ld", 
+	daslog_debugf("Writing attribute %s (attrid: %ld attrtype:%ld) for variable #%ld", 
 		sAttrName, iAttr, nCdfType, iVarNum
 	);
 
@@ -1467,7 +1467,7 @@ das_errcode _addUserGAttrs(struct context* pCtx)
 	const char* pIn  = pCtx->sGlobAttr;
 
 	if((*pIn == ',')||(*pIn == '='))
-		return das_error(PERR, "Global attribute string malformed, starts without a value.");
+		return daserrf(PERR, "Global attribute string malformed, starts without a value.");
 
 	char* pOut = aBuf;
 	while((*pIn != '\0')&&((pIn - pIn0) < (GATTR_BUF_SZ - 1) )){
@@ -1508,7 +1508,7 @@ das_errcode _addUserGAttrs(struct context* pCtx)
 
 			pEq = strchr(pBeg, '\v');
 			if( (pEq == NULL)||((pEnd - pBeg) < 3)||(pEq == pBeg)||(pEq == (pEnd - 1)))
-				return das_error(PERR, "Invalid global attribute key=value pair: '%s'", pBeg);
+				return daserrf(PERR, "Invalid global attribute key=value pair: '%s'", pBeg);
 			
 			*pEq = '\0';
 			++pEq;
@@ -1536,7 +1536,7 @@ static bool _isCdfControl(const char* sName)
 das_errcode onStream(DasStream* pSd, void* pUser){
 	struct context* pCtx = (struct context*)pUser;
 
-	daslog_info_v("Writing to: %s", pCtx->sWriteTo);
+	daslog_infof("Writing to: %s", pCtx->sWriteTo);
 
 	CDFstatus iStatus = CDF_OK; /* needed by the _OK() macro */ 
 
@@ -1547,11 +1547,11 @@ das_errcode onStream(DasStream* pSd, void* pUser){
 	if(Ctx_hasTplt(pCtx)){
 		/* Copy in skeleton and open that or... */
 #ifndef _WIN32		
-		if(!das_copyfile(pCtx->sTpltFile, pCtx->sWriteTo, NEW_FILE_MODE)){
+		if(!dasfs_copyFile(pCtx->sTpltFile, pCtx->sWriteTo, NEW_FILE_MODE)){
 #else
-		if(!das_copyfile(pCtx->sTpltFile, pCtx->sWriteTo)){
+		if(!dasfs_copyFile(pCtx->sTpltFile, pCtx->sWriteTo)){
 #endif
-			das_error(PERR, "Couldn't open copy '%s' --to--> '%s'", 
+			daserrf(PERR, "Couldn't open copy '%s' --to--> '%s'", 
 				pCtx->sTpltFile, pCtx->sWriteTo
 			);
 			return PERR;
@@ -1561,7 +1561,7 @@ das_errcode onStream(DasStream* pSd, void* pUser){
 
 		if(CDF_MAD( CDFopenCDF(pCtx->sWriteTo, &(pCtx->nCdfId))) ){
 			*pDot = '.'; /* Convert back */
-			return das_error(PERR, "Couldn't open CDF file '%s'", pCtx->sWriteTo);
+			return daserrf(PERR, "Couldn't open CDF file '%s'", pCtx->sWriteTo);
 		}
 	}
 	else{
@@ -1570,7 +1570,7 @@ das_errcode onStream(DasStream* pSd, void* pUser){
 
 		if(CDF_MAD( CDFcreateCDF(pCtx->sWriteTo, &(pCtx->nCdfId)) ) ){
 			*pDot = '.'; /* Convert back */
-			return das_error(PERR, "Couldn't open CDF file '%s'", pCtx->sWriteTo);
+			return daserrf(PERR, "Couldn't open CDF file '%s'", pCtx->sWriteTo);
 		}
 	}
 
@@ -1586,21 +1586,21 @@ das_errcode onStream(DasStream* pSd, void* pUser){
 
 		/* Let the caller handle this...
 		if(!DasDesc_has((DasDesc*)pSd, "Data_version"))
-			DasDesc_setInt((DasDesc*)pSd, "Data_version", 1);
+			DasDesc_setValInt((DasDesc*)pSd, "Data_version", 1);
 		*/
 
 		if(!DasDesc_has((DasDesc*)pSd, "Generation_date")){
-			das_time dt;
-			dt_now(&dt);
+			DasTime dt;
+			DasTime_now(&dt);
 			char sTime[32] = {'\0'};
 			snprintf(sTime, 31, "%04d%02d%02d", dt.year, dt.month, dt.mday);
 		}
 	}
 
 	/* We have the file, run in our properties */
-	size_t uProps = DasDesc_length((DasDesc*)pSd);
+	size_t uProps = DasDesc_numProps((DasDesc*)pSd);
 	for(size_t u = 0; u < uProps; ++u){
-		const DasProp* pProp = DasDesc_getPropByIdx((DasDesc*)pSd, u);
+		const DasProp* pProp = DasDesc_propAt((DasDesc*)pSd, u);
 		if(pProp == NULL) continue;
 
 		/* Some properties are meta-data controllers */
@@ -1699,13 +1699,13 @@ void _resetWeights(){
 typedef struct cdf_var_info {
 	bool bCoord;                 /* True if this is a coordinate */
 	int iDep;                    /* The dependency this satisfies (if any) */
-	char sDim[DAS_MAX_ID_BUFSZ]; /* The generic name of the dim */
+	char sDim[DASID_SZ]; /* The generic name of the dim */
 	DasDim* pDim;                /* the associated physical dimension */
 	char sRole[DASDIM_ROLE_SZ];  /* It's role in the physical dimension */
 	DasVar* pVar;                /* The actual dasvar */
 	int iMaxIdx;                 /* The maximum valid external index for this var */
-	ptrdiff_t aVarShape[VARIDX_MAX];    /* This var's overall dataset shape */
-	char sCdfName[DAS_MAX_ID_BUFSZ];  /* The name this variable has in the CDF */
+	ptrdiff_t aVarShape[DASIDX_MAX];    /* This var's overall dataset shape */
+	char sCdfName[DASID_SZ];  /* The name this variable has in the CDF */
 	size_t uOrder;               /* Position before sorting, the last tie breaker */
 } VarInfo;
 
@@ -1732,17 +1732,17 @@ VarInfo* VarInfoAry_getByRole(
 	return NULL;
 }
 
-int _maxIndex(const ptrdiff_t* pShape){ /* Implicit length VARIDX_MAX */
+int _maxIndex(const ptrdiff_t* pShape){ /* Implicit length DASIDX_MAX */
 	int iMaxIndex = -1;
-	for(int i = 0; i < VARIDX_MAX; ++i)
-		if(pShape[i] != VARIDX_UNUSED) iMaxIndex = i;
+	for(int i = 0; i < DASIDX_MAX; ++i)
+		if(pShape[i] != DASIDX_UNUSED) iMaxIndex = i;
 	assert(iMaxIndex >= 0);
 	return iMaxIndex;
 }
 
-int _usedIndexes(const ptrdiff_t* pShape){ /* Implicit length VARIDX_MAX */
+int _usedIndexes(const ptrdiff_t* pShape){ /* Implicit length DASIDX_MAX */
 	int nUsed = 0;
-	for(int i = 0; i < VARIDX_MAX; ++i)
+	for(int i = 0; i < DASIDX_MAX; ++i)
 		if(pShape[i] >= 0) ++nUsed;
 	return nUsed;
 }
@@ -1818,27 +1818,27 @@ int _markUsed(const char* sDim, const char** pUsedDims, size_t uLen){
 		}
 	}
 
-	return das_error(PERR, "No slots available to store usage of dimension %s"
+	return daserrf(PERR, "No slots available to store usage of dimension %s"
 		" as a coordinate dependency.", sDim);
 }
 
 
 VarInfo* solveDepends(DasDs* pDs, size_t* pNumCoords)
 {
-	ptrdiff_t aDsShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
+	ptrdiff_t aDsShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
 	int nDsRank = DasDs_shape(pDs, aDsShape);
 
 	/* (1) Gather the array shapes ************* */
 
-	size_t uD, uCoordDims = DasDs_numDims(pDs, DASDIM_COORD);
+	size_t uD, uCoordDims = DasDs_numDims(pDs, DASDIMTYPE_COORD);
 	size_t uExtra = 0;
 	size_t uCoords = 0;
 	for(uD = 0; uD < uCoordDims; ++uD){	
-		DasDim* pDim = DasDs_getDimByIdx(pDs, uD, DASDIM_COORD);
+		DasDim* pDim = DasDs_dimAt(pDs, uD, DASDIMTYPE_COORD);
 		uCoords += DasDim_numVars(pDim);
-		if(DasDim_getVar(pDim, DASVAR_REF) &&
-			DasDim_getVar(pDim, DASVAR_OFFSET) &&
-			! DasDim_getVar(pDim, DASVAR_CENTER)
+		if(DasDim_var(pDim, DASDIM_ROLE_REF) &&
+			DasDim_var(pDim, DASDIM_ROLE_OFFSET) &&
+			! DasDim_var(pDim, DASDIM_ROLE_CENTER)
 		)
 			++uExtra; /* Make space for binary vars we might create */
 	}
@@ -1847,7 +1847,7 @@ VarInfo* solveDepends(DasDs* pDs, size_t* pNumCoords)
 
 	size_t uInfos = 0;
 	for(uD = 0; uD < uCoordDims; ++uD){
-		DasDim* pDim = (DasDim*)DasDs_getDimByIdx(pDs, uD, DASDIM_COORD);
+		DasDim* pDim = (DasDim*)DasDs_dimAt(pDs, uD, DASDIMTYPE_COORD);
 			
 		size_t uVars = DasDim_numVars(pDim);
 		for(size_t uV = 0; uV < uVars; ++uV){
@@ -1856,9 +1856,9 @@ VarInfo* solveDepends(DasDs* pDs, size_t* pNumCoords)
 			pVi->bCoord = true;
 			pVi->iDep = -1; /* not assigned to a dim yet */
 			pVi->pDim = pDim;
-			pVi->pVar = (DasVar*)DasDim_getVarByIdx(pDim, uV);
-			strncpy(pVi->sDim, DasDim_dim(pDim), DAS_MAX_ID_BUFSZ-1);
-			const char* sRole = DasDim_getRoleByIdx(pDim, uV);
+			pVi->pVar = (DasVar*)DasDim_varAt(pDim, uV);
+			strncpy(pVi->sDim, DasDim_physDim(pDim), DASID_SZ-1);
+			const char* sRole = DasDim_roleAt(pDim, uV);
 			if(sRole!=NULL)
 			strncpy(pVi->sRole, sRole, DASDIM_ROLE_SZ-1);
 
@@ -1876,7 +1876,7 @@ VarInfo* solveDepends(DasDs* pDs, size_t* pNumCoords)
 
 	/* (3) Assign variables as dependencies. As each physdim is mentioned, 
 	       try not to use it again unless you have nothing else */
-	const char* aUsedDims[VARIDX_MAX] = {0};
+	const char* aUsedDims[DASIDX_MAX] = {0};
 	int nAssigned = 0;
 	bool bDepAssigned = false;
 	for(int iDep = 0; iDep < nDsRank; ++iDep){
@@ -1886,10 +1886,10 @@ VarInfo* solveDepends(DasDs* pDs, size_t* pNumCoords)
 		for(size_t u = 0; u < uInfos; ++u){
 			if(aVarInfo[u].iMaxIdx != iDep) continue;  /* max idx must match */
 
-			if(! _isUsed(aVarInfo[u].sDim, aUsedDims, VARIDX_MAX)){
+			if(! _isUsed(aVarInfo[u].sDim, aUsedDims, DASIDX_MAX)){
 				aVarInfo[u].iDep = iDep;   /* This var is now a dependency */
 				aUsedDims[iDep] = aVarInfo[u].sDim;
-				_markUsed(aVarInfo[u].sDim, aUsedDims, VARIDX_MAX);
+				_markUsed(aVarInfo[u].sDim, aUsedDims, DASIDX_MAX);
 				bDepAssigned = true;
 				break;
 			}
@@ -1901,14 +1901,14 @@ VarInfo* solveDepends(DasDs* pDs, size_t* pNumCoords)
 			for(size_t u = 0; u < uInfos; ++u){
 				if(aVarInfo[u].iMaxIdx != iDep) continue;  /* max idx must match */
 				aVarInfo[u].iDep = iDep;
-				_markUsed(aVarInfo[u].sDim, aUsedDims, VARIDX_MAX);
+				_markUsed(aVarInfo[u].sDim, aUsedDims, DASIDX_MAX);
 				bDepAssigned = true;
 				break;
 			}
 		}
 
 		if(!bDepAssigned){
-			daslog_warn_v("Could not assign DEPEND_%d for dataset '%s' in group '%s'.", 
+			daslog_warnf("Could not assign DEPEND_%d for dataset '%s' in group '%s'.", 
 				iDep, DasDs_name(pDs), DasDs_group(pDs)
 			);
 		}
@@ -1918,7 +1918,7 @@ VarInfo* solveDepends(DasDs* pDs, size_t* pNumCoords)
 	}
 
 	if(nAssigned != nDsRank){
-		das_error(PERR, "Dataset not convertable to CDF.  The dataset "
+		daserrf(PERR, "Dataset not convertable to CDF.  The dataset "
 			"is rank %d, but it only has %d unique coordinate variables.",
 			nDsRank, nAssigned
 		);
@@ -1935,14 +1935,14 @@ VarInfo* solveDepends(DasDs* pDs, size_t* pNumCoords)
 		VarInfo* pViOff = VarInfoAry_getDepN(aVarInfo, uInfos, iDep);
 		assert(pViOff != NULL);
 
-		if(strcmp(pViOff->sRole, DASVAR_OFFSET) != 0)
+		if(strcmp(pViOff->sRole, DASDIM_ROLE_OFFSET) != 0)
 			continue;
 
 		/ * We want the associated reference... * /
-		VarInfo* pViRef = VarInfoAry_getByRole(aVarInfo, uInfos, pViOff->pDim, DASVAR_REF);
+		VarInfo* pViRef = VarInfoAry_getByRole(aVarInfo, uInfos, pViOff->pDim, DASDIM_ROLE_REF);
 
 		/ * ... but skip creation if a center var already exists * /
-		VarInfo* pViCent = VarInfoAry_getByRole(aVarInfo, uInfos, pViOff->pDim, DASVAR_CENTER);
+		VarInfo* pViCent = VarInfoAry_getByRole(aVarInfo, uInfos, pViOff->pDim, DASDIM_ROLE_CENTER);
 
 		if((pViRef == NULL)||(pViCent != NULL))
 			continue;
@@ -1951,14 +1951,14 @@ VarInfo* solveDepends(DasDs* pDs, size_t* pNumCoords)
 		   substitute this in for the dependency IF we aren't time. * /
 		VarInfo* pViNew = (aVarInfo + uInfos);
 		pViNew->bCoord = true;
-		pViNew->pVar = new_DasVarBinary(DASVAR_CENTER, pViRef->pVar, "+", pViOff->pVar);
+		pViNew->pVar = new_DasVarBinary(DASDIM_ROLE_CENTER, pViRef->pVar, "+", pViOff->pVar);
 		
 		/ * Give the new var to the dimension * /
-		DasDim_addVar(pViOff->pDim, DASVAR_CENTER, pViNew->pVar);
+		DasDim_addVar(pViOff->pDim, DASDIM_ROLE_CENTER, pViNew->pVar);
 		pViNew->pDim = pViOff->pDim;
 		
-		strncpy(pViNew->sDim,  pViOff->sDim, DAS_MAX_ID_BUFSZ - 1);
-		strncpy(pViNew->sRole, DASVAR_CENTER, DASDIM_ROLE_SZ - 1);
+		strncpy(pViNew->sDim,  pViOff->sDim, DASID_SZ - 1);
+		strncpy(pViNew->sRole, DASDIM_ROLE_CENTER, DASDIM_ROLE_SZ - 1);
 
 		DasVar_shape(pViNew->pVar, pViNew->aVarShape);
 		pViNew->iMaxIdx = _maxIndex(pViNew->aVarShape);
@@ -1983,8 +1983,8 @@ VarInfo* solveDepends(DasDs* pDs, size_t* pNumCoords)
    internal shape collapses to. */
 long DasVar_cdfNumComps(const DasVar* pVar)
 {
-	if(DasVar_valType(pVar) != vtComposite) return 1;
-	ptrdiff_t aIntr[VARIDX_MAX] = {0};
+	if(DasVar_vt(pVar) != DASVT_COMP) return 1;
+	ptrdiff_t aIntr[DASIDX_MAX] = {0};
 	int nIntrRank = DasVar_intrShape(pVar, aIntr);
 	long nComps = 1;
 	for(int i = 0; i < nIntrRank; ++i)
@@ -1994,7 +1994,7 @@ long DasVar_cdfNumComps(const DasVar* pVar)
 
 /* Does this variable carry named components?
 
-   vtComposite is the whole family: vectors, positions, rotations, complex
+   DASVT_COMP is the whole family: vectors, positions, rotations, complex
    pairs and plain runs alike.  Every one of them gets a LABL_PTR naming its
    components, since a CDF reader has no other way to tell a component axis
    from a two-bin coordinate.  Frames and per-component units are separate
@@ -2013,37 +2013,37 @@ long DasVar_cdfType(const DasVar* pVar)
 
 	/* WARNING: Update if das_val_type_e changes */
 	static const long aCdfType[] = {
-		0,         /* vtNull     = 0 */
-		CDF_UINT1, /* vtUByte    = 1 */ 
-		CDF_INT1,  /* vtByte     = 2 */
-		CDF_UINT2, /* vtUShort   = 3 */
-		CDF_INT2,  /* vtShort    = 4 */
-		CDF_UINT4, /* vtUInt     = 5 */
-		CDF_INT4,  /* vtInt      = 6 */
-		0,         /* vtULong    = 7 */  /* CDF doesn't have this */
-		CDF_INT8,  /* vtLong     = 8 */
-		CDF_REAL4, /* vtFloat    = 9 */
-		CDF_REAL8, /* vtDouble   = 10 */
-		CDF_TIME_TT2000, /* vtTime = 11 */
-		0,         /* vtIndex    = 12 */
-		CDF_UCHAR, /* vtText     = 13 */
+		0,         /* DASVT_NULL     = 0 */
+		CDF_UINT1, /* DASVT_UBYTE    = 1 */ 
+		CDF_INT1,  /* DASVT_BYTE     = 2 */
+		CDF_UINT2, /* DASVT_USHORT   = 3 */
+		CDF_INT2,  /* DASVT_SHORT    = 4 */
+		CDF_UINT4, /* DASVT_UINT     = 5 */
+		CDF_INT4,  /* DASVT_INT      = 6 */
+		0,         /* DASVT_ULONG    = 7 */  /* CDF doesn't have this */
+		CDF_INT8,  /* DASVT_LONG     = 8 */
+		CDF_REAL4, /* DASVT_FLOAT    = 9 */
+		CDF_REAL8, /* DASVT_DOUBLE   = 10 */
+		CDF_TIME_TT2000, /* DASVT_TIME = 11 */
+		0,         /* DASVT_INDEX    = 12 */
+		CDF_UCHAR, /* DASVT_TEXT     = 13 */
 		0,         /* (free)     = 14 */
-		CDF_UINT1, /* vtByteSeq  = 15 */
-		0,         /* vtComposite= 16 */
+		CDF_UINT1, /* DASVT_BYTESEQ  = 15 */
+		0,         /* DASVT_COMP= 16 */
 	};
 
 	/* All calendar times will be converted to TT2000 by the CDF writer */
-	if(Units_haveCalRep(DasVar_units(pVar)))
+	if(DasUnits_isTimePoint(DasVar_units(pVar)))
 		return CDF_TIME_TT2000;
 	
 	/* Text is stored as unsigned bytes, but it is a CDF string, not a run of
 	   CDF_UINT1 */
-	if(DasVar_valType(pVar) == vtText)
+	if(DasVar_vt(pVar) == DASVT_TEXT)
 		return CDF_CHAR;
 
 	/* For other variables, we want the underlying type.  Element types stop at
-	   etTime, the guard is for the day that stops being true. */
-	das_elem_type et = DasVar_elemType(pVar);
+	   DASET_TIME, the guard is for the day that stops being true. */
+	das_et et = DasVar_et(pVar);
 	if((size_t)et >= sizeof(aCdfType)/sizeof(aCdfType[0])) return 0;
 	return aCdfType[et];
 }
@@ -2059,7 +2059,7 @@ const char* DasVar_cdfName(
 
 	const char* sRole = DasVar_role(pVar);
 	if(sRole == NULL){
-		das_error(PERR, "Couldn't find var 0x%" PRIxPTR " in dimension %s", (uintptr_t)pVar, DasDim_name(pDim));
+		daserrf(PERR, "Couldn't find var 0x%" PRIxPTR " in dimension %s", (uintptr_t)pVar, DasDim_name(pDim));
 		return NULL;
 	}
 
@@ -2071,20 +2071,20 @@ const char* DasVar_cdfName(
 	}
 
 	/* No override: Try var cdfName property for this variable specifically */
-	const DasProp* pVarName = DasDesc_getLocal((const DasDesc*)pVar, "cdfName");
+	const DasProp* pVarName = DasDesc_localProp((const DasDesc*)pVar, "cdfName");
 	if( pVarName != NULL){
 		strncpy(sBuf, DasProp_value(pVarName), uBufLen - 1);
 		return sBuf;	
 	}
 
-	DasVar* pPtVar = DasDim_getPointVar(pDim);
-	DasVar* pRefVar = DasDim_getVar(pDim, DASVAR_REF);
+	DasVar* pPtVar = DasDim_pointVar(pDim);
+	DasVar* pRefVar = DasDim_var(pDim, DASDIM_ROLE_REF);
 
 	/* No var cdfName: Try time special case. (Would be nice to ditch this) */
-	if( (DasDim_type(pDim) == DASDIM_COORD)&&(strcmp(DasDim_dim(pDim), "time") == 0)){
+	if( (DasDim_type(pDim) == DASDIMTYPE_COORD)&&(strcmp(DasDim_physDim(pDim), "time") == 0)){
 		if((pVar == pPtVar) || (pVar == pRefVar) )
 			strncpy(sBuf, "Epoch", uBufLen - 1);
-		else if(pVar == DasDim_getVar(pDim, DASVAR_OFFSET))
+		else if(pVar == DasDim_var(pDim, DASDIM_ROLE_OFFSET))
 			strncpy(sBuf, "EpochOffset", uBufLen - 1);
 
 		return sBuf;
@@ -2092,7 +2092,7 @@ const char* DasVar_cdfName(
 	
 	/* Not time: See if we can consider ourselves representative of the whole
 	   phys-dim group. Use the dim cdfName if present */
-	const DasProp* pDimName = DasDesc_getLocal((DasDesc*)pDim, "cdfName");
+	const DasProp* pDimName = DasDesc_localProp((DasDesc*)pDim, "cdfName");
 
 	if( (pVar == pPtVar)||(pVar == pRefVar)){
 		if(pDimName)
@@ -2129,17 +2129,17 @@ const char* DasVar_cdfUniqName(
 	DasDs* pDs = (DasDs*) DasDesc_parent((DasDesc*)pDim);
 	int nPktId = 0;
 	if(pCtx->pVarMap != NULL)
-		nPktId = DasStream_getPktId((DasStream*)DasDesc_parent((DasDesc*)pDs), (DasDesc*)pDs);
+		nPktId = DasStream_pktId((DasStream*)DasDesc_parent((DasDesc*)pDs), (DasDesc*)pDs);
 
 	DasVar_cdfName(pDim, pVar, sBuf, uBufLen, pCtx->pVarMap, nPktId);
 
 	/* A name from the variable map or a variable's own cdfName is the
 	   writer's choice and is used exactly (Juno's LFRL, LFRH, ...). */
 	bool bExact = (_VarNameMap_getName(pCtx->pVarMap, nPktId, pVar) != NULL) ||
-	              (DasDesc_getLocal((const DasDesc*)pVar, "cdfName") != NULL);
+	              (DasDesc_localProp((const DasDesc*)pVar, "cdfName") != NULL);
 
-	size_t uSz = DAS_MAX_ID_BUFSZ * 2;
-	char sBase[DAS_MAX_ID_BUFSZ * 2] = {'\0'};
+	size_t uSz = DASID_SZ * 2;
+	char sBase[DASID_SZ * 2] = {'\0'};
 	const char* sGroup = DasDs_group(pDs);
 	const char* sDsName = DasDs_name(pDs);
 
@@ -2179,7 +2179,7 @@ const char* DasVar_cdfUniqName(
 		int nRoom = (int)uBufLen - 1 - nSfx;
 		snprintf(sBuf, uBufLen, "%.*s%s", (nKeep < nRoom) ? nKeep : nRoom, sBase, sSfx);
 		if(n == 1)
-			daslog_warn_v("CDF variable name %.*s is taken, using %s", nKeep, sBase, sBuf);
+			daslog_warnf("CDF variable name %.*s is taken, using %s", nKeep, sBase, sBuf);
 	}
 	return sBuf;
 }
@@ -2192,20 +2192,20 @@ const char* DasVar_cdfUniqName(
 long DasVar_cdfNonRecDims(
 	int nDsRank, ptrdiff_t* pDsShape, const DasVar* pVar, long* pNonRecDims
 ){
-	ptrdiff_t aShape[VARIDX_MAX];
+	ptrdiff_t aShape[DASIDX_MAX];
 
 	DasVar_shape(pVar, aShape);
 	long nUsed = 0;
 	for(int i = 1; i < nDsRank; ++i){
-		if(aShape[i] == VARIDX_RAGGED)
-			return -1 * das_error(PERR, 
+		if(aShape[i] == DASIDX_RAGGED)
+			return -1 * daserrf(PERR, 
 				"Ragged indexes in non-record indexes are not supported by CDFs"
 			);
 		
-		if(aShape[i] != VARIDX_UNUSED){
+		if(aShape[i] != DASIDX_UNUSED){
 			if(aShape[i] < 1){
 				if(pDsShape[i] < 1){
-					return -1 * das_error(
+					return -1 * daserrf(
 						PERR, "Ragged datasets with sequences are not yet supported"
 					);
 				}
@@ -2233,8 +2233,8 @@ long DasVar_cdfNonRecDims(
 /* Text whose items have no fixed width, e.g. utf8 with itemBytes="*" */
 static bool _DasVar_cdfIsRaggedText(const DasVar* pVar)
 {
-	if(DasVar_valType(pVar) != vtText) return false;
-	ptrdiff_t aIntr[VARIDX_MAX] = {0};
+	if(DasVar_vt(pVar) != DASVT_TEXT) return false;
+	ptrdiff_t aIntr[DASIDX_MAX] = {0};
 	DasVar_intrShape(pVar, aIntr);
 	return (aIntr[0] < 1);
 }
@@ -2242,17 +2242,17 @@ static bool _DasVar_cdfIsRaggedText(const DasVar* pVar)
 /** create a unique variable in the cdf output file 
  * 
  * @param[out] sNameBuf a buffer to receive the variable name must point to at least
- *        DAS_MAX_ID_BUFSZ bytes of space
+ *        DASID_SZ bytes of space
  */
 das_errcode makeCdfVar(
 	struct context* pCtx, DasDim* pDim, DasVar* pVar, int nDsRank, ptrdiff_t* pDsShape,
 	char* sNameBuf
 ){
 	CDFstatus iStatus = 0;
-	ptrdiff_t aMin[VARIDX_MAX] = {0};
-	ptrdiff_t aMax[VARIDX_MAX] = {0};
+	ptrdiff_t aMin[DASIDX_MAX] = {0};
+	ptrdiff_t aMax[DASIDX_MAX] = {0};
 
-	long aNonRecDims[VARIDX_MAX] = {0};
+	long aNonRecDims[DASIDX_MAX] = {0};
 	/* Sequence variables mold themselves to the shape of the containing dataset so
 	   the dataset shape has to be passed in a well */
 	long nNonRecDims = DasVar_cdfNonRecDims(nDsRank, pDsShape, pVar, aNonRecDims);
@@ -2260,8 +2260,8 @@ das_errcode makeCdfVar(
 		return PERR;
 
 	/* Create the associated variances array */
-	long nRecVary = DasVar_degenerate(pVar, 0) ? NOVARY : VARY;
-	long aDimVary[VARIDX_MAX - 1] = {NOVARY,NOVARY,NOVARY,NOVARY,NOVARY,NOVARY,NOVARY};
+	long nRecVary = DasVar_isDegenerate(pVar, 0) ? NOVARY : VARY;
+	long aDimVary[DASIDX_MAX - 1] = {NOVARY,NOVARY,NOVARY,NOVARY,NOVARY,NOVARY,NOVARY};
 	for(int i = 0; i < nNonRecDims; ++i){
 		if(aNonRecDims[i] > 0)
 			aDimVary[i] = VARY;
@@ -2278,16 +2278,16 @@ das_errcode makeCdfVar(
 		DasDs* pDs = (DasDs*) DasDesc_parent((DasDesc*)pDim);
 		int nPktId = 0;
 		if(pCtx->pVarMap != NULL)
-			nPktId = DasStream_getPktId((DasStream*)DasDesc_parent((DasDesc*)pDs), (DasDesc*)pDs);
+			nPktId = DasStream_pktId((DasStream*)DasDesc_parent((DasDesc*)pDs), (DasDesc*)pDs);
 
-		if(! DasVar_cdfName(pDim, pVar, sNameBuf, DAS_MAX_ID_BUFSZ - 1, pCtx->pVarMap, nPktId))
+		if(! DasVar_cdfName(pDim, pVar, sNameBuf, DASID_SZ - 1, pCtx->pVarMap, nPktId))
 			return PERR;
 
 		/* If the name is '-' then just set this variable to be dropped from the output */
 		/*
 		if(sNameBuf[0] == '-'){
 			DasVar_cdfId(pVar) = DROP_VAR_ID;
-			daslog_info_v("Variable %s:%s from packet %d dropped by user request.",
+			daslog_infof("Variable %s:%s from packet %d dropped by user request.",
 				DasDim_name(pDim), DasVar_role(pVar), nPktId
 			);
 			return DAS_OKAY;
@@ -2297,7 +2297,7 @@ das_errcode makeCdfVar(
 		long nVarNum = CDFgetVarNum(pCtx->nCdfId, sNameBuf);
 		if(nVarNum >= 0){
 			DasVar_cdfId(pVar) = nVarNum;
-			if(DasVar_valType(pVar) == vtText){
+			if(DasVar_vt(pVar) == DASVT_TEXT){
 				long nElems = 0;
 				if(CDF_MAD(CDFgetzVarNumElements(pCtx->nCdfId, nVarNum, &nElems)))
 					return PERR;
@@ -2311,28 +2311,28 @@ das_errcode makeCdfVar(
 	}
 	else{
 		/* No skeletons, make a new unique variable */
-		if(DasVar_cdfUniqName(pCtx, pDim, pVar, sNameBuf, DAS_MAX_ID_BUFSZ - 1) == NULL)
+		if(DasVar_cdfUniqName(pCtx, pDim, pVar, sNameBuf, DASID_SZ - 1) == NULL)
 			return PERR;
 
 		/* If this var is to be interpreted as a text value, we'll need strlen */
 		long nCharLen = 1L;
 		long nCdfType = DasVar_cdfType(pVar);
 		if((nCdfType == CDF_CHAR)||(nCdfType == CDF_UCHAR)){
-			ptrdiff_t aIntr[VARIDX_MAX] = {0};
+			ptrdiff_t aIntr[DASIDX_MAX] = {0};
 			DasVar_intrShape(pVar, aIntr);
 			nCharLen = aIntr[0];
 
 			/* CDF strings are fixed width, and the records have not arrived
 			   yet, so the stream has to say how wide */
 			if(_DasVar_cdfIsRaggedText(pVar)){
-				const DasProp* pLen = DasDesc_getLocal((DasDesc*)pDim, "cdfCharLen");
+				const DasProp* pLen = DasDesc_localProp((DasDesc*)pDim, "cdfCharLen");
 				int64_t nLen = 0;
-				if((pLen == NULL)||(DasProp_convertInt(pLen, &nLen, 1) != 1)||(nLen < 1))
-					return das_error(PERR,
+				if((pLen == NULL)||(DasProp_toInts(pLen, &nLen, 1) != 1)||(nLen < 1))
+					return daserrf(PERR,
 						"Variable %s holds variable length text, which needs an "
 						"integer cdfCharLen property on its <%s> element to set "
 						"the CDF string width", sNameBuf,
-						(DasDim_type(pDim) == DASDIM_COORD) ? "coord" : "data"
+						(DasDim_type(pDim) == DASDIMTYPE_COORD) ? "coord" : "data"
 					);
 				nCharLen = (long)nLen;
 			}
@@ -2342,7 +2342,7 @@ das_errcode makeCdfVar(
 			DasVar_cdfPadLen(pVar) = nCharLen;
 		}
 
-		daslog_info_v("Auto variable %s", sNameBuf);
+		daslog_infof("Auto variable %s", sNameBuf);
 
 		iStatus = CDFcreatezVar(
 			pCtx->nCdfId,                      /* CDF File ID */
@@ -2402,11 +2402,11 @@ das_errcode makeCdfVar(
 
 	for(int r = 1; r < nDsRank; ++r){
 		if(pDsShape[r] > 0){
-			if(DasVar_degenerate(pVar, r))
+			if(DasVar_isDegenerate(pVar, r))
 				aMax[r] = 1;
 			else{
-				if(pDsShape[r] == VARIDX_RAGGED)
-					return das_error(PERR, "CDF does not allow ragged array lengths "
+				if(pDsShape[r] == DASIDX_RAGGED)
+					return daserrf(PERR, "CDF does not allow ragged array lengths "
 						"after the zeroth index.  We could get around using by loading "
 						"all data in RAM and using fill values when writing the CDF "
 						"but have chosen not to do so at this time."
@@ -2422,20 +2422,20 @@ das_errcode makeCdfVar(
 	/* Force all sequences and binary variables to take on concrete values, and
 	   square off anything ragged: a CDF record is a rectangle, so the Qube
 	   call is the one that matches the destination. */
-	DasAry* pAry = DasVar_subsetQube(pVar, nDsRank, aMin, aMax, NULL);
+	DasAry* pAry = new_DasAry_subsetQube(pVar, nDsRank, aMin, aMax, NULL);
 
-	ptrdiff_t aAryShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
-	ptrdiff_t aTmp[VARIDX_MAX] = VARIDX_INIT_UNUSED;
+	ptrdiff_t aAryShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
+	ptrdiff_t aTmp[DASIDX_MAX] = DASIDX_INIT_UNUSED;
 	int nAryRank = DasAry_shape(pAry, aAryShape);
 
 	size_t uLen = 0;
-	das_val_type vt = DasAry_valType(pAry);
-	const ubyte* pVals = DasAry_getIn(pAry, vt, DIM0, &uLen);
+	das_vt vt = DasAry_vt(pAry);
+	const uint8_t* pVals = DasAry_valsIn(pAry, vt, DAS_ADDR0, &uLen);
 
 	/* Put index information into data types needed for function call */
-	static const long indices[VARIDX_MAX]  = {0,0,0,0, 0,0,0,0};
-	long counts[VARIDX_MAX]                 = {0,0,0,0, 0,0,0,0};
-	static const long intervals[VARIDX_MAX] = {1,1,1,1, 1,1,1,1};
+	static const long indices[DASIDX_MAX]  = {0,0,0,0, 0,0,0,0};
+	long counts[DASIDX_MAX]                 = {0,0,0,0, 0,0,0,0};
+	static const long intervals[DASIDX_MAX] = {1,1,1,1, 1,1,1,1};
 
 	/* shave off any length 1 indexes after the first when saving to CDF */
 	int iDimOut = 0;
@@ -2472,11 +2472,11 @@ das_errcode makeCdfVar(
    1 is the first non-record dimension.  Components are always last. */
 static int _cdfCompDimIdx(const DasVar* pVar)
 {
-	ptrdiff_t aShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
+	ptrdiff_t aShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
 	int nRank = DasVar_shape(pVar, aShape);
 	int iDim = 1;
 	for(int i = 1; i < nRank; ++i)
-		if(aShape[i] != VARIDX_UNUSED) ++iDim;
+		if(aShape[i] != DASIDX_UNUSED) ++iDim;
 	return iDim;
 }
 
@@ -2577,20 +2577,20 @@ static das_errcode _addCompSysAttrs(struct context* pCtx, DasVar* pVar)
 	const DasForm* pForm = DasVar_form(pVar);
 	long iVar = DasVar_cdfId(pVar);
 
-	ubyte uSys = DAS_VSYS_UNKNOWN;
-	const ubyte* pDirs = NULL;
-	if(DasForm_isKind(pForm, DAS_FORM_VEC)){
-		uSys  = DasFormVec_sysType(pForm);
+	uint8_t uSys = DASVECSYS_UNKNOWN;
+	const uint8_t* pDirs = NULL;
+	if(DasForm_isKind(pForm, DASFORM_VEC)){
+		uSys  = DasFormVec_sysId(pForm);
 		pDirs = DasFormVec_dirs(pForm);
 	}
-	else if(DasForm_isKind(pForm, DAS_FORM_POS)){
-		uSys  = DasFormPos_sysType(pForm);
+	else if(DasForm_isKind(pForm, DASFORM_POS)){
+		uSys  = DasFormPos_sysId(pForm);
 		pDirs = DasFormPos_dirs(pForm);
 	}
 	else
 		return DAS_OKAY;
 
-	const char* sSys = das_vsys_toStr(uSys);
+	const char* sSys = dasvecsys_name(uSys);
 	if(sSys == NULL) return DAS_OKAY;
 	das_errcode nRet = writeVarStrAttr(pCtx, iVar, "COMPONENT_SYSTEM", sSys);
 	if(nRet != DAS_OKAY) return nRet;
@@ -2600,7 +2600,7 @@ static das_errcode _addCompSysAttrs(struct context* pCtx, DasVar* pVar)
 
 	char sOrder[32] = {'\0'};
 	for(long i = 0; i < nComp; ++i){
-		const char* sName = das_vsys_name(uSys, (pDirs != NULL) ? pDirs[i] : (int)i);
+		const char* sName = dasvecsys_dirName(uSys, (pDirs != NULL) ? pDirs[i] : (int)i);
 		if(sName == NULL) return DAS_OKAY;
 		if(i > 0) strcat(sOrder, ";");
 		strcat(sOrder, sName);
@@ -2619,16 +2619,16 @@ static das_errcode _addFormAttrs(struct context* pCtx, DasVar* pVar)
 	if(pForm == NULL) return DAS_OKAY;
 	long iVar = DasVar_cdfId(pVar);
 
-	bool bExt = DasForm_isKind(pForm, DAS_FORM_EXT);
+	bool bExt = DasForm_isKind(pForm, DASFORM_EXT);
 	das_errcode nRet = writeVarStrAttr(pCtx, iVar, "opsKind", DasForm_kind(pForm));
 	if(nRet != DAS_OKAY) return nRet;
 
-	bool bGeom = DasForm_isKind(pForm, DAS_FORM_VEC)||DasForm_isKind(pForm, DAS_FORM_POS);
+	bool bGeom = DasForm_isKind(pForm, DASFORM_VEC)||DasForm_isKind(pForm, DASFORM_POS);
 	if(bGeom && ((nRet = _addCompSysAttrs(pCtx, pVar)) != DAS_OKAY))
 		return nRet;
 
 	char sAttr[64] = {'\0'};
-	das_form_param_buf buf;
+	DasFormParamBuf buf;
 	const DasProp* pParam = NULL;
 	for(int i = 0; (pParam = DasForm_paramAt(pForm, i, &buf)) != NULL; ++i){
 		const char* sParam = DasProp_name(pParam);
@@ -2677,19 +2677,19 @@ static das_errcode _addFrameAttrs(struct context* pCtx, DasVar* pVar)
 	das_errcode nRet = DAS_OKAY;
 	int32_t nOrder = 0;
 
-	if(DasForm_isKind(pForm, DAS_FORM_ROT)){
-		const char* sSys = DasForm_getParam(pForm, "system", NULL);
+	if(DasForm_isKind(pForm, DASFORM_ROT)){
+		const char* sSys = DasForm_param(pForm, "system", NULL);
 		if((sSys != NULL)&&(strcmp(sSys, "matrix") == 0)){
 			nOrder = 2;
-			return writeVarAttr(pCtx, iVar, "TENSOR_ORDER", CDF_INT4, (const ubyte*)&nOrder);
+			return writeVarAttr(pCtx, iVar, "TENSOR_ORDER", CDF_INT4, (const uint8_t*)&nOrder);
 		}
 		return DAS_OKAY;
 	}
 
-	bool bPos = DasForm_isKind(pForm, DAS_FORM_POS);
-	if(!bPos && !DasForm_isKind(pForm, DAS_FORM_VEC)) return DAS_OKAY;
+	bool bPos = DasForm_isKind(pForm, DASFORM_POS);
+	if(!bPos && !DasForm_isKind(pForm, DASFORM_VEC)) return DAS_OKAY;
 
-	const char* sFrame = DasForm_getParam(pForm, "frame", NULL);
+	const char* sFrame = DasForm_param(pForm, "frame", NULL);
 	if((sFrame != NULL)&&((nRet = writeVarStrAttr(pCtx, iVar, "FRAME_NAME", sFrame)) != DAS_OKAY))
 		return nRet;
 
@@ -2699,7 +2699,7 @@ static das_errcode _addFrameAttrs(struct context* pCtx, DasVar* pVar)
 	if(bPos){
 		nRet = writeVarStrAttr(pCtx, iVar, "FRAME_ORIGIN", DasFormPos_body(pForm));
 		if(nRet != DAS_OKAY) return nRet;
-		if(DasFormPos_fixed(pForm) &&
+		if(DasFormPos_isFixed(pForm) &&
 		   ((nRet = writeVarStrAttr(pCtx, iVar, "FRAME_FIXED", "true")) != DAS_OKAY))
 			return nRet;
 	}
@@ -2707,7 +2707,7 @@ static das_errcode _addFrameAttrs(struct context* pCtx, DasVar* pVar)
 	   has none, its last CDF dimension is a real index */
 	nOrder = 1;
 	if((DasVar_cdfNumComps(pVar) > 1) &&
-	   ((nRet = writeVarAttr(pCtx, iVar, "TENSOR_ORDER", CDF_INT4, (const ubyte*)&nOrder)) != DAS_OKAY))
+	   ((nRet = writeVarAttr(pCtx, iVar, "TENSOR_ORDER", CDF_INT4, (const uint8_t*)&nOrder)) != DAS_OKAY))
 		return nRet;
 
 
@@ -2734,7 +2734,7 @@ das_errcode makeCompLabels(struct context* pCtx, DasDim* pDim, DasVar* pVar)
 {
 	/* compLabel has been retired, warn for now. */
 	static bool bWarnedCompLbl = false;
-	if(!bWarnedCompLbl && (DasDesc_getLocal((DasDesc*)pDim, "compLabel") != NULL)){
+	if(!bWarnedCompLbl && (DasDesc_localProp((DasDesc*)pDim, "compLabel") != NULL)){
 		daslog_warn(
 			"This stream sets compLabel, which das3_cdf no longer reads.  Put "
 			"one label per component in a stringArray 'label' property on the "
@@ -2750,7 +2750,7 @@ das_errcode makeCompLabels(struct context* pCtx, DasDim* pDim, DasVar* pVar)
 	for(long i = 0; i < nComp; ++i) psBuf[i] = pStore + i*DASCDF_COMP_STR_SZ;
 
 	das_errcode nRet = DAS_OKAY;
-	int nGot = DasVar_compLabels(pVar, psBuf, nComp, DASCDF_COMP_STR_SZ - 1);
+	int nGot = DasVar_compLbls(pVar, psBuf, nComp, DASCDF_COMP_STR_SZ - 1);
 	if(nGot < 0)
 		nRet = -1 * nGot;
 	else if(nGot == 1)
@@ -2779,21 +2779,21 @@ static int _cdfCompUnits(
 	int nComp = (int)DasVar_cdfNumComps(pVar);
 	if((nComp < 2)||(nComp > nMax)) return 0;
 
-	if(DasForm_isKind(pForm, DAS_FORM_CPLX)){
-		if(DasFormCplx_sysType(pForm) != DAS_VSYS_POLAR) return 0;
+	if(DasForm_isKind(pForm, DASFORM_CPLX)){
+		if(DasFormCplx_sysId(pForm) != DASCPLXSYS_POLAR) return 0;
 		strncpy(psBuf[0], sUnits, uLenEa - 1);
-		strncpy(psBuf[1], UNIT_DEGREES, uLenEa - 1);
+		strncpy(psBuf[1], DASUNITS_DEGREES, uLenEa - 1);
 		return 2;
 	}
 
-	const ubyte* pDirs = NULL;
-	ubyte uSys = DAS_VSYS_UNKNOWN;
-	if(DasForm_isKind(pForm, DAS_FORM_VEC)){
-		uSys  = DasFormVec_sysType(pForm);
+	const uint8_t* pDirs = NULL;
+	uint8_t uSys = DASVECSYS_UNKNOWN;
+	if(DasForm_isKind(pForm, DASFORM_VEC)){
+		uSys  = DasFormVec_sysId(pForm);
 		pDirs = DasFormVec_dirs(pForm);
 	}
-	else if(DasForm_isKind(pForm, DAS_FORM_POS)){
-		uSys  = DasFormPos_sysType(pForm);
+	else if(DasForm_isKind(pForm, DASFORM_POS)){
+		uSys  = DasFormPos_sysId(pForm);
 		pDirs = DasFormPos_dirs(pForm);
 	}
 	else
@@ -2802,18 +2802,18 @@ static int _cdfCompUnits(
 	/* which canonical components are angles, per system */
 	bool aAngle[3] = {false, false, false};
 	switch(uSys){
-	case DAS_VSYS_CYL:     aAngle[1] = true; break;
-	case DAS_VSYS_SPH:
-	case DAS_VSYS_CENTRIC: aAngle[1] = true; aAngle[2] = true; break;
-	case DAS_VSYS_DETIC:
-	case DAS_VSYS_GRAPHIC: aAngle[0] = true; aAngle[1] = true; break;
+	case DASVECSYS_CYL:     aAngle[1] = true; break;
+	case DASVECSYS_SPH:
+	case DASVECSYS_CENTRIC: aAngle[1] = true; aAngle[2] = true; break;
+	case DASVECSYS_DETIC:
+	case DASVECSYS_GRAPHIC: aAngle[0] = true; aAngle[1] = true; break;
 	default: return 0;   /* cartesian: one units covers every component */
 	}
 	if(nComp > 3) return 0;
 
 	for(int i = 0; i < nComp; ++i){
-		ubyte uDir = (pDirs != NULL) ? pDirs[i] : (ubyte)i;
-		strncpy(psBuf[i], aAngle[uDir] ? UNIT_DEGREES : sUnits, uLenEa - 1);
+		uint8_t uDir = (pDirs != NULL) ? pDirs[i] : (uint8_t)i;
+		strncpy(psBuf[i], aAngle[uDir] ? DASUNITS_DEGREES : sUnits, uLenEa - 1);
 	}
 	return nComp;
 }
@@ -2833,7 +2833,7 @@ das_errcode writeVarProps(
 
 	/* Find out if I happen to also be a coordinate */
 	int iAmDep = -1;
-	if(DasDim_type(pDim) == DASDIM_COORD){
+	if(DasDim_type(pDim) == DASDIMTYPE_COORD){
 		for(size_t u = 0; u < uCoords; ++u){
 			if((pCoords + u)->pVar == pVar){
 				iAmDep = (pCoords + u)->iDep;
@@ -2842,7 +2842,7 @@ das_errcode writeVarProps(
 		}
 	}
 
-	ptrdiff_t aVarShape[VARIDX_MAX];
+	ptrdiff_t aVarShape[DASIDX_MAX];
 	DasVar_shape(pVar, aVarShape);
 	int iIdxMax = _maxIndex(aVarShape);
 
@@ -2855,7 +2855,7 @@ das_errcode writeVarProps(
 	for(int iIdx = iIdxMax; iIdx >= 0; --iIdx){
 
 		/* Either not record varying, or not affected by this index */
-		if(DasVar_degenerate(pVar, 0)||DasVar_degenerate(pVar, iIdx))
+		if(DasVar_isDegenerate(pVar, 0)||DasVar_isDegenerate(pVar, iIdx))
 			continue;
 
 		if(iIdx == iAmDep)
@@ -2892,20 +2892,20 @@ das_errcode writeVarProps(
 				writeVarStrAttr(pCtx, DasVar_cdfId(pVar), sAttrName, sAux);
 			}
 			else{
-				daslog_warn_v("%s: %s also runs along index %d, but only %s fits in "
+				daslog_warnf("%s: %s also runs along index %d, but only %s fits in "
 					"AUX_DEPEND_%d", DasDim_name(pDim), pVi->sCdfName, iIdx, sAux, nDepNum);
 			}
 		}
 	}
 
-	/* Intercept vtTime structure variables and save the units at ns */
+	/* Intercept DASVT_TIME structure variables and save the units at ns */
 	char sConvert[128] = {'\0'};
 	const char* sUnits = " ";
-	if(DasVar_valType(pVar) == vtTime)
+	if(DasVar_vt(pVar) == DASVT_TIME)
 		sUnits = "ns";
 	else if (DasVar_units(pVar) != NULL){
-		if(Units_haveCalRep(DasVar_units(pVar)))
-			sUnits = Units_interval(DasVar_units(pVar));
+		if(DasUnits_isTimePoint(DasVar_units(pVar)))
+			sUnits = DasUnits_toInterval(DasVar_units(pVar));
 		else{
 			sUnits = DasVar_units(pVar);
 			/* Convert all instances of ** to ^ follow the CDF convention */
@@ -2948,18 +2948,18 @@ das_errcode writeVarProps(
 	/* VAR_TYPE: coordinates are support by construction; a data dimension
 	   may say varType=support (a common das property, descriptive only) */
 	const char* sVarType = "data";
-	const char* sWant = DasDesc_getStr((DasDesc*)pDim, "varType");
-	if(DasDim_type(pDim) == DASDIM_COORD){
+	const char* sWant = DasDesc_val((DasDesc*)pDim, "varType");
+	if(DasDim_type(pDim) == DASDIMTYPE_COORD){
 		sVarType = "support_data";
 		if(sWant != NULL)
-			daslog_warn_v("varType=%s on coordinate %s ignored, coordinates are support_data",
+			daslog_warnf("varType=%s on coordinate %s ignored, coordinates are support_data",
 				sWant, DasDim_name(pDim));
 	}
 	else if(sWant != NULL){
 		if(strcmp(sWant, "support") == 0)      sVarType = "support_data";
 		else if(strcmp(sWant, "data") == 0)    sVarType = "data";
 		else
-			daslog_warn_v("varType=%s on %s is not 'data' or 'support', writing VAR_TYPE=data",
+			daslog_warnf("varType=%s on %s is not 'data' or 'support', writing VAR_TYPE=data",
 				sWant, DasDim_name(pDim));
 	}
 	writeVarStrAttr(pCtx, DasVar_cdfId(pVar), "VAR_TYPE", sVarType);
@@ -2978,8 +2978,8 @@ das_errcode writeVarProps(
 	   indistinguishable from a free-standing angle.  A lone linear or
 	   complex component carries nothing worth writing. */
 	const DasForm* pForm = DasVar_form(pVar);
-	bool bGeom1 = (DasVar_valType(pVar) == vtComposite) && (pForm != NULL) &&
-		(DasForm_isKind(pForm, DAS_FORM_VEC)||DasForm_isKind(pForm, DAS_FORM_POS));
+	bool bGeom1 = (DasVar_vt(pVar) == DASVT_COMP) && (pForm != NULL) &&
+		(DasForm_isKind(pForm, DASFORM_VEC)||DasForm_isKind(pForm, DASFORM_POS));
 	if(DasVar_cdfHasComps(pVar) || bGeom1){
 		if( (nRet = _addFormAttrs(pCtx, pVar)) != DAS_OKAY)
 			return nRet;
@@ -2990,8 +2990,8 @@ das_errcode writeVarProps(
 	/* The ops frame is the authoritative statement, a random "frame" property
 	   from the producer must not overwrite the FRAME_NAME written above */
 	bool bOpsFrame = (DasVar_cdfHasComps(pVar) || bGeom1) && (pForm != NULL) &&
-		(DasForm_isKind(pForm, DAS_FORM_VEC)||DasForm_isKind(pForm, DAS_FORM_POS)) &&
-		(DasForm_getParam(pForm, "frame", NULL) != NULL);
+		(DasForm_isKind(pForm, DASFORM_VEC)||DasForm_isKind(pForm, DASFORM_POS)) &&
+		(DasForm_param(pForm, "frame", NULL) != NULL);
 
 	/* Copy down PhyDim properties to variables since CDF has no concept
 	   of a Physical Dimension variable group.
@@ -3003,12 +3003,12 @@ das_errcode writeVarProps(
 	/* A set with no parent dimension has no role, which is legal, so this
 	   cannot go straight into strcmp. */
 	const char* sRole = DasVar_role(pVar);
-	bool bIsRef = (sRole != NULL) && (strcmp(sRole, DASVAR_REF) == 0);
-	if((DasDim_getPointVar(pDim) == pVar)||bIsRef){
+	bool bIsRef = (sRole != NULL) && (strcmp(sRole, DASDIM_ROLE_REF) == 0);
+	if((DasDim_pointVar(pDim) == pVar)||bIsRef){
 
-		size_t uProps = DasDesc_length((DasDesc*)pDim);
+		size_t uProps = DasDesc_numProps((DasDesc*)pDim);
 		for(size_t u = 0; u < uProps; ++u){
-			const DasProp* pProp = DasDesc_getPropByIdx((DasDesc*)pDim, u);
+			const DasProp* pProp = DasDesc_propAt((DasDesc*)pDim, u);
 			if(pProp == NULL) continue;
 
 			if(_isCdfControl(DasProp_name(pProp)))
@@ -3024,8 +3024,8 @@ das_errcode writeVarProps(
 		}
 	}
 	else{
-		if(DasDim_getVar(pDim, DASVAR_OFFSET) == pVar){
-			const DasProp* pProp = DasDesc_getLocal((DasDesc*)pDim, "RESOLUTION");
+		if(DasDim_var(pDim, DASDIM_ROLE_OFFSET) == pVar){
+			const DasProp* pProp = DasDesc_localProp((DasDesc*)pDim, "RESOLUTION");
 			if(pProp != NULL){
 				if(writeVarProp(pCtx, DasVar_cdfId(pVar), pProp) != DAS_OKAY)
 					return PERR;
@@ -3033,8 +3033,8 @@ das_errcode writeVarProps(
 
 			/* Include a handy reference back to my "reference". Easy to do for
 			   coords, not so easy for data */
-			if(DasDim_type(pDim) == DASDIM_COORD){
-				VarInfo* pRef = VarInfoAry_getByRole(pCoords, uCoords, pDim, DASVAR_REF);
+			if(DasDim_type(pDim) == DASDIMTYPE_COORD){
+				VarInfo* pRef = VarInfoAry_getByRole(pCoords, uCoords, pDim, DASDIM_ROLE_REF);
 				if((pRef != NULL)&&(pRef->sCdfName[0] != '\0')){
 					writeVarStrAttr(pCtx, DasVar_cdfId(pVar), "OFFSET_OF", pRef->sCdfName);
 				}
@@ -3044,25 +3044,25 @@ das_errcode writeVarProps(
 
 	/* If this is an array var, get the fill value and make a property for it 
 	   but only if we're NOT a coordinate! */
-	DasAry* pAry = DasVar_getAry(pVar);
-	if((DasDim_type(pDim) == DASDIM_DATA) && (pAry != NULL)){
+	DasAry* pAry = DasVar_ary(pVar);
+	if((DasDim_type(pDim) == DASDIMTYPE_DATA) && (pAry != NULL)){
 		/* A text array's fill is one byte, not a string; ISTP's string fill
 		   is a single blank */
-		if(DasVar_valType(pVar) == vtText)
+		if(DasVar_vt(pVar) == DASVT_TEXT)
 			nRet = writeVarStrAttr(pCtx, DasVar_cdfId(pVar), "FILLVAL", " ");
 		else
 			nRet = writeVarAttr(pCtx, DasVar_cdfId(pVar), "FILLVAL", DasVar_cdfType(pVar),
-			                    DasAry_getFill(pAry));
+			                    DasAry_fill(pAry));
 		if(nRet != DAS_OKAY)
 			return nRet;
 	}
 
 	/* Finally, if there are properties associated with this specific variable,
 	   add them as direct variable attributes. */
-	size_t uProps2 = DasDesc_length((DasDesc*)pVar);
+	size_t uProps2 = DasDesc_numProps((DasDesc*)pVar);
 	if(uProps2 > 0){
 		for(size_t u = 0; u < uProps2; ++u){
-			const DasProp* pProp = DasDesc_getPropByIdx((DasDesc*)pVar, u);
+			const DasProp* pProp = DasDesc_propAt((DasDesc*)pVar, u);
 			if(pProp == NULL) continue;
 
 			if(_isCdfControl(DasProp_name(pProp)))
@@ -3107,24 +3107,24 @@ das_errcode onDataSet(DasDs* pDs, int nPktId, void* pUser)
 	struct context* pCtx = (struct context*)pUser;
 
 
-	ptrdiff_t aDsShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
+	ptrdiff_t aDsShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
 	int nDsRank = DasDs_shape(pDs, aDsShape);
 
-	daslog_info_v("Creating variables for dataset %s,%s", DasDs_group(pDs), DasDs_name(pDs));
+	daslog_infof("Creating variables for dataset %s,%s", DasDs_group(pDs), DasDs_name(pDs));
 
 	if(daslog_level() <= DASLOG_DEBUG){
 		/* Housekeeping datasets can run to tens of KB, size it */
 		int nNeed = DasDs_info(pDs, NULL, 0);
 		char* sBuf = (char*)malloc(nNeed + 1);
 		DasDs_info(pDs, sBuf, nNeed + 1);
-		daslog_debug_v("%s", sBuf);
+		daslog_debugf("%s", sBuf);
 		free(sBuf);
 	}
 
 	/* Send Data set properties to the global attribute space */
-	size_t uProps = DasDesc_length((DasDesc*)pDs);
+	size_t uProps = DasDesc_numProps((DasDesc*)pDs);
 	for(size_t u = 0; u < uProps; ++u){
-		const DasProp* pProp = DasDesc_getPropByIdx((DasDesc*)pDs, u);
+		const DasProp* pProp = DasDesc_propAt((DasDesc*)pDs, u);
 		if(pProp == NULL) continue;
 
 		if(_isCdfControl(DasProp_name(pProp)))
@@ -3156,15 +3156,15 @@ das_errcode onDataSet(DasDs* pDs, int nPktId, void* pUser)
 	}
 
 	/* Now for the data variables... */
-	size_t uDims = DasDs_numDims(pDs, DASDIM_DATA);
-	char sNameBuf[DAS_MAX_ID_BUFSZ] = {'\0'};
+	size_t uDims = DasDs_numDims(pDs, DASDIMTYPE_DATA);
+	char sNameBuf[DASID_SZ] = {'\0'};
 	
 	for(size_t d = 0; d < uDims; ++d)
 	{
-		DasDim* pDim = (DasDim*) DasDs_getDimByIdx(pDs, d, DASDIM_DATA);
+		DasDim* pDim = (DasDim*) DasDs_dimAt(pDs, d, DASDIMTYPE_DATA);
 		size_t uVars = DasDim_numVars(pDim);
 		for(size_t v = 0; v < uVars; ++v){
-			DasVar* pVar = (DasVar*) DasDim_getVarByIdx(pDim, v);
+			DasVar* pVar = (DasVar*) DasDim_varAt(pDim, v);
 
 			nRet = makeCdfVar(pCtx, pDim, pVar, nDsRank, aDsShape, sNameBuf);
 			if(nRet != DAS_OKAY)
@@ -3195,7 +3195,7 @@ das_errcode onDataSet(DasDs* pDs, int nPktId, void* pUser)
 int64_t* g_pTimeValBuf = NULL;
 size_t g_uTimeBufLen = 0;
 
-const ubyte* _structToTT2k(const ubyte* pData, size_t uTimes)
+const uint8_t* _structToTT2k(const uint8_t* pData, size_t uTimes)
 {
 	if(g_uTimeBufLen < uTimes){
 		if(g_pTimeValBuf != NULL){
@@ -3204,15 +3204,15 @@ const ubyte* _structToTT2k(const ubyte* pData, size_t uTimes)
 		g_pTimeValBuf = (int64_t*)calloc(uTimes, sizeof(int64_t));
 	}
 
-	const das_time* pTimes = (const das_time*)pData;
+	const DasTime* pTimes = (const DasTime*)pData;
 	for(size_t u = 0; u < uTimes; ++u){
-		g_pTimeValBuf[u] = dt_to_tt2k(pTimes + u);
+		g_pTimeValBuf[u] = DasTime_toTt2k(pTimes + u);
 	}
-	return (const ubyte*)g_pTimeValBuf;
+	return (const uint8_t*)g_pTimeValBuf;
 }
 
-const ubyte* _valueToTT2k(
-	const ubyte* pData, size_t uTimes, das_val_type vt, das_units units
+const uint8_t* _valueToTT2k(
+	const uint8_t* pData, size_t uTimes, das_vt vt, DasUnits units
 ){
 	if(g_uTimeBufLen < uTimes){
 		if(g_pTimeValBuf != NULL){
@@ -3224,16 +3224,16 @@ const ubyte* _valueToTT2k(
 	/* Just handle doubles for now, that's the most common time type */
 	const double* pDblSrc = NULL;
 	switch(vt){
-	case vtDouble:
+	case DASVT_DOUBLE:
 		/* TODO: Check endianness here! */
 		pDblSrc = (const double*)pData;
 		for(size_t u = 0; u < uTimes; ++u){
-			g_pTimeValBuf[u] = Units_convertTo(pDblSrc[u], units, UNIT_TT2000);
+			g_pTimeValBuf[u] = DasUnits_convert(pDblSrc[u], units, DASUNITS_TT2000);
 		}
-		return (const ubyte*)g_pTimeValBuf;
+		return (const uint8_t*)g_pTimeValBuf;
 
 	default:
-		das_error(DASERR_NOTIMP, "Add conversion for epoch based from type %s", das_vt_toStr(vt));
+		daserrf(DASERR_NOTIMP, "Add conversion for epoch based from type %s", dasvt_name(vt));
 		return NULL;
 	}
 }
@@ -3252,14 +3252,14 @@ static das_errcode _writeRecVaryText(
 	size_t uWidth = (size_t)DasVar_cdfPadLen(pVar);
 	char* pPad = (char*)malloc((size_t)nRecs * uWidth);
 	if(pPad == NULL)
-		return das_error(PERR, "Couldn't allocate %zu bytes", (size_t)nRecs * uWidth);
+		return daserrf(PERR, "Couldn't allocate %zu bytes", (size_t)nRecs * uWidth);
 	memset(pPad, ' ', (size_t)nRecs * uWidth);
 
-	das_val_type vt = DasAry_valType(pAry);
+	das_vt vt = DasAry_vt(pAry);
 	size_t uCut = 0;
 	for(ptrdiff_t i = 0; i < nRecs; ++i){
 		size_t uLen = 0;
-		const char* pStr = (const char*)DasAry_getIn(pAry, vt, DIM1_AT(i), &uLen);
+		const char* pStr = (const char*)DasAry_valsIn(pAry, vt, DAS_ADDR1(i), &uLen);
 		if(pStr == NULL){ free(pPad); return PERR; }
 		const char* pEnd = (const char*)memchr(pStr, '\0', uLen);
 		size_t uChars = (pEnd != NULL) ? (size_t)(pEnd - pStr) : uLen;
@@ -3269,13 +3269,13 @@ static das_errcode _writeRecVaryText(
 	if(uCut > 0){
 		char sName[CDF_VAR_NAME_LEN256 + 1] = {'\0'};
 		CDFgetzVarName(pCtx->nCdfId, DasVar_cdfId(pVar), sName);
-		daslog_warn_v("%zu value(s) of %s were longer than cdfCharLen=%zu "
+		daslog_warnf("%zu value(s) of %s were longer than cdfCharLen=%zu "
 			"and were truncated", uCut, sName, uWidth);
 	}
 
-	static const long indices[VARIDX_MAX]  = {0,0,0,0, 0,0,0,0};
-	static const long intervals[VARIDX_MAX] = {1,1,1,1, 1,1,1,1};
-	static const long counts[VARIDX_MAX]    = {0,0,0,0, 0,0,0,0};
+	static const long indices[DASIDX_MAX]  = {0,0,0,0, 0,0,0,0};
+	static const long intervals[DASIDX_MAX] = {1,1,1,1, 1,1,1,1};
+	static const long counts[DASIDX_MAX]    = {0,0,0,0, 0,0,0,0};
 
 	bool bOkay = !CDF_MAD(CDFhyperPutzVarData(
 		pCtx->nCdfId, DasVar_cdfId(pVar), DasVar_cdfStart(pVar), (long)nRecs, 1,
@@ -3299,34 +3299,34 @@ das_errcode _writeRecVaryAry(struct context* pCtx, DasVar* pVar, DasAry* pAry)
 	   a header is sent, but no actual values.  If so just return okay.
 	*/
 	if(DasAry_size(pAry) == 0){
-		daslog_debug_v("No more data to write for array %s", DasAry_id(pAry));
+		daslog_debugf("No more data to write for array %s", DasAry_id(pAry));
 		return DAS_OKAY;
 	}
 
-	static const long indices[VARIDX_MAX]  = {0,0,0,0, 0,0,0,0};
-	static const long intervals[VARIDX_MAX] = {1,1,1,1, 1,1,1,1};
-	long counts[VARIDX_MAX]                 = {0,0,0,0, 0,0,0,0};
-	ptrdiff_t aShape[VARIDX_MAX]            = VARIDX_INIT_BEGIN;
+	static const long indices[DASIDX_MAX]  = {0,0,0,0, 0,0,0,0};
+	static const long intervals[DASIDX_MAX] = {1,1,1,1, 1,1,1,1};
+	long counts[DASIDX_MAX]                 = {0,0,0,0, 0,0,0,0};
+	ptrdiff_t aShape[DASIDX_MAX]            = DASIDX_INIT_BEGIN;
 
 	size_t uElSize = 0;
 	size_t uElements = 0;
 	size_t uTotal = 0;
-	const ubyte* pData = DasAry_getAllVals(pAry, &uElSize, &uElements);
+	const uint8_t* pData = DasAry_data(pAry, &uElSize, &uElements);
 	
 	if(pData == NULL)
 		return PERR;
 
-	/* Hook in time conversion conversion.  If we see vtTime, that's a structure, and
+	/* Hook in time conversion conversion.  If we see DASVT_TIME, that's a structure, and
 	   it needs to be re-written to TT2K, if we see */
 
-	if(DasAry_valType(pAry) == vtTime)
+	if(DasAry_vt(pAry) == DASVT_TIME)
 		pData = _structToTT2k(pData, uElements);
 	else if( 
-		Units_haveCalRep(DasAry_units(pAry)) && 
-		(DasAry_valType(pAry) != vtLong) && 
-		(DasAry_units(pAry) != UNIT_TT2000)
+		DasUnits_isTimePoint(DasAry_units(pAry)) && 
+		(DasAry_vt(pAry) != DASVT_LONG) && 
+		(DasAry_units(pAry) != DASUNITS_TT2000)
 	)
-		pData = _valueToTT2k(pData, uElements, DasAry_valType(pAry), DasAry_units(pAry));
+		pData = _valueToTT2k(pData, uElements, DasAry_vt(pAry), DasAry_units(pAry));
 
 	int nRank = DasAry_shape(pAry, aShape);
 
@@ -3337,8 +3337,8 @@ das_errcode _writeRecVaryAry(struct context* pCtx, DasVar* pVar, DasAry* pAry)
 	   dimensions but the CDF variable has them collapsed to one (see
 	   DasVar_cdfNonRecDims), so the trailing counts collapse the same way. */
 	int nIntrRank = 0;
-	if(DasVar_valType(pVar) == vtComposite){
-		ptrdiff_t aIntr[VARIDX_MAX] = {0};
+	if(DasVar_vt(pVar) == DASVT_COMP){
+		ptrdiff_t aIntr[DASIDX_MAX] = {0};
 		nIntrRank = DasVar_intrShape(pVar, aIntr);
 	}
 	int nExtRank = nRank - nIntrRank;
@@ -3381,7 +3381,7 @@ das_errcode putAllData(struct context* pCtx, int nDsRank, ptrdiff_t* pDsShape, D
 {
 	/* Take a short cut for array backed variables.  A NULL array is the
 	   answer for anything that computes its values, not a failure. */
-	DasAry* pAry = DasVar_getAry(pVar);   /* Does not copy data */
+	DasAry* pAry = DasVar_ary(pVar);   /* Does not copy data */
 	if(pAry != NULL){
 
 		if(_writeRecVaryAry(pCtx, pVar, pAry) != DAS_OKAY)
@@ -3393,14 +3393,14 @@ das_errcode putAllData(struct context* pCtx, int nDsRank, ptrdiff_t* pDsShape, D
 		   degenerate indexes are saved to CDF "punch out" the degenerate indexes
 		   with a max range of just 1 */
 
-		ptrdiff_t aMin[VARIDX_MAX] = VARIDX_INIT_BEGIN;
-		ptrdiff_t aMax[VARIDX_MAX] = VARIDX_INIT_BEGIN;
+		ptrdiff_t aMin[DASIDX_MAX] = DASIDX_INIT_BEGIN;
+		ptrdiff_t aMax[DASIDX_MAX] = DASIDX_INIT_BEGIN;
 
 		for(int r = 0; r < nDsRank; ++r){
 			if(pDsShape[r] <= 0)
-				return das_error(PERR, "Ragged datasets are not yet supported");
+				return daserrf(PERR, "Ragged datasets are not yet supported");
 			
-			if(DasVar_degenerate(pVar, r)){
+			if(DasVar_isDegenerate(pVar, r)){
 				aMax[r] = 1;
 				assert(r > 0); /* Can't be degenerate in the streaming index at this point */
 			}
@@ -3409,7 +3409,7 @@ das_errcode putAllData(struct context* pCtx, int nDsRank, ptrdiff_t* pDsShape, D
 		}
 
 		/* A potentially long calculation.... */
-		DasAry* pAry = DasVar_subsetQube(pVar, nDsRank, aMin, aMax, NULL);
+		DasAry* pAry = new_DasAry_subsetQube(pVar, nDsRank, aMin, aMax, NULL);
 
 		if(_writeRecVaryAry(pCtx, pVar, pAry) != DAS_OKAY)
 			return PERR;
@@ -3422,27 +3422,27 @@ das_errcode putAllData(struct context* pCtx, int nDsRank, ptrdiff_t* pDsShape, D
 /* Assuming all variables were setup above, now write a bunch of data to the CDF */
 das_errcode writeAndClearData(DasDs* pDs, struct context* pCtx)
 {
-	ptrdiff_t aDsShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
+	ptrdiff_t aDsShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
 	int nDsRank = DasDs_shape(pDs, aDsShape);
-	daslog_info_v("Writing %zu records for dataset %s,%s", 
+	daslog_infof("Writing %zu records for dataset %s,%s", 
 		aDsShape[0], DasDs_group(pDs), DasDs_name(pDs)
 	);
 
 	/* Write all the data first.  Don't clear arrays as you go because
 	   binary-op variables might depend on them! */
 
-	for(int iType = DASDIM_COORD; iType <= DASDIM_DATA; ++iType){  /* Coord & Data */
+	for(int iType = DASDIMTYPE_COORD; iType <= DASDIMTYPE_DATA; ++iType){  /* Coord & Data */
 
 		size_t uDims = DasDs_numDims(pDs, iType);                   /* All Dimensions */
 		for(size_t uD = 0; uD < uDims; ++uD){
 
-			DasDim* pDim = (DasDim*)DasDs_getDimByIdx(pDs, uD, iType); /* All Variables */
+			DasDim* pDim = (DasDim*)DasDs_dimAt(pDs, uD, iType); /* All Variables */
 			size_t uVars = DasDim_numVars(pDim);
 
 			for(size_t uV = 0; uV < uVars; ++uV){
-				DasVar* pVar = (DasVar*) DasDim_getVarByIdx(pDim, uV);
+				DasVar* pVar = (DasVar*) DasDim_varAt(pDim, uV);
 
-				if(DasVar_degenerate(pVar, 0))  /* var is not record varying */
+				if(DasVar_isDegenerate(pVar, 0))  /* var is not record varying */
 					continue;
 
 				if(putAllData(pCtx, nDsRank, aDsShape, pVar) != DAS_OKAY)
@@ -3451,10 +3451,10 @@ das_errcode writeAndClearData(DasDs* pDs, struct context* pCtx)
 		}
 	}
 
-	/* The accumulation buffers are spent now.  DasDs_clearRagged0 knows which
+	/* The accumulation buffers are spent now.  DasDs_clearIdx0 knows which
 	   arrays vary in the streaming index, so there is nothing for this file to
 	   tag or remember. */
-	DasDs_clearRagged0(pDs);
+	DasDs_clearIdx0(pDs);
 
 	return DAS_OKAY;
 }
@@ -3471,15 +3471,15 @@ das_errcode onData(DasDs* pDs, int nPktId, void* pUser)
 	if(daslog_level() <= DASLOG_DEBUG){
 
 		char sBuf[128] = {'\0'};
-		ptrdiff_t aShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
+		ptrdiff_t aShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
 		
 		int nRank = DasDs_shape(pDs, aShape);
-		das_shape_info(aShape, nRank, nRank, sBuf, 127);
+		dasshape_info(aShape, nRank, nRank, sBuf, 127);
 
-		daslog_debug_v("Dataset %s shape is now: %s", DasDs_name(pDs), sBuf);
-		daslog_debug_v("Dataset memory alloc:   %zu bytes", DasDs_memOwned(pDs));
-		daslog_debug_v("Dataset memory used:    %zu bytes", DasDs_memUsed(pDs));
-		daslog_debug_v("Dataset memory indexed: %zu bytes", DasDs_memIndexed(pDs));
+		daslog_debugf("Dataset %s shape is now: %s", DasDs_name(pDs), sBuf);
+		daslog_debugf("Dataset memory alloc:   %zu bytes", DasDs_memOwned(pDs));
+		daslog_debugf("Dataset memory used:    %zu bytes", DasDs_memUsed(pDs));
+		daslog_debugf("Dataset memory indexed: %zu bytes", DasDs_memIndexed(pDs));
 	}
 
 	if(DasDs_memUsed(pDs) > pCtx->uFlushSz)
@@ -3504,15 +3504,15 @@ das_errcode onClose(DasStream* pSd, const DasExcept* pExcept, void* pUser)
 
 	/* Loop over all the datasets in the stream and make sure they are flushed */
 	DasDesc* pDesc = NULL;
-	while((pSd != NULL)&&((pDesc = DasStream_nextDesc(pSd, pDesc, DASDESC_DS)) != NULL)){
+	while((pSd != NULL)&&((pDesc = DasStream_nextDesc(pSd, pDesc, DASDESCTYPE_DS)) != NULL)){
 		if(writeAndClearData((DasDs*)pDesc, pCtx) != DAS_OKAY)
 			return PERR;
 	}
 
-	if((pExcept == NULL)||(DasExcept_type(pExcept) == DAS_EX_NO_DATA))
+	if((pExcept == NULL)||(DasExcept_type(pExcept) == DASEXCEPTTYPE_NO_DATA))
 		return DAS_OKAY;
 
-	daslog_error_v("Input stream ended with %s: %s", DasExcept_typeStr(pExcept),
+	daslog_errorf("Input stream ended with %s: %s", DasExcept_typeStr3(pExcept),
 		DasExcept_msg(pExcept));
 	return PERR;
 }
@@ -3524,16 +3524,16 @@ das_errcode onClose(DasStream* pSd, const DasExcept* pExcept, void* pUser)
 void _addTimeStampName(char* sDest, size_t uDest)
 {
 	char sTmp[LOC_PATH_LEN] = {'\0'};
-	das_time dt; dt_now(&dt);
+	DasTime dt; DasTime_now(&dt);
 	snprintf(sTmp, LOC_PATH_LEN - 1, "%s%cparsed_at_%04d-%02d-%02dT%02d-%02d-%06.3f.cdf", 
-		sDest, DAS_DSEPC, dt.year, dt.month, dt.mday, dt.hour, dt.minute, dt.second
+		sDest, DASFS_SEPC, dt.year, dt.month, dt.mday, dt.hour, dt.minute, dt.second
 	);
 	strncpy(sDest, sTmp, uDest - 1);
 }
 
 das_errcode _addSourceName(char* sDest, size_t uDest, const char* sInFile)
 {
-	char* pSep = strrchr(sInFile, DAS_DSEPC);
+	char* pSep = strrchr(sInFile, DASFS_SEPC);
 #ifdef _WIN32
 	/* Windows takes either separator, examples/ex12.d3t is a valid path */
 	char* pFwd = strrchr(sInFile, '/');
@@ -3544,7 +3544,7 @@ das_errcode _addSourceName(char* sDest, size_t uDest, const char* sInFile)
 		sInFile = pSep + 1;
 
 	if(sInFile[0] == '\0')
-		return das_error(PERR, "Input filename was empty (or was just a directory part)");
+		return daserrf(PERR, "Input filename was empty (or was just a directory part)");
 
 	/* If ends in some other extension, change it to .cdf */
 	char* pDot = strrchr(sInFile, '.');
@@ -3557,7 +3557,7 @@ das_errcode _addSourceName(char* sDest, size_t uDest, const char* sInFile)
 	}
 
 	char sTmp2[LOC_PATH_LEN] = {'\0'};
-	snprintf(sTmp2, LOC_PATH_LEN - 1, "%s%c%s.cdf", sDest, DAS_DSEPC, sInFile);
+	snprintf(sTmp2, LOC_PATH_LEN - 1, "%s%c%s.cdf", sDest, DASFS_SEPC, sInFile);
 
 	strncpy(sDest, sTmp2, uDest - 1);
 
@@ -3570,14 +3570,14 @@ das_errcode writeFileToStdout(const char* sFile)
 {
 	FILE* pIn = fopen(sFile, "rb");
 	if(pIn == NULL)
-		return das_error(PERR, "Can not read source file %s.", sFile);
+		return daserrf(PERR, "Can not read source file %s.", sFile);
 	
 	char buffer[65536];
 	size_t uRead = 0;
 
 	while( (uRead = fread(buffer, sizeof(char), 65536, pIn)) > 0){
 		if(uRead != fwrite(buffer, sizeof(char), uRead, stdout)){
-			das_error(PERR, "Error writing %s to stdout", sFile);
+			daserrf(PERR, "Error writing %s to stdout", sFile);
 			fclose(pIn);
 			return PERR;
 		} 
@@ -3595,7 +3595,7 @@ int main(int argc, char** argv)
 	das_errcode nRet = DAS_OKAY;
 
 	/* Exit on errors, log info messages and above */
-	das_init(argv[0], DASERR_DIS_EXIT, DASLOG_INFO, NULL);
+	daslib_init(argv[0], DASERRDISP_EXIT, DASLOG_INFO, NULL);
 	char sWriteTo[LOC_PATH_LEN] = {'\0'};
 
 #if 0  /* xport: the file is now opened by new_DasXport_file() */
@@ -3607,7 +3607,7 @@ int main(int argc, char** argv)
 	if(parseArgs(argc, argv, &opts) != DAS_OKAY)
 		return 13;
 
-	daslog_setlevel(daslog_strlevel(opts.aLevel));
+	daslog_setLevel(daslog_levelFromStr(opts.aLevel));
 
 	/* Make room for storing the var context info */
 	g_uMaxVars = 512;
@@ -3634,13 +3634,13 @@ int main(int argc, char** argv)
 
 	if(opts.aOutFile[0] != '\0'){
 		/* Writing to a specific final location */
-		if(das_isdir(opts.aOutFile)){
+		if(dasfs_isDir(opts.aOutFile)){
 			strncpy(ctx.sWriteTo, opts.aOutFile, 127);
 			bAddFileName = true;
 		}
 		else{
 			strncpy(ctx.sWriteTo, opts.aOutFile, LOC_PATH_LEN-1);
-			if((nRet = das_mkdirsto(ctx.sWriteTo)) != DAS_OKAY)
+			if((nRet = dasfs_mkdirsTo(ctx.sWriteTo)) != DAS_OKAY)
 				return nRet;
 		}
 	}
@@ -3651,17 +3651,17 @@ int main(int argc, char** argv)
 		   default, parseArgs() fills it otherwise. */
 		if(opts.aTmpDir[0] == '\0'){
 			snprintf(ctx.sWriteTo, LOC_PATH_LEN-1, "%s%c%s%cd3cdf-tmp-%d.cdf", 
-				das_userdir(), DAS_DSEPC, DEF_TEMP_DIR, DAS_DSEPC, getpid()
+				dasfs_userDir(), DASFS_SEPC, DEF_TEMP_DIR, DASFS_SEPC, getpid()
 			);
 		}	
 		else{
 			snprintf(ctx.sWriteTo, LOC_PATH_LEN-1, "%s%cd3cdf-tmp-%d.cdf", 
-				opts.aTmpDir, DAS_DSEPC, getpid()
+				opts.aTmpDir, DASFS_SEPC, getpid()
 			);
 		}
 		bReStream = true;
-		if(das_mkdirsto(ctx.sWriteTo) != DAS_OKAY){
-			return das_error(PERR, "Couldn't make directories to %s", ctx.sWriteTo);	
+		if(dasfs_mkdirsTo(ctx.sWriteTo) != DAS_OKAY){
+			return daserrf(PERR, "Couldn't make directories to %s", ctx.sWriteTo);	
 		}
 	}
 
@@ -3673,7 +3673,7 @@ int main(int argc, char** argv)
 
 #if 0  /* xport: replaced by the transport based setup below */
 	/* Build one of 4 types of stream readers */
-	DasCredMngr* pCreds = NULL;
+	DasCredMgr* pCreds = NULL;
 	DasHttpResp res; memset(&res, 0, sizeof(DasHttpResp));
 	DasIO* pIn = NULL;
 
@@ -3689,28 +3689,28 @@ int main(int argc, char** argv)
 		(strncmp(opts.aSource, "https://", 8) == 0)
 	){
 
-		pCreds = new_DasCredMngr();
-		DasCredMngr_setFileStore(pCreds, opts.aCredFile);
-		DasCredMngr_load(pCreds);   /* no file yet is fine */
-		DasCredMngr_setPrompt(pCreds, das_term_prompt, NULL);
+		pCreds = new_DasCredMgr();
+		DasCredMgr_setStore(pCreds, opts.aCredFile);
+		DasCredMgr_load(pCreds);   /* no file yet is fine */
+		DasCredMgr_setPrompt(pCreds, DasCredMgr_termPrompt, NULL);
 
 		/* Give it a connection time out of 6 seconds */
 		if(!das_http_getBody(opts.aSource, "das3_cdf", pCreds, &res, 6.0)){
 
 			if((res.nCode == 401)||(res.nCode == 403))
-				return das_error(DASERR_HTTP, "Authorization failure: %s", res.sError);
+				return daserrf(DASERR_HTTP, "Authorization failure: %s", res.sError);
 			
 			if((res.nCode == 400)||(res.nCode == 404))
-				return das_error(DASERR_HTTP, "Query error: %s", res.sError);
+				return daserrf(DASERR_HTTP, "Query error: %s", res.sError);
 
-			return das_error(DASERR_HTTP, "Uncatorize error: %s", res.sError);
+			return daserrf(DASERR_HTTP, "Uncatorize error: %s", res.sError);
 		}
 		
 		char sUrl[ DAS_FIELD_SZ(popts_t,aSource) ] = {'\0'};
 		das_url_toStr(&(res.url), sUrl, sizeof(sUrl) - 1);
 		
 		if(strcmp(sUrl, opts.aSource) != 0)
-			daslog_info_v("Redirected to %s", sUrl);
+			daslog_infof("Redirected to %s", sUrl);
 
 		if(DasHttpResp_useSsl(&res))
 			pIn = new_DasIO_ssl("das3_cdf", res.pSsl, "r");
@@ -3735,7 +3735,7 @@ int main(int argc, char** argv)
 		pInFile = fopen(sInFile, "rb");
 
 		if(pInFile == NULL)
-			return das_error(PERR, "Couldn't open file %s", sInFile);
+			return daserrf(PERR, "Couldn't open file %s", sInFile);
 
 		pIn = new_DasIO_cfile(PROG, pInFile, "rb");
 
@@ -3746,7 +3746,7 @@ int main(int argc, char** argv)
 #else
 	/* Every input becomes a transport, so one DasIO constructor serves them
 	   all and only getting the bytes differs: stdin, http(s), or a file */
-	DasCredMngr* pCreds = NULL;
+	DasCredMgr* pCreds = NULL;
 	DasHttpResp* pRes = NULL;
 	DasXport* pSrc = NULL;
 
@@ -3762,28 +3762,28 @@ int main(int argc, char** argv)
 		(strncmp(opts.aSource, "https://", 8) == 0)
 	){
 
-		pCreds = new_DasCredMngr();
-		DasCredMngr_setFileStore(pCreds, opts.aCredFile);
-		DasCredMngr_load(pCreds);   /* no file yet is fine */
-		DasCredMngr_setPrompt(pCreds, das_term_prompt, NULL);
+		pCreds = new_DasCredMgr();
+		DasCredMgr_setStore(pCreds, opts.aCredFile);
+		DasCredMgr_load(pCreds);   /* no file yet is fine */
+		DasCredMgr_setPrompt(pCreds, DasCredMgr_termPrompt, NULL);
 
 		/* Give it a connection time out of 6 seconds */
 		pRes = new_DasHttpResp_get(opts.aSource, "das3_cdf", pCreds, 6.0);
-		if(!DasHttpResp_ok(pRes)){
+		if(!DasHttpResp_isOk(pRes)){
 			int nCode = DasHttpResp_code(pRes);
 			const char* sErr = DasHttpResp_error(pRes);
 
 			if((nCode == 401)||(nCode == 403))
-				return das_error(DASERR_HTTP, "Authorization failure: %s", sErr);
+				return daserrf(DASERR_HTTP, "Authorization failure: %s", sErr);
 			
 			if((nCode == 400)||(nCode == 404))
-				return das_error(DASERR_HTTP, "Query error: %s", sErr);
+				return daserrf(DASERR_HTTP, "Query error: %s", sErr);
 
-			return das_error(DASERR_HTTP, "Uncategorized error: %s", sErr);
+			return daserrf(DASERR_HTTP, "Uncategorized error: %s", sErr);
 		}
 		
 		if(strcmp(DasHttpResp_url(pRes), opts.aSource) != 0)
-			daslog_info_v("Redirected to %s", DasHttpResp_url(pRes));
+			daslog_infof("Redirected to %s", DasHttpResp_url(pRes));
 
 		pSrc = DasHttpResp_takeBody(pRes);
 
@@ -3803,7 +3803,7 @@ int main(int argc, char** argv)
 			sInFile = opts.aSource + 7;
 
 		if((pSrc = new_DasXport_file(sInFile, "r")) == NULL)
-			return das_error(PERR, "Couldn't open file %s", sInFile);
+			return daserrf(PERR, "Couldn't open file %s", sInFile);
 
 		if(bAddFileName)
 			_addSourceName(ctx.sWriteTo, LOC_PATH_LEN-1, sInFile);
@@ -3819,21 +3819,21 @@ int main(int argc, char** argv)
 	                                  writes and clears them itself */
 
 	/* If remove was selected try to delete the output location */
-	if( opts.bRmFirst && das_isfile(ctx.sWriteTo) ){
+	if( opts.bRmFirst && dasfs_isFile(ctx.sWriteTo) ){
 		if(remove(ctx.sWriteTo) != 0)
-			return das_error(PERR, "Could not clear destination file %s first", ctx.sWriteTo);
+			return daserrf(PERR, "Could not clear destination file %s first", ctx.sWriteTo);
 	}
 
 	/* Install our handlers */
-	das_stream_proc handler;
-	das_stream_proc_init(&handler, &ctx);
-	handler.onStreamDesc = onStream;
-	handler.onDsDesc     = onDataSet;
+	DasIOProc handler;
+	init_DasIOProc(&handler, &ctx);
+	handler.onStream = onStream;
+	handler.onDs     = onDataSet;
 	handler.onDsData     = onData;
 	handler.onComment    = onComment;
 	handler.onClose      = onClose;
 
-	DasIO_addProcessor(pIn, &handler);
+	DasIO_addProc(pIn, &handler);
 	
 	nRet = DasIO_readAll(pIn);  /* <---- RUNS ALL PROCESSING -----<<< */
 
@@ -3849,13 +3849,13 @@ int main(int argc, char** argv)
 		fclose(pInFile);
 
 	if(pCreds){
-		del_DasCredMngr(pCreds);
+		del_DasCredMgr(pCreds);
 		DasHttpResp_clear(&res);
 	}
 #else
 	del_DasIO(pIn);            /* closes the file, pipe or connection */
 	del_DasHttpResp(pRes);
-	del_DasCredMngr(pCreds);
+	del_DasCredMgr(pCreds);
 #endif
 
 	if((nRet == DAS_OKAY)&&(bReStream)){
@@ -3865,8 +3865,8 @@ int main(int argc, char** argv)
 
 	/* If we didn't send any records and data are written to disk, cleanup 
 	   the mostly useless CDF if asked */
-	if((!bReStream) && ctx.bCleanUp && (!ctx.nRecsOut) && das_isfile(ctx.sWriteTo)){
-		daslog_info_v("No record varying data detected, removing %s by user request", 
+	if((!bReStream) && ctx.bCleanUp && (!ctx.nRecsOut) && dasfs_isFile(ctx.sWriteTo)){
+		daslog_infof("No record varying data detected, removing %s by user request", 
 			ctx.sWriteTo
 		);
 		remove(ctx.sWriteTo);

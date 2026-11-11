@@ -7,8 +7,8 @@
 #include <stdint.h>   /* C99 */
 #include <stdbool.h>  /* C99 */
 
-#include <das3/util.h>    /* das_xml_escape, das_stdio_binary */
-#include <das3/oob.h>     /* das_except_toStr */
+#include <das3/util.h>    /* dasxml_escape, dasfs_setStdioBinary */
+#include <das3/oob.h>     /* dasexcepttype_name */
 #include <das3/str.h>
 #include "send.h"
 
@@ -21,25 +21,25 @@
    Packet lengths count LF line ends, so each emitter puts stdout in
    binary mode first. */
 
-void das_send_except(int nDasVer, das_except_e nType, const char* sMsg)
+void das_send_except(int nDasVer, das_excepttype nType, const char* sMsg)
 {
 	if((nDasVer < 2)||(nDasVer > 3)) return;
-	das_stdio_binary(stdout);
+	dasfs_setStdioBinary(stdout);
 
 	/* Sized for SPICE long messages, up to 1840 characters before escaping */
 	char sMsgEsc[2048] = {'\0'};
 	char sOut[2176] = {'\0'};
-	das_xml_escape(sMsg, sMsgEsc, sizeof(sMsgEsc));
+	dasxml_escape(sMsg, sMsgEsc, sizeof(sMsgEsc));
 
 	if(nDasVer == 2){
 		snprintf(sOut, sizeof(sOut), "<exception type=\"%s\"\n"
 		                     "           message=\"%s\" />\n",
-		         das_except_toStr(nType, 2), sMsgEsc);
+		         dasexcepttype_name(nType, 2), sMsgEsc);
 		printf("[XX]%06zu%s", strlen(sOut), sOut);
 	}
 	else{
 		snprintf(sOut, sizeof(sOut), "<exception type=\"%s\">%s</exception>\n",
-		         das_except_toStr(nType, 3), sMsgEsc);
+		         dasexcepttype_name(nType, 3), sMsgEsc);
 		printf("|Ex||%zu|%s", strlen(sOut), sOut);
 	}
 }
@@ -48,13 +48,13 @@ static void _send_comment(
 	int nDasVer, const char* sType, const char* sSrc, const char* sVal
 ){
 	if((nDasVer < 2)||(nDasVer > 3)) return;
-	das_stdio_binary(stdout);
+	dasfs_setStdioBinary(stdout);
 
 	char sSrcEsc[1024] = {'\0'};
 	char sValEsc[1024] = {'\0'};
 	char sOut[2176] = {'\0'};
-	das_xml_escape(sSrc, sSrcEsc, sizeof(sSrcEsc));
-	das_xml_escape(sVal, sValEsc, sizeof(sValEsc));
+	dasxml_escape(sSrc, sSrcEsc, sizeof(sSrcEsc));
+	dasxml_escape(sVal, sValEsc, sizeof(sValEsc));
 
 	if(nDasVer == 2){
 		snprintf(sOut, 2175, "<comment type=\"%s\"\n"
@@ -72,7 +72,7 @@ static void _send_comment(
 void das_send_stub(int nDasVer)
 {
 	const char* sHdr = NULL;
-	das_stdio_binary(stdout);
+	dasfs_setStdioBinary(stdout);
 	switch(nDasVer){
 	case 2:
 		sHdr = "<stream version=\"2.2\"></stream>\n";
@@ -97,7 +97,7 @@ int das_send_nodata(int nDasVer, const char* sFmt, ...)
 	va_end(argp);
 
 	fprintf(stderr, "INFO: No Data in interval %s\n", sMsg);
-	das_send_except(nDasVer, DAS_EX_NO_DATA, sMsg);
+	das_send_except(nDasVer, DASEXCEPTTYPE_NO_DATA, sMsg);
 	return 0;
 }
 
@@ -120,7 +120,7 @@ int das_vsend_queryerr(int nDasVer, const char* sFmt, va_list argp)
 	va_end(_argp);
 
 	fprintf(stderr, "ERROR: Query Error, %s\n", sMsg);
-	das_send_except(nDasVer, DAS_EX_QUERY_ERR, sMsg);
+	das_send_except(nDasVer, DASEXCEPTTYPE_QUERY_ERR, sMsg);
 	return 47;
 }
 
@@ -134,7 +134,7 @@ int das_send_srverr(int nDasVer, const char* sFmt, ...)
 	va_end(argp);
 
 	fprintf(stderr, "ERROR: %s\n", sMsg);
-	das_send_except(nDasVer, DAS_EX_SERVER_ERR, sMsg);
+	das_send_except(nDasVer, DASEXCEPTTYPE_SERVER_ERR, sMsg);
 	return 48;
 }
 

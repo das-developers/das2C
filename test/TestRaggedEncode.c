@@ -44,7 +44,7 @@
 #define MAX_PKTS    64
 #define MAX_PAYLOAD 4096
 
-static ubyte g_aPayload[MAX_PKTS][MAX_PAYLOAD];
+static uint8_t g_aPayload[MAX_PKTS][MAX_PAYLOAD];
 static int   g_aPayLen[MAX_PKTS];
 static int   g_nPkts;
 
@@ -58,7 +58,7 @@ static int _loadPayloads(const char* sPath)
 {
 	FILE* pFile = fopen(sPath, "rb");
 	if(pFile == NULL){ printf("ERROR: Couldn't open %s\n", sPath); return 13; }
-	static ubyte aRaw[262144];
+	static uint8_t aRaw[262144];
 	size_t uRaw = fread(aRaw, 1, sizeof(aRaw), pFile);
 	fclose(pFile);
 
@@ -118,7 +118,7 @@ static das_errcode onClose(DasStream* pSd, const DasExcept* pEx, void* pUser)
 
 	/* Flip every codec to a writer; the arrays keep their decoded data */
 	for(size_t u = 0; u < DasDs_numCodecs(g_pDs); ++u){
-		if(DasDs_updateCodec(g_pDs, u, DASENC_WRITE, NULL, NULL, 0, '\0', NULL, NULL) != DAS_OKAY){
+		if(DasDs_updateCodec(g_pDs, u, DASCODEC_WRITE, NULL, NULL, 0, '\0', NULL, NULL) != DAS_OKAY){
 			printf("ERROR: Couldn't flip codec %zu to a writer\n", u);
 			return DASERR_ENC;
 		}
@@ -129,19 +129,19 @@ static das_errcode onClose(DasStream* pSd, const DasExcept* pEx, void* pUser)
 		return DASERR_BUF;
 
 	for(int r = 0; r < g_nRecs; ++r){
-		DasBuf_reinit(pBuf);
+		DasBuf_reset(pBuf);
 		if(DasDs_encodeData(g_pDs, pBuf, r) != DAS_OKAY){
 			printf("ERROR: Encode failed for record %d of %s\n", r, sPath);
 			del_DasBuf(pBuf);
 			return DASERR_DS;
 		}
 		size_t uWrote = 0;
-		const ubyte* pWrote = DasBuf_data(pBuf, &uWrote);
+		const uint8_t* pWrote = DasBuf_data(pBuf, &uWrote);
 		if(((int)uWrote != g_aPayLen[r])
 		   ||((uWrote > 0)&&(memcmp(pWrote, g_aPayload[r], uWrote) != 0))){
 			int iDiff = 0;
 			int nMin = (uWrote < (size_t)g_aPayLen[r]) ? (int)uWrote : g_aPayLen[r];
-			while((iDiff < nMin)&&(pWrote[iDiff] == (ubyte)g_aPayload[r][iDiff])) ++iDiff;
+			while((iDiff < nMin)&&(pWrote[iDiff] == (uint8_t)g_aPayload[r][iDiff])) ++iDiff;
 			printf("ERROR: Record %d of %s: re-encode differs from the file "
 				"(wrote %zu bytes, expected %d, first difference at offset %d)\n",
 				r, sPath, uWrote, g_aPayLen[r], iDiff);
@@ -156,7 +156,7 @@ static das_errcode onClose(DasStream* pSd, const DasExcept* pEx, void* pUser)
 
 int main(int argc, char** argv)
 {
-	das_init(argv[0], DASERR_DIS_EXIT, DASLOG_WARN, NULL);
+	daslib_init(argv[0], DASERRDISP_EXIT, DASLOG_WARN, NULL);
 
 	if(argc < 2){
 		fprintf(stderr, "Usage: %s FIXTURE.d3b [FIXTURE.d3b ...]\n", argv[0]);
@@ -172,15 +172,15 @@ int main(int argc, char** argv)
 		FILE* pFile = fopen(argv[iFile], "rb");
 		if(pFile == NULL){ printf("ERROR: Couldn't open %s\n", argv[iFile]); return 13; }
 		DasIO* pIn = new_DasIO("TestRaggedEncode", new_DasXport_cfile(pFile, "r"), NULL);
-		DasIO_setModel(pIn, STREAM_MODEL_V3);
+		DasIO_setModel(pIn, DASIOMODEL_V3);
 		DasIO_setAccum(pIn, true);
 
-		das_stream_proc handler;
-		das_stream_proc_init(&handler, (void*)argv[iFile]);
-		handler.onDsDesc = onDataset;
+		DasIOProc handler;
+		init_DasIOProc(&handler, (void*)argv[iFile]);
+		handler.onDs = onDataset;
 		handler.onDsData = onData;
 		handler.onClose = onClose;
-		DasIO_addProcessor(pIn, &handler);
+		DasIO_addProc(pIn, &handler);
 
 		/* onClose runs the flip + re-encode comparison; its error comes back here */
 		int nRet = DasIO_readAll(pIn);

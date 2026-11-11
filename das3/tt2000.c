@@ -80,7 +80,7 @@ double floor(double x);
 #define JDY17070922             2344793
 #define JDY22920411             2558297
 
-/* Also defined in time.h, the public copy, so callers of dt_to_tt2k() can
+/* Also defined in time.h, the public copy, so callers of DasTime_toTt2k() can
    test for it.  The two must stay the same value. */
 #ifndef ILLEGAL_TT2000_VALUE
 #define ILLEGAL_TT2000_VALUE    (-9223372036854775805LL) 
@@ -407,7 +407,7 @@ static bool LoadLeapSecondsTable ()
 	char* table;
 	FILE* leaptable = NULL;
 	int im, ix, ius2k;
-	das_time dt = {0};
+	DasTime dt = {0};
 	table = CDFgetLeapSecondsTableEnvVar();
 	
 	if(table != NULL && strlen(table) > 0) {
@@ -466,8 +466,8 @@ static bool LoadLeapSecondsTable ()
 					   TestTT2000 passed natively only because the garbage happened
 					   to be small. */
 					US2K_LEAPS_0_POS[ius2k*2] = LTD[ix][3] - LEAPS_BEFORE_ZERO;
-					dt_set(&dt, yy, mm, dd, 0, 0, 0, 0.0);
-					US2K_LEAPS_0_POS[ius2k*2+1] = Units_convertFromDt(&dt,UNIT_US2000);
+					DasTime_set(&dt, yy, mm, dd, 0, 0, 0, 0.0);
+					US2K_LEAPS_0_POS[ius2k*2+1] = DasTime_toPoint(&dt,DASUNITS_US2000);
 					++ius2k;
 					US2K_LEAPS_0_POS_SZ = ius2k*2;
 				}

@@ -53,7 +53,7 @@
 #define _VAL_FILL_SZ 48
 #define _VAL_TERM_SZ 48
 #define _VAL_MIME_SZ 64
-#define _VAL_SEQ_CONST_SZ sizeof(das_time)
+#define _VAL_SEQ_CONST_SZ sizeof(DasTime)
 
 
 /* ****************************************************************************
@@ -64,7 +64,7 @@ typedef struct serial_xml_context {
 	int nPktId;
 	
 	DasDs* pDs;
-	ptrdiff_t aExtShape[VARIDX_MAX];
+	ptrdiff_t aExtShape[DASIDX_MAX];
 	DasDim* pCurDim;
 
 	bool bEmbedAsBytes;  /* stream opt-in: flatten undecodable embedded formats */
@@ -90,11 +90,11 @@ typedef struct serial_xml_context {
 	DasForm* pVarForm;   /* built at <ops>, ownership passes to the variable */
 	bool bInOps;         /* true only WHILE inside the element */
 	bool bOpsSeen;       /* an <ops> arrived for this variable at all */
-	das_val_type varItemType;  /* The type of values to store in the array */
+	das_vt varItemType;  /* The type of values to store in the array */
 	
 	int varIntRank; /* Internal index count: 0 for a scalar, 1 for a byte run, one
 	                   per intern= level for a composite */
-	das_units varUnits;
+	DasUnits varUnits;
 	char varUnitsText[128];  /* units= text that didn't parse, set on the variable
 	                            as 'unitsText' once it exists.  Usable units are
 	                            127 bytes or less, longer junk is cut to fit. */
@@ -109,25 +109,25 @@ typedef struct serial_xml_context {
 	   the product) so both are kept.  Conflating them into one int is what held
 	   composites to a single internal level. */
 	int       nVarIntRank;              /* intern= level count; 0 when not a composite */
-	ptrdiff_t aVarIntShape[VARIDX_MAX]; /* one extent per level */
+	ptrdiff_t aVarIntShape[DASIDX_MAX]; /* one extent per level */
 	int       nVarComps;                /* product of the levels: values per item */
 
-	int8_t aVarMap[VARIDX_MAX];
-	ptrdiff_t aVarExtShape[VARIDX_MAX]; /* the var's own declared extents */
+	int8_t aVarMap[DASIDX_MAX];
+	ptrdiff_t aVarExtShape[DASIDX_MAX]; /* the var's own declared extents */
 
 	DasDesc varProps; /* Temporary accumulator for variable properties */
 
 	/* Stuff needed for sequence vars */
-	ubyte aSeqMin[_VAL_SEQ_CONST_SZ];     /* big enough to hold a double */
-	ubyte aSeqInter[VARIDX_MAX * _VAL_SEQ_CONST_SZ];  /* one slope per dep axis */
+	uint8_t aSeqMin[_VAL_SEQ_CONST_SZ];     /* big enough to hold a double */
+	uint8_t aSeqInter[DASIDX_MAX * _VAL_SEQ_CONST_SZ];  /* one slope per dep axis */
 
 	/* Composite sequence: each <sequence> child is one component, gathered here
 	   until close-var builds the generator.  Scratch grows to the component
 	   count of the widest composite seen and lives as long as the parse. */
 	int    nSeqSeen;
 	int    nSeqCap;                     /* components the scratch can hold */
-	ubyte* pSeqMinC;                    /* nSeqCap * _VAL_SEQ_CONST_SZ */
-	ubyte* pSeqInterC;                  /* nSeqCap * VARIDX_MAX * _VAL_SEQ_CONST_SZ */
+	uint8_t* pSeqMinC;                    /* nSeqCap * _VAL_SEQ_CONST_SZ */
+	uint8_t* pSeqInterC;                  /* nSeqCap * DASIDX_MAX * _VAL_SEQ_CONST_SZ */
 
 	/* Stuff needed for any array var */
 	DasAry* pCurAry;
@@ -146,7 +146,7 @@ typedef struct serial_xml_context {
 
 	/* Stuff needed only for embedded values array vars */
 	DasCodec codecHdrVals;
-	ubyte aValUnderFlow[_VAL_UNDER_SZ];
+	uint8_t aValUnderFlow[_VAL_UNDER_SZ];
 	int nValUnderFlowValid;
 
 	/* The codec's own tally of values handed back across every character-data
@@ -184,7 +184,7 @@ static void _serial_var_init(context_t* pCtx)
 	pCtx->pVarForm = new_DasFormLin();
 	pCtx->bInOps   = false;
 	pCtx->bOpsSeen = false;
-	pCtx->varItemType = vtUnknown;
+	pCtx->varItemType = DASVT_UNK;
 
 	pCtx->varIntRank = 0;
 	pCtx->varUnits = NULL;
@@ -198,10 +198,10 @@ static void _serial_var_init(context_t* pCtx)
 	pCtx->bVarBorrows = false;
 	pCtx->nVarComps = 0;
 	pCtx->nVarIntRank = 0;
-	for(int i = 0; i < VARIDX_MAX; ++i){
-		pCtx->aVarMap[i] = VARIDX_UNUSED;
-		pCtx->aVarExtShape[i] = VARIDX_UNUSED;
-		pCtx->aVarIntShape[i] = VARIDX_UNUSED;
+	for(int i = 0; i < DASIDX_MAX; ++i){
+		pCtx->aVarMap[i] = DASIDX_UNUSED;
+		pCtx->aVarExtShape[i] = DASIDX_UNUSED;
+		pCtx->aVarIntShape[i] = DASIDX_UNUSED;
 	}
 	memset(pCtx->aSeqMin, 0, DAS_FIELD_SZ(context_t, aSeqMin));
 	memset(pCtx->aSeqInter, 0, DAS_FIELD_SZ(context_t, aSeqInter));
@@ -253,8 +253,8 @@ static das_errcode _serial_parseIndex(
 	const char* sElement
 ){
 	int nGot = 0;
-	das_errcode nRet = das_shape_fromStr(
-		sIndex, VARIDX_MAX, bInVar, sElement, pMap, &nGot
+	das_errcode nRet = dasshape_fromStr(
+		sIndex, DASIDX_MAX, bInVar, sElement, pMap, &nGot
 	);
 	if(nRet != DAS_OKAY)
 		return nRet;
@@ -262,7 +262,7 @@ static das_errcode _serial_parseIndex(
 	/* Rank is policy, not grammar: a variable's index= has to line up with the
 	   dataset it lives in. */
 	if(nGot != nRank)
-		return das_error(DASERR_SERIAL,
+		return daserrf(DASERR_SERIAL,
 			"The rank of this dataset is %d, but %d index ranges were specified",
 			nRank, nGot
 		);
@@ -286,7 +286,7 @@ static das_errcode _serial_parseIntern(
 	char sWhere[64];
 	snprintf(sWhere, sizeof(sWhere), "intern= in dataset ID %02d", nPktId);
 
-	das_errcode nRet = das_shape_fromStr(
+	das_errcode nRet = dasshape_fromStr(
 		sIntern, nMaxRank, false /* no ^ or - inside an item */, sWhere, pShape,
 		pnRank
 	);
@@ -295,19 +295,19 @@ static das_errcode _serial_parseIntern(
 
 	long long nProd = 1;
 	for(int i = 0; i < *pnRank; ++i){
-		if(pShape[i] == VARIDX_RAGGED)
-			return das_error(DASERR_NOTIMP,
+		if(pShape[i] == DASIDX_RAGGED)
+			return daserrf(DASERR_NOTIMP,
 				"intern=\"%s\" in dataset ID %02d: ragged internal levels are "
 				"not handled yet, every level needs a fixed extent", sIntern, nPktId
 			);
 		if(pShape[i] < 1)
-			return das_error(DASERR_SERIAL,
+			return daserrf(DASERR_SERIAL,
 				"Bad internal extent in intern=\"%s\", dataset ID %02d, levels "
 				"are positive counts", sIntern, nPktId
 			);
 		nProd *= (long long)pShape[i];
 		if(nProd > 0x7FFFFFFF)
-			return das_error(DASERR_SERIAL,
+			return daserrf(DASERR_SERIAL,
 				"intern=\"%s\" in dataset ID %02d implies more values per item "
 				"than can be counted", sIntern, nPktId
 			);
@@ -323,7 +323,7 @@ static das_errcode _serial_parseIntern(
    value.c 
 */
 static das_errcode _serial_initfill(
-	ubyte* pBuf, int nBufLen, das_val_type vt, const char* sFill, bool bText, bool bBool
+	uint8_t* pBuf, int nBufLen, das_vt vt, const char* sFill, bool bText, bool bBool
 ){
 	/* A boolean's fill must end up as a NUMBER in the array, but a user sets it to
 	   match what they SEE in the stream.  For a utf8 bool that's the glyph '*' (the
@@ -338,54 +338,54 @@ static das_errcode _serial_initfill(
 		bool bGlyph = (sFill != NULL) && (sFill[0] != '\0') && (sFill[1] == '\0') &&
 		              ((sFill[0] == '*')||(sFill[0] == '?')||(sFill[0] == '-'));
 		if((sFill == NULL)||(sFill[0] == '\0')||bGlyph){
-			if(nBufLen < (int)das_vt_size(vt))
-				return das_error(DASERR_SERIAL, "Logic error fill value buffer too small");
-			memcpy(pBuf, das_vt_fill(vt), das_vt_size(vt));
+			if(nBufLen < (int)dasvt_size(vt))
+				return daserrf(DASERR_SERIAL, "Logic error fill value buffer too small");
+			memcpy(pBuf, dasvt_fill(vt), dasvt_size(vt));
 			return DAS_OKAY;
 		}
 		/* A lone, non-glyph character is a bad fill -- give a clear message rather
 		   than the opaque "could not parse" from the numeric path below. */
 		if(sFill[1] == '\0')
-			return das_error(DASERR_SERIAL,
+			return daserrf(DASERR_SERIAL,
 				"Invalid boolean fill '%s': use a fill glyph ('*', '?' or '-') or a "
 				"numeric sentinel (e.g. \"255\")", sFill);
-		return das_value_fromStr(sFill, vt, pBuf, nBufLen);
+		return dasval_fromStr(sFill, vt, pBuf, nBufLen);
 	}
 
 	/* A string array stores chars, so its fill is a literal byte, NOT a parsed
 	   number.  fill=" " is the pad byte 0x20 (the natural fixed-length string pad),
 	   and fill="" (the only legal variable-length string fill) leaves the empty/
 	   null byte.  The numeric path below is wrong for both: it would default an
-	   empty fill to das_vt_fill(vtUByte)==255, and it parse-FAILS on a non-digit
+	   empty fill to dasvt_fill(DASVT_UBYTE)==255, and it parse-FAILS on a non-digit
 	   like ' ' (sscanf "%hhu"). */
 	if(bText){
 		if(nBufLen < 1)
-			return das_error(DASERR_SERIAL, "Logic error fill value buffer too small");
+			return daserrf(DASERR_SERIAL, "Logic error fill value buffer too small");
 		/* A string fill is a single per-element pad char, auto-repeated across the
 		   field width by DasAry, so only the first character is used.  If the author
 		   supplied more, say so -- they put bytes in the stream we're dropping.
 		   (Header parsing is not the hot path; warn freely here.) */
 		if((sFill != NULL) && (strlen(sFill) > 1))
-			daslog_warn_v(
+			daslog_warnf(
 				"Extra fill characters ignored; using '%c' as the repeated string "
 				"pad (fill=\"%s\")", sFill[0], sFill
 			);
-		pBuf[0] = ((sFill != NULL) && (sFill[0] != '\0')) ? (ubyte)sFill[0] : 0;
+		pBuf[0] = ((sFill != NULL) && (sFill[0] != '\0')) ? (uint8_t)sFill[0] : 0;
 		return DAS_OKAY;
 	}
 
 	if((sFill == NULL)||(sFill[0] == '\0')){
-		if(nBufLen >= das_vt_size(vt)){
-			memcpy(pBuf, das_vt_fill(vt), das_vt_size(vt));
+		if(nBufLen >= dasvt_size(vt)){
+			memcpy(pBuf, dasvt_fill(vt), dasvt_size(vt));
 			return DAS_OKAY;
 		}
 		else{
-			return das_error(DASERR_SERIAL, "Logic error fill value buffer too small");
+			return daserrf(DASERR_SERIAL, "Logic error fill value buffer too small");
 		}
 	}
 
 	// Ugh, now we have to parse the damn thing.
-	return das_value_fromStr(sFill, vt, pBuf, nBufLen);
+	return dasval_fromStr(sFill, vt, pBuf, nBufLen);
 }
 
 /* ****************************************************************************
@@ -407,27 +407,27 @@ static void _serial_onOpenDs(context_t* pCtx, const char** psAttr)
 		else if((strcmp(psAttr[i],"index")==0)&&(psAttr[i+1][0] != '\0')) 
 			strncpy(sIndex, psAttr[i+1], 47);
 		else
-			daslog_warn_v("Unknown attribute %s in <dataset> ID %02d", psAttr[i], pCtx->nPktId);
+			daslog_warnf("Unknown attribute %s in <dataset> ID %02d", psAttr[i], pCtx->nPktId);
 	}
 
 	int nRank = 0;
 	int id = pCtx->nPktId;
 	if((sRank==NULL)||(sscanf(sRank, "%d", &nRank) != 1)){
-		pCtx->nDasErr = das_error(DASERR_SERIAL, "Invalid or missing rank attribute for <dataset> %02d", id);
+		pCtx->nDasErr = daserrf(DASERR_SERIAL, "Invalid or missing rank attribute for <dataset> %02d", id);
 		return;
 	}
-	if((nRank <= 0)||(nRank >= VARIDX_MAX)){
-		pCtx->nDasErr = das_error(DASERR_SERIAL, "Invalid rank (%d) for dataset ID %02d", nRank, id);
+	if((nRank <= 0)||(nRank >= DASIDX_MAX)){
+		pCtx->nDasErr = daserrf(DASERR_SERIAL, "Invalid rank (%d) for dataset ID %02d", nRank, id);
 		return;
 	}
 	if((sName == NULL)||(strlen(sName) < 1)){
-		pCtx->nDasErr = das_error(DASERR_SERIAL, "Missing name attribute for dataset %02d", id);
+		pCtx->nDasErr = daserrf(DASERR_SERIAL, "Missing name attribute for dataset %02d", id);
 		return;
 	}
 
 	// Save off the expected overall dataset shape
 	if(sIndex[0] == '\0'){
-		pCtx->nDasErr = das_error(DASERR_SERIAL, "Missing index attribute for dataset %02d", id);
+		pCtx->nDasErr = daserrf(DASERR_SERIAL, "Missing index attribute for dataset %02d", id);
 		return;
 	}
 
@@ -472,14 +472,14 @@ static void _serial_onOpenProp(context_t* pCtx, const char** psAttr){
 		/* Liberal on input: warn, don't reject, on attributes we don't model */
 		else{
 			const char* sEl = (pCtx->pCurDim == NULL) ? "dataset" : (
-				(pCtx->pCurDim->dtype == DASDIM_DATA) ? "data" : "coord"
+				(pCtx->pCurDim->dtype == DASDIMTYPE_DATA) ? "data" : "coord"
 			);
 			char sBuf[64] = {'\0'};
 			if(pCtx->pCurDim == NULL)
 				snprintf(sBuf, 63, " ID %02d", pCtx->nPktId);
 			else
 				snprintf(sBuf, 63, " '%s' in dataset ID %02d", DasDim_name(pCtx->pCurDim), pCtx->nPktId);
-			daslog_warn_v(
+			daslog_warnf(
 				"Ignoring unknown property attribute '%s' in properties for <%s>%s",
 				psAttr[i], sEl, sBuf
 			);
@@ -497,14 +497,14 @@ static void _serial_onOpenDim(
 	if(pCtx->nDasErr != DAS_OKAY)
 		return;
 
-	das_dim_type_e dt = DASDIM_UNK;
+	das_dimtype dt = DASDIMTYPE_UNK;
 
 	int id = pCtx->nPktId;
 
-	if(strcmp(sDimType, "coord") == 0) dt = DASDIM_COORD;
-	else if (strcmp(sDimType, "data") == 0) dt = DASDIM_DATA;
+	if(strcmp(sDimType, "coord") == 0) dt = DASDIMTYPE_COORD;
+	else if (strcmp(sDimType, "data") == 0) dt = DASDIMTYPE_DATA;
 	else{
-		pCtx->nDasErr = das_error(DASERR_SERIAL, "Unknown physical dimension type '%s'", sDimType);
+		pCtx->nDasErr = daserrf(DASERR_SERIAL, "Unknown physical dimension type '%s'", sDimType);
 		return;
 	}
 
@@ -523,14 +523,14 @@ static void _serial_onOpenDim(
 			if(psAttr[i+1][0] != '\0') strncpy(sAnnot, psAttr[i+1], 47);
 		} 
 		else
-			daslog_warn_v(
+			daslog_warnf(
 				"Unknown attribute %s in <%s> for dataset ID %02d", psAttr[i], sDimType, id
 			);
 	}
 
 	/* freak about about missing items */
 	if(sPhysDim == NULL){
-		pCtx->nDasErr = das_error(DASERR_SERIAL, 
+		pCtx->nDasErr = daserrf(DASERR_SERIAL, 
 			"Attribute \"physDim\" missing for %s groups in dataset ID %d", 
 			sDimType, id
 		);
@@ -542,8 +542,8 @@ static void _serial_onOpenDim(
 		sPhysDim = "none";
 	
 	/* 
-	if((dt == DASDIM_COORD) && (sAxis[0] == '\0') && (sAnnot[0] == '\0')){
-		pCtx->nDasErr = das_error(DASERR_SERIAL, 
+	if((dt == DASDIMTYPE_COORD) && (sAxis[0] == '\0') && (sAnnot[0] == '\0')){
+		pCtx->nDasErr = daserrf(DASERR_SERIAL, 
 			"Both \"axis\" and \"annotation\" missing for coordinate dimension %s in dataset ID %d", 
 			sPhysDim, id
 		);
@@ -566,7 +566,7 @@ static void _serial_onOpenDim(
 			else
 				*sEnd = '\0';
 			if(sBeg == sEnd){
-				pCtx->nDasErr = das_error(DASERR_SERIAL, 
+				pCtx->nDasErr = daserrf(DASERR_SERIAL, 
 					"Empty axis entry in '%s' for element <%s>",sAxis, sDimType
 				);
 				return;
@@ -582,7 +582,7 @@ static void _serial_onOpenDim(
 		DasDim_setPrimeCoord(pDim, true);
 	}
 	else if(sAnnot[0] != '\0'){
-		strncpy(pDim->axes[0], sAnnot, DASDIM_AXLEN-1);
+		strncpy(pDim->axes[0], sAnnot, DASDIM_AXIS_SZ-1);
 		DasDim_setPrimeCoord(pDim, false);
 	}
 	
@@ -616,7 +616,7 @@ static void _serial_onOps(context_t* pCtx, const char** psAttr)
 {
 	if(pCtx->nDasErr != DAS_OKAY) return;
 	if(!pCtx->bInVar){
-		pCtx->nDasErr = das_error(DASERR_SERIAL,
+		pCtx->nDasErr = daserrf(DASERR_SERIAL,
 			"<ops> outside a variable in dataset ID %02d", pCtx->nPktId);
 		return;
 	}
@@ -643,7 +643,7 @@ static void _serial_onOpenVar(
 	context_t* pCtx, const char* sVarElType, const char** psAttr
 ){
 	if(pCtx->bInVar){
-		pCtx->nDasErr = das_error(DASERR_SERIAL,
+		pCtx->nDasErr = daserrf(DASERR_SERIAL,
 			"Variables can not be nested inside other variables"
 		);
 		return;
@@ -672,7 +672,7 @@ static void _serial_onOpenVar(
 		/* Canonicalize the role here, so the legacy "average" spelling never
 		   reaches the data model (same treatment as semantic just below) */
 		if(strcmp(psAttr[i], "use") == 0)
-			strncpy(pCtx->varUse, das_role_fromStr(psAttr[i+1]), DASDIM_ROLE_SZ-1);
+			strncpy(pCtx->varUse, DasDim_roleFromStr(psAttr[i+1]), DASDIM_ROLE_SZ-1);
 
 		/* semantic and valType (a legacy alias) both name the value semantic.
 		   Canonicalize to the DAS_SEM_* singleton here  */
@@ -680,7 +680,7 @@ static void _serial_onOpenVar(
 			(strcmp(psAttr[i], "semantic") == 0)||(strcmp(psAttr[i], "valType") == 0)
 		){
 			if(bBytes){
-				pCtx->nDasErr = das_error(DASERR_SERIAL,
+				pCtx->nDasErr = daserrf(DASERR_SERIAL,
 					"A <bytes> run carries no semantic; the element name is the "
 					"structural family and the encoding tells string from blob, "
 					"dataset ID %d", id
@@ -688,9 +688,9 @@ static void _serial_onOpenVar(
 				return;
 			}
 			pCtx->valSemantic = das_sem_fromStr(psAttr[i+1]);
-			if((pCtx->valSemantic == NULL)||(pCtx->valSemantic == DAS_SEM_TEXT)||
+			if((pCtx->valSemantic == NULL)||(pCtx->valSemantic == DASSEM_TEXT)||
 			   (pCtx->valSemantic == DAS_SEM_BLOB)){
-				pCtx->nDasErr = das_error(DASERR_SERIAL,
+				pCtx->nDasErr = daserrf(DASERR_SERIAL,
 					"Unknown semantic '%s' in <%s> for dataset ID %d; expected one "
 					"of bool, datetime, integer, real (string and blob are the "
 					"<bytes> element now)",
@@ -708,9 +708,9 @@ static void _serial_onOpenVar(
 		else if(strcmp(psAttr[i], "units") == 0){
 			/* Units are input, text that doesn't parse leaves the variable
 			   dimensionless and is kept, see varUnitsText */
-			pCtx->varUnits = Units_fromStr(psAttr[i+1]);
+			pCtx->varUnits = DasUnits_fromStr(psAttr[i+1]);
 			if(pCtx->varUnits == NULL){
-				pCtx->varUnits = UNIT_DIMENSIONLESS;
+				pCtx->varUnits = DASUNITS_DIMENSIONLESS;
 				strncpy(pCtx->varUnitsText, psAttr[i+1],
 				        DAS_FIELD_SZ(context_t, varUnitsText) - 1);
 			}
@@ -720,14 +720,14 @@ static void _serial_onOpenVar(
 
 		/* Temporarily ignore values that are running around in wild */
 		else
-			daslog_warn_v(
+			daslog_warnf(
 				"Unknown attribute %s in <%s> for dataset ID %02d", psAttr[i], sVarElType, id
 			);
 	}
 
 	if(pCtx->varFam == VS_COMPOSITE){
 		if((sIntern == NULL)||(sIntern[0] == '\0')){
-			pCtx->nDasErr = das_error(DASERR_SERIAL,
+			pCtx->nDasErr = daserrf(DASERR_SERIAL,
 				"<composite> missing its intern attribute in dataset ID %d", id
 			);
 			return;
@@ -736,21 +736,21 @@ static void _serial_onOpenVar(
 		   the shared limit here; the real budget is checked against the actual
 		   external count in _serial_makeVarAry. */
 		pCtx->nDasErr = _serial_parseIntern(
-			sIntern, VARIDX_MAX - 1, pCtx->aVarIntShape, &(pCtx->nVarIntRank),
+			sIntern, DASIDX_MAX - 1, pCtx->aVarIntShape, &(pCtx->nVarIntRank),
 			&(pCtx->nVarComps), id
 		);
 		if(pCtx->nDasErr != DAS_OKAY)
 			return;
 	}
 	else if(sIntern != NULL){
-		pCtx->nDasErr = das_error(DASERR_SERIAL,
+		pCtx->nDasErr = daserrf(DASERR_SERIAL,
 			"Attribute intern is only valid on <composite>, dataset ID %d", id
 		);
 		return;
 	}
 
 	/* Get the mapping from dataset space to array space */
-	ptrdiff_t aVarExtShape[VARIDX_MAX];
+	ptrdiff_t aVarExtShape[DASIDX_MAX];
 	int nRet = _serial_parseIndex(
 		sIndex, DasDs_rank(pCtx->pDs), aVarExtShape, _IDX_FOR_VAR, sVarElType
 	);
@@ -767,7 +767,7 @@ static void _serial_onOpenVar(
 	for(int i = 0; i < nDsRank; ++i){
 		if((pCtx->aExtShape[i] >= 0) && (aVarExtShape[i] >= 0)
 		   && (aVarExtShape[i] != pCtx->aExtShape[i])){
-			pCtx->nDasErr = das_error(DASERR_SERIAL,
+			pCtx->nDasErr = daserrf(DASERR_SERIAL,
 				"Index mismatch in <%s> of dimension '%s' (dataset ID %d): the variable "
 				"declares extent %td at index %d where the dataset header declares %td",
 				sVarElType, DasDim_name(pCtx->pCurDim), pCtx->nPktId,
@@ -779,22 +779,22 @@ static void _serial_onOpenVar(
 
 	/* Make the var map, insure all unused index positions are set as unused */
 	int j = 0;
-	for(int i = 0; i < VARIDX_MAX; ++i){
-		if((i < nDsRank) &&(aVarExtShape[i] != VARIDX_UNUSED)){
+	for(int i = 0; i < DASIDX_MAX; ++i){
+		if((i < nDsRank) &&(aVarExtShape[i] != DASIDX_UNUSED)){
 			pCtx->aVarMap[i] = j;
 			j++;
 		}
 		else{
-			pCtx->aVarMap[i] = VARIDX_UNUSED;
+			pCtx->aVarMap[i] = DASIDX_UNUSED;
 		}
-		pCtx->aVarExtShape[i] = (i < nDsRank) ? aVarExtShape[i] : VARIDX_UNUSED;
+		pCtx->aVarExtShape[i] = (i < nDsRank) ? aVarExtShape[i] : DASIDX_UNUSED;
 	}
 
 	/* Only a sequence may borrow ('^'); a stored var owns its extent.  Flag it here
 	   so the array build (_serial_makeVarAry) can reject a '^' on a values/packet var. */
 	pCtx->bVarBorrows = false;
 	for(int i = 0; i < nDsRank; ++i)
-		if(aVarExtShape[i] == VARIDX_BORROW) pCtx->bVarBorrows = true;
+		if(aVarExtShape[i] == DASIDX_BORROW) pCtx->bVarBorrows = true;
 
 	/* A composite carries one internal index per intern= level; a byte run carries
 	   exactly one (the byte number); a scalar carries none. */
@@ -809,22 +809,22 @@ static void _serial_onOpenVar(
 		strncpy(pCtx->varUse, "center", DASDIM_ROLE_SZ-1);
 
 	if((pCtx->valSemantic == NULL)&&(!bBytes)){
-		pCtx->nDasErr = das_error(DASERR_SERIAL,
+		pCtx->nDasErr = daserrf(DASERR_SERIAL,
 			"Attribute 'semantic' not provided for <%s> in dataset ID %d", sVarElType, pCtx->nPktId
 		);
 		return;
 	}
 	/* Absent units means dimensionless */
 	if(pCtx->varUnits == NULL)
-		pCtx->varUnits = UNIT_DIMENSIONLESS;
+		pCtx->varUnits = DASUNITS_DIMENSIONLESS;
 
 	/* Calendar-representable units (an epoch: TT2000, t1970, ...) need to 
 	   match with datetime semantics */
-	if(Units_haveCalRep(pCtx->varUnits) && (pCtx->valSemantic != DAS_SEM_DATE)){
-		pCtx->nDasErr = das_error(DASERR_SERIAL,
+	if(DasUnits_isTimePoint(pCtx->varUnits) && (pCtx->valSemantic != DASSEM_DATE)){
+		pCtx->nDasErr = daserrf(DASERR_SERIAL,
 			"Contradictory <%s> in dataset ID %d: units '%s' are a calendar epoch "
 			"but semantic is '%s', expected 'datetime'", sVarElType, pCtx->nPktId,
-			Units_toStr(pCtx->varUnits), pCtx->valSemantic
+			DasUnits_toStr(pCtx->varUnits), pCtx->valSemantic
 		);
 		return;
 	}
@@ -854,18 +854,18 @@ static void _serial_onSequence(context_t* pCtx, const char** psAttr)
 			/* Removed from the v3.0 schema 2026-07-21; deferred to v3.1 (see
 			   notes/das3_roadmap.md#future).  Error out because ignoring it would
 			   silently change the sequence's values. */
-			pCtx->nDasErr = das_error(DASERR_SERIAL,
+			pCtx->nDasErr = daserrf(DASERR_SERIAL,
 				"In <sequence> for dataset ID %d, '%s' is not part of das v3.0 "
 				"(deferred to v3.1)", pCtx->nPktId, psAttr[i]
 			);
 		else
-			daslog_warn_v(
+			daslog_warnf(
 				"Unknown attribute %s in <sequence> for dataset ID %02d", psAttr[i], pCtx->nPktId
 			);
 	}
 
 	if((sInter == NULL)||(sInter[0] == '\0')){
-		pCtx->nDasErr = das_error(DASERR_SERIAL, "Interval not provided for <sequence> in "
+		pCtx->nDasErr = daserrf(DASERR_SERIAL, "Interval not provided for <sequence> in "
 			"dataset ID %d", pCtx->nPktId
 		);
 		return;
@@ -874,24 +874,24 @@ static void _serial_onSequence(context_t* pCtx, const char** psAttr)
 	/* For sequences, pick a storage type if none given */
 	if(pCtx->valStorage[0] == '\0'){
 		/* Pick a default based on the semantic */
-		if(pCtx->valSemantic == DAS_SEM_REAL)
+		if(pCtx->valSemantic == DASSEM_REAL)
 			strncpy(pCtx->valStorage, "double", _VAL_STOREAGE_SZ);
-		else if(pCtx->valSemantic == DAS_SEM_INT)
+		else if(pCtx->valSemantic == DASSEM_INT)
 			strncpy(pCtx->valStorage, "long", _VAL_STOREAGE_SZ);
-		else if(pCtx->valSemantic == DAS_SEM_BOOL)
+		else if(pCtx->valSemantic == DASSEM_BOOL)
 			strncpy(pCtx->valStorage, "byte", _VAL_STOREAGE_SZ);
-		else if(pCtx->valSemantic == DAS_SEM_DATE){
+		else if(pCtx->valSemantic == DASSEM_DATE){
 			/* UTC takes the broken-down struct so that minval can be an ISO
 			   string; epoch units are plain numbers of their own kind */
-			if(pCtx->varUnits == UNIT_TT2000)
+			if(pCtx->varUnits == DASUNITS_TT2000)
 				strncpy(pCtx->valStorage, "long", _VAL_STOREAGE_SZ);
-			else if(pCtx->varUnits == UNIT_UTC)
+			else if(pCtx->varUnits == DASUNITS_UTC)
 				strncpy(pCtx->valStorage, "struct", _VAL_STOREAGE_SZ);
 			else
 				strncpy(pCtx->valStorage, "double", _VAL_STOREAGE_SZ);
 		}
 		else{
-			pCtx->nDasErr = das_error(DASERR_SERIAL,
+			pCtx->nDasErr = daserrf(DASERR_SERIAL,
 				"A <sequence> needs a numeric semantic, dataset ID %d", pCtx->nPktId
 			);
 			return;
@@ -900,11 +900,11 @@ static void _serial_onSequence(context_t* pCtx, const char** psAttr)
 
 	/* Item type can't be set when the variable opens because we could bubble it
 	 * up from the packet description */
-	pCtx->varItemType = das_vt_fromStr(pCtx->valStorage);
+	pCtx->varItemType = dasvt_id(pCtx->valStorage);
 
 	das_errcode nRet;
-	if((nRet = das_value_fromStr(sMin, pCtx->varItemType, pCtx->aSeqMin, _VAL_SEQ_CONST_SZ)) != 0){
-		das_error(DASERR_SERIAL, "Could not convert sequence minval string '%s' to a value", sMin);
+	if((nRet = dasval_fromStr(sMin, pCtx->varItemType, pCtx->aSeqMin, _VAL_SEQ_CONST_SZ)) != 0){
+		daserrf(DASERR_SERIAL, "Could not convert sequence minval string '%s' to a value", sMin);
 		pCtx->nDasErr = nRet;
 		return;
 	}
@@ -920,10 +920,10 @@ static void _serial_onSequence(context_t* pCtx, const char** psAttr)
 	int nDsRank = DasDs_rank(pCtx->pDs);
 	for(int i = 0; i < nDsRank; ++i) if(pCtx->aVarMap[i] >= 0) ++nUsed;
 
-	/* etTime slopes are stored as DOUBLES in seconds (the affine rule at the
+	/* DASET_TIME slopes are stored as DOUBLES in seconds (the affine rule at the
 	   storage layer); every other element keeps its own stride */
-	das_val_type vtSlope = (pCtx->varItemType == vtTime) ? vtDouble : pCtx->varItemType;
-	size_t uItem = das_vt_size(vtSlope);
+	das_vt vtSlope = (pCtx->varItemType == DASVT_TIME) ? DASVT_DOUBLE : pCtx->varItemType;
+	size_t uItem = dasvt_size(vtSlope);
 
 	/* Parse the interval list.  Conservative emit is FULL-RANK: one ';'-separated
 	   slot per DATASET index, positionally locked to `index` -- a `-` at every
@@ -931,12 +931,12 @@ static void _serial_onSequence(context_t* pCtx, const char** psAttr)
 	   in): a SHORTHAND single slope, valid only when the sequence depends on exactly
 	   ONE index.  Slopes pack into aSeqInter in DEPENDENCY order (matching how
 	   DasGenSeq reads M[k]). */
-	char aTok[VARIDX_MAX][64];
+	char aTok[DASIDX_MAX][64];
 	int nTok = 0;
 	const char* pBeg = sInter;
 	while(*pBeg != '\0'){
-		if(nTok >= VARIDX_MAX){
-			pCtx->nDasErr = das_error(DASERR_SERIAL,
+		if(nTok >= DASIDX_MAX){
+			pCtx->nDasErr = daserrf(DASERR_SERIAL,
 				"Too many interval components in <sequence> for dataset ID %d", pCtx->nPktId
 			);
 			return;
@@ -960,7 +960,7 @@ static void _serial_onSequence(context_t* pCtx, const char** psAttr)
 			bool bDep  = (pCtx->aVarMap[i] >= 0);
 			bool bDash = (strcmp(aTok[i], "-") == 0);
 			if(bDep == bDash){
-				pCtx->nDasErr = das_error(DASERR_SERIAL,
+				pCtx->nDasErr = daserrf(DASERR_SERIAL,
 					"<sequence> interval is not aligned with index at position %d: a "
 					"slope must sit at each dependent index and '-' at each degenerate "
 					"one, dataset ID %d", i, pCtx->nPktId
@@ -968,11 +968,11 @@ static void _serial_onSequence(context_t* pCtx, const char** psAttr)
 				return;
 			}
 			if(bDep){
-				if((nRet = das_value_fromStr(
+				if((nRet = dasval_fromStr(
 					aTok[i], vtSlope,
 					pCtx->aSeqInter + (size_t)k * uItem, _VAL_SEQ_CONST_SZ
 				)) != 0){
-					das_error(DASERR_SERIAL,
+					daserrf(DASERR_SERIAL,
 						"Could not convert sequence interval slope '%s' to a value", aTok[i]
 					);
 					pCtx->nDasErr = nRet;
@@ -989,17 +989,17 @@ static void _serial_onSequence(context_t* pCtx, const char** psAttr)
 		   transition. */
 		for(int k = 0; k < nTok; ++k){
 			if(strcmp(aTok[k], "-") == 0){
-				pCtx->nDasErr = das_error(DASERR_SERIAL,
+				pCtx->nDasErr = daserrf(DASERR_SERIAL,
 					"'-' is not allowed in a compact <sequence> interval; use the "
 					"full-rank ('-'-aligned to index) form, dataset ID %d", pCtx->nPktId
 				);
 				return;
 			}
-			if((nRet = das_value_fromStr(
+			if((nRet = dasval_fromStr(
 				aTok[k], vtSlope,
 				pCtx->aSeqInter + (size_t)k * uItem, _VAL_SEQ_CONST_SZ
 			)) != 0){
-				das_error(DASERR_SERIAL,
+				daserrf(DASERR_SERIAL,
 					"Could not convert sequence interval slope '%s' to a value", aTok[k]
 				);
 				pCtx->nDasErr = nRet;
@@ -1008,7 +1008,7 @@ static void _serial_onSequence(context_t* pCtx, const char** psAttr)
 		}
 	}
 	else{
-		pCtx->nDasErr = das_error(DASERR_SERIAL,
+		pCtx->nDasErr = daserrf(DASERR_SERIAL,
 			"<sequence> interval must be full-rank ('-'-aligned to index, %d slots) or "
 			"compact (one slope per dependent index, %d slots); got %d slot(s), "
 			"dataset ID %d", nDsRank, nUsed, nTok, pCtx->nPktId
@@ -1022,7 +1022,7 @@ static void _serial_onSequence(context_t* pCtx, const char** psAttr)
 	   must be one <sequence> per internal cell. */
 	if(pCtx->nVarComps > 0){
 		if(pCtx->nSeqSeen >= pCtx->nVarComps){
-			pCtx->nDasErr = das_error(DASERR_SERIAL,
+			pCtx->nDasErr = daserrf(DASERR_SERIAL,
 				"More <sequence> elements than the %d component(s) the composite "
 				"declares, dataset ID %d", pCtx->nVarComps, pCtx->nPktId
 			);
@@ -1031,14 +1031,14 @@ static void _serial_onSequence(context_t* pCtx, const char** psAttr)
 		if(pCtx->nSeqCap < pCtx->nVarComps){
 			free(pCtx->pSeqMinC);
 			free(pCtx->pSeqInterC);
-			pCtx->pSeqMinC   = (ubyte*)calloc(pCtx->nVarComps, _VAL_SEQ_CONST_SZ);
-			pCtx->pSeqInterC = (ubyte*)calloc(pCtx->nVarComps, VARIDX_MAX * _VAL_SEQ_CONST_SZ);
+			pCtx->pSeqMinC   = (uint8_t*)calloc(pCtx->nVarComps, _VAL_SEQ_CONST_SZ);
+			pCtx->pSeqInterC = (uint8_t*)calloc(pCtx->nVarComps, DASIDX_MAX * _VAL_SEQ_CONST_SZ);
 			pCtx->nSeqCap = pCtx->nVarComps;
 		}
 		memcpy(pCtx->pSeqMinC + (size_t)pCtx->nSeqSeen * _VAL_SEQ_CONST_SZ,
 		       pCtx->aSeqMin, _VAL_SEQ_CONST_SZ);
-		memcpy(pCtx->pSeqInterC + (size_t)pCtx->nSeqSeen * VARIDX_MAX * _VAL_SEQ_CONST_SZ,
-		       pCtx->aSeqInter, VARIDX_MAX * _VAL_SEQ_CONST_SZ);
+		memcpy(pCtx->pSeqInterC + (size_t)pCtx->nSeqSeen * DASIDX_MAX * _VAL_SEQ_CONST_SZ,
+		       pCtx->aSeqInter, DASIDX_MAX * _VAL_SEQ_CONST_SZ);
 		++pCtx->nSeqSeen;
 	}
 }
@@ -1057,7 +1057,7 @@ static das_errcode _serial_makeVarAry(context_t* pCtx, bool bHandleFill)
 	/* A '^' (borrowed extent) is only valid on a <sequence>; this builds a STORED
 	   var (values/packet), which owns its extent.  Guard verified 2026-07-24. */
 	if(pCtx->bVarBorrows)
-		return das_error(DASERR_SERIAL,
+		return daserrf(DASERR_SERIAL,
 			"A borrowed extent '^' is only valid on a <sequence>; variable %s:%s in "
 			"dataset ID %d is a stored var and must declare its own size",
 			DasDim_name(pCtx->pCurDim), pCtx->varUse, pCtx->nPktId
@@ -1067,23 +1067,23 @@ static das_errcode _serial_makeVarAry(context_t* pCtx, bool bHandleFill)
 	snprintf(sAryId, 63, "%s_%s", pCtx->varUse, DasDim_name(pCtx->pCurDim));
 
 	/* Determine the array indexes from the variable indexes */
-	size_t aShape[VARIDX_MAX];
+	size_t aShape[DASIDX_MAX];
 	int nAryRank = 0; /* <-- current array index then bumped to the rank */
 	int nDsRank = DasDs_rank(pCtx->pDs);
 	for(int i = 0; i < nDsRank; ++i){
-		if(pCtx->aVarMap[i] == VARIDX_UNUSED)
+		if(pCtx->aVarMap[i] == DASIDX_UNUSED)
 			continue;
 
-		/* if(pCtx->aExtShape[pCtx->aVarMap[i]] == VARIDX_RAGGED){ */
+		/* if(pCtx->aExtShape[pCtx->aVarMap[i]] == DASIDX_RAGGED){ */
 
-		if(pCtx->aExtShape[i] == VARIDX_RAGGED){
+		if(pCtx->aExtShape[i] == DASIDX_RAGGED){
 			aShape[ pCtx->aVarMap[i] ] = 0;
 		}
 		else{
 			/* if(pCtx->aExtShape[pCtx->aVarMap[i]] <= 0){ */
 
 			if(pCtx->aExtShape[i] <= 0){
-				return das_error(DASERR_SERIAL,
+				return daserrf(DASERR_SERIAL,
 					"Invalid array map for variable %s:%s in dataset id %d",
 					DasDim_name(pCtx->pCurDim), pCtx->varUse, pCtx->nPktId
 				);
@@ -1104,22 +1104,22 @@ static das_errcode _serial_makeVarAry(context_t* pCtx, bool bHandleFill)
 	/* The <bytes> family refines here, when the packet encoding is known:
 	   utf8 keeps string, raw/base64 is a blob */
 	if((pCtx->varFam == VS_STRING)&&(pCtx->sValEncType != NULL)&&
-	   (pCtx->sValEncType != DAS_ENC_UTF8))
+	   (pCtx->sValEncType != DASENC_UTF8))
 		pCtx->varFam = VS_BLOB;
 
-	das_val_type vt = vtUnknown;
-	if(pCtx->varFam == VS_STRING)      vt = vtText;
-	else if(pCtx->varFam == VS_BLOB)   vt = vtByteSeq;
+	das_vt vt = DASVT_UNK;
+	if(pCtx->varFam == VS_STRING)      vt = DASVT_TEXT;
+	else if(pCtx->varFam == VS_BLOB)   vt = DASVT_BYTESEQ;
 	else{
 		if(pCtx->valStorage[0] != '\0'){
-			vt = das_vt_fromStr(pCtx->valStorage);
+			vt = dasvt_id(pCtx->valStorage);
 		}
 		/* that didn't work, try using the val semantic + encoding */
-		if(vt == vtUnknown){
+		if(vt == DASVT_UNK){
 			vt = das_vt_store_type(pCtx->sValEncType, pCtx->nPktItemBytes, pCtx->valSemantic);
 
-			if(vt == vtUnknown){
-				return das_error(DASERR_SERIAL,
+			if(vt == DASVT_UNK){
+				return daserrf(DASERR_SERIAL,
 					"Attribute 'storage' missing for non-string values encoded "
 					"as text for variable %s:%s in dataset ID %d",
 					DasDim_name(pCtx->pCurDim), pCtx->varUse, pCtx->nPktId
@@ -1133,16 +1133,16 @@ static das_errcode _serial_makeVarAry(context_t* pCtx, bool bHandleFill)
 
 	if(pCtx->varIntRank > 0){
 
-		/* DasAry keeps ONE index list capped at VARIDX_MAX, shared between the
+		/* DasAry keeps ONE index list capped at DASIDX_MAX, shared between the
 		   external and internal halves (Dude's ruling 2026-07-29).  Check before
 		   writing: a deep intern= on a high rank dataset would otherwise run off
 		   the end of aShape. */
-		if((nAryRank + pCtx->varIntRank) > VARIDX_MAX)
-			return das_error(DASERR_SERIAL,
+		if((nAryRank + pCtx->varIntRank) > DASIDX_MAX)
+			return daserrf(DASERR_SERIAL,
 				"Variable %s:%s in dataset ID %d needs %d external plus %d internal "
 				"indices; DasAry shares a limit of %d between them",
 				DasDim_name(pCtx->pCurDim), pCtx->varUse, pCtx->nPktId, nAryRank,
-				pCtx->varIntRank, VARIDX_MAX
+				pCtx->varIntRank, DASIDX_MAX
 			);
 
 		/* Internal structure due to composites: one array dimension per level, so
@@ -1156,14 +1156,14 @@ static das_errcode _serial_makeVarAry(context_t* pCtx, bool bHandleFill)
 		}
 		else{
 			/* Internal structure must be due to text or byte strings */
-			if(vt == vtByteSeq){
-				vt = vtUByte;
+			if(vt == DASVT_BYTESEQ){
+				vt = DASVT_UBYTE;
 				aShape[nAryRank] = 0;
 				++nAryRank;
 				uFlags = DASARY_AS_SUBSEQ;
 			}
-			else if(vt == vtText){
-				vt = vtUByte;
+			else if(vt == DASVT_TEXT){
+				vt = DASVT_UBYTE;
 				/* A variable-length string (itemBytes="*") gets a RAGGED char dim and
 				   the codec markEnds each value (DASENC_WRAP).  A FIXED-length string
 				   (itemBytes="N") instead gets a FIXED char dim of N+1 -- N data chars
@@ -1175,7 +1175,7 @@ static das_errcode _serial_makeVarAry(context_t* pCtx, bool bHandleFill)
 				uFlags = DASARY_AS_STRING;
 			}
 			else{
-				return das_error(DASERR_SERIAL,
+				return daserrf(DASERR_SERIAL,
 					"Unknown purpose for internal variable indices, not a vector "
 					"nor a string nor a byte-string"
 				);
@@ -1183,12 +1183,12 @@ static das_errcode _serial_makeVarAry(context_t* pCtx, bool bHandleFill)
 		}
 	}
 
-	ubyte aFill[DATUM_BUF_SZ] = {0};
+	uint8_t aFill[DASDATUM_BUF_SZ] = {0};
 
 	if(bHandleFill){
 		bool bTextFill = (pCtx->varFam == VS_STRING);
-		bool bBoolFill = (pCtx->valSemantic == DAS_SEM_BOOL);
-		int nRet = _serial_initfill(aFill, DATUM_BUF_SZ, vt, pCtx->sPktFillVal, bTextFill, bBoolFill);
+		bool bBoolFill = (pCtx->valSemantic == DASSEM_BOOL);
+		int nRet = _serial_initfill(aFill, DASDATUM_BUF_SZ, vt, pCtx->sPktFillVal, bTextFill, bBoolFill);
 		if(nRet != DAS_OKAY)
 			return nRet;
 	}
@@ -1265,7 +1265,7 @@ static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 			}
 			else{
 				if(!_serial_parseCount(psAttr[i+1], &(pCtx->nPktItems))){
-					pCtx->nDasErr = das_error(DASERR_SERIAL,
+					pCtx->nDasErr = daserrf(DASERR_SERIAL,
 						"Error parsing 'numItems=\"%s\"' in <packet> for dataset ID %02d,"
 						" expected \"*\" or a positive integer", psAttr[i+1], pCtx->nPktId
 					);
@@ -1278,7 +1278,7 @@ static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 		if(strcmp(psAttr[i], "encoding")==0){
 			pCtx->sValEncType = das_enc_fromStr(psAttr[i+1]);
 			if(pCtx->sValEncType == NULL){
-				pCtx->nDasErr = das_error(DASERR_SERIAL,
+				pCtx->nDasErr = daserrf(DASERR_SERIAL,
 					"Unknown encoding '%s' in <packet> for dataset ID %d; expected one of "
 					"byte, ubyte, BEint, BEuint, BEreal, LEint, LEuint, LEreal, utf8, blob, base64",
 					psAttr[i+1], pCtx->nPktId
@@ -1300,7 +1300,7 @@ static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 				nValTermStat = 0x1;
 			}
 			else if(!_serial_parseCount(psAttr[i+1], &(pCtx->nPktItemBytes))){
-				pCtx->nDasErr = das_error(DASERR_SERIAL,
+				pCtx->nDasErr = daserrf(DASERR_SERIAL,
 					"Error parsing 'itemBytes=\"%s\"' in <packet> for dataset ID %02d,"
 					" expected \"*\" or a positive integer", psAttr[i+1], pCtx->nPktId
 				);
@@ -1318,7 +1318,7 @@ static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 			   of 1-N whitespace bytes */
 			const char* sTerm = (strcmp(psAttr[i+1], "\\s") == 0) ? " " : psAttr[i+1];
 			if(strlen(sTerm) != 1){
-				pCtx->nDasErr = das_error(DASERR_SERIAL,
+				pCtx->nDasErr = daserrf(DASERR_SERIAL,
 					"Error parsing '%s=\"%s\" in <packet> for dataset ID %02d."
 					" Expected \"\\s\" or a 1-byte long string", psAttr[i], psAttr[i+1],
 					pCtx->nPktId
@@ -1335,12 +1335,12 @@ static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 			continue;
 		}
 		/* trim toggles the default-on left+right trim of each value (var-width utf8).
-		   Liberal read (das_str2bool: first letter, T/t/1/Y -> true, F/f/0/N ->
+		   Liberal read (dasstr_toBool: first letter, T/t/1/Y -> true, F/f/0/N ->
 		   false); a value it can't read is a mis-authored stream. */
 		if(strcmp(psAttr[i], "trim") == 0){
 			bool bTrim;
-			if(!das_str2bool(psAttr[i+1], &bTrim)){
-				pCtx->nDasErr = das_error(DASERR_SERIAL,
+			if(!dasstr_toBool(psAttr[i+1], &bTrim)){
+				pCtx->nDasErr = daserrf(DASERR_SERIAL,
 					"Error parsing 'trim=\"%s\"' in <packet> for dataset ID %02d; expected"
 					" a boolean (true/false)", psAttr[i+1], pCtx->nPktId
 				);
@@ -1351,7 +1351,7 @@ static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 		}
 
 		/* Refused rather than skipped */
-		pCtx->nDasErr = das_error(DASERR_SERIAL,
+		pCtx->nDasErr = daserrf(DASERR_SERIAL,
 			"Unknown attribute '%s' in <packet> for dataset ID %02d",
 			psAttr[i], pCtx->nPktId
 		);
@@ -1360,7 +1360,7 @@ static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 
 	/* Check to see if all needed attributes were provided */
 	if(nReq != 0x7){
-		pCtx->nDasErr = das_error(DASERR_SERIAL,
+		pCtx->nDasErr = daserrf(DASERR_SERIAL,
 			"Error parsing <packet> for dataset ID %02d, one of the required attributes"
 			" 'encoding', 'numItems', or 'itemBytes' is missing.", pCtx->nPktId
 		);
@@ -1371,7 +1371,7 @@ static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 	   and the packet reader count in */
 	if((pCtx->nPktItems > 0)&&(pCtx->nPktItemBytes > 0)&&
 	   (pCtx->nPktItems > INT_MAX / pCtx->nPktItemBytes)){
-		pCtx->nDasErr = das_error(DASERR_SERIAL,
+		pCtx->nDasErr = daserrf(DASERR_SERIAL,
 			"numItems=\"%d\" times itemBytes=\"%d\" in <packet> for dataset ID %02d"
 			" is too large", pCtx->nPktItems, pCtx->nPktItemBytes, pCtx->nPktId
 		);
@@ -1380,8 +1380,8 @@ static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 
 	/* valTerm frames text only; raw and base64 values are always {N} prefixed */
 	if((pCtx->sValTerm[0] != '\0')&&(pCtx->sValEncType != NULL)&&
-	   (pCtx->sValEncType != DAS_ENC_UTF8)){
-		pCtx->nDasErr = das_error(DASERR_SERIAL,
+	   (pCtx->sValEncType != DASENC_UTF8)){
+		pCtx->nDasErr = daserrf(DASERR_SERIAL,
 			"valTerm is only valid for encoding=\"utf8\", not \"%s\", in <packet> for "
 			"%s:%s in dataset ID %02d", pCtx->sValEncType, DasDim_name(pCtx->pCurDim),
 			pCtx->varUse, pCtx->nPktId
@@ -1391,10 +1391,10 @@ static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 
 	/* With itemBytes="*" and no valTerm each value carries a {N} length prefix.
 	   That's only read into byte runs, so numeric text needs a terminator. */
-	if((pCtx->nPktItemBytes < 0)&&(pCtx->sValEncType == DAS_ENC_UTF8)&&
+	if((pCtx->nPktItemBytes < 0)&&(pCtx->sValEncType == DASENC_UTF8)&&
 	   (pCtx->sValTerm[0] == '\0')&&
 	   ((pCtx->varFam == VS_SCALAR)||(pCtx->varFam == VS_COMPOSITE))){
-		pCtx->nDasErr = das_error(DASERR_SERIAL,
+		pCtx->nDasErr = daserrf(DASERR_SERIAL,
 			"%s:%s in dataset ID %02d has utf8 values with itemBytes=\"*\" and no valTerm, "
 			"so they would be {N} length-prefixed, which is only supported for <bytes>.  "
 			"Add valTerm=\"\\s\" for whitespace-separated values.",
@@ -1408,7 +1408,7 @@ static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 	   strings can have fill, so long as the fill value is as long as given length  */
 	if( ((nValTermStat & 0x1) == 0x1) && (pCtx->varFam == VS_STRING)
 	    && (pCtx->sPktFillVal[0] != '\0') ){
-		pCtx->nDasErr = das_error(DASERR_SERIAL,
+		pCtx->nDasErr = daserrf(DASERR_SERIAL,
 			"A variable-length string (itemBytes=\"*\") may only have an empty fill; "
 			"fill=\"%s\" is not allowed in <packet> for %s:%s in dataset ID %02d",
 			pCtx->sPktFillVal, DasDim_name(pCtx->pCurDim), pCtx->varUse, pCtx->nPktId
@@ -1426,13 +1426,13 @@ static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 	   (png, ...) that needs a codec extension to decode; the two encodings are
 	   just raw or base64, so both are undecodable without the codec.  A bare
 	   raw or base64 section (no embedded=) is pass-through and needs none. */
-	if(((pCtx->sValEncType == DAS_ENC_BLOB)||(pCtx->sValEncType == DAS_ENC_BASE64))
-	   && (pCtx->sValMime[0] != '\0') && !das_codex_supported(pCtx->sValMime)){
+	if(((pCtx->sValEncType == DASENC_RAW)||(pCtx->sValEncType == DASENC_B64))
+	   && (pCtx->sValMime[0] != '\0') && !DasCodex_isSupported(pCtx->sValMime)){
 
 		/* Default: fail loud HERE, with the mime in hand, rather than at the
 		   cryptic storage guard downstream in the generator. */
 		if(!pCtx->bEmbedAsBytes){
-			pCtx->nDasErr = das_error(DASERR_SERIAL,
+			pCtx->nDasErr = daserrf(DASERR_SERIAL,
 				"Variable %s:%s in dataset ID %02d is an embedded '%s'; no codec "
 				"extension is registered to decode it (pass the reader's "
 				"embed-as-bytes option to recover it as opaque bytes)",
@@ -1446,7 +1446,7 @@ static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 		   on the stream index. 
 		   TODO: handle a multi-blob (multi item) packet */
 		if(pCtx->nPktItems != 1){
-			pCtx->nDasErr = das_error(DASERR_SERIAL,
+			pCtx->nDasErr = daserrf(DASERR_SERIAL,
 				"Cannot flatten embedded '%s' in variable %s:%s (dataset ID %02d): "
 				"only numItems=\"1\" embedded formats are supported",
 				pCtx->sValMime, DasDim_name(pCtx->pCurDim), pCtx->varUse, pCtx->nPktId
@@ -1457,20 +1457,20 @@ static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 		/* Record the declared decoded morphology as provenance BEFORE we overwrite
 		   it -- these are preserved, not invented, so storage is stamped only when
 		   the stream actually declared it. */
-		DasDesc_setStr(&(pCtx->varProps), "embeddedMime",     pCtx->sValMime);
-		DasDesc_setStr(&(pCtx->varProps), "embeddedIndex",    pCtx->varIndex);
-		DasDesc_setStr(&(pCtx->varProps), "embeddedSemantic", pCtx->valSemantic);
+		DasDesc_setVal(&(pCtx->varProps), "embeddedMime",     pCtx->sValMime);
+		DasDesc_setVal(&(pCtx->varProps), "embeddedIndex",    pCtx->varIndex);
+		DasDesc_setVal(&(pCtx->varProps), "embeddedSemantic", pCtx->valSemantic);
 		if(pCtx->valStorage[0] != '\0')
-			DasDesc_setStr(&(pCtx->varProps), "embeddedStorage", pCtx->valStorage);
+			DasDesc_setVal(&(pCtx->varProps), "embeddedStorage", pCtx->valStorage);
 
-		daslog_warn_v(
+		daslog_warnf(
 			"Flattening embedded '%s' in variable %s:%s to opaque bytes; index "
 			"morphology (%s) is not preserved",
 			pCtx->sValMime, DasDim_name(pCtx->pCurDim), pCtx->varUse, pCtx->varIndex
 		);
 
 		/* Rewrite the value section to a degenerate per-record byte blob:
-		   1) semantic "blob" + cleared storage -> vtByteSeq
+		   1) semantic "blob" + cleared storage -> DASVT_BYTESEQ
 		   2) clear the mime -> downstream treats it as a bare pass-through blob
 		   3) collapse the inner index map so the var depends on the stream index
 		     only (for now index 0 keeps its mapping, all inner indices go unused)
@@ -1479,7 +1479,7 @@ static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 		pCtx->varFam = VS_BLOB;
 		memset(pCtx->valStorage, 0, DAS_FIELD_SZ(context_t, valStorage));
 		memset(pCtx->sValMime,   0, DAS_FIELD_SZ(context_t, sValMime));
-		for(int i = 1; i < VARIDX_MAX; ++i) pCtx->aVarMap[i] = VARIDX_UNUSED;
+		for(int i = 1; i < DASIDX_MAX; ++i) pCtx->aVarMap[i] = DASIDX_UNUSED;
 		pCtx->varIntRank = 1;
 		pCtx->bFlattened = true;
 	}
@@ -1499,7 +1499,7 @@ static void _serial_onOpenVals(context_t* pCtx, const char** psAttr)
 	pCtx->varGenKind = gtArray;
 
 	if(pCtx->bInValues){ // Can't nest values
-		pCtx->nDasErr = das_error(DASERR_SERIAL, 
+		pCtx->nDasErr = daserrf(DASERR_SERIAL, 
 			"<values> element nested in dataset ID %d", pCtx->nPktId
 		);
 		return;
@@ -1511,9 +1511,9 @@ static void _serial_onOpenVals(context_t* pCtx, const char** psAttr)
 	/* A fixed set of values can't map to a variable length index */
 	int nDsRank = DasDs_rank(pCtx->pDs);
 	for(int i = 0; i < nDsRank; ++i){
-		if(pCtx->aVarMap[i] != VARIDX_UNUSED){
-			if(pCtx->aExtShape[i] == VARIDX_RAGGED){
-				pCtx->nDasErr = das_error(DASERR_SERIAL,
+		if(pCtx->aVarMap[i] != DASIDX_UNUSED){
+			if(pCtx->aExtShape[i] == DASIDX_RAGGED){
+				pCtx->nDasErr = daserrf(DASERR_SERIAL,
 					"The external shape of variable %s:%s in dataset ID %02d is not "
 					"consistent with the shape of the overall dataset.  A fixed set of "
 					"values in index %d, can't map to a dataset with a variable length "
@@ -1534,14 +1534,14 @@ static void _serial_onOpenVals(context_t* pCtx, const char** psAttr)
 	   to v3.1. */
 	for(int i = 0; psAttr[i] != NULL; i+=2){
 		if((strcmp(psAttr[i], "repeat") == 0)||(strcmp(psAttr[i], "repetitions") == 0)){
-			pCtx->nDasErr = das_error(DASERR_SERIAL,
+			pCtx->nDasErr = daserrf(DASERR_SERIAL,
 				"In <values> for dataset ID %d, '%s' is not part of das-basic-stream v3.0 ", 
 				pCtx->nPktId, psAttr[i]
 			);
 			return;
 		}
 		if(strcmp(psAttr[i], "idxTerm") == 0){
-			pCtx->nDasErr = das_error(DASERR_SERIAL,
+			pCtx->nDasErr = daserrf(DASERR_SERIAL,
 				"In <values> for dataset ID %d, idxTerm is not das-basic-stream v3.0 "
 				"<values> attribute ", pCtx->nPktId
 			);
@@ -1549,7 +1549,7 @@ static void _serial_onOpenVals(context_t* pCtx, const char** psAttr)
 		}
 		if(strcmp(psAttr[i], "valTerm") == 0){
 			if(strlen(psAttr[i+1]) != 1){
-				pCtx->nDasErr = das_error(DASERR_SERIAL,
+				pCtx->nDasErr = daserrf(DASERR_SERIAL,
 					"Error parsing '%s=\"%s\"' in <values> for dataset ID %02d."
 					" Expected a 1-byte long string", psAttr[i], psAttr[i+1], pCtx->nPktId
 				);
@@ -1558,14 +1558,14 @@ static void _serial_onOpenVals(context_t* pCtx, const char** psAttr)
 			strncpy(pCtx->sValTerm, psAttr[i+1], _VAL_TERM_SZ-1);
 			continue;
 		}
-		pCtx->nDasErr = das_error(DASERR_NOTIMP,
+		pCtx->nDasErr = daserrf(DASERR_NOTIMP,
 			"Attribute '%s' of <values> element not yet supported in dataset ID %d",
 			psAttr[i], pCtx->nPktId
 		);
 		return;
 	}
 
-	pCtx->sValEncType = DAS_ENC_UTF8;
+	pCtx->sValEncType = DASENC_UTF8;
 
 	das_errcode nRet = _serial_makeVarAry(pCtx, NO_FILL);
 	if(nRet != DAS_OKAY){
@@ -1577,8 +1577,8 @@ static void _serial_onOpenVals(context_t* pCtx, const char** psAttr)
 		to have null (fill) items in <values> blocks, but no one does this cause
 		<values> are typically coordinates, and coordinates are known, usually. */
 	nRet = init_DasCodec(
-		DASENC_READ, &(pCtx->codecHdrVals), pCtx->pCurAry, pCtx->valSemantic, "utf8",
-		DASENC_ITEM_TERM, pCtx->sValTerm[0], pCtx->varUnits, NULL
+		DASCODEC_READ, &(pCtx->codecHdrVals), pCtx->pCurAry, pCtx->valSemantic, "utf8",
+		DASCODEC_ITEM_TERM, pCtx->sValTerm[0], pCtx->varUnits, NULL
 	);
 	if(nRet != DAS_OKAY)
 		pCtx->nDasErr = nRet;
@@ -1597,7 +1597,7 @@ static void _serial_xmlElementBeg(void* pUserData, const char* sElement, const c
 
 	if(strcmp(sElement, "dataset") == 0){
 		if(pCtx->pDs != NULL){
-			pCtx->nDasErr = das_error(DASERR_SERIAL, "Only one dataset definition allowed per header packet");
+			pCtx->nDasErr = daserrf(DASERR_SERIAL, "Only one dataset definition allowed per header packet");
 			return;
 		}
 		_serial_onOpenDs(pCtx, psAttr);
@@ -1632,7 +1632,7 @@ static void _serial_xmlElementBeg(void* pUserData, const char* sElement, const c
 	if(pCtx->bInOps){
 		/* <ops> is flat by construction: parameters are attributes, and nesting is
 		   what an unrecognized kind could not carry through. */
-		pCtx->nDasErr = das_error(DASERR_SERIAL,
+		pCtx->nDasErr = daserrf(DASERR_SERIAL,
 			"<ops> takes no child elements, found <%s> in dataset ID %02d",
 			sElement, pCtx->nPktId
 		);
@@ -1640,7 +1640,7 @@ static void _serial_xmlElementBeg(void* pUserData, const char* sElement, const c
 	}
 	/* dasTelem v0.6 emits <vector> and those streams are live -2026-08-01 */
 	if(strcmp(sElement, "vector") == 0){
-		pCtx->nDasErr = das_error(DASERR_SERIAL,
+		pCtx->nDasErr = daserrf(DASERR_SERIAL,
 			"<vector> is a das2 dialect; a variable's math rides on a flat "
 			"<ops kind=\"vector\" frame=\"...\"/> instead.  Regenerate the stream "
 			"(dasTelem v0.6 and earlier produce this), dataset ID %02d",
@@ -1661,7 +1661,7 @@ static void _serial_xmlElementBeg(void* pUserData, const char* sElement, const c
 		return;
 	}
 
-	pCtx->nDasErr = das_error(DASERR_SERIAL, 
+	pCtx->nDasErr = daserrf(DASERR_SERIAL, 
 		"Unsupported element %s in the definition for dataset ID %02d.",
 		sElement, pCtx->nPktId
 	);
@@ -1684,7 +1684,7 @@ static void _serial_xmlCharData(void* pUserData, const char* sChars, int nLen)
 		 */
 		
 		DasAry* pAry = &(pCtx->aPropVal);
-		DasAry_append(pAry, (ubyte*) sChars, nLen);
+		DasAry_append(pAry, (uint8_t*) sChars, nLen);
 		return;
 	}
 
@@ -1707,7 +1707,7 @@ static void _serial_xmlCharData(void* pUserData, const char* sChars, int nLen)
 
 		if(n > 0){
 			if(pCtx->nValUnderFlowValid + n >= (_VAL_UNDER_SZ-1)){
-				pCtx->nDasErr = das_error(DASERR_SERIAL, 
+				pCtx->nDasErr = daserrf(DASERR_SERIAL, 
 					"Parse error: Underflow buffer can't hold %d + %d bytes", 
 					pCtx->nValUnderFlowValid, n
 				);
@@ -1717,7 +1717,7 @@ static void _serial_xmlCharData(void* pUserData, const char* sChars, int nLen)
 			memcpy(pCtx->aValUnderFlow + pCtx->nValUnderFlowValid, sChars, n);
 		
 			/* Read the underflow buffer then clear it */
-			/* TODO:  make DasAry_putAt handle index rolling as well
+			/* TODO:  make DasAry_setValsAt handle index rolling as well
 			 *  (I think this is done now?)
 			 */
 			/* Decode only what the underflow buffer holds: the bytes saved from
@@ -1743,10 +1743,10 @@ static void _serial_xmlCharData(void* pUserData, const char* sChars, int nLen)
 	}
 
 	/* Decode as many values as possible from the input */
-	/* TODO:  make DasAry_putAt handle index rolling as well */
+	/* TODO:  make DasAry_setValsAt handle index rolling as well */
 	int nChunkVals = 0;
 	nUnRead = DasCodec_decode(
-		&(pCtx->codecHdrVals), (const ubyte*) sChars, nLen, -1, &nChunkVals
+		&(pCtx->codecHdrVals), (const uint8_t*) sChars, nLen, -1, &nChunkVals
 	);
 	if(nUnRead < 0){
 		strncpy(pCtx->sErrMsg, "Decoding error in header values", 511);
@@ -1766,7 +1766,7 @@ static void _serial_xmlCharData(void* pUserData, const char* sChars, int nLen)
 			if(!isspace((unsigned char)sChars[i])){ bBlank = false; break; }
 		}
 		if(!bBlank){
-			pCtx->nDasErr = das_error(DASERR_SERIAL,
+			pCtx->nDasErr = daserrf(DASERR_SERIAL,
 				"Parse error: %d bytes of header values consumed without decoding a "
 				"value, near '%.32s'", nSeen, sChars
 			);
@@ -1777,7 +1777,7 @@ static void _serial_xmlCharData(void* pUserData, const char* sChars, int nLen)
 	/* Copy unread bytes into the underflow buffer */
 	if(nUnRead > 0){
 		if(nUnRead > _VAL_UNDER_SZ){
-			pCtx->nDasErr = das_error(DASERR_SERIAL, 
+			pCtx->nDasErr = daserrf(DASERR_SERIAL, 
 				"Parse error: Unread bytes of character data (%d) too large to "
 				"fit in underflow buffer (%d)", nUnRead, _VAL_UNDER_SZ
 			);
@@ -1798,20 +1798,20 @@ static void _serial_onCloseProp(context_t* pCtx, DasDesc* pDest){
 		return;
 
 	DasAry* pAry = &(pCtx->aPropVal);
-	ubyte uTerm = 0;
+	uint8_t uTerm = 0;
 	DasAry_append(pAry, &uTerm, 1);  // Null terminate the value string
 	size_t uValLen = 0;
-	const char* sValue = DasAry_getCharsIn(pAry, DIM0, &uValLen);
+	const char* sValue = DasAry_charsIn(pAry, DAS_ADDR0, &uValLen);
 
 	if(pDest == NULL){
-		pCtx->nDasErr = das_error(DASERR_SERIAL, "Property element at improper location");
+		pCtx->nDasErr = daserrf(DASERR_SERIAL, "Property element at improper location");
 		return;
 	}
 
 	/* Property units are input too.  Text that doesn't parse leaves the value
-	   unitless, Units_fromStr() said why; the value text is untouched. */
-	das_units propUnits = Units_fromStr(pCtx->sPropUnits);
-	if(propUnits == NULL) propUnits = UNIT_DIMENSIONLESS;
+	   unitless, DasUnits_fromStr() said why; the value text is untouched. */
+	DasUnits propUnits = DasUnits_fromStr(pCtx->sPropUnits);
+	if(propUnits == NULL) propUnits = DASUNITS_DIMENSIONLESS;
 
 	DasDesc_flexSet(
 		pDest,                                                   // descriptor
@@ -1853,9 +1853,9 @@ static void _serial_onCloseVals(context_t* pCtx){
 	 */
 	size_t uExpect = 0;
 	
-	for(int iExt = 0; iExt < VARIDX_MAX; ++iExt){
+	for(int iExt = 0; iExt < DASIDX_MAX; ++iExt){
 
-		if(pCtx->aExtShape[iExt] == VARIDX_UNUSED)
+		if(pCtx->aExtShape[iExt] == DASIDX_UNUSED)
 			break;
 
 		if(pCtx->aExtShape[iExt] < 1) continue; /* this external index is variable length */
@@ -1872,7 +1872,7 @@ static void _serial_onCloseVals(context_t* pCtx){
 	}
 
 	/* Now get the array size in any non-internal dimensions */
-	ptrdiff_t aShape[VARIDX_MAX] = {0};
+	ptrdiff_t aShape[DASIDX_MAX] = {0};
 	int nExtAryRank = DasAry_shape(pCtx->pCurAry, aShape) - pCtx->varIntRank;
 
 	size_t uHave = 0;
@@ -1889,7 +1889,7 @@ static void _serial_onCloseVals(context_t* pCtx){
 	   They are arrived at independently, so a disagreement is an internal fault
 	   (a dropped index roll, say) and not a malformed stream.  Say which. */
 	if(uHave != pCtx->uHdrValsRead){
-		pCtx->nDasErr = das_error(DASERR_SERIAL,
+		pCtx->nDasErr = daserrf(DASERR_SERIAL,
 			"Internal error: the codec reported %zu header values for variable %s:%s in "
 			"dataset ID %02d but the array holds %zu",
 			pCtx->uHdrValsRead, DasDim_name(pCtx->pCurDim), pCtx->varUse, pCtx->nPktId, uHave
@@ -1898,7 +1898,7 @@ static void _serial_onCloseVals(context_t* pCtx){
 	}
 
 	if(uHave != uExpect){
-		pCtx->nDasErr = das_error(DASERR_SERIAL,
+		pCtx->nDasErr = daserrf(DASERR_SERIAL,
 			"Expected %zu header values for variable %s:%s in dataset ID %02d, read %zu",
 			uExpect, DasDim_name(pCtx->pCurDim), pCtx->varUse, pCtx->nPktId, uHave
 		);
@@ -1923,7 +1923,7 @@ static void _serial_onCloseVar(context_t* pCtx)
 
 	/* datetime scalars are affine whether or not the stream said so; binding
 	   the point row explicitly matches the schema's SHOULD */
-	if((pCtx->varFam == VS_SCALAR)&&(pCtx->valSemantic == DAS_SEM_DATE)&&
+	if((pCtx->varFam == VS_SCALAR)&&(pCtx->valSemantic == DASSEM_DATE)&&
 	   !pCtx->bOpsSeen){
 		del_DasForm(pCtx->pVarForm);
 		pCtx->pVarForm = new_DasFormPt();
@@ -1932,37 +1932,37 @@ static void _serial_onCloseVar(context_t* pCtx)
 	if(pCtx->varGenKind == gtSeq){
 		/* the sequence's declared extents, with the dataset header filling in
 		   numbers where the variable deferred */
-		ptrdiff_t aExt[VARIDX_MAX];
+		ptrdiff_t aExt[DASIDX_MAX];
 		for(int i = 0; i < nDsRank; ++i){
 			aExt[i] = pCtx->aVarExtShape[i];
 
 			/* A sequence has no storage, so '*' cannot mean ragged on one --
 			   there is nothing there to be ragged.  It means what '^' means:
 			   the container decides.  Read it that way and say so out loud. */
-			if(aExt[i] == VARIDX_RAGGED){
-				daslog_info_v(
+			if(aExt[i] == DASIDX_RAGGED){
+				daslog_infof(
 					"Dataset ID %d, %s:%s index %d: '*' on a sequence reads as "
 					"'^', the container's extent", pCtx->nPktId,
 					DasDim_name(pCtx->pCurDim), pCtx->varUse, i
 				);
-				aExt[i] = VARIDX_BORROW;
+				aExt[i] = DASIDX_BORROW;
 			}
 
 			/* The hard rail: nothing borrows outside the dataset's own index
 			   range.  Wherever the dataset named a number, that number IS the
 			   extent.  Only a ragged dataset index leaves the question open,
 			   and then it takes a shape model to answer at read time. */
-			if((aExt[i] == VARIDX_BORROW)&&(pCtx->aExtShape[i] >= 0))
+			if((aExt[i] == DASIDX_BORROW)&&(pCtx->aExtShape[i] >= 0))
 				aExt[i] = pCtx->aExtShape[i];
 		}
 
-		das_val_type vtEl = pCtx->varItemType;
-		size_t uElem  = das_vt_size(vtEl);
-		size_t uSlope = (vtEl == vtTime) ? sizeof(double) : uElem;
+		das_vt vtEl = pCtx->varItemType;
+		size_t uElem  = dasvt_size(vtEl);
+		size_t uSlope = (vtEl == DASVT_TIME) ? sizeof(double) : uElem;
 
 		int nComps = (pCtx->nVarComps > 0) ? pCtx->nVarComps : 1;
 		if((pCtx->nVarComps > 0)&&(pCtx->nSeqSeen != pCtx->nVarComps)){
-			pCtx->nDasErr = das_error(DASERR_SERIAL,
+			pCtx->nDasErr = daserrf(DASERR_SERIAL,
 				"<composite> declares %d component(s) but has %d <sequence> "
 				"child(ren), dataset ID %d", pCtx->nVarComps, pCtx->nSeqSeen,
 				pCtx->nPktId
@@ -1970,13 +1970,13 @@ static void _serial_onCloseVar(context_t* pCtx)
 			goto NO_CUR_VAR;
 		}
 		/* expand dependency-ordered slopes into per-external-index slots */
-		ubyte* aIcpt  = (ubyte*)calloc(nComps, sizeof(das_time));
-		ubyte* aSlope = (ubyte*)calloc((size_t)nComps * VARIDX_MAX, sizeof(das_time));
+		uint8_t* aIcpt  = (uint8_t*)calloc(nComps, sizeof(DasTime));
+		uint8_t* aSlope = (uint8_t*)calloc((size_t)nComps * DASIDX_MAX, sizeof(DasTime));
 		for(int c = 0; c < nComps; ++c){
-			const ubyte* pMin = (pCtx->nVarComps > 0) ?
+			const uint8_t* pMin = (pCtx->nVarComps > 0) ?
 				pCtx->pSeqMinC + (size_t)c * _VAL_SEQ_CONST_SZ : pCtx->aSeqMin;
-			const ubyte* pInt = (pCtx->nVarComps > 0) ?
-				pCtx->pSeqInterC + (size_t)c * VARIDX_MAX * _VAL_SEQ_CONST_SZ : pCtx->aSeqInter;
+			const uint8_t* pInt = (pCtx->nVarComps > 0) ?
+				pCtx->pSeqInterC + (size_t)c * DASIDX_MAX * _VAL_SEQ_CONST_SZ : pCtx->aSeqInter;
 			memcpy(aIcpt + (size_t)c*uElem, pMin, uElem);
 			int k = 0;
 			for(int i = 0; i < nDsRank; ++i){
@@ -1989,14 +1989,14 @@ static void _serial_onCloseVar(context_t* pCtx)
 			}
 		}
 		pGen = new_DasGenSeqN(
-			(das_elem_type)vtEl, nComps, aIcpt, nDsRank, aSlope, aExt
+			(das_et)vtEl, nComps, aIcpt, nDsRank, aSlope, aExt
 		);
 		free(aIcpt);
 		free(aSlope);
 	}
 	else{
 		if(pCtx->pCurAry == NULL){
-			pCtx->nDasErr = das_error(DASERR_SERIAL,
+			pCtx->nDasErr = daserrf(DASERR_SERIAL,
 				"Variable %s:%s in dataset ID %d has no value source",
 				DasDim_name(pCtx->pCurDim), pCtx->varUse, pCtx->nPktId
 			);
@@ -2024,7 +2024,7 @@ static void _serial_onCloseVar(context_t* pCtx)
 		pVar = _new_DasVarBytes_gen(
 			pGen, pCtx->varUnits, (pCtx->varFam == VS_STRING),
 			(pCtx->nPktItemBytes > 0) ? (ptrdiff_t)pCtx->nPktItemBytes
-			                          : VARIDX_RAGGED
+			                          : DASIDX_RAGGED
 		);
 	}
 	DasGen_decRef(pGen);   /* the variable holds the surviving reference */
@@ -2041,14 +2041,14 @@ static void _serial_onCloseVar(context_t* pCtx)
 
 	/* If this is an array var type & it is record varying, add a packet decoder */
 	if((pCtx->varGenKind == gtArray)&&(pCtx->pCurAry != NULL)&&
-	   (pCtx->aVarMap[0] != VARIDX_UNUSED)){
+	   (pCtx->aVarMap[0] != DASIDX_UNUSED)){
 
 		DasCodec* pNewCodec = NULL;
 
 		/* the codec still speaks semantic internally; byte runs derive theirs
 		   from the structural family (the wire no longer says it) */
 		const char* sCodecSem = pCtx->valSemantic;
-		if(pCtx->varFam == VS_STRING)    sCodecSem = DAS_SEM_TEXT;
+		if(pCtx->varFam == VS_STRING)    sCodecSem = DASSEM_TEXT;
 		else if(pCtx->varFam == VS_BLOB) sCodecSem = DAS_SEM_BLOB;
 
 		/* The item COUNT (nPktItems, -1 when variable) is passed straight through to
@@ -2058,28 +2058,28 @@ static void _serial_onCloseVar(context_t* pCtx)
 		if(pCtx->nPktItemBytes < 0){
 
 			/* itemBytes="*" is framed two ways:
-			   1. DASENC_ITEM_LEN: no valTerm, each value carries an in-packet length
+			   1. DASCODEC_ITEM_LEN: no valTerm, each value carries an in-packet length
 			      tag '{N}'.  Always the case for raw and base64.
-			   2. DASENC_ITEM_TERM: utf8 with a valTerm is terminator-framed.  Note
+			   2. DASCODEC_ITEM_TERM: utf8 with a valTerm is terminator-framed.  Note
 			      that cSep is meaningless for the length-prefixed form, so pass NUL.
 			*/
 			bool bLenPfx = (pCtx->sValTerm[0] == '\0')
-			            || (pCtx->sValEncType != DAS_ENC_UTF8);
-			int16_t nFraming = bLenPfx ? DASENC_ITEM_LEN : DASENC_ITEM_TERM;
-			ubyte cSep = bLenPfx ? '\0' : pCtx->sValTerm[0];
+			            || (pCtx->sValEncType != DASENC_UTF8);
+			int16_t nFraming = bLenPfx ? DASCODEC_ITEM_LEN : DASCODEC_ITEM_TERM;
+			uint8_t cSep = bLenPfx ? '\0' : pCtx->sValTerm[0];
 
-			pNewCodec = DasDs_addStringCodec(
+			pNewCodec = DasDs_makeStrCodec(
 				pCtx->pDs, DasAry_id(pCtx->pCurAry), sCodecSem,
 				pCtx->sValEncType, nFraming, cSep,
-				pCtx->nPktItems, DASENC_READ
+				pCtx->nPktItems, DASCODEC_READ
 			);
 
 		}
 		else{
-			pNewCodec = DasDs_addFixedCodec(
+			pNewCodec = DasDs_makeFixedCodec(
 				pCtx->pDs, DasAry_id(pCtx->pCurAry), sCodecSem,
 				pCtx->sValEncType, pCtx->nPktItemBytes, pCtx->nPktItems,
-				DASENC_READ
+				DASCODEC_READ
 			);
 		}
 		if(pNewCodec == NULL){
@@ -2091,9 +2091,9 @@ static void _serial_onCloseVar(context_t* pCtx)
 			external indices we have for numItems="*" utf8 encoded data. -- see DasCodec. */
 		{
 			int nDsRank = DasDs_rank(pCtx->pDs);
-			ubyte nExtRagged = 0;
+			uint8_t nExtRagged = 0;
 			for(int iExt = 1; iExt < nDsRank; ++iExt){
-				if((pCtx->aVarMap[iExt] != VARIDX_UNUSED) && (pCtx->aExtShape[iExt] == VARIDX_RAGGED))
+				if((pCtx->aVarMap[iExt] != DASIDX_UNUSED) && (pCtx->aExtShape[iExt] == DASIDX_RAGGED))
 					++nExtRagged;
 			}
 			pNewCodec->nExtRagged = nExtRagged;
@@ -2103,8 +2103,8 @@ static void _serial_onCloseVar(context_t* pCtx)
 			   its declared count. */
 			int nSpan = 0;
 			if(nExtRagged > 0){
-				int aRagIdx[VARIDX_MAX];
-				int nChk = DasCodec_raggedIndices(pNewCodec, aRagIdx);
+				int aRagIdx[DASIDX_MAX];
+				int nChk = DasCodec_findRagged(pNewCodec, aRagIdx);
 				if(nChk < 0){
 					pCtx->nDasErr = -1 * nChk;
 					goto NO_CUR_VAR;
@@ -2124,17 +2124,17 @@ static void _serial_onCloseVar(context_t* pCtx)
 			   packet edge ends the run and rolls the next higher index.
 			*/
 			if(pCtx->sItemsTerm[0] != '\0'){
-				char aLvls[VARIDX_MAX];
-				ubyte nLvls = 0;
+				char aLvls[DASIDX_MAX];
+				uint8_t nLvls = 0;
 				const char* p = pCtx->sItemsTerm;
-				while((*p != '\0') && (nLvls < VARIDX_MAX)){
+				while((*p != '\0') && (nLvls < DASIDX_MAX)){
 					char c = *p;
 					if(*p == '\\'){
 						switch(p[1]){
 						case 'n': c = '\n'; break;  case 't': c = '\t'; break;
 						case 'r': c = '\r'; break;  case '0': c = '\0'; break;
 						default:
-							pCtx->nDasErr = das_error(DASERR_SERIAL,
+							pCtx->nDasErr = daserrf(DASERR_SERIAL,
 								"Bad escape in idxTerm=\"%s\" for dataset ID %02d",
 								pCtx->sItemsTerm, pCtx->nPktId);
 							goto NO_CUR_VAR;
@@ -2146,7 +2146,7 @@ static void _serial_onCloseVar(context_t* pCtx)
 					if(*p == ',') ++p;
 				}
 				if((nLvls != nExtRagged) && (nLvls != nSpan)){
-					pCtx->nDasErr = das_error(DASERR_SERIAL,
+					pCtx->nDasErr = daserrf(DASERR_SERIAL,
 						"idxTerm=\"%s\" has %hhu terminator(s) but %s:%s needs %hhu (one per "
 						"ragged index) or %d (one per index down to the inner-most ragged) "
 						"in dataset ID %02d", pCtx->sItemsTerm, nLvls,
@@ -2158,7 +2158,7 @@ static void _serial_onCloseVar(context_t* pCtx)
 				if(nTRet != DAS_OKAY){ pCtx->nDasErr = nTRet; goto NO_CUR_VAR; }
 			}
 			else if((nSpan >= 2) && DasCodec_isText(pNewCodec)){
-				pCtx->nDasErr = das_error(DASERR_SERIAL,
+				pCtx->nDasErr = daserrf(DASERR_SERIAL,
 					"%s:%s in dataset ID %02d is utf8 with a variable-count run structure "
 					"%d indexes deep but declares no idxTerm.", DasDim_name(pCtx->pCurDim),
 					pCtx->varUse, pCtx->nPktId, nSpan
@@ -2174,15 +2174,15 @@ static void _serial_onCloseVar(context_t* pCtx)
 	}
 
 	/* If any properties were buffered for this variable, copy them over */
-	if(DasDesc_length(&(pCtx->varProps)) > 0){
+	if(DasDesc_numProps(&(pCtx->varProps)) > 0){
 		DasDesc_copyIn((DasDesc*)pVar, &(pCtx->varProps));
 	}
 
 	/* Units text that didn't parse rides along as a property, so passing the
-	   stream through loses nothing.  Units_fromStr() said why it failed. */
+	   stream through loses nothing.  DasUnits_fromStr() said why it failed. */
 	if(pCtx->varUnitsText[0] != '\0'){
-		DasDesc_setStr((DasDesc*)pVar, "unitsText", pCtx->varUnitsText);
-		daslog_warn_v("Units '%s' on variable %s:%s set to dimensionless, the "
+		DasDesc_setVal((DasDesc*)pVar, "unitsText", pCtx->varUnitsText);
+		daslog_warnf("Units '%s' on variable %s:%s set to dimensionless, the "
 		              "text is kept in property 'unitsText'", pCtx->varUnitsText,
 		              DasDim_name(pCtx->pCurDim), pCtx->varUse);
 	}
@@ -2279,10 +2279,10 @@ static void _serial_xmlElementEnd(void* pUserData, const char* sElement)
 DasDs* new_DasDs_xml(DasBuf* pBuf, DasDesc* pParent, int nPktId)
 {
 	context_t context = {0};  // All object's initially null
-	DasDesc_init(&(context.varProps), DASDESC_UNK, NULL); /* Variable properties at zero */
+	DasDesc_init(&(context.varProps), DASDESCTYPE_UNK, NULL); /* Variable properties at zero */
 
-	if((pParent == NULL)||(((DasDesc*)pParent)->type != DASDESC_STREAM)){
-		das_error(DASERR_SERIAL, "Stream descriptor must appear before a dataset descriptor");
+	if((pParent == NULL)||(((DasDesc*)pParent)->type != DASDESCTYPE_STREAM)){
+		daserrf(DASERR_SERIAL, "Stream descriptor must appear before a dataset descriptor");
 		return NULL;
 	}
 
@@ -2290,19 +2290,19 @@ DasDs* new_DasDs_xml(DasBuf* pBuf, DasDesc* pParent, int nPktId)
 	context.bEmbedAsBytes = DasStream_getEmbedAsBytes(context.pSd);
 
 	context.nPktId = nPktId;
-	for(int i = 0; i < VARIDX_MAX; ++i)
-		context.aExtShape[i] = VARIDX_UNUSED;
+	for(int i = 0; i < DASIDX_MAX; ++i)
+		context.aExtShape[i] = DASIDX_UNUSED;
 
 	context.nDasErr = DAS_OKAY;
 
 	XML_Parser pParser = XML_ParserCreate("UTF-8");
 	if(pParser == NULL){
-		das_error(DASERR_SERIAL, "Couldn't create XML parser\n" );
+		daserrf(DASERR_SERIAL, "Couldn't create XML parser\n" );
 		return NULL;
 	}
 
 	/* Make a 1-D array to hold the current property value during string accumulation */
-	init_DasAry(&(context.aPropVal), "streamprops", vtUByte, 0, (const ubyte[1]){0}, RANK_1(0), NULL);
+	init_DasAry(&(context.aPropVal), "streamprops", DASVT_UBYTE, 0, (const uint8_t[1]){0}, DAS_SHAPE1(0), NULL);
 
 	XML_SetUserData(pParser, (void*)&context);
 	XML_SetElementHandler(pParser, _serial_xmlElementBeg, _serial_xmlElementEnd);
@@ -2312,7 +2312,7 @@ DasDs* new_DasDs_xml(DasBuf* pBuf, DasDesc* pParent, int nPktId)
 	const char* sXml = (const char*)DasBuf_data(pBuf, &uXml);
 	if(XML_Parse(pParser, sXml, (int)uXml, true) == XML_STATUS_ERROR)
 	{
-		das_error(DASERR_PKT, "Parse error at line %lu: %s\n",
+		daserrf(DASERR_PKT, "Parse error at line %lu: %s\n",
 			(unsigned long)XML_GetCurrentLineNumber(pParser),
 			XML_ErrorString(XML_GetErrorCode(pParser))
 		);
@@ -2326,18 +2326,18 @@ DasDs* new_DasDs_xml(DasBuf* pBuf, DasDesc* pParent, int nPktId)
 	   from its variables, so an orphaned index would silently vanish.  
 
 	   A serializable dataset index must resolve to a concrete size (>=0) or ragged 
-	   (VARIDX_RAGGED); a merged shape of VARIDX_BORROW (only a sequence generator
-	   remains, which stores no extent) or VARIDX_UNUSED means the blob we flattened
+	   (DASIDX_RAGGED); a merged shape of DASIDX_BORROW (only a sequence generator
+	   remains, which stores no extent) or DASIDX_UNUSED means the blob we flattened
 	   was the sole thing pinning that index's length.
 
 	   Refuse rather than emit a morphology that won't re-parse.
 	*/
 	if((context.nDasErr == DAS_OKAY) && context.bFlattened && (context.pDs != NULL)){
-		ptrdiff_t aDerived[VARIDX_MAX] = VARIDX_INIT_UNUSED;
+		ptrdiff_t aDerived[DASIDX_MAX] = DASIDX_INIT_UNUSED;
 		int nRank = DasDs_shape(context.pDs, aDerived);
 		for(int i = 1; i < nRank; ++i){
-			if((context.aExtShape[i] != VARIDX_UNUSED) && (aDerived[i] <= VARIDX_BORROW)){
-				context.nDasErr = das_error(DASERR_SERIAL,
+			if((context.aExtShape[i] != DASIDX_UNUSED) && (aDerived[i] <= DASIDX_BORROW)){
+				context.nDasErr = daserrf(DASERR_SERIAL,
 					"Flattening an embedded format orphaned index %d of dataset '%s': "
 					"no remaining variable pins its extent (only a sequence generator "
 					"is left), so this stream's morphology cannot be recovered as "
@@ -2352,16 +2352,16 @@ DasDs* new_DasDs_xml(DasBuf* pBuf, DasDesc* pParent, int nPktId)
 	   coordinate variable? */
 	if((context.nDasErr == DAS_OKAY)&&(context.pDs != NULL)){
 		int nRank = DasDs_rank(context.pDs);
-		size_t nCoord = DasDs_numDims(context.pDs, DASDIM_COORD);
+		size_t nCoord = DasDs_numDims(context.pDs, DASDIMTYPE_COORD);
 		for(int iIdx = 0; iIdx < nRank; ++iIdx){
 			bool bCovered = false;
 			for(size_t iC = 0; (iC < nCoord) && !bCovered; ++iC){
-				DasDim* pCoord = DasDs_getDimByIdx(context.pDs, iC, DASDIM_COORD);
-				if((pCoord != NULL) && !DasDim_degenerate(pCoord, iIdx))
+				DasDim* pCoord = DasDs_dimAt(context.pDs, iC, DASDIMTYPE_COORD);
+				if((pCoord != NULL) && !DasDim_isDegenerate(pCoord, iIdx))
 					bCovered = true;
 			}
 			if(!bCovered)
-				daslog_warn_v(
+				daslog_warnf(
 					"Coordinate coverage gap: no coordinate variable in dataset "
 					"'%s' varies along index `%c` (%d)", DasDs_name(context.pDs), 
 					g_sIdxLower[iIdx], iIdx
@@ -2388,6 +2388,6 @@ ERROR:
 	XML_ParserFree(pParser);
 	if(context.pDs)   // Happens, for example, if vector has no components
 		del_DasDesc((DasDesc*)context.pDs);
-	das_error_str(context.nDasErr, context.sErrMsg);
+	daserr(context.nDasErr, context.sErrMsg);
 	return NULL;
 }

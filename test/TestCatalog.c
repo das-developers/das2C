@@ -70,7 +70,7 @@ int main(int argc, char** argv) {
 	const char* sAgent = "das2C Unit_Test";
 	
 	/* Exit on errors, log info messages and above */
-	das_init(argv[0], DASERR_DIS_EXIT, DASLOG_INFO, NULL);
+	daslib_init(argv[0], DASERRDISP_EXIT, DASLOG_INFO, NULL);
 
 	/* Children are loaded by a session, which holds the agent string and
 	   the node cache; the nodes themselves no longer carry either */
@@ -149,7 +149,7 @@ int main(int argc, char** argv) {
 	
 	/* Get a Query definition */
 	printf("TEST %d: Getting partial query interface ", nTest);
-	const DasJdo* pQuery = DasNode_getJdo(pSurvey2, "protocol/http_params/start_time");
+	const DasJdo* pQuery = DasNode_jdo(pSurvey2, "protocol/http_params/start_time");
 	if(pQuery == NULL){ 
 		printf("   [FAILED]\n");
 		return nTest;

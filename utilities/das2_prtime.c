@@ -25,7 +25,7 @@
   
   Updates by CWP to add extra output options
 
-  Needs libdas3, for dt_parsetime().
+  Needs libdas3, for DasTime_fromStr().
 
   cc -O -o prtime prtime.c -I/usr/local/include -L/usr/local/lib -ldas -lm
 
@@ -171,7 +171,7 @@ void prn_time(
 
 int main (int argc, char *argv[])
 {
-	das_time dt;
+	DasTime dt;
 	char s[80] = {'\0'};
 	int len, i;
 	int type = BOTH;
@@ -236,7 +236,7 @@ int main (int argc, char *argv[])
 		if (strlen(s) > 1) {
 
 			/* parse time string */
-			if(!dt_parsetime(&dt, s)) {
+			if(!DasTime_fromStr(&dt, s)) {
 				fprintf (stderr, "%s: error parsing \"%s\"\n", argv[0], s);
 				return 127;
 			}

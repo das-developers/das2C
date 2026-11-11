@@ -49,16 +49,16 @@ extern "C" {
  *        the values:
  *           bool, datetime, int, real, string
  * 
- * @memberof das_val_type
+ * @memberof das_vt
  */
-das_val_type das_vt_store_type(
+das_vt das_vt_store_type(
 	const char* sEncType, int nItemBytes, const char* sInterp
 );
 
 /** Resolve a packet header encoding string to its canonical schema value.
  *
  * An encoding names how values are serialized in a packet, orthogonal to how they are
- * stored (das_val_type) or interpreted (semantic).  The vocabulary is CLOSED -- exactly
+ * stored (das_vt) or interpreted (semantic).  The vocabulary is CLOSED -- exactly
  * the DAS_ENC_* set, the schema's EncodingType pattern -- and not application-expandable.
  * This is the one place an encoding string is validated; output is a canonical DAS_ENC_*
  * pointer, so callers may compare the result by pointer.
@@ -72,12 +72,12 @@ const char* das_enc_fromStr(const char* sEncType);
 /** Resolve a semantic string to its canonical schema value.
  *
  * A variable's *semantic* is how its values are meant to be interpreted, 
- * orthogonal to how they are stored.  So a vtText field may values meant as
- * integers, or a vtLong of TT2000 times.  So storage answers "what bytes?"
+ * orthogonal to how they are stored.  So a DASVT_TEXT field may values meant as
+ * integers, or a DASVT_LONG of TT2000 times.  So storage answers "what bytes?"
  * but semantic answers "what do they mean, and what operations make sense?".
  *
  * This is the single place stream header spellings are normalized (liberal-in): 
- * "int" and 'integer' both maps to DAS_SEM_INT. Output is always a canonical
+ * "int" and 'integer' both maps to DASSEM_INT. Output is always a canonical
  * DAS_SEM_* singleton pointer defined above.
  *
  * @param sSemantic a semantic string from a stream header (may be NULL).

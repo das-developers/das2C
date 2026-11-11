@@ -37,7 +37,7 @@
 /* A control.  Borrowed pointers point into the source's document.  JSON
  * number text is not NUL terminated, hence the owned copies of enum and
  * range strings. */
-struct das_src_ctrl {
+struct das_srcctrl_t {
 	DasSrcProp* pProp;          /* back pointer, the owner */
 	const DasJdo* pSet;         /* the set dict: param, flag, pval, enum, range, value */
 	const DasJdo* pParam;       /* the protocol parameter entry for sParam, or
@@ -50,13 +50,13 @@ struct das_src_ctrl {
 	char* sHi;
 };
 
-struct das_src_prop {
-	das_src_sec_e sec;
+struct das_srcprop_t {
+	das_srcsec sec;
 	DasSrcGroup* pGroup;        /* back pointer */
 	const char* sName;          /* borrowed dict key, the node's spelling */
 	char* sKey;                 /* owned, "coords.time.min" */
 	const DasJdo* pJdo;         /* the property dict: value, set, type, label... */
-	das_srcprop_type_e type;
+	das_srcproptype type;
 	const char* sTypeName;      /* borrowed, "" when inferred */
 	char* sValue;               /* owned scalar copy, NULL when null or absent */
 	DasSrcCtrl* pCtrl;          /* owned, NULL for a fixed property */
@@ -64,9 +64,9 @@ struct das_src_prop {
 
 /* Properties of a group are adjacent in the source's aProp array, so a
  * group is an index range. */
-struct das_src_group {
+struct das_srcgroup_t {
 	const DasSrc* pSrc;         /* back pointer, for reaching the properties */
-	das_src_sec_e sec;
+	das_srcsec sec;
 	const char* sName;          /* borrowed dict key, "" for options */
 	const DasJdo* pJdo;         /* the coordinate, variable, format or options dict */
 	size_t uFirst;              /* into DasSrc.aProp */
@@ -77,8 +77,8 @@ struct das_src_group {
 	size_t uMime;
 };
 
-struct das_src {
-	das_src_kind_e kind;
+struct das_src_t {
+	das_srckind kind;
 	char* sPath;                /* owned, "" when none */
 	char* sUrl;                 /* owned, "" when none */
 
@@ -88,8 +88,8 @@ struct das_src {
 
 	DasSrcGroup* aGroup;        /* owned, in section then presentation order */
 	size_t uGroup;
-	size_t aSecFirst[das_src_sec_size];   /* first group of each section */
-	size_t aSecCount[das_src_sec_size];
+	size_t aSecFirst[DASSRCSEC_SIZE];   /* first group of each section */
+	size_t aSecCount[DASSRCSEC_SIZE];
 
 	DasSrcProp* aProp;          /* owned, grouped as the groups say */
 	size_t uProp;
@@ -102,7 +102,7 @@ struct das_src {
 };
 
 /* The stream source.  Base first so a DasStreamSrc* is a DasSrc*; the cast
- * back is made only after kind says das_src_kind_stream. */
+ * back is made only after kind says DASSRCKIND_STREAM. */
 typedef struct das_stream_src {
 	DasSrc base;
 	const DasJdo* pProto;       /* "protocol", NULL makes the source unqueryable */
@@ -116,7 +116,7 @@ typedef struct das_stream_src {
 
 /* Fold a section name as a user may type it to a section.  Case
  * insensitive.  Returns false if the word is not a section name. */
-bool _das_src_secByName(const char* sName, das_src_sec_e* pSec);
+bool _das_src_secByName(const char* sName, das_srcsec* pSec);
 
 /* The short spelling of a property name: "minimum" -> "min", "enable" ->
  * "enabled".  Names with no alias are returned as given. */
@@ -132,7 +132,7 @@ bool _das_src_propEq(const char* sA, const char* sB);
  * @returns The number of parts, 1 to 3, or 0 if the key is empty, has an
  *        empty part, has more than three parts, or has a part that does
  *        not fit. */
-int _das_src_splitKey(const char* sKey, char aParts[3][DAS_MAX_ID_BUFSZ]);
+int _das_src_splitKey(const char* sKey, char aParts[3][DASID_SZ]);
 
 /* Find properties matching a key, the engine behind DasSrc_findProp()
  * and DasSrc_check().

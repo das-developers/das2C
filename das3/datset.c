@@ -44,31 +44,31 @@ const char* DasDs_group(const DasDs* pThis){ return pThis->sGroupId; }
 
 const char* DasDs_name(const DasDs* pThis){ return pThis->sId; }
 
-const char* DasDs_getPlot(const DasDs* pThis){ return pThis->sPlot; }
+const char* DasDs_plot(const DasDs* pThis){ return pThis->sPlot; }
 
 int DasDs_rank(const DasDs* pThis){ return pThis->nRank; }
 
-size_t DasDs_numAry(const DasDs* pThis){ return pThis->uArrays; }
+size_t DasDs_numArys(const DasDs* pThis){ return pThis->uArrays; }
 
-DasAry* DasDs_getAry(const DasDs* pThis, size_t uIdx)
+DasAry* DasDs_aryAt(const DasDs* pThis, size_t uIdx)
 {
 	return (uIdx < pThis->uArrays) ? pThis->lArrays[uIdx] : NULL;
 }
 
 size_t DasDs_numCodecs(const DasDs* pThis){ return pThis->uCodecs; }
 
-DasCodec* DasDs_getCodec(const DasDs* pThis, size_t uIdx)
+DasCodec* DasDs_codecAt(const DasDs* pThis, size_t uIdx)
 {
 	return (uIdx < pThis->uCodecs) ? pThis->lCodecs + uIdx : NULL;
 }
 
 /* 0 is never a legal count, the DASENC_ITEM_* flags are negative */
-int DasDs_pktItems(const DasDs* pThis, size_t uIdx)
+int DasDs_codecItemsAt(const DasDs* pThis, size_t uIdx)
 {
 	return (uIdx < pThis->uCodecs) ? pThis->lItems[uIdx] : 0;
 }
 
-size_t DasDs_numDims(const DasDs* pThis, das_dim_type_e vt){
+size_t DasDs_numDims(const DasDs* pThis, das_dimtype vt){
 	size_t uDims = 0;
 	for(size_t u = 0; u < pThis->uDims; ++u){
 		if(pThis->lDims[u]->dtype == vt) ++uDims;
@@ -76,7 +76,7 @@ size_t DasDs_numDims(const DasDs* pThis, das_dim_type_e vt){
 	return uDims;
 }
 
-DasDim* DasDs_getDim(DasDs* pThis, const char* sId, das_dim_type_e dmt)
+DasDim* DasDs_physDim(DasDs* pThis, const char* sId, das_dimtype dmt)
 {
 	const char* sDimId = NULL;
 	for(size_t u = 0; u < pThis->uDims; ++u){
@@ -90,7 +90,7 @@ DasDim* DasDs_getDim(DasDs* pThis, const char* sId, das_dim_type_e dmt)
 	return NULL;
 }
 
-DasDim* DasDs_getDimByIdx(DasDs* pThis, size_t idx, das_dim_type_e dmt)
+DasDim* DasDs_dimAt(DasDs* pThis, size_t idx, das_dimtype dmt)
 {
 	size_t uTypeIdx = 0;
 	for(size_t u = 0; u < pThis->uDims; ++u){
@@ -102,7 +102,7 @@ DasDim* DasDs_getDimByIdx(DasDs* pThis, size_t idx, das_dim_type_e dmt)
 	return NULL;
 }
 
-DasDim* DasDs_getDimByName(DasDs* pThis, const char* sId)
+DasDim* DasDs_dim(DasDs* pThis, const char* sId)
 {
 	const char* sDimId = NULL;
 	for(size_t u = 0; u < pThis->uDims; ++u){
@@ -127,11 +127,11 @@ int DasDs_shape(const DasDs* pThis, ptrdiff_t* pShape)
 {
 	/* If cached, just return the value captured by DasDs_cacheShape() */
 	if(! pThis->_dynamic ){
-		memcpy(pShape, pThis->_shape, sizeof(ptrdiff_t)*VARIDX_MAX);
+		memcpy(pShape, pThis->_shape, sizeof(ptrdiff_t)*DASIDX_MAX);
 		return pThis->nRank;
 	}
 	
-	for(int i = 0; i < pThis->nRank; ++i) pShape[i] = VARIDX_UNUSED;
+	for(int i = 0; i < pThis->nRank; ++i) pShape[i] = DASIDX_UNUSED;
 
 	/* Find out my current shape.  Ask all the dimensions their shape.
 	 * Since this can be an instantaneous question during data flow, respond 
@@ -140,14 +140,14 @@ int DasDs_shape(const DasDs* pThis, ptrdiff_t* pShape)
 	DasDim* pDim = NULL;
 	int nDimRank = 0;
 	size_t uDim = 0;
-	ptrdiff_t aShape[VARIDX_MAX];
+	ptrdiff_t aShape[DASIDX_MAX];
 	
 	for(uDim = 0; uDim < pThis->uDims; ++uDim){
 		pDim = pThis->lDims[uDim];
 		nDimRank = DasDim_shape(pDim, aShape);
 		
 		if(nDimRank > pThis->nRank){
-			das_error(
+			daserrf(
 				DASERR_DS, "Dimension rank consistancy check failure.  Dimension "
 				"%s (%s) of dataset %s, is rank %d, must be at most rank %d for consistancy", 
 				pDim->sId, pDim->sDim, pThis->sId, nDimRank, pThis->nRank
@@ -155,16 +155,16 @@ int DasDs_shape(const DasDs* pThis, ptrdiff_t* pShape)
 			return 0;
 		}
 		
-		das_varindex_merge(pThis->nRank, pShape, aShape);
+		dasshape_merge(pThis->nRank, pShape, aShape);
 	}
 	return pThis->nRank;
 }
 
-ptrdiff_t DasDs_lengthIn(const DasDs* pThis, int nIdx, ptrdiff_t* pLoc)
+ptrdiff_t DasDs_lengthIn(const DasDs* pThis, int nIdx, ptrdiff_t* pAddr)
 {
 	
-	int nLengthIn = VARIDX_UNUSED;
-	int nVarLenIn = VARIDX_UNUSED;
+	int nLengthIn = DASIDX_UNUSED;
+	int nVarLenIn = DASIDX_UNUSED;
 	
 	/* The simple function below fails if only a REFERENCE and OFFSET are
 	 * specified but not the CENTER variable */
@@ -172,16 +172,16 @@ ptrdiff_t DasDs_lengthIn(const DasDs* pThis, int nIdx, ptrdiff_t* pLoc)
 	const DasDim* pDim = NULL;
 	for(int i = 0; i < pThis->uDims; ++i){
 		pDim = pThis->lDims[i];
-		nVarLenIn = DasDim_lengthIn(pDim, nIdx, pLoc);
+		nVarLenIn = DasDim_lengthIn(pDim, nIdx, pAddr);
 		
-		nLengthIn = das_varlength_merge(nLengthIn, nVarLenIn);
+		nLengthIn = dasshape_mergeLen(nLengthIn, nVarLenIn);
 	}
 	return nLengthIn;
 }
 
 bool DasDs_cubicCoords(const DasDs* pThis,  const DasDim** pCoords)
 {
-	ptrdiff_t aDsShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
+	ptrdiff_t aDsShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
 	int nRank = DasDs_shape(pThis, aDsShape);
 
 	for(int i = 0; i < nRank; ++i){  /* For each index... */
@@ -191,7 +191,7 @@ bool DasDs_cubicCoords(const DasDs* pThis,  const DasDim** pCoords)
 
 			const DasDim* pCoord = pThis->lDims[c];
 
-			if(pCoord->dtype != DASDIM_COORD) continue;
+			if(pCoord->dtype != DASDIMTYPE_COORD) continue;
 
 			bool bUsed = false;           /* See if already used for lower index*/
 			for(int j = 0; j < i; ++j){
@@ -200,7 +200,7 @@ bool DasDs_cubicCoords(const DasDs* pThis,  const DasDim** pCoords)
 			}
 			if(bUsed) continue;
 
-			if(DasDim_degenerate(pCoord, i)) 
+			if(DasDim_isDegenerate(pCoord, i)) 
 				continue;  /* Doesn't depend on this idx */
 
 			/* make sure it depends only on this index */
@@ -208,7 +208,7 @@ bool DasDs_cubicCoords(const DasDs* pThis,  const DasDim** pCoords)
 			for(int j = 0; j < nRank; ++j){
 				if(j == i) continue;
 
-				if(! DasDim_degenerate(pCoord, j)){
+				if(! DasDim_isDegenerate(pCoord, j)){
 					bOnlyMe = false;
 					break;
 				}
@@ -234,14 +234,14 @@ das_errcode DasDs_addAry(DasDs* pThis, DasAry* pAry)
 	/* Codecs and variables find their arrays here by id, so an id must name
 	   exactly one array */
 	if(pAry == NULL)
-		return das_error(DASERR_DS, "NULL array for dataset %s", pThis->sId);
+		return daserrf(DASERR_DS, "NULL array for dataset %s", pThis->sId);
 	for(size_t u = 0; u < pThis->uArrays; ++u){
 		if(pThis->lArrays[u] == pAry)
-			return das_error(DASERR_DS, "Array %s is already in dataset %s",
+			return daserrf(DASERR_DS, "Array %s is already in dataset %s",
 				DasAry_id(pAry), pThis->sId
 			);
 		if(strcmp(DasAry_id(pThis->lArrays[u]), DasAry_id(pAry)) == 0)
-			return das_error(DASERR_DS, "Dataset %s already has an array with id %s",
+			return daserrf(DASERR_DS, "Dataset %s already has an array with id %s",
 				pThis->sId, DasAry_id(pAry)
 			);
 	}
@@ -270,7 +270,7 @@ das_errcode DasDs_addAry(DasDs* pThis, DasAry* pAry)
 	return DAS_OKAY;
 }
 
-DasAry* DasDs_getAryById(DasDs* pThis, const char* sAryId)
+DasAry* DasDs_ary(DasDs* pThis, const char* sAryId)
 {
 	for(size_t u = 0; u < pThis->uArrays; ++u){
 		if(strcmp(DasAry_id(pThis->lArrays[u]), sAryId) == 0){
@@ -321,14 +321,14 @@ das_errcode DasDs_addDim(DasDs* pThis, DasDim* pDim)
 	 */
 	size_t v = 0;
 	
-	if(pDim->dtype == DASDIM_UNK)
-		return das_error(DASERR_DS, "Can't add a dimension of type ANY to dataset %s", pThis->sId);
+	if(pDim->dtype == DASDIMTYPE_UNK)
+		return daserrf(DASERR_DS, "Can't add a dimension of type ANY to dataset %s", pThis->sId);
 		
 	
 	/* Make sure that I don't already have a dimension with this name */
 	for(v = 0; v < pThis->uDims; ++v){
 		if(strcmp(pThis->lDims[v]->sId, pDim->sId) == 0)
-			return das_error(DASERR_DS, 
+			return daserrf(DASERR_DS, 
 				"A dimension named %s already exists in dataset %s", pDim->sId, pThis->sId
 			);
 	}
@@ -348,7 +348,7 @@ das_errcode DasDs_addDim(DasDs* pThis, DasDim* pDim)
 				}
 			}
 			if(!bInSet){
-				das_error(
+				daserrf(
 					D2ERR_DS, "Data dimension %s depends on coordinate %s which "
 					"is not part of dataset %s", pDim->sDim, pDim->aCoords[u]->sId, 
 					pThis->sId
@@ -378,7 +378,7 @@ das_errcode DasDs_addDim(DasDs* pThis, DasDim* pDim)
 		size_t uNew = pThis->uSzDims * 2;
 		DasDim** pNew = (DasDim**) calloc(uNew, sizeof(void*));
 		if(pNew == NULL)
-			return das_error(DASERR_DS, "Couldn't allocate space for %zu dimensions", uNew);
+			return daserrf(DASERR_DS, "Couldn't allocate space for %zu dimensions", uNew);
 
 		if(pThis->uDims > 0)
 			memcpy(pNew, pThis->lDims, pThis->uDims * sizeof(void*));
@@ -400,7 +400,7 @@ das_errcode DasDs_addDim(DasDs* pThis, DasDim* pDim)
 }
 
 DasDim* DasDs_makeDim(
-    DasDs* pThis, das_dim_type_e dType, const char* sDim, const char* sId
+    DasDs* pThis, das_dimtype dType, const char* sDim, const char* sId
 ){
 	DasDim* pDim = new_DasDim(sDim, sId, dType, pThis->nRank);
 	if(DasDs_addDim(pThis, pDim) != DAS_OKAY){
@@ -427,7 +427,7 @@ static das_errcode _DasDs_codecsGoLarge(DasDs* pThis)
 	if((pNewCodecs == NULL)||(pNewItems == NULL)){
 		if(pNewCodecs != NULL) free(pNewCodecs);
 		if(pNewItems  != NULL) free(pNewItems);
-		return das_error(DASERR_DS, "Couldn't allocate space for %zu codecs", uNewSz);
+		return daserrf(DASERR_DS, "Couldn't allocate space for %zu codecs", uNewSz);
 	}
 
 	memcpy(pNewCodecs, pThis->aCodecs, DASDS_LOC_ENC_SZ*sizeof(DasCodec));
@@ -452,7 +452,7 @@ static das_errcode _DasDs_codecsGoLarger(DasDs* pThis)
 	if((pNewCodecs == NULL)||(pNewItems == NULL)){
 		if(pNewCodecs != NULL) free(pNewCodecs);
 		if(pNewItems  != NULL) free(pNewItems);
-		return das_error(DASERR_DS, "Couldn't allocate space for %zu codecs", uNewSz);
+		return daserrf(DASERR_DS, "Couldn't allocate space for %zu codecs", uNewSz);
 	}
 
 	memcpy(pNewCodecs, pThis->lCodecs, pThis->uSzCodecs*sizeof(DasCodec));
@@ -489,7 +489,7 @@ static das_errcode _DasDs_codecsMakeRoom(DasDs* pThis)
          -cwp 2025-04-03
 */
 
-DasCodec* DasDs_addFixedCodec(
+DasCodec* DasDs_makeFixedCodec(
 	DasDs* pThis, const char* sAryId, const char* sSemantic, 
 	const char* sEncType, int nItemBytes, int nNumItems, bool bRead
 ){
@@ -498,9 +498,9 @@ DasCodec* DasDs_addFixedCodec(
 		return NULL;
 
 	/* Find the array with this ID */
-	DasAry* pAry = DasDs_getAryById(pThis, sAryId);
+	DasAry* pAry = DasDs_ary(pThis, sAryId);
 	if(pAry == NULL){
-		das_error(DASERR_DS, "An array with id '%s' was not found", sAryId);
+		daserrf(DASERR_DS, "An array with id '%s' was not found", sAryId);
 		return NULL;
 	}
 
@@ -519,18 +519,18 @@ DasCodec* DasDs_addFixedCodec(
 	return pCodec;
 }
 
-DasCodec* DasDs_addStringCodec(
+DasCodec* DasDs_makeStrCodec(
     DasDs* pThis, const char* sAryId, const char* sSemantic, 
-    const char* sEncType, int nItemTerm, ubyte uTerm, int nNumItems,
+    const char* sEncType, int nItemTerm, uint8_t uTerm, int nNumItems,
     bool bRead
 ){
 	if(_DasDs_codecsMakeRoom(pThis) != DAS_OKAY)
 		return NULL;
 
 	/* Find the array with this ID */
-	DasAry* pAry = DasDs_getAryById(pThis, sAryId);
+	DasAry* pAry = DasDs_ary(pThis, sAryId);
 	if(pAry == NULL){
-		das_error(DASERR_DS, "An array with id '%s' was not found", sAryId);
+		daserrf(DASERR_DS, "An array with id '%s' was not found", sAryId);
 		return NULL;
 	}
 
@@ -549,7 +549,7 @@ DasCodec* DasDs_addStringCodec(
 	return pCodec;
 }
 
-DasCodec* DasDs_addCodecFrom(
+DasCodec* DasDs_cloneCodec(
 	DasDs* pThis, const char* sAryId, const DasCodec* pOther, int nNumItems,
 	bool bRead
 ){
@@ -562,9 +562,9 @@ DasCodec* DasDs_addCodecFrom(
 		_sFindAry = DasAry_id(pOther->pAry);
 
 	/* Look for the array in this dataset, not the other one */
-	DasAry* pAry = DasDs_getAryById(pThis, _sFindAry);
+	DasAry* pAry = DasDs_ary(pThis, _sFindAry);
 	if(pAry == NULL){
-		das_error(DASERR_DS, "An array with id '%s' was not found", _sFindAry);
+		daserrf(DASERR_DS, "An array with id '%s' was not found", _sFindAry);
 		return NULL;
 	}
 	
@@ -585,18 +585,18 @@ DasCodec* DasDs_addCodecFrom(
 
 das_errcode DasDs_updateCodec(
 	DasDs* pThis, size_t uIdx, bool bRead, const char* sAryId,
-	const char* sEncType, int16_t nItemBytes, ubyte cSep, das_units epoch,
+	const char* sEncType, int16_t nItemBytes, uint8_t cSep, DasUnits epoch,
 	const char* sOutFmt
 ){
 	if(uIdx >= pThis->uCodecs)
-		return das_error(DASERR_DS, "Dataset %s has no codec %zu", pThis->sId, uIdx);
+		return daserrf(DASERR_DS, "Dataset %s has no codec %zu", pThis->sId, uIdx);
 
 	/* The id is resolved here, against this dataset's own list, so a codec
 	   can never be aimed at an array its dataset does not hold */
 	DasAry* pAry = NULL;
 	if((sAryId != NULL)&&(sAryId[0] != '\0')){
-		if((pAry = DasDs_getAryById(pThis, sAryId)) == NULL)
-			return das_error(DASERR_DS, "Dataset %s has no array with id '%s'",
+		if((pAry = DasDs_ary(pThis, sAryId)) == NULL)
+			return daserrf(DASERR_DS, "Dataset %s has no array with id '%s'",
 				pThis->sId, sAryId
 			);
 	}
@@ -610,8 +610,8 @@ das_errcode DasDs_recBytes(const DasDs* pThis, int* pBytes)
 {
 	int nBytesPerPkt = 0;
 	for(size_t u = 0; u < pThis->uCodecs; ++u){
-		int nValsExpect = DasDs_pktItems(pThis, u);
-		int nValSz = DasDs_getCodec(pThis, u)->nBufValSz;
+		int nValsExpect = DasDs_codecItemsAt(pThis, u);
+		int nValSz = DasDs_codecAt(pThis, u)->nBufValSz;
 
 		/* A variable count or a variable width makes the record variable */
 		if((nValsExpect < 1)||(nValSz < 1)){
@@ -621,7 +621,7 @@ das_errcode DasDs_recBytes(const DasDs* pThis, int* pBytes)
 
 		/* Counts come from the stream header, so the sum is checked, not wrapped */
 		if(nValsExpect > (INT_MAX - nBytesPerPkt) / nValSz)
-			return das_error(DASERR_DS,
+			return daserrf(DASERR_DS,
 				"Records in dataset %s would be over %d bytes long", pThis->sId, INT_MAX
 			);
 		nBytesPerPkt += nValSz*nValsExpect;
@@ -630,7 +630,7 @@ das_errcode DasDs_recBytes(const DasDs* pThis, int* pBytes)
 	return DAS_OKAY;
 }
 
-DasCodec* DasDs_getCodecFor(
+DasCodec* DasDs_codecFor(
 	const DasDs* pThis, const char* sAryId, int* pItems
 ){
 	size_t u;
@@ -642,7 +642,7 @@ DasCodec* DasDs_getCodecFor(
 		}
 	}
 	if(pFind == NULL){
-		das_error(DASERR_DS, "No array with ID %s present in this dataset", sAryId);
+		daserrf(DASERR_DS, "No array with ID %s present in this dataset", sAryId);
 		return NULL;
 	}
 
@@ -657,7 +657,7 @@ DasCodec* DasDs_getCodecFor(
 
 	/* Some arrays don't have codecs, maybe because app code didn't 
 	   create one yet, or it's a set of header only values */
-	daslog_debug_v(
+	daslog_debugf(
 		"No codec for array '%s' in dataset '%s (%s)', must be a header only array", 
 		sAryId, pThis->sId, pThis->sGroupId
 	);
@@ -674,7 +674,7 @@ static int _DasDs_catDim(const DasDim* pDim, char* sBuf, size_t uLen, int n)
 	int nDim = DasDim_info(pDim, NULL, 0);
 	char* sDim = (char*)malloc(nDim + 1);
 	if(sDim == NULL){
-		das_error(DASERR_DS, "Couldn't allocate %d bytes", nDim + 1);
+		daserrf(DASERR_DS, "Couldn't allocate %d bytes", nDim + 1);
 		return -1;
 	}
 	DasDim_info(pDim, sDim, nDim + 1);
@@ -695,10 +695,10 @@ static int _DasDs_catTitle(const DasDs* pThis, char* sBuf, size_t uLen, int n)
 		n = _prn_catf(sBuf, uLen, n, "Dataset: '%s'", pThis->sId);
 	
 	if(pThis->nRank > 0){
-		ptrdiff_t aShape[VARIDX_MAX];
+		ptrdiff_t aShape[DASIDX_MAX];
 		DasDs_shape(pThis, aShape);
 		n = _prn_catf(sBuf, uLen, n, " | ");
-		n += das_shape_info(aShape, pThis->nRank, pThis->nRank, 
+		n += dasshape_info(aShape, pThis->nRank, pThis->nRank, 
 			_prn_at(sBuf, uLen, n), _prn_rem(uLen, n)
 		);
 	}
@@ -728,7 +728,7 @@ int DasDs_info(const DasDs* pThis, char* sBuf, size_t uLen)
 	
 	/* Data first, then coordinates */
 	for(int nPass = 0; nPass < 2; ++nPass){
-		das_dim_type_e dt = (nPass == 0) ? DASDIM_DATA : DASDIM_COORD;
+		das_dimtype dt = (nPass == 0) ? DASDIMTYPE_DATA : DASDIMTYPE_COORD;
 		for(uint32_t u = 0; u < pThis->uDims; ++u){
 			if(pThis->lDims[u]->dtype != dt) continue;
 			if((n = _DasDs_catDim(pThis->lDims[u], sBuf, uLen, n)) < 0)
@@ -787,7 +787,7 @@ static void _del_DasDs(DasDesc* pDesc){
 	free(pThis);
 }
 
-size_t DasDs_clearRagged0(DasDs* pThis)
+size_t DasDs_clearIdx0(DasDs* pThis)
 {
 	size_t uBytesCleared = 0;
 	DasDim* pDim = NULL;
@@ -798,8 +798,8 @@ size_t DasDs_clearRagged0(DasDs* pThis)
 		pDim = pThis->lDims[d];
 		for(size_t v = 0; v < pDim->uVars; ++v){
 			pVar = pDim->aVars[v];
-			if(!DasVar_degenerate(pVar, 0)){
-				if( (pAry = DasVar_getAry(pVar)) != NULL){
+			if(!DasVar_isDegenerate(pVar, 0)){
+				if( (pAry = DasVar_ary(pVar)) != NULL){
 					uBytesCleared += DasAry_clear(pAry) * DasAry_valSize(pAry);
 				}
 			}
@@ -812,29 +812,29 @@ size_t DasDs_clearRagged0(DasDs* pThis)
 DasDs* new_DasDs(
 	const char* sId, const char* sGroupId, int nRank
 ){
-	if(!das_assert_valid_id(sId)) return NULL;
+	if(!dasid_check(sId)) return NULL;
 
 	/* "" is the null group too, so copies can pass DasDs_group() straight
 	   through; the id validator would reject an empty string. */
 	if((sGroupId != NULL) && (sGroupId[0] == '\0')) sGroupId = NULL;
-	if((sGroupId != NULL) && (!das_assert_valid_id(sGroupId))) return NULL;
+	if((sGroupId != NULL) && (!dasid_check(sGroupId))) return NULL;
 	if(nRank < 1){
-		das_error(DASERR_DS, "Datasets below rank 1 are not supported");
+		daserrf(DASERR_DS, "Datasets below rank 1 are not supported");
 		return NULL;
 	}
-	if(nRank > VARIDX_MAX ){
-		das_error(DASERR_DS, "Datasets above rank %d are not currently "
+	if(nRank > DASIDX_MAX ){
+		daserrf(DASERR_DS, "Datasets above rank %d are not currently "
 		           "supported, but can be if needed.", DASERR_DS);
 		return NULL;
 	}
 
 	DasDs* pThis = (DasDs*)calloc(1, sizeof(DasDs));
 	if(pThis == NULL){
-		das_error(DASERR_DS, "Couldn't allocate %zu bytes for a new dataset", sizeof(DasDs));
+		daserrf(DASERR_DS, "Couldn't allocate %zu bytes for a new dataset", sizeof(DasDs));
 		return NULL;
 	}
 
-	DasDesc_init((DasDesc*)pThis, DASDESC_DS, _del_DasDs);
+	DasDesc_init((DasDesc*)pThis, DASDESCTYPE_DS, _del_DasDs);
 	
 	/* Make sure not to break in middle of utf-8 sequence, start to replace
 	 * all the strncpy's in das2 libs with this for safety */
@@ -862,7 +862,7 @@ DasDs* new_DasDs(
 /* ************************************************************************* */
 /* Shallow-on-arrays deep-on-structure copy, the stream-filter work horse */
 
-DasDs* DasDs_copy(const DasDs* pThis)
+DasDs* new_DasDs_copy(const DasDs* pThis)
 {
 	/* A non-const handle is needed for the by-index dim accessor, but nothing
 	   below mutates the source. */
@@ -873,7 +873,7 @@ DasDs* DasDs_copy(const DasDs* pThis)
 		return NULL;
 
 	DasDesc_copyIn((DasDesc*)pOut, (const DasDesc*)pThis);
-	DasDs_setPlot(pOut, DasDs_getPlot(pThis));
+	DasDs_setPlot(pOut, DasDs_plot(pThis));
 	pOut->_dynamic = pThis->_dynamic;
 
 	/* 1. Share the storage arrays.  DasDs_addAry() adds its own reference, and
@@ -885,31 +885,31 @@ DasDs* DasDs_copy(const DasDs* pThis)
 			goto FAIL;
 	}
 
-	/* 2. Copy the dimensions and their variables.  DasVar_copy() shares (and
+	/* 2. Copy the dimensions and their variables.  new_DasVar_copy() shares (and
 	      ref-counts) the same backing array a variable already points at, so the
 	      copied variables read from the shared storage added above. */
-	for(int iType = DASDIM_COORD; iType <= DASDIM_DATA; ++iType){
+	for(int iType = DASDIMTYPE_COORD; iType <= DASDIMTYPE_DATA; ++iType){
 		size_t uDims = DasDs_numDims(pThis, iType);
 		for(size_t uD = 0; uD < uDims; ++uD){
-			DasDim* pDimIn = DasDs_getDimByIdx(pSrc, uD, iType);
+			DasDim* pDimIn = DasDs_dimAt(pSrc, uD, iType);
 
 			DasDim* pDimOut = DasDs_makeDim(
-				pOut, iType, DasDim_dim(pDimIn), DasDim_name(pDimIn)
+				pOut, iType, DasDim_physDim(pDimIn), DasDim_name(pDimIn)
 			);
 			if(pDimOut == NULL)
 				goto FAIL;
 
 			DasDesc_copyIn((DasDesc*)pDimOut, (DasDesc*)pDimIn);
 
-			DasDim_setAxes(pDimOut, pDimIn);
+			DasDim_setAxesFrom(pDimOut, pDimIn);
 
 			size_t uVars = DasDim_numVars(pDimIn);
 			for(size_t uV = 0; uV < uVars; ++uV){
-				DasVar* pVarOut = DasVar_copy(DasDim_getVarByIdx(pDimIn, uV));
+				DasVar* pVarOut = new_DasVar_copy(DasDim_varAt(pDimIn, uV));
 				if(pVarOut == NULL)
 					goto FAIL;
 
-				if(!DasDim_addVar(pDimOut, DasDim_getRoleByIdx(pDimIn, uV), pVarOut)){
+				if(!DasDim_addVar(pDimOut, DasDim_roleAt(pDimIn, uV), pVarOut)){
 					dec_DasVar(pVarOut);
 					goto FAIL;
 				}
@@ -921,8 +921,8 @@ DasDs* DasDs_copy(const DasDs* pThis)
 	      array in pOut (found by id) and preserves its read/write mode, so the
 	      copy serializes exactly as the original would. */
 	for(size_t u = 0; u < pThis->uCodecs; ++u){
-		const DasCodec* pCdIn = DasDs_getCodec(pThis, u);
-		if(DasDs_addCodecFrom(
+		const DasCodec* pCdIn = DasDs_codecAt(pThis, u);
+		if(DasDs_cloneCodec(
 			pOut, DasAry_id(pCdIn->pAry), pCdIn, pThis->lItems[u],
 			DasCodec_isReader(pCdIn)
 		) == NULL)
@@ -948,14 +948,14 @@ das_errcode DasDs_replaceAry(DasDs* pThis, const char* sOldId, DasAry* pNew)
 		}
 	}
 	if(pOld == NULL)
-		return das_error(DASERR_DS, "No array with id '%s' to replace", sOldId);
+		return daserrf(DASERR_DS, "No array with id '%s' to replace", sOldId);
 
 	/* Ids name exactly one array, see DasDs_addAry() */
 	for(size_t u = 0; u < pThis->uArrays; ++u){
 		if(u == uSlot) continue;
 		if((pThis->lArrays[u] == pNew)||
 		   (strcmp(DasAry_id(pThis->lArrays[u]), DasAry_id(pNew)) == 0))
-			return das_error(DASERR_DS, "Dataset %s already has an array with id %s",
+			return daserrf(DASERR_DS, "Dataset %s already has an array with id %s",
 				pThis->sId, DasAry_id(pNew)
 			);
 	}
@@ -963,18 +963,18 @@ das_errcode DasDs_replaceAry(DasDs* pThis, const char* sOldId, DasAry* pNew)
 
 	/* Re-point every array variable that reads from the old array.  This drops
 	   each variable's reference on pOld and takes one on pNew. */
-	for(int iType = DASDIM_COORD; iType <= DASDIM_DATA; ++iType){
+	for(int iType = DASDIMTYPE_COORD; iType <= DASDIMTYPE_DATA; ++iType){
 		size_t uDims = DasDs_numDims(pThis, iType);
 		for(size_t uD = 0; uD < uDims; ++uD){
-			DasDim* pDim = DasDs_getDimByIdx(pThis, uD, iType);
+			DasDim* pDim = DasDs_dimAt(pThis, uD, iType);
 			size_t uVars = DasDim_numVars(pDim);
 			for(size_t uV = 0; uV < uVars; ++uV){
-				DasVar* pVar = DasDim_getVarByIdx(pDim, uV);
+				DasVar* pVar = DasDim_varAt(pDim, uV);
 				/* a computed variable has no generator; its operands are
 				   variables in this same list and get re-pointed on their own */
 				if((DasVar_gen(pVar) != NULL) &&
 				   (DasGen_type(DasVar_gen(pVar)) == gtArray) &&
-				   (DasVar_getAry(pVar) == pOld)){
+				   (DasVar_ary(pVar) == pOld)){
 					if(!DasVar_setAry(pVar, pNew))
 						return DASERR_DS;
 				}
@@ -1021,7 +1021,7 @@ das_errcode DasDs_setPlot(DasDs* pThis, const char* sPlot)
 		}
 		break;
 	}
-	return das_error(DASERR_DS,
+	return daserrf(DASERR_DS,
 		"Invalid plot=\"%s\" for dataset %s; expected cartesian2d, cartesian3d, "
 		"polar, cylindrical or spherical, optionally followed by :movie",
 		sPlot, pThis->sId
@@ -1039,13 +1039,13 @@ static das_errcode _DasDs_checkCodecOrder(DasDs* pThis)
 	ptrdiff_t iLast = -1;
 	const DasAry* pLastAry = NULL;
 	size_t uFound = 0;
-	for(int iType = DASDIM_COORD; iType <= DASDIM_DATA; ++iType){
+	for(int iType = DASDIMTYPE_COORD; iType <= DASDIMTYPE_DATA; ++iType){
 		size_t uDims = DasDs_numDims(pThis, iType);
 		for(size_t uD = 0; uD < uDims; ++uD){
-			const DasDim* pDim = DasDs_getDimByIdx(pThis, uD, iType);
+			const DasDim* pDim = DasDs_dimAt(pThis, uD, iType);
 			size_t uVars = DasDim_numVars(pDim);
 			for(size_t uV = 0; uV < uVars; ++uV){
-				const DasVar* pVar = DasDim_getVarByIdx(pDim, uV);
+				const DasVar* pVar = DasDim_varAt(pDim, uV);
 				if((DasVar_gen(pVar) == NULL)||(DasGen_type(DasVar_gen(pVar)) != gtArray))
 					continue;
 				const DasAry* pAry = DasGen_getArray(DasVar_gen(pVar));
@@ -1057,7 +1057,7 @@ static das_errcode _DasDs_checkCodecOrder(DasDs* pThis)
 				if(iCodec == iLast) continue;  /* two vars sharing one array    */
 
 				if(iCodec < iLast)
-					return das_error(DASERR_DS,
+					return daserrf(DASERR_DS,
 						"Dataset %s: packets would write array '%s' before '%s', "
 						"but the header declares them the other way round.  Add "
 						"codecs in header order, coordinates before data",
@@ -1070,7 +1070,7 @@ static das_errcode _DasDs_checkCodecOrder(DasDs* pThis)
 		}
 	}
 	if(uFound != pThis->uCodecs)
-		return das_error(DASERR_DS,
+		return daserrf(DASERR_DS,
 			"Dataset %s: %zu codecs write packet data but the header declares "
 			"only %zu of them", pThis->sId, pThis->uCodecs, uFound
 		);
@@ -1094,7 +1094,7 @@ das_errcode DasDs_encodeHdr(DasDs* pThis, DasBuf* pBuf)
 {
 	das_errcode nRet = _DasDs_checkCodecOrder(pThis);
 	if(nRet != DAS_OKAY) return nRet;
-	ptrdiff_t aShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
+	ptrdiff_t aShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
 	int nRank = DasDs_shape(pThis, aShape);
 
 	/* (group, name) is the dataset key, and an empty group is the null group,
@@ -1106,7 +1106,7 @@ das_errcode DasDs_encodeHdr(DasDs* pThis, DasBuf* pBuf)
 	DasBuf_printf(pBuf, " rank=\"%d\" index=\"", nRank);
 	for(int i = 0; i < nRank; ++i){
 		if(i > 0) DasBuf_puts(pBuf, ";");
-		if((i==0)||(aShape[i] == VARIDX_RAGGED)) DasBuf_puts(pBuf, "*");
+		if((i==0)||(aShape[i] == DASIDX_RAGGED)) DasBuf_puts(pBuf, "*");
 		else DasBuf_printf(pBuf, "%td", aShape[i]);
 	}
 	DasBuf_puts(pBuf, "\"");
@@ -1118,10 +1118,10 @@ das_errcode DasDs_encodeHdr(DasDs* pThis, DasBuf* pBuf)
 		return nRet;
 
 	/* Now for the coordinates then data */
-	for(int iType = DASDIM_COORD; iType <= DASDIM_DATA; ++iType){
+	for(int iType = DASDIMTYPE_COORD; iType <= DASDIMTYPE_DATA; ++iType){
 		size_t uDims = DasDs_numDims(pThis, iType);                   /* All Dimensions */
 		for(size_t uD = 0; uD < uDims; ++uD){
-			DasDim* pDim = (DasDim*)DasDs_getDimByIdx(pThis, uD, iType); /* All Variables */
+			DasDim* pDim = (DasDim*)DasDs_dimAt(pThis, uD, iType); /* All Variables */
 			if( (nRet = DasDim_encode(pDim, pBuf)) != 0)
 				return nRet;
 		}
@@ -1137,13 +1137,13 @@ das_errcode DasDs_encodeHdr(DasDs* pThis, DasBuf* pBuf)
 /* Parse a ragged run tag "[<idx>|N]" at the front of pBuf.  A variable item-count
    run that is not the last block in a packet is bounded by this tag (the count of
    the external ragged index it closes).  Returns N (>= 0) and sets *pnTagBytes to
-   the tag's byte width, or a negative das_error code on a malformed tag.  The idx
+   the tag's byte width, or a negative daserrf code on a malformed tag.  The idx
    letter is informational for a single ragged level, so it is read past but not
    yet cross-checked against the index position. */
-static int _read_run_tag(const ubyte* pBuf, int nBufLen, int* pnTagBytes)
+static int _read_run_tag(const uint8_t* pBuf, int nBufLen, int* pnTagBytes)
 {
 	if((nBufLen < 4) || (pBuf[0] != '['))
-		return -1 * das_error(DASERR_SERIAL,
+		return -1 * daserrf(DASERR_SERIAL,
 			"Expected a ragged run tag '[<idx>|N]' to bound a variable item-count run"
 		);
 
@@ -1154,16 +1154,16 @@ static int _read_run_tag(const ubyte* pBuf, int nBufLen, int* pnTagBytes)
 		else if(pBuf[i] == ']'){ iClose = i; break; }
 	}
 	if((iBar < 1) || (iClose <= iBar))
-		return -1 * das_error(DASERR_SERIAL, "Malformed ragged run tag");
+		return -1 * daserrf(DASERR_SERIAL, "Malformed ragged run tag");
 
 	int nCount = 0;
 	for(int i = iBar + 1; i < iClose; ++i){
 		if((pBuf[i] < '0') || (pBuf[i] > '9'))
-			return -1 * das_error(DASERR_SERIAL, "Non-digit in ragged run tag count");
+			return -1 * daserrf(DASERR_SERIAL, "Non-digit in ragged run tag count");
 		/* The digits are packet data; a wrapped count would go negative and
 		   flip the codec into read-to-end mode. */
 		if(nCount > (INT_MAX - (pBuf[i] - '0')) / 10)
-			return -1 * das_error(DASERR_SERIAL, "Ragged run tag count is too large");
+			return -1 * daserrf(DASERR_SERIAL, "Ragged run tag count is too large");
 		nCount = nCount * 10 + (pBuf[i] - '0');
 	}
 	*pnTagBytes = iClose + 1;
@@ -1185,10 +1185,10 @@ static int _read_run_tag(const ubyte* pBuf, int nBufLen, int* pnTagBytes)
    of the codec to roll those as needed (for example with vectors).  Typically
    this is handled by having the array object auto-roll fixed internal extents.
 
-   Returns:  bytes consumed from pRaw, or a negative das_error code. 
+   Returns:  bytes consumed from pRaw, or a negative daserrf code. 
    */
 static int _decode_ragged_run(
-	DasCodec* pCodec, const ubyte* pRaw, int nBufLen,
+	DasCodec* pCodec, const uint8_t* pRaw, int nBufLen,
 	const ptrdiff_t* aShape, int d, int dLast
 ){
 	int nUsed = 0;
@@ -1208,7 +1208,7 @@ static int _decode_ragged_run(
 	int nTagBytes = 0;
 	int nCount = _read_run_tag(pRaw, nBufLen, &nTagBytes);
 	if(nCount < 0)
-		return nCount;   /* already a negative das_error code */
+		return nCount;   /* already a negative daserrf code */
 
 	/* A zero-length run means an element with no children. */
 	if(nCount == 0)
@@ -1217,7 +1217,7 @@ static int _decode_ragged_run(
 		   life.  Allowing zero length runs can only be done in conjunction 
 			with a full stack audit. */
 
-		return -1 * das_error(DASERR_NOTIMP,
+		return -1 * daserrf(DASERR_NOTIMP,
 			"Zero-length ragged run (count 0 at array index %d) is not supported for "
 			"array %s: sub-runs must have >= 1 element (see notes/das3_roadmap.md)",
 			d, DasAry_id(pCodec->pAry)
@@ -1231,9 +1231,9 @@ static int _decode_ragged_run(
 		int nSubLen = nBufLen - nUsed;
 		int nUnread = DasCodec_decode(pCodec, pRaw + nUsed, nSubLen, nCount, &nValsRead);
 		if(nUnread < 0)
-			return nUnread;   /* negative das_error from the codec */
+			return nUnread;   /* negative daserrf from the codec */
 		if(nCount != nValsRead)
-			return -1 * das_error(DASERR_SERIAL,
+			return -1 * daserrf(DASERR_SERIAL,
 				"Expected %d atoms in a ragged run for array %s but decoded %d",
 				nCount, DasAry_id(pCodec->pAry), nValsRead
 			);
@@ -1259,7 +1259,7 @@ static int _decode_ragged_run(
 das_errcode DasDs_decodeData(DasDs* pThis, DasBuf* pBuf)
 {
 	if(DasDs_numCodecs(pThis) == 0){
-		return das_error(DASERR_SERIAL, 
+		return daserrf(DASERR_SERIAL, 
 			"No decoders are defined for dataset %s in group %s", DasDs_name(pThis), DasDs_group(pThis)
 		);
 	}
@@ -1268,17 +1268,17 @@ das_errcode DasDs_decodeData(DasDs* pThis, DasBuf* pBuf)
 	int nUnReadBytes = 0;
 	int nSzEncs = (int)DasDs_numCodecs(pThis);
 	for(int i = 0; i < nSzEncs; ++i){
-		DasCodec* pCodec = DasDs_getCodec(pThis, i);
+		DasCodec* pCodec = DasDs_codecAt(pThis, i);
 		size_t uBufLen = 0;
-		const ubyte* pRaw = DasBuf_data(pBuf, &uBufLen);
+		const uint8_t* pRaw = DasBuf_data(pBuf, &uBufLen);
 
 		if(pRaw == NULL){
-			return das_error(DASERR_SERIAL,
+			return daserrf(DASERR_SERIAL,
 				"Packet buffer is empty, there are no bytes to decode"
 			);
 		}
 		if(uBufLen > 0x7fffffff)
-			return das_error(DASERR_SERIAL, "Packet buffer > signed integer half range, what are you doing?");
+			return daserrf(DASERR_SERIAL, "Packet buffer > signed integer half range, what are you doing?");
 		int nBufLen = (int)uBufLen;
 		
 		/* Encoder returns the number of bytes it didn't read.  Assuming we are
@@ -1286,7 +1286,7 @@ das_errcode DasDs_decodeData(DasDs* pThis, DasBuf* pBuf)
 		   be 0, AKA nothing will be unread in the packet.
 		 */
 		int nValsRead = 0;
-		int nValsExpect = DasDs_pktItems(pThis, i);
+		int nValsExpect = DasDs_codecItemsAt(pThis, i);
 
 		/* A variable item-count run (numItems="*") splits on who can know the run
 		   lengths.  
@@ -1317,13 +1317,13 @@ das_errcode DasDs_decodeData(DasDs* pThis, DasBuf* pBuf)
 				continue;
 			}
 
-			int aRagIdx[VARIDX_MAX];
-			int nLvls = DasCodec_raggedIndices(pCodec, aRagIdx);
+			int aRagIdx[DASIDX_MAX];
+			int nLvls = DasCodec_findRagged(pCodec, aRagIdx);
 			if(nLvls < 0)
 				return -1 * nLvls;
 			int dLast = aRagIdx[nLvls - 1];
 
-			ptrdiff_t aShape[VARIDX_MAX];
+			ptrdiff_t aShape[DASIDX_MAX];
 			DasAry_shape(pCodec->pAry, aShape);
 
 			/* Tag-bounded: "[idx|N]" runs, nested for multi-level raggedness.  A
@@ -1349,7 +1349,7 @@ das_errcode DasDs_decodeData(DasDs* pThis, DasBuf* pBuf)
 			iRagged = aRagIdx[0];
 		}
 
-		const ubyte* pDecBuf = pRaw;
+		const uint8_t* pDecBuf = pRaw;
 		int nDecLen = nBufLen;
 		int nCodecExpect = nValsExpect;
 
@@ -1359,7 +1359,7 @@ das_errcode DasDs_decodeData(DasDs* pThis, DasBuf* pBuf)
 
 		if(nCodecExpect > 0){
 			if(nCodecExpect != nValsRead)
-				return das_error(DASERR_SERIAL,
+				return daserrf(DASERR_SERIAL,
 					"Expected to parse %d values from a packet for array %s in dataset %s "
 					"but received %d.", nCodecExpect, DasAry_id(pCodec->pAry), DasDs_name(pThis),
 					nValsRead
@@ -1383,7 +1383,7 @@ das_errcode DasDs_decodeData(DasDs* pThis, DasBuf* pBuf)
 	}
 
 	if(nUnReadBytes > 0){
-		daslog_warn_v("%d unread bytes at the end of the packet for dataset %s", 
+		daslog_warnf("%d unread bytes at the end of the packet for dataset %s", 
 			nUnReadBytes, DasDs_name(pThis)
 		);
 	}
@@ -1406,22 +1406,22 @@ das_errcode DasDs_decodeData(DasDs* pThis, DasBuf* pBuf)
 
    See DasAry_itemsIn for how this distinguishes strings/blobs from vectors
 
-   Labels follow index position, 'j' for array index 1. aLoc pins our 
-   upper level location and can be up to VARIDX_MAX -1 long.
+   Labels follow index position, 'j' for array index 1. aAddr pins our 
+   upper level location and can be up to DASIDX_MAX -1 long.
 
    Returns values written, or -1 * das error. 
 */
 static int _encode_ragged_run(
-	DasCodec* pCodec, DasBuf* pBuf, ptrdiff_t* aLoc, int d, int dLast,
+	DasCodec* pCodec, DasBuf* pBuf, ptrdiff_t* aAddr, int d, int dLast,
 	const ptrdiff_t* aShape
 ){
 	char sTag[32];
 	das_errcode nRet;
 
 	if(d == dLast){
-		size_t uVals = DasAry_itemsIn(pCodec->pAry, d, aLoc);
+		size_t uVals = DasAry_itemsIn(pCodec->pAry, d, aAddr);
 		if(uVals < 1)
-			return -1 * das_error(DASERR_SERIAL,
+			return -1 * daserrf(DASERR_SERIAL,
 				"No values under index %d to encode for array %s", d,
 				DasAry_id(pCodec->pAry)
 			);
@@ -1429,26 +1429,26 @@ static int _encode_ragged_run(
 		if((nRet = DasBuf_write(pBuf, sTag, nTag)) != DAS_OKAY)
 			return -1 * nRet;
 
-		int nVals = DasCodec_encode(pCodec, pBuf, d, aLoc, (int)uVals, 0);
+		int nVals = DasCodec_encode(pCodec, pBuf, d, aAddr, (int)uVals, 0);
 		if(nVals < 0)
 			return nVals;
 		if((size_t)nVals != uVals)
-			return -1 * das_error(DASERR_SERIAL,
+			return -1 * daserrf(DASERR_SERIAL,
 				"Tagged %zu values for array %s but the codec wrote %d",
 				uVals, DasAry_id(pCodec->pAry), nVals
 			);
 		return nVals;
 	}
 
-	size_t uKids = DasAry_lengthIn(pCodec->pAry, d, aLoc);
+	size_t uKids = DasAry_lengthIn(pCodec->pAry, d, aAddr);
 	if(uKids < 1)
-		return -1 * das_error(DASERR_SERIAL,
+		return -1 * daserrf(DASERR_SERIAL,
 			"No sub-runs under index %d to encode for array %s", d,
 			DasAry_id(pCodec->pAry)
 		);
 	if(aShape[d] >= 0){
 		if(uKids != (size_t)aShape[d])
-			return -1 * das_error(DASERR_SERIAL,
+			return -1 * daserrf(DASERR_SERIAL,
 				"Fixed extent at index %d of array %s holds %zu of %td sub-runs",
 				d, DasAry_id(pCodec->pAry), uKids, aShape[d]
 			);
@@ -1461,8 +1461,8 @@ static int _encode_ragged_run(
 
 	int nVals = 0;
 	for(size_t u = 0; u < uKids; ++u){
-		aLoc[d] = (ptrdiff_t)u;
-		int nSub = _encode_ragged_run(pCodec, pBuf, aLoc, d + 1, dLast, aShape);
+		aAddr[d] = (ptrdiff_t)u;
+		int nSub = _encode_ragged_run(pCodec, pBuf, aAddr, d + 1, dLast, aShape);
 		if(nSub < 0)
 			return nSub;
 		nVals += nSub;
@@ -1488,7 +1488,7 @@ das_errcode DasDs_encodeData(DasDs* pThis, DasBuf* pBuf, ptrdiff_t iIdx0)
 {
 	
 	if(DasDs_numCodecs(pThis) == 0){
-		return das_error(DASERR_SERIAL, 
+		return daserrf(DASERR_SERIAL, 
 			"No decoders are defined for dataset %s in group %s", DasDs_name(pThis), DasDs_group(pThis)
 		);
 	}
@@ -1498,11 +1498,11 @@ das_errcode DasDs_encodeData(DasDs* pThis, DasBuf* pBuf, ptrdiff_t iIdx0)
 	int nValsWrote = 0;
 	bool bLast = false;
 	for(int i = 0; i < nSzEncs; ++i){
-		DasCodec* pCodec = DasDs_getCodec(pThis, i);
+		DasCodec* pCodec = DasDs_codecAt(pThis, i);
 		
 		/* Encoder returns the number of values it wrote */
 		nValsWrote = 0;
-		nValsExpect = DasDs_pktItems(pThis, i);
+		nValsExpect = DasDs_codecItemsAt(pThis, i);
 
 		bLast = (i == ((nSzEncs) - 1));
 
@@ -1516,10 +1516,10 @@ das_errcode DasDs_encodeData(DasDs* pThis, DasBuf* pBuf, ptrdiff_t iIdx0)
 		bool bRaggedText = (nValsExpect < 1) && DasCodec_isText(pCodec) && (pCodec->nSep > 1);
 		bool bRaggedTags = false;
 		int dLast = 0;
-		ptrdiff_t aShape[VARIDX_MAX];
+		ptrdiff_t aShape[DASIDX_MAX];
 		if((nValsExpect < 1) && !bRaggedText){
-			int aRagIdx[VARIDX_MAX];
-			int nLvls = DasCodec_raggedIndices(pCodec, aRagIdx);
+			int aRagIdx[DASIDX_MAX];
+			int nLvls = DasCodec_findRagged(pCodec, aRagIdx);
 			if(nLvls < 0)
 				return -1 * nLvls;
 			dLast = aRagIdx[nLvls - 1];
@@ -1533,13 +1533,13 @@ das_errcode DasDs_encodeData(DasDs* pThis, DasBuf* pBuf, ptrdiff_t iIdx0)
 			nValsWrote = DasCodec_encodeRuns(pCodec, pBuf, iIdx0);
 		}
 		else if(bRaggedTags){
-			ptrdiff_t aLoc[VARIDX_MAX] = {0};
-			aLoc[0] = iIdx0;
-			nValsWrote = _encode_ragged_run(pCodec, pBuf, aLoc, 1, dLast, aShape);
+			ptrdiff_t aAddr[DASIDX_MAX] = {0};
+			aAddr[0] = iIdx0;
+			nValsWrote = _encode_ragged_run(pCodec, pBuf, aAddr, 1, dLast, aShape);
 		}
 		else{
 			nValsWrote = DasCodec_encode(
-				pCodec, pBuf, DIM1_AT(iIdx0), nValsExpect, bLast ? DASENC_PKT_LAST : 0
+				pCodec, pBuf, DAS_ADDR1(iIdx0), nValsExpect, bLast ? DASENC_PKT_LAST : 0
 			);
 		}
 		if(nValsWrote < 0){
@@ -1548,7 +1548,7 @@ das_errcode DasDs_encodeData(DasDs* pThis, DasBuf* pBuf, ptrdiff_t iIdx0)
 		
 		if(nValsExpect > 0){
 			if(nValsExpect != nValsWrote)
-				return das_error(DASERR_SERIAL, 
+				return daserrf(DASERR_SERIAL, 
 					"Expected to write %d values to a packet for array %s in dataset %s "
 					"but wrote %d instead.", nValsExpect, DasAry_id(pCodec->pAry), 
 					DasDs_name(pThis), nValsWrote
@@ -1557,7 +1557,7 @@ das_errcode DasDs_encodeData(DasDs* pThis, DasBuf* pBuf, ptrdiff_t iIdx0)
 		else{
 			/* Even for variable number of items, we expect to write something */
 			if(nValsWrote == 0){
-				return das_error(DASERR_SERIAL, "No values written for array %s in dataset %s",
+				return daserrf(DASERR_SERIAL, "No values written for array %s in dataset %s",
 					DasAry_id(pCodec->pAry), DasDs_name(pThis)
 				);
 			}

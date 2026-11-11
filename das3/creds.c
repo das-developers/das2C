@@ -56,7 +56,7 @@
  * replaced, the record stays.  A refresh token is a second secret for the
  * same record.  Add it as a second row index in cred_rec and a
  * DasCredMngr_setRefresh(); the key file grows a "refresh" key whose value
- * carries its own [XXXXXX] prefix.  The public das_cred needs no new field:
+ * carries its own [XXXXXX] prefix.  The public DasCred needs no new field:
  * a DASCRED_REFRESHABLE flag bit says one exists.
  *
  * Where refresh happens.  _DasCredMngr_getHttpAuth() is private (creds_p.h)
@@ -70,11 +70,11 @@
  * still holds the token we were going to use, write, unlock.  The write
  * through is unconditional, no option to turn it off.
  *
- * Asking the user.  das_prompt is for user names and passwords only, HTTP
+ * Asking the user.  dasfn_prompt is for user names and passwords only, HTTP
  * Basic.  OAuth on a terminal is the device flow (RFC 8628): show a URL and a
  * code, poll the token endpoint.  That is a different conversation and gets
  * its own callback and setter, with a default that prints to stderr like
- * das_term_prompt().  Browser login (auth code + PKCE, RFC 8252 loopback) is
+ * DasCredMgr_termPrompt().  Browser login (auth code + PKCE, RFC 8252 loopback) is
  * an application hook, the library should not open browsers.  Never add the
  * OAuth password grant; RFC 9700 says MUST NOT.  Today a 401 always leads to
  * the Basic prompt; http.c should pass the WWW-Authenticate scheme in so a
@@ -268,7 +268,7 @@ static int _termReadline(char* sBuf, size_t uLen, bool bEcho)
 
 #endif
 
-bool das_term_prompt(
+bool DasCredMgr_termPrompt(
 	void* pUser, const char* sServer, const char* sRealm, const char* sDataset,
 	const char* sMessage, char* sUser, size_t uUserSz, char* sPass,
 	size_t uPassSz
@@ -356,7 +356,7 @@ void _dascred_wipe(void* pMem, size_t uLen)
 typedef struct cred_rec {
 	int16_t    nCred;
 	uint32_t   uFlags;      /* _REC_ bits only, secret flags are in its row */
-	das_auth_e eScheme;
+	das_auth eScheme;
 	int64_t    nExpires;    /* Unix seconds UTC, 0 for never */
 	ptrdiff_t  iSecret;     /* row in pSecrets, -1 for none */
 	char sServer[DASCRED_SRV_SZ];
@@ -364,13 +364,13 @@ typedef struct cred_rec {
 	char sDataset[DASCRED_DSET_SZ];
 } cred_rec;
 
-struct das_credmngr {
+struct das_credmgr_t {
 	DasAry*    pRecs;
 	DasAry*    pSecrets;
 	size_t     uLiveBytes;   /* in rows still referenced */
 	size_t     uDeadBytes;   /* in tombstoned rows */
 	int        nNextId;
-	das_prompt fPrompt;
+	dasfn_prompt fPrompt;
 	void*      pPromptUser;
 	int        nStore;
 	char       sPath[DASCRED_STORE_SZ];
@@ -378,19 +378,19 @@ struct das_credmngr {
 	char       sLastMsg[MSG_SZ];
 };
 
-static cred_rec* _DasCredMngr_recs(const DasCredMngr* pThis, size_t* pN)
+static cred_rec* _DasCredMngr_recs(const DasCredMgr* pThis, size_t* pN)
 {
 	size_t uN = 0;
-	ubyte* p = NULL;
+	uint8_t* p = NULL;
 	if(DasAry_size(pThis->pRecs) > 0)
-		p = DasAry_getBuf(pThis->pRecs, vtUnknown, DIM0, &uN);
+		p = DasAry_dataIn(pThis->pRecs, DASVT_UNK, DAS_ADDR0, &uN);
 	*pN = (p == NULL) ? 0 : uN;
 	return (cred_rec*)p;
 }
 
 static bool _recLive(const cred_rec* pRec){ return !(pRec->uFlags & REC_REMOVED); }
 
-static cred_rec* _DasCredMngr_recById(const DasCredMngr* pThis, int16_t nCred)
+static cred_rec* _DasCredMngr_recById(const DasCredMgr* pThis, int16_t nCred)
 {
 	if(nCred < 1) return NULL;
 	size_t uN;
@@ -403,7 +403,7 @@ static cred_rec* _DasCredMngr_recById(const DasCredMngr* pThis, int16_t nCred)
 /* Exact match on all three strings, live records only, or only removed ones
    with changes not yet saved */
 static cred_rec* _DasCredMngr_findExact(
-	const DasCredMngr* pThis, const char* sServer, const char* sRealm,
+	const DasCredMgr* pThis, const char* sServer, const char* sRealm,
 	const char* sDataset, bool bRemoved
 ){
 	size_t uN;
@@ -422,10 +422,10 @@ static cred_rec* _DasCredMngr_findExact(
 	return NULL;
 }
 
-static char* _DasCredMngr_row(const DasCredMngr* pThis, ptrdiff_t iRow)
+static char* _DasCredMngr_row(const DasCredMgr* pThis, ptrdiff_t iRow)
 {
 	size_t uLen = 0;
-	return (char*)DasAry_getBuf(pThis->pSecrets, vtUByte, DIM1_AT(iRow), &uLen);
+	return (char*)DasAry_dataIn(pThis->pSecrets, DASVT_UBYTE, DAS_ADDR1(iRow), &uLen);
 }
 
 static bool _prefixRead(const char* s, uint32_t* pFlags)
@@ -454,14 +454,14 @@ static void _prefixWrite(char* s, uint32_t uFlags)
 	s[7] = ']';
 }
 
-static uint32_t _DasCredMngr_secFlags(const DasCredMngr* pThis, const cred_rec* pRec)
+static uint32_t _DasCredMngr_secFlags(const DasCredMgr* pThis, const cred_rec* pRec)
 {
 	uint32_t uFlags = 0;
 	if(pRec->iSecret >= 0) _prefixRead(_DasCredMngr_row(pThis, pRec->iSecret), &uFlags);
 	return uFlags & SEC_STORED;
 }
 
-static const char* _DasCredMngr_secText(const DasCredMngr* pThis, const cred_rec* pRec)
+static const char* _DasCredMngr_secText(const DasCredMgr* pThis, const cred_rec* pRec)
 {
 	if(pRec->iSecret < 0) return "";
 	return _DasCredMngr_row(pThis, pRec->iSecret) + SEC_PREFIX_LEN;
@@ -472,7 +472,7 @@ static bool _recExpired(const cred_rec* pRec)
 	return (pRec->nExpires != 0) && (pRec->nExpires <= (int64_t)time(NULL));
 }
 
-static bool _DasCredMngr_usable(const DasCredMngr* pThis, const cred_rec* pRec)
+static bool _DasCredMngr_usable(const DasCredMgr* pThis, const cred_rec* pRec)
 {
 	return (pRec->iSecret >= 0) && (pRec->eScheme != DASAUTH_NONE) &&
 	       !(_DasCredMngr_secFlags(pThis, pRec) & DASCRED_REJECTED) &&
@@ -482,7 +482,7 @@ static bool _DasCredMngr_usable(const DasCredMngr* pThis, const cred_rec* pRec)
 static DasAry* _newSecrets(void)
 {
 	DasAry* pAry = new_DasAry(
-		"cred_secrets", vtUByte, 0, (const ubyte[1]){0}, RANK_2(0,0), UNIT_DIMENSIONLESS
+		"cred_secrets", DASVT_UBYTE, 0, (const uint8_t[1]){0}, DAS_SHAPE2(0,0), DASUNITS_DIMENSIONLESS
 	);
 	/* The array zeroes each block it lets go of, as it grows and when freed */
 	if(pAry) DasAry_setUsage(pAry, DASARY_AS_STRING | DASARY_WIPE_ON_FREE);
@@ -490,7 +490,7 @@ static DasAry* _newSecrets(void)
 }
 
 /* Rebuild the secrets array without its tombstones */
-static void _DasCredMngr_compact(DasCredMngr* pThis)
+static void _DasCredMngr_compact(DasCredMgr* pThis)
 {
 	DasAry* pNew = _newSecrets();
 	if(pNew == NULL) return;   /* keep going with the old one */
@@ -501,8 +501,8 @@ static void _DasCredMngr_compact(DasCredMngr* pThis)
 	for(size_t u = 0; u < uN; ++u){
 		if(pRecs[u].iSecret < 0) continue;
 		const char* s = _DasCredMngr_row(pThis, pRecs[u].iSecret);
-		DasAry_append(pNew, (const ubyte*)s, strlen(s) + 1);
-		DasAry_markEnd(pNew, DIM1);
+		DasAry_append(pNew, (const uint8_t*)s, strlen(s) + 1);
+		DasAry_markEnd(pNew, DAS_IDX1);
 		pRecs[u].iSecret = iNext++;
 	}
 	dec_DasAry(pThis->pSecrets);
@@ -511,7 +511,7 @@ static void _DasCredMngr_compact(DasCredMngr* pThis)
 }
 
 /* Tombstone a record's secret, if it has one */
-static void _DasCredMngr_killSecret(DasCredMngr* pThis, cred_rec* pRec)
+static void _DasCredMngr_killSecret(DasCredMgr* pThis, cred_rec* pRec)
 {
 	if(pRec->iSecret < 0) return;
 	char* s = _DasCredMngr_row(pThis, pRec->iSecret);
@@ -528,16 +528,16 @@ static void _DasCredMngr_killSecret(DasCredMngr* pThis, cred_rec* pRec)
 
 /* Give a record a new secret row; any old one must be killed first */
 static bool _DasCredMngr_putSecret(
-	DasCredMngr* pThis, cred_rec* pRec, uint32_t uFlags, const char* sSecret
+	DasCredMgr* pThis, cred_rec* pRec, uint32_t uFlags, const char* sSecret
 ){
 	char sPre[SEC_PREFIX_LEN];
 	_prefixWrite(sPre, uFlags & SEC_STORED);
 	size_t uLen = strlen(sSecret);
-	if((DasAry_append(pThis->pSecrets, (const ubyte*)sPre, SEC_PREFIX_LEN) == NULL) ||
-	   (DasAry_append(pThis->pSecrets, (const ubyte*)sSecret, uLen + 1) == NULL))
+	if((DasAry_append(pThis->pSecrets, (const uint8_t*)sPre, SEC_PREFIX_LEN) == NULL) ||
+	   (DasAry_append(pThis->pSecrets, (const uint8_t*)sSecret, uLen + 1) == NULL))
 		return false;
-	DasAry_markEnd(pThis->pSecrets, DIM1);
-	pRec->iSecret = (ptrdiff_t)DasAry_lengthIn(pThis->pSecrets, DIM0) - 1;
+	DasAry_markEnd(pThis->pSecrets, DAS_IDX1);
+	pRec->iSecret = (ptrdiff_t)DasAry_lengthIn(pThis->pSecrets, DAS_ADDR0) - 1;
 	pThis->uLiveBytes += SEC_PREFIX_LEN + uLen + 1;
 	return true;
 }
@@ -550,14 +550,14 @@ static bool _okText(const char* s, size_t uMax, const char* sWhat, bool bLog)
 	size_t uLen = strlen(s);
 	if(uLen >= uMax){
 		if(bLog)
-			das_error(DASERR_CRED, "The %s is %zu bytes, the limit is %zu", sWhat,
+			daserrf(DASERR_CRED, "The %s is %zu bytes, the limit is %zu", sWhat,
 			          uLen, uMax - 1);
 		return false;
 	}
 	for(const unsigned char* p = (const unsigned char*)s; *p != '\0'; ++p){
 		if((*p < 0x20)||(*p == 0x7F)||(*p == '|')){
 			if(bLog)
-				das_error(DASERR_CRED, "The %s contains a '|' or a control character",
+				daserrf(DASERR_CRED, "The %s contains a '|' or a control character",
 				          sWhat);
 			return false;
 		}
@@ -573,14 +573,14 @@ static bool _okSecret(const char* s, bool bLog)
 	size_t uLen = strlen(s);
 	if((uLen == 0) || (uLen >= DASCRED_SECRET_SZ)){
 		if(bLog)
-			das_error(DASERR_CRED, "A secret must be 1 to %d bytes long",
+			daserrf(DASERR_CRED, "A secret must be 1 to %d bytes long",
 			          DASCRED_SECRET_SZ - 1);
 		return false;
 	}
 	for(const unsigned char* p = (const unsigned char*)s; *p != '\0'; ++p){
 		if((*p < 0x21)||(*p > 0x7E)||(*p == '|')){
 			if(bLog)
-				das_error(DASERR_CRED, "A secret may only hold printable ASCII "
+				daserrf(DASERR_CRED, "A secret may only hold printable ASCII "
 				          "other than '|' and space");
 			return false;
 		}
@@ -590,11 +590,11 @@ static bool _okSecret(const char* s, bool bLog)
 
 /* Returns the new ID, or -1 if the manager has used them all */
 static int16_t _DasCredMngr_newRec(
-	DasCredMngr* pThis, const char* sServer, const char* sRealm,
+	DasCredMgr* pThis, const char* sServer, const char* sRealm,
 	const char* sDataset, uint32_t uFlags
 ){
 	if(pThis->nNextId > INT16_MAX){
-		das_error(DASERR_CRED, "This credentials manager has made %d credentials, "
+		daserrf(DASERR_CRED, "This credentials manager has made %d credentials, "
 		          "the most one can", INT16_MAX);
 		return -1;
 	}
@@ -609,7 +609,7 @@ static int16_t _DasCredMngr_newRec(
 	strncpy(rec.sRealm, sRealm, DASCRED_REALM_SZ - 1);
 	strncpy(rec.sDataset, sDataset, DASCRED_DSET_SZ - 1);
 
-	if(DasAry_append(pThis->pRecs, (const ubyte*)&rec, 1) == NULL) return -1;
+	if(DasAry_append(pThis->pRecs, (const uint8_t*)&rec, 1) == NULL) return -1;
 	++(pThis->nNextId);
 	return rec.nCred;
 }
@@ -617,11 +617,11 @@ static int16_t _DasCredMngr_newRec(
 /* ************************************************************************* */
 /* Credential records */
 
-void das_cred_init(
-	das_cred* pCred, char* sServer, size_t uServerSz, char* sRealm,
+void init_DasCred(
+	DasCred* pCred, char* sServer, size_t uServerSz, char* sRealm,
 	size_t uRealmSz, char* sDataset, size_t uDatasetSz
 ){
-	memset(pCred, 0, sizeof(das_cred));  /* zeroed expires is the null datum */
+	memset(pCred, 0, sizeof(DasCred));  /* zeroed expires is the null datum */
 
 	pCred->sServer = sServer;   pCred->uServerSz  = sServer  ? uServerSz : 0;
 	pCred->sRealm = sRealm;     pCred->uRealmSz   = sRealm   ? uRealmSz : 0;
@@ -645,19 +645,19 @@ static void _copyStr(char* sDest, size_t uSz, const char* sSrc, int* pRet)
 }
 
 static int _DasCredMngr_copyOut(
-	const DasCredMngr* pThis, const cred_rec* pRec, das_cred* pOut
+	const DasCredMgr* pThis, const cred_rec* pRec, DasCred* pOut
 ){
 	int nRet = DAS_OKAY;
-	pOut->nCred = pRec->nCred;
-	pOut->uFlags = _DasCredMngr_secFlags(pThis, pRec) |
+	pOut->id = pRec->nCred;
+	pOut->flags = _DasCredMngr_secFlags(pThis, pRec) |
 	               (_recExpired(pRec) ? DASCRED_EXPIRED : 0);
-	pOut->eScheme = (pRec->iSecret >= 0) ? pRec->eScheme : DASAUTH_NONE;
+	pOut->scheme = (pRec->iSecret >= 0) ? pRec->eScheme : DASAUTH_NONE;
 	if(pRec->nExpires != 0)
-		das_datum_init(
-			&(pOut->expires), (const ubyte*)&(pRec->nExpires), vtLong, 0, UNIT_T1970
+		DasDatum_set(
+			&(pOut->expires), (const uint8_t*)&(pRec->nExpires), DASVT_LONG, 0, DASUNITS_T1970
 		);
 	else
-		das_datum_initNull(&(pOut->expires));
+		DasDatum_setNull(&(pOut->expires));
 
 	_copyStr(pOut->sServer, pOut->uServerSz, pRec->sServer, &nRet);
 	_copyStr(pOut->sRealm, pOut->uRealmSz, pRec->sRealm, &nRet);
@@ -668,16 +668,16 @@ static int _DasCredMngr_copyOut(
 /* ************************************************************************* */
 /* Construction */
 
-DasCredMngr* new_DasCredMngr(void)
+DasCredMgr* new_DasCredMgr(void)
 {
-	DasCredMngr* pThis = (DasCredMngr*)calloc(1, sizeof(DasCredMngr));
+	DasCredMgr* pThis = (DasCredMgr*)calloc(1, sizeof(DasCredMgr));
 	if(pThis == NULL) return NULL;
 
 	cred_rec fill;
 	memset(&fill, 0, sizeof(cred_rec));
 	pThis->pRecs = new_DasAry(
-		"cred_records", vtUnknown, sizeof(cred_rec), (const ubyte*)&fill,
-		RANK_1(0), UNIT_DIMENSIONLESS
+		"cred_records", DASVT_UNK, sizeof(cred_rec), (const uint8_t*)&fill,
+		DAS_SHAPE1(0), DASUNITS_DIMENSIONLESS
 	);
 	pThis->pSecrets = _newSecrets();
 	if((pThis->pRecs == NULL)||(pThis->pSecrets == NULL)){
@@ -691,7 +691,7 @@ DasCredMngr* new_DasCredMngr(void)
 	return pThis;
 }
 
-void del_DasCredMngr(DasCredMngr* pThis)
+void del_DasCredMgr(DasCredMgr* pThis)
 {
 	if(pThis == NULL) return;
 	dec_DasAry(pThis->pSecrets);
@@ -702,12 +702,12 @@ void del_DasCredMngr(DasCredMngr* pThis)
 /* ************************************************************************* */
 /* Records and secrets */
 
-int16_t DasCredMngr_addCred(
-	DasCredMngr* pThis, const char* sServer, const char* sRealm,
+int16_t DasCredMgr_addCred(
+	DasCredMgr* pThis, const char* sServer, const char* sRealm,
 	const char* sDataset
 ){
 	if((pThis == NULL)||(sServer == NULL)||(sServer[0] == '\0')){
-		das_error(DASERR_CRED, "A credential needs a manager and a server");
+		daserrf(DASERR_CRED, "A credential needs a manager and a server");
 		return -1;
 	}
 	if(sRealm == NULL) sRealm = "";
@@ -724,11 +724,11 @@ int16_t DasCredMngr_addCred(
 	return _DasCredMngr_newRec(pThis, sServer, sRealm, sDataset, REC_DIRTY);
 }
 
-int DasCredMngr_setSecret(
-	DasCredMngr* pThis, int16_t nCred, das_auth_e eScheme, const char* sSecret,
-	const das_datum* pExpires
+int DasCredMgr_setSecret(
+	DasCredMgr* pThis, int16_t nCred, das_auth eScheme, const char* sSecret,
+	const DasDatum* pExpires
 ){
-	if(pThis == NULL) return das_error(DASERR_CRED, "NULL credentials manager");
+	if(pThis == NULL) return daserrf(DASERR_CRED, "NULL credentials manager");
 
 	cred_rec* pRec = _DasCredMngr_recById(pThis, nCred);
 	if(pRec == NULL) return DASCRED_NONE;
@@ -742,45 +742,45 @@ int DasCredMngr_setSecret(
 	}
 
 	if((eScheme != DASAUTH_BASIC)&&(eScheme != DASAUTH_BEARER))
-		return das_error(DASERR_CRED, "Unknown authentication scheme %d", (int)eScheme);
+		return daserrf(DASERR_CRED, "Unknown authentication scheme %d", (int)eScheme);
 	if(sSecret == NULL)
-		return das_error(DASERR_CRED, "NULL secret");
+		return daserrf(DASERR_CRED, "NULL secret");
 	if(!_okSecret(sSecret, true))
 		return DASERR_CRED;
 
 	int64_t nExpires = 0;
-	if((pExpires != NULL) && !das_datum_isNull(pExpires)){
+	if((pExpires != NULL) && !DasDatum_isNull(pExpires)){
 		double rSec;
-		if(!das_datum_toEpoch(pExpires, UNIT_T1970, &rSec))
-			return das_error(DASERR_CRED, "The expiration is not a time");
+		if(!DasDatum_toPoint(pExpires, DASUNITS_T1970, &rSec))
+			return daserrf(DASERR_CRED, "The expiration is not a time");
 		nExpires = (int64_t)rSec;
 		if(nExpires == 0) nExpires = 1;  /* 0 means never */
 	}
 
 	_DasCredMngr_killSecret(pThis, pRec);
 	if(!_DasCredMngr_putSecret(pThis, pRec, 0, sSecret))
-		return das_error(DASERR_CRED, "Could not store the secret");
+		return daserrf(DASERR_CRED, "Could not store the secret");
 	pRec->eScheme = eScheme;
 	pRec->nExpires = nExpires;
 	pRec->uFlags |= REC_DIRTY;
 	return DAS_OKAY;
 }
 
-int DasCredMngr_setUserPass(
-	DasCredMngr* pThis, int16_t nCred, const char* sUser, const char* sPass
+int DasCredMgr_setUserPass(
+	DasCredMgr* pThis, int16_t nCred, const char* sUser, const char* sPass
 ){
-	if(pThis == NULL) return das_error(DASERR_CRED, "NULL credentials manager");
+	if(pThis == NULL) return daserrf(DASERR_CRED, "NULL credentials manager");
 	if(_DasCredMngr_recById(pThis, nCred) == NULL) return DASCRED_NONE;
 	if((sUser == NULL)||(sPass == NULL))
-		return das_error(DASERR_CRED, "NULL user name or password");
+		return daserrf(DASERR_CRED, "NULL user name or password");
 	if(strchr(sUser, ':') != NULL)
-		return das_error(DASERR_CRED, "The user name cannot contain a colon, ':', character");
+		return daserrf(DASERR_CRED, "The user name cannot contain a colon, ':', character");
 
 	size_t uUser = strlen(sUser);
 	size_t uPass = strlen(sPass);
 	char sPair[DASCRED_USER_SZ + DASCRED_PASS_SZ];
 	if(uUser + uPass + 2 > sizeof(sPair))
-		return das_error(DASERR_CRED, "The user name and password are more than "
+		return daserrf(DASERR_CRED, "The user name and password are more than "
 		                 "%zu bytes together", sizeof(sPair) - 2);
 
 	memcpy(sPair, sUser, uUser);
@@ -788,20 +788,20 @@ int DasCredMngr_setUserPass(
 	memcpy(sPair + uUser + 1, sPass, uPass);
 
 	size_t uLen = 0;
-	char* sHash = das_b64_encode((const unsigned char*)sPair, uUser + 1 + uPass, &uLen);
+	char* sHash = dasb64_encode((const unsigned char*)sPair, uUser + 1 + uPass, &uLen);
 	_dascred_wipe(sPair, sizeof(sPair));
 	if(sHash == NULL)
-		return das_error(DASERR_CRED, "Could not encode the login");
+		return daserrf(DASERR_CRED, "Could not encode the login");
 
-	int nRet = DasCredMngr_setSecret(pThis, nCred, DASAUTH_BASIC, sHash, NULL);
+	int nRet = DasCredMgr_setSecret(pThis, nCred, DASAUTH_BASIC, sHash, NULL);
 	_dascred_wipe(sHash, uLen);
 	free(sHash);
 	return nRet;
 }
 
-int DasCredMngr_removeCred(DasCredMngr* pThis, int16_t nCred)
+int DasCredMgr_rmCred(DasCredMgr* pThis, int16_t nCred)
 {
-	if(pThis == NULL) return das_error(DASERR_CRED, "NULL credentials manager");
+	if(pThis == NULL) return daserrf(DASERR_CRED, "NULL credentials manager");
 	cred_rec* pRec = _DasCredMngr_recById(pThis, nCred);
 	if(pRec == NULL) return DASCRED_NONE;
 	_DasCredMngr_killSecret(pThis, pRec);
@@ -816,7 +816,7 @@ int DasCredMngr_removeCred(DasCredMngr* pThis, int16_t nCred)
  * one for the whole server, a record naming the request's realm beats one for
  * any realm.  A request with no realm takes a record with any realm. */
 static cred_rec* _DasCredMngr_match(
-	const DasCredMngr* pThis, const char* sServer, const char* sRealm,
+	const DasCredMgr* pThis, const char* sServer, const char* sRealm,
 	const char* sDataset, bool bUsable
 ){
 	if(sRealm == NULL) sRealm = "";
@@ -846,12 +846,12 @@ static cred_rec* _DasCredMngr_match(
 	return pBest;
 }
 
-int DasCredMngr_getCred(
-	const DasCredMngr* pThis, const char* sServer, const char* sRealm,
-	const char* sDataset, bool bValidOnly, das_cred* pOut
+int DasCredMgr_findCred(
+	const DasCredMgr* pThis, const char* sServer, const char* sRealm,
+	const char* sDataset, bool bValidOnly, DasCred* pOut
 ){
 	if((pThis == NULL)||(sServer == NULL)||(pOut == NULL))
-		return das_error(DASERR_CRED, "NULL manager, server or output record");
+		return daserrf(DASERR_CRED, "NULL manager, server or output record");
 
 	const cred_rec* pRec = _DasCredMngr_match(
 		pThis, sServer, sRealm, sDataset, bValidOnly
@@ -860,11 +860,11 @@ int DasCredMngr_getCred(
 	return _DasCredMngr_copyOut(pThis, pRec, pOut);
 }
 
-int DasCredMngr_getSecret(
-	const DasCredMngr* pThis, int16_t nCred, char* sBuf, size_t uLen
+int DasCredMgr_secret(
+	const DasCredMgr* pThis, int16_t nCred, char* sBuf, size_t uLen
 ){
 	if(pThis == NULL){
-		das_error(DASERR_CRED, "NULL credentials manager");
+		daserrf(DASERR_CRED, "NULL credentials manager");
 		return DASCRED_NONE;
 	}
 	const cred_rec* pRec = _DasCredMngr_recById(pThis, nCred);
@@ -880,7 +880,7 @@ int DasCredMngr_getSecret(
 	return (int)uSecret;
 }
 
-int DasCredMngr_numCreds(const DasCredMngr* pThis)
+int DasCredMgr_numCreds(const DasCredMgr* pThis)
 {
 	if(pThis == NULL) return 0;
 	size_t uN;
@@ -890,10 +890,10 @@ int DasCredMngr_numCreds(const DasCredMngr* pThis)
 	return nLive;
 }
 
-int DasCredMngr_getCredByIdx(const DasCredMngr* pThis, int i, das_cred* pOut)
+int DasCredMgr_credAt(const DasCredMgr* pThis, int i, DasCred* pOut)
 {
 	if((pThis == NULL)||(pOut == NULL))
-		return das_error(DASERR_CRED, "NULL manager or output record");
+		return daserrf(DASERR_CRED, "NULL manager or output record");
 	if(i < 0) return DASCRED_NONE;
 
 	size_t uN;
@@ -910,16 +910,16 @@ int DasCredMngr_getCredByIdx(const DasCredMngr* pThis, int i, das_cred* pOut)
 /* ************************************************************************* */
 /* Prompts */
 
-das_prompt DasCredMngr_setPrompt(
-	DasCredMngr* pThis, das_prompt fPrompt, void* pUser
+dasfn_prompt DasCredMgr_setPrompt(
+	DasCredMgr* pThis, dasfn_prompt fPrompt, void* pUser
 ){
-	das_prompt fOld = pThis->fPrompt;
+	dasfn_prompt fOld = pThis->fPrompt;
 	pThis->fPrompt = fPrompt;
 	pThis->pPromptUser = pUser;
 	return fOld;
 }
 
-das_prompt DasCredMngr_getPrompt(const DasCredMngr* pThis, void** ppUser)
+dasfn_prompt DasCredMgr_prompt(const DasCredMgr* pThis, void** ppUser)
 {
 	if(ppUser != NULL) *ppUser = pThis->pPromptUser;
 	return pThis->fPrompt;
@@ -929,7 +929,7 @@ das_prompt DasCredMngr_getPrompt(const DasCredMngr* pThis, void** ppUser)
 /* The HTTP client's side door, see creds_p.h */
 
 static int16_t _DasCredMngr_authValue(
-	const DasCredMngr* pThis, const cred_rec* pRec, char* sBuf, size_t uLen
+	const DasCredMgr* pThis, const cred_rec* pRec, char* sBuf, size_t uLen
 ){
 	const char* sScheme = (pRec->eScheme == DASAUTH_BEARER) ? "Bearer" : "Basic";
 	int nLen = snprintf(sBuf, uLen, "%s %s", sScheme, _DasCredMngr_secText(pThis, pRec));
@@ -941,7 +941,7 @@ static int16_t _DasCredMngr_authValue(
 }
 
 int16_t _DasCredMngr_getHttpAuth(
-	DasCredMngr* pThis, const char* sServer, const char* sRealm,
+	DasCredMgr* pThis, const char* sServer, const char* sRealm,
 	const char* sDataset, char* sBuf, size_t uLen
 ){
 	if((pThis == NULL)||(sServer == NULL)||(sBuf == NULL)||(uLen == 0))
@@ -971,9 +971,9 @@ int16_t _DasCredMngr_getHttpAuth(
 			continue;
 		}
 
-		int16_t nCred = DasCredMngr_addCred(pThis, sServer, sRealm, sDataset);
+		int16_t nCred = DasCredMgr_addCred(pThis, sServer, sRealm, sDataset);
 		if(nCred < 1) break;
-		if(DasCredMngr_setUserPass(pThis, nCred, sUser, sPass) != DAS_OKAY) break;
+		if(DasCredMgr_setUserPass(pThis, nCred, sUser, sPass) != DAS_OKAY) break;
 
 		nRet = _DasCredMngr_authValue(
 			pThis, _DasCredMngr_recById(pThis, nCred), sBuf, uLen
@@ -986,7 +986,7 @@ int16_t _DasCredMngr_getHttpAuth(
 	return nRet;
 }
 
-void _DasCredMngr_authFailed(DasCredMngr* pThis, int16_t nCred, const char* sMsg)
+void _DasCredMngr_authFailed(DasCredMgr* pThis, int16_t nCred, const char* sMsg)
 {
 	if(pThis == NULL) return;
 	cred_rec* pRec = _DasCredMngr_recById(pThis, nCred);
@@ -1004,9 +1004,9 @@ void _DasCredMngr_authFailed(DasCredMngr* pThis, int16_t nCred, const char* sMsg
 /* ************************************************************************* */
 /* Stores */
 
-das_errcode DasCredMngr_setFileStore(DasCredMngr* pThis, const char* sPath)
+das_errcode DasCredMgr_setStore(DasCredMgr* pThis, const char* sPath)
 {
-	if(pThis == NULL) return das_error(DASERR_CRED, "NULL credentials manager");
+	if(pThis == NULL) return daserrf(DASERR_CRED, "NULL credentials manager");
 
 	if((sPath == NULL)||(sPath[0] == '\0')){
 		pThis->nStore = STORE_NONE;
@@ -1015,7 +1015,7 @@ das_errcode DasCredMngr_setFileStore(DasCredMngr* pThis, const char* sPath)
 		return DAS_OKAY;
 	}
 	if(strlen(sPath) >= DASCRED_STORE_SZ)
-		return das_error(DASERR_CRED, "The key file path is %zu bytes, the limit "
+		return daserrf(DASERR_CRED, "The key file path is %zu bytes, the limit "
 		                 "is %d", strlen(sPath), DASCRED_STORE_SZ - 1);
 
 	/* Everything held is new to a different store, so the next save writes it
@@ -1033,7 +1033,7 @@ das_errcode DasCredMngr_setFileStore(DasCredMngr* pThis, const char* sPath)
 	return DAS_OKAY;
 }
 
-const char* DasCredMngr_store(const DasCredMngr* pThis)
+const char* DasCredMgr_store(const DasCredMgr* pThis)
 {
 	return pThis->sStoreDesc;
 }
@@ -1062,7 +1062,7 @@ typedef struct cred_line {
 	const char* sServer;
 	const char* sRealm;
 	const char* sDataset;
-	das_auth_e  eScheme;
+	das_auth  eScheme;
 	int64_t     nExpires;
 	uint32_t    uFlags;
 	const char* sSecret;
@@ -1092,7 +1092,7 @@ static bool _parseLine(char* sLine, cred_line* pOut, const char* sFile, int nLin
 	for(char* p = s; *p != '\0'; ++p){
 		if(*p != '|') continue;
 		if(nFields > MAX_FIELDS){
-			daslog_warn_v("%s,%d: Too many fields, line kept but not used", sFile, nLine);
+			daslog_warnf("%s,%d: Too many fields, line kept but not used", sFile, nLine);
 			return false;
 		}
 		*p = '\0';
@@ -1101,7 +1101,7 @@ static bool _parseLine(char* sLine, cred_line* pOut, const char* sFile, int nLin
 	for(int i = 0; i < nFields; ++i) aField[i] = _trim(aField[i]);
 
 	if((nFields < 3)||((nFields % 2) == 0)||(aField[0][0] == '\0')){
-		daslog_warn_v("%s,%d: Not a credential, line kept but not used", sFile, nLine);
+		daslog_warnf("%s,%d: Not a credential, line kept but not used", sFile, nLine);
 		return false;
 	}
 
@@ -1124,22 +1124,22 @@ static bool _parseLine(char* sLine, cred_line* pOut, const char* sFile, int nLin
 			else if(strcasecmp(sVal, "bearer") == 0) pOut->eScheme = DASAUTH_BEARER;
 			else if(strcasecmp(sVal, "none") == 0)   pOut->eScheme = DASAUTH_NONE;
 			else{
-				daslog_warn_v("%s,%d: Unknown scheme, line kept but not used", sFile, nLine);
+				daslog_warnf("%s,%d: Unknown scheme, line kept but not used", sFile, nLine);
 				return false;
 			}
 		}
 		else if(strcmp(sKey, "expires") == 0){
-			das_time dt;
-			if(!dt_parsetime(&dt, sVal)){
-				daslog_warn_v("%s,%d: Unreadable expiration, line kept but not used",
+			DasTime dt;
+			if(!DasTime_fromStr(&dt, sVal)){
+				daslog_warnf("%s,%d: Unreadable expiration, line kept but not used",
 				              sFile, nLine);
 				return false;
 			}
-			pOut->nExpires = (int64_t)Units_convertFromDt(&dt, UNIT_T1970);
+			pOut->nExpires = (int64_t)DasTime_toPoint(&dt, DASUNITS_T1970);
 			if(pOut->nExpires == 0) pOut->nExpires = 1;
 		}
 		else{
-			daslog_warn_v("%s,%d: Unknown key, line kept but not used", sFile, nLine);
+			daslog_warnf("%s,%d: Unknown key, line kept but not used", sFile, nLine);
 			return false;
 		}
 	}
@@ -1152,7 +1152,7 @@ static bool _parseLine(char* sLine, cred_line* pOut, const char* sFile, int nLin
 	pOut->uFlags &= SEC_STORED;
 
 	if(!bScheme){
-		daslog_warn_v("%s,%d: No scheme, line kept but not used", sFile, nLine);
+		daslog_warnf("%s,%d: No scheme, line kept but not used", sFile, nLine);
 		return false;
 	}
 	pOut->sSecret = (pOut->eScheme == DASAUTH_NONE) ? "" : sSecret;
@@ -1161,7 +1161,7 @@ static bool _parseLine(char* sLine, cred_line* pOut, const char* sFile, int nLin
 	   !_okText(pOut->sRealm, DASCRED_REALM_SZ, "realm", false) ||
 	   !_okText(pOut->sDataset, DASCRED_DSET_SZ, "dataset", false) ||
 	   ((pOut->eScheme != DASAUTH_NONE) && !_okSecret(pOut->sSecret, false))){
-		daslog_warn_v("%s,%d: A field is too long or holds characters it can't, "
+		daslog_warnf("%s,%d: A field is too long or holds characters it can't, "
 		              "line kept but not used", sFile, nLine);
 		return false;
 	}
@@ -1171,7 +1171,7 @@ static bool _parseLine(char* sLine, cred_line* pOut, const char* sFile, int nLin
 /* Take a line from the store into memory, the store's version wins.  Returns
    the record, or NULL if it could not be made. */
 static cred_rec* _DasCredMngr_absorb(
-	DasCredMngr* pThis, cred_rec* pRec, const cred_line* pLine, int* pChanged
+	DasCredMgr* pThis, cred_rec* pRec, const cred_line* pLine, int* pChanged
 ){
 	if(pRec == NULL){
 		int16_t nCred = _DasCredMngr_newRec(
@@ -1201,7 +1201,7 @@ static cred_rec* _DasCredMngr_absorb(
 }
 
 static bool _DasCredMngr_emit(
-	const DasCredMngr* pThis, FILE* pOut, const cred_rec* pRec
+	const DasCredMgr* pThis, FILE* pOut, const cred_rec* pRec
 ){
 	const char* sScheme = "none";
 	if(pRec->iSecret >= 0){
@@ -1213,10 +1213,10 @@ static bool _DasCredMngr_emit(
 	if(pRec->sDataset[0] != '\0') fprintf(pOut, "|dataset|%s", pRec->sDataset);
 	fprintf(pOut, "|scheme|%s", sScheme);
 	if(pRec->nExpires != 0){
-		das_time dt;
+		DasTime dt;
 		char sTime[64];
-		Units_convertToDt(&dt, (double)pRec->nExpires, UNIT_T1970);
-		fprintf(pOut, "|expires|%s", dt_isoc(&dt, 0, sTime, sizeof(sTime)));
+		DasTime_fromPoint(&dt, (double)pRec->nExpires, DASUNITS_T1970);
+		fprintf(pOut, "|expires|%s", DasTime_toIsoC(&dt, 0, sTime, sizeof(sTime)));
 	}
 	if(pRec->iSecret >= 0)
 		fprintf(pOut, "|%s\n", _DasCredMngr_row(pThis, pRec->iSecret));
@@ -1247,13 +1247,13 @@ static cred_lock _lockStore(const char* sPath, bool bWrite)
 		FILE_ATTRIBUTE_NORMAL, NULL
 	);
 	if(h == INVALID_HANDLE_VALUE){
-		daslog_error_v("Couldn't open sync file '%s'", sLock);
+		daslog_errorf("Couldn't open sync file '%s'", sLock);
 		return NO_LOCK;
 	}
 	OVERLAPPED ov;
 	memset(&ov, 0, sizeof(ov));
 	if(!LockFileEx(h, bWrite ? LOCKFILE_EXCLUSIVE_LOCK : 0, 0, 1, 0, &ov)){
-		daslog_error_v("Couldn't lock '%s'", sLock);
+		daslog_errorf("Couldn't lock '%s'", sLock);
 		CloseHandle(h);
 		return NO_LOCK;
 	}
@@ -1261,7 +1261,7 @@ static cred_lock _lockStore(const char* sPath, bool bWrite)
 #else
 	int nFd = open(sLock, O_RDWR | O_CREAT, 0600);
 	if(nFd < 0){
-		daslog_error_v("Couldn't open sync file '%s', %s", sLock, strerror(errno));
+		daslog_errorf("Couldn't open sync file '%s', %s", sLock, strerror(errno));
 		return NO_LOCK;
 	}
 	struct flock fl;
@@ -1270,7 +1270,7 @@ static cred_lock _lockStore(const char* sPath, bool bWrite)
 	fl.l_whence = SEEK_SET;
 	while(fcntl(nFd, F_SETLKW, &fl) == -1){
 		if(errno == EINTR) continue;
-		daslog_error_v("Couldn't lock '%s', %s", sLock, strerror(errno));
+		daslog_errorf("Couldn't lock '%s', %s", sLock, strerror(errno));
 		close(nFd);
 		return NO_LOCK;
 	}
@@ -1302,12 +1302,12 @@ static bool _permsOk(const char* sPath)
 	struct stat st;
 	if(stat(sPath, &st) != 0) return true;   /* missing is handled by the caller */
 	if(st.st_uid != geteuid()){
-		daslog_error_v("Not using credentials file '%s', it belongs to another "
+		daslog_errorf("Not using credentials file '%s', it belongs to another "
 		               "user", sPath);
 		return false;
 	}
 	if(st.st_mode & 077){
-		daslog_error_v("Not using credentials file '%s', other users can read or "
+		daslog_errorf("Not using credentials file '%s', other users can read or "
 		               "change it.  Fix with: chmod 600 %s", sPath, sPath);
 		return false;
 	}
@@ -1353,15 +1353,15 @@ static bool _commitTemp(FILE* pOut, const char* sTmp, const char* sPath)
  * version of each credential, except that a save keeps this manager's
  * unsaved changes and removals and writes the result back.  Returns the
  * count of credentials changed in memory (load) or written (save), or -1. */
-static int _DasCredMngr_sync(DasCredMngr* pThis, bool bSave)
+static int _DasCredMngr_sync(DasCredMgr* pThis, bool bSave)
 {
 	if(pThis->nStore == STORE_NONE){
-		das_error(DASERR_CRED, "No credentials store set, see DasCredMngr_setFileStore()");
+		daserrf(DASERR_CRED, "No credentials store set, see DasCredMgr_setStore()");
 		return -1;
 	}
 	const char* sPath = pThis->sPath;
 
-	if(!bSave && !das_isfile(sPath)) return 0;
+	if(!bSave && !dasfs_isFile(sPath)) return 0;
 
 	cred_lock hLock = _lockStore(sPath, bSave);
 	if(hLock == NO_LOCK) return -1;
@@ -1372,15 +1372,15 @@ static int _DasCredMngr_sync(DasCredMngr* pThis, bool bSave)
 	char sTmp[DASCRED_STORE_SZ + 16] = {'\0'};
 	char* aLine = (char*)malloc(2 * LINE_SZ);  /* line and working copy */
 	if(aLine == NULL){
-		das_error(DASERR_CRED, "Out of memory");
+		daserrf(DASERR_CRED, "Out of memory");
 		goto DONE;
 	}
 	char* aWork = aLine + LINE_SZ;
 
-	if(das_isfile(sPath)){
+	if(dasfs_isFile(sPath)){
 		if(!_permsOk(sPath)) goto DONE;
 		if((pIn = fopen(sPath, "rb")) == NULL){
-			daslog_error_v("Couldn't open '%s' for reading", sPath);
+			daslog_errorf("Couldn't open '%s' for reading", sPath);
 			goto DONE;
 		}
 	}
@@ -1390,7 +1390,7 @@ static int _DasCredMngr_sync(DasCredMngr* pThis, bool bSave)
 	}
 
 	if(bSave && ((pOut = _openTemp(sPath, sTmp, sizeof(sTmp))) == NULL)){
-		daslog_error_v("Couldn't write a new credentials file beside '%s'", sPath);
+		daslog_errorf("Couldn't write a new credentials file beside '%s'", sPath);
 		goto DONE;
 	}
 
@@ -1406,7 +1406,7 @@ static int _DasCredMngr_sync(DasCredMngr* pThis, bool bSave)
 
 		/* Longer than any credential can be, keep it but don't parse it */
 		if((uLen == LINE_SZ - 1) && (aLine[uLen - 1] != '\n')){
-			daslog_warn_v("%s,%d: Line too long, kept but not used", sPath, nLine);
+			daslog_warnf("%s,%d: Line too long, kept but not used", sPath, nLine);
 			if(pOut) fputs(aLine, pOut);
 			int c;
 			while(((c = fgetc(pIn)) != EOF) && (c != '\n'))
@@ -1453,7 +1453,7 @@ static int _DasCredMngr_sync(DasCredMngr* pThis, bool bSave)
 		}
 	}
 	if(pIn && ferror(pIn)){
-		daslog_error_v("Error reading '%s'", sPath);
+		daslog_errorf("Error reading '%s'", sPath);
 		bOkay = false;
 	}
 
@@ -1471,7 +1471,7 @@ static int _DasCredMngr_sync(DasCredMngr* pThis, bool bSave)
 		if(pIn){ fclose(pIn); pIn = NULL; }  /* Windows can't replace an open file */
 		bOkay = _commitTemp(pOut, sTmp, sPath) && bOkay;
 		pOut = NULL;
-		if(!bOkay) daslog_error_v("Couldn't save credentials to '%s'", sPath);
+		if(!bOkay) daslog_errorf("Couldn't save credentials to '%s'", sPath);
 	}
 
 	for(size_t u = 0; u < uN; ++u){
@@ -1499,14 +1499,14 @@ DONE:
 	return nRet;
 }
 
-int DasCredMngr_load(DasCredMngr* pThis)
+int DasCredMgr_load(DasCredMgr* pThis)
 {
-	if(pThis == NULL){ das_error(DASERR_CRED, "NULL credentials manager"); return -1; }
+	if(pThis == NULL){ daserrf(DASERR_CRED, "NULL credentials manager"); return -1; }
 	return _DasCredMngr_sync(pThis, false);
 }
 
-int DasCredMngr_save(DasCredMngr* pThis)
+int DasCredMgr_save(DasCredMgr* pThis)
 {
-	if(pThis == NULL){ das_error(DASERR_CRED, "NULL credentials manager"); return -1; }
+	if(pThis == NULL){ daserrf(DASERR_CRED, "NULL credentials manager"); return -1; }
 	return _DasCredMngr_sync(pThis, true);
 }

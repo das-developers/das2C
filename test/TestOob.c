@@ -25,9 +25,9 @@
  * For more information, please refer to <http://unlicense.org/>
  */
 
-/* Checks das_except_toStr() / _fromStr() against the table,
- * das_xml_escape() truncation, and a DasIO round trip of DasIO_comment_v() /
- * DasIO_exception_v().  The legacy send.h writers are checked by
+/* Checks dasexcepttype_name() / _fromStr() against the table,
+ * dasxml_escape() truncation, and a DasIO round trip of DasIO_commentf() /
+ * DasIO_exceptionf().  The legacy send.h writers are checked by
  * legacy/TestSend.c.
  */
 
@@ -55,30 +55,30 @@ static int g_fails = 0;
 
 static void test_lookup(void)
 {
-	struct {das_except_e nType; const char* s2; const char* s3;} aRow[] = {
-		{DAS_EX_UNKNOWN,    "Unknown",          "Unknown"},
-		{DAS_EX_NO_DATA,    "NoDataInInterval", "NoMatchingData"},
-		{DAS_EX_SERVER_ERR, "ServerError",      "ServerError"},
-		{DAS_EX_QUERY_ERR,  "IllegalArgument",  "QueryError"}
+	struct {das_excepttype nType; const char* s2; const char* s3;} aRow[] = {
+		{DASEXCEPTTYPE_UNKNOWN,    "Unknown",          "Unknown"},
+		{DASEXCEPTTYPE_NO_DATA,    "NoDataInInterval", "NoMatchingData"},
+		{DASEXCEPTTYPE_SERVER_ERR, "ServerError",      "ServerError"},
+		{DASEXCEPTTYPE_QUERY_ERR,  "IllegalArgument",  "QueryError"}
 	};
 	for(size_t u = 0; u < sizeof(aRow)/sizeof(aRow[0]); ++u){
-		const char* s2 = das_except_toStr(aRow[u].nType, 2);
-		const char* s3 = das_except_toStr(aRow[u].nType, 3);
+		const char* s2 = dasexcepttype_name(aRow[u].nType, 2);
+		const char* s3 = dasexcepttype_name(aRow[u].nType, 3);
 		if((s2 == NULL)||(strcmp(s2, aRow[u].s2) != 0)) FAIL("das2 name for %d", aRow[u].nType);
 		if((s3 == NULL)||(strcmp(s3, aRow[u].s3) != 0)) FAIL("das3 name for %d", aRow[u].nType);
 
 		/* either spelling parses back, no version needed */
-		if(das_except_fromStr(aRow[u].s2) != aRow[u].nType) FAIL("fromStr %s", aRow[u].s2);
-		if(das_except_fromStr(aRow[u].s3) != aRow[u].nType) FAIL("fromStr %s", aRow[u].s3);
+		if(dasexcepttype_id(aRow[u].s2) != aRow[u].nType) FAIL("fromStr %s", aRow[u].s2);
+		if(dasexcepttype_id(aRow[u].s3) != aRow[u].nType) FAIL("fromStr %s", aRow[u].s3);
 	}
 
-	if(das_except_toStr(DAS_EX_SERVER_ERR, 1) != NULL) FAIL("das1 has no exceptions");
-	if(das_except_toStr(DAS_EX_SERVER_ERR, 4) != NULL) FAIL("no das4 yet");
-	if(das_except_toStr((das_except_e)99, 3) != NULL)  FAIL("type out of range");
+	if(dasexcepttype_name(DASEXCEPTTYPE_SERVER_ERR, 1) != NULL) FAIL("das1 has no exceptions");
+	if(dasexcepttype_name(DASEXCEPTTYPE_SERVER_ERR, 4) != NULL) FAIL("no das4 yet");
+	if(dasexcepttype_name((das_excepttype)99, 3) != NULL)  FAIL("type out of range");
 
 	/* streams may carry their own types, those are not errors */
-	if(das_except_fromStr("SomethingCustom") != DAS_EX_UNKNOWN) FAIL("custom type");
-	if(das_except_fromStr(NULL) != DAS_EX_UNKNOWN) FAIL("NULL type");
+	if(dasexcepttype_id("SomethingCustom") != DASEXCEPTTYPE_UNKNOWN) FAIL("custom type");
+	if(dasexcepttype_id(NULL) != DASEXCEPTTYPE_UNKNOWN) FAIL("NULL type");
 }
 
 /* ************************************************************************* */
@@ -89,18 +89,18 @@ static void test_escape(void)
 	char sBuf[16];
 
 	/* each '&' grows to five bytes, three fit exactly with the NUL */
-	das_xml_escape("&&&&&&&&a", sBuf, sizeof(sBuf));
+	dasxml_escape("&&&&&&&&a", sBuf, sizeof(sBuf));
 	if(strcmp(sBuf, "&amp;&amp;&amp;") != 0) FAIL("escape fill, got '%s'", sBuf);
 
 	/* an entity that won't fit whole is left out, not cut */
-	das_xml_escape("ab&", sBuf, 5);
+	dasxml_escape("ab&", sBuf, 5);
 	if(strcmp(sBuf, "ab") != 0) FAIL("escape cut entity, got '%s'", sBuf);
 
 	/* nor is a two byte character, e-acute here */
-	das_xml_escape("ab\xc3\xa9", sBuf, 4);
+	dasxml_escape("ab\xc3\xa9", sBuf, 4);
 	if(strcmp(sBuf, "ab") != 0) FAIL("escape cut utf-8, got '%s'", sBuf);
 
-	das_xml_escape("a\"b'c<d>e", sBuf, sizeof(sBuf));
+	dasxml_escape("a\"b'c<d>e", sBuf, sizeof(sBuf));
 	if(strcmp(sBuf, "a&quot;b&apos;c") != 0) FAIL("escape set, got '%s'", sBuf);
 }
 
@@ -113,7 +113,7 @@ typedef struct seen {
 	int nClose;
 	bool bHadSd;          /* the close handler got a stream */
 	int nExcept;
-	das_except_e aExcept[MAX_SEEN];
+	das_excepttype aExcept[MAX_SEEN];
 	char aExceptMsg[MAX_SEEN][64];
 	int nComment;
 	bool bCmtSd;          /* every comment came with a stream */
@@ -156,16 +156,16 @@ static das_errcode _readWith(const char* sFile, const char* sProcs, seen_t* pSee
 	memset(pSeen, 0, sizeof(seen_t));
 	DasIO* pIn = new_DasIO("TestOob", new_DasXport_file(sFile, "r"), NULL);
 	if(pIn == NULL){ FAIL("can't open %s", sFile); return 15; }
-	DasIO_setModel(pIn, STREAM_MODEL_MIXED);
+	DasIO_setModel(pIn, DASIOMODEL_MIXED);
 
-	das_stream_proc handler, monitor;
-	das_stream_proc_init(&handler, pSeen);
+	DasIOProc handler, monitor;
+	init_DasIOProc(&handler, pSeen);
 	handler.onClose = onClose;
 	handler.onComment = onComment;
-	das_stream_proc_init(&monitor, pSeen);
+	init_DasIOProc(&monitor, pSeen);
 	monitor.onComment = onComment;
-	if(strchr(sProcs, 'h')) DasIO_addProcessor(pIn, &handler);
-	if(strchr(sProcs, 'm')) DasIO_addProcessor(pIn, &monitor);
+	if(strchr(sProcs, 'h')) DasIO_addProc(pIn, &handler);
+	if(strchr(sProcs, 'm')) DasIO_addProc(pIn, &monitor);
 
 	das_errcode nRet = DasIO_readAll(pIn);
 	del_DasIO(pIn);
@@ -178,13 +178,13 @@ static das_errcode _read(const char* sFile, seen_t* pSeen)
 
 	DasIO* pIn = new_DasIO("TestOob", new_DasXport_file(sFile, "r"), NULL);
 	if(pIn == NULL){ FAIL("can't open %s", sFile); return 15; }
-	DasIO_setModel(pIn, STREAM_MODEL_MIXED);  /* das3 headers carry <p> */
+	DasIO_setModel(pIn, DASIOMODEL_MIXED);  /* das3 headers carry <p> */
 
-	das_stream_proc handler;
-	das_stream_proc_init(&handler, pSeen);
+	DasIOProc handler;
+	init_DasIOProc(&handler, pSeen);
 	handler.onClose = onClose;
 	handler.onComment = onComment;
-	DasIO_addProcessor(pIn, &handler);
+	DasIO_addProc(pIn, &handler);
 
 	das_errcode nRet = DasIO_readAll(pIn);
 	del_DasIO(pIn);
@@ -214,9 +214,9 @@ static void test_dasio(int nVer)
 	   stream: nothing may be written after it */
 	DasIO* pOut = new_DasIO("TestOob", new_DasXport_file(sFile, "w"), sMode);
 	if(pOut == NULL){ FAIL("can't write %s", sFile); return; }
-	if(DasIO_exception_v(pOut, DAS_EX_SERVER_ERR, "%s %d", MSG_SERVER, 42) != DAS_OKAY)
-		FAIL("das%d: DasIO_exception_v", nVer);
-	if(DasIO_comment_v(pOut, "log:info", "too late") == DAS_OKAY)
+	if(DasIO_exceptionf(pOut, DASEXCEPTTYPE_SERVER_ERR, "%s %d", MSG_SERVER, 42) != DAS_OKAY)
+		FAIL("das%d: DasIO_exceptionf", nVer);
+	if(DasIO_commentf(pOut, "log:info", "too late") == DAS_OKAY)
 		FAIL("das%d: a comment after the exception was accepted", nVer);
 	del_DasIO(pOut);
 
@@ -224,7 +224,7 @@ static void test_dasio(int nVer)
 	if((seen.nClose != 1)||(!seen.bHadSd))
 		FAIL("das%d: stub stream closed %d times, stream %s", nVer, seen.nClose,
 			seen.bHadSd ? "present" : "missing");
-	if((seen.nExcept != 1)||(seen.aExcept[0] != DAS_EX_SERVER_ERR)||
+	if((seen.nExcept != 1)||(seen.aExcept[0] != DASEXCEPTTYPE_SERVER_ERR)||
 		(!_sameText(seen.aExceptMsg[0], MSG_SERVER " 42")))
 		FAIL("das%d: stub stream exception '%s'", nVer, seen.aExceptMsg[0]);
 	if(seen.nComment != 0) FAIL("das%d: stub stream has %d comments", nVer, seen.nComment);
@@ -245,10 +245,10 @@ static void test_dasio(int nVer)
 	DasStream* pSd = new_DasStream();
 	DasIO_writeStreamDesc(pOut, pSd);
 	del_DasDesc((DasDesc*)pSd);
-	if(DasIO_comment_v(pOut, "log:info", "%s", MSG_INFO) != DAS_OKAY)
-		FAIL("das%d: DasIO_comment_v", nVer);
-	if(DasIO_exception_v(pOut, DAS_EX_NO_DATA, "%s", MSG_NODATA) != DAS_OKAY)
-		FAIL("das%d: DasIO_exception_v no data", nVer);
+	if(DasIO_commentf(pOut, "log:info", "%s", MSG_INFO) != DAS_OKAY)
+		FAIL("das%d: DasIO_commentf", nVer);
+	if(DasIO_exceptionf(pOut, DASEXCEPTTYPE_NO_DATA, "%s", MSG_NODATA) != DAS_OKAY)
+		FAIL("das%d: DasIO_exceptionf no data", nVer);
 	DasIO_close(pOut);
 	del_DasIO(pOut);
 
@@ -257,39 +257,39 @@ static void test_dasio(int nVer)
 		(!_sameText(seen.aCommentVal[0], MSG_INFO)))
 		FAIL("das%d: comment '%s'", nVer, seen.aCommentVal[0]);
 	if(!seen.bCmtSd) FAIL("das%d: comment after the header arrived without a stream", nVer);
-	if((seen.nExcept != 1)||(seen.aExcept[0] != DAS_EX_NO_DATA)||
+	if((seen.nExcept != 1)||(seen.aExcept[0] != DASEXCEPTTYPE_NO_DATA)||
 		(!_sameText(seen.aExceptMsg[0], MSG_NODATA)))
 		FAIL("das%d: no data exception '%s'", nVer, seen.aExceptMsg[0]);
 
 	remove(sFile);
 }
 
-/* The refusals tested here are deliberate, so their das_error() messages
+/* The refusals tested here are deliberate, so their daserrf() messages
    are dropped; everything else prints as usual.  The return codes are what
    the checks look at. */
-static void _dropErrors(const das_logmsg* pMsg, void* pUser)
+static void _dropErrors(const DasLogMsg* pMsg, void* pUser)
 {
 	(void)pUser;
-	if(pMsg->nErr == DAS_OKAY) daslog_stderr(pMsg, NULL);
+	if(pMsg->errCode == DAS_OKAY) daslog_stderr(pMsg, NULL);
 }
 
 /* ************************************************************************* */
 
 int main(int argc, char** argv)
 {
-	das_loghook hook = {_dropErrors, NULL};
-	das_init(argv[0], DASERR_DIS_RET, DASLOG_INFO, &hook);
+	DasLogHook hook = {_dropErrors, NULL};
+	daslib_init(argv[0], DASERRDISP_RET, DASLOG_INFO, &hook);
 
 	test_lookup();
 	test_escape();
 
-	/* A processor that never went through das_stream_proc_init() is refused,
+	/* A processor that never went through init_DasIOProc() is refused,
 	   uVersion zero would otherwise be read as some layout */
-	das_stream_proc zero;
+	DasIOProc zero;
 	memset(&zero, 0, sizeof(zero));
 	DasIO* pIo = new_DasIO_feed("TestOob", "r");
-	if(DasIO_addProcessor(pIo, &zero) >= 0)
-		FAIL("a zeroed das_stream_proc was accepted");
+	if(DasIO_addProc(pIo, &zero) >= 0)
+		FAIL("a zeroed DasIOProc was accepted");
 	del_DasIO(pIo);
 
 	printf("INFO: ======== ERROR lines below are intentional, provoked by negative checks ========\n");

@@ -46,7 +46,7 @@
 typedef struct cache_tree{
 	double rBinSec;      /* Conversion of binUnits to seconds */
 	int nBinSize;        /* Number of binUnits in a single bin */
-	das_units binUnits;   /* Typically seconds, but may millisec or other */
+	DasUnits binUnits;   /* Typically seconds, but may millisec or other */
 	char sStoreMeth[32]; /**/
 	char sSubDir[32];    /**/
 } cache_tree_t;
@@ -88,20 +88,20 @@ int readStoreMeth(
 	int j = 0;
 	char sBuf[256] = {'\0'};
 	
-	if( (pDsdf = dsdf_parse(sDsdf)) == NULL)
-		return das_error(P_ERR, "Couldn't prase DSDF file %s", sDsdf);
+	if( (pDsdf = new_DasDesc_dsdf(sDsdf)) == NULL)
+		return daserrf(P_ERR, "Couldn't prase DSDF file %s", sDsdf);
 	
 	/* Make one cache tree for each cacheLevel keyword has our paramset */
 	
 	*pNum = 0;
 	pCurTree = pTrees;
 	
-	uProps = DasDesc_length(pDsdf);
+	uProps = DasDesc_numProps(pDsdf);
 	for(u = 0; u<uProps; u++){
-		if( (sKey = DasDesc_getNameByIdx(pDsdf, u)) == NULL) continue;
+		if( (sKey = DasDesc_propNameAt(pDsdf, u)) == NULL) continue;
 		if(strstr(sKey, "cacheLevel") == NULL) continue;
 		
-		if( (sTmp = DasDesc_getValByIdx(pDsdf, u)) == NULL) continue;
+		if( (sTmp = DasDesc_valAt(pDsdf, u)) == NULL) continue;
 		strncpy(sVal, sTmp, 255);
 		
 		
@@ -114,7 +114,7 @@ int readStoreMeth(
 			if(bLookStart){
 				
 				if(*pChar == '|')
-					return das_error(P_ERR, "Syntax error in %s, keyword %s", sDsdf, sKey);
+					return daserrf(P_ERR, "Syntax error in %s, keyword %s", sDsdf, sKey);
 				
 				if(!isspace(*pChar)){	
 					sItemAry[i] = pChar;
@@ -142,13 +142,13 @@ int readStoreMeth(
 			pChar = strchr(sItemAry[0], ' ');
 			if(pChar == NULL) pChar = strchr(sItemAry[0], '\t');
 			if(pChar == NULL) 
-				return das_error(P_ERR, "Units missing in dsdf file %s, keyword %s.", sDsdf, sKey);
+				return daserrf(P_ERR, "Units missing in dsdf file %s, keyword %s.", sDsdf, sKey);
 			while(isspace(*pChar)){
 				*pChar = '\0';
 				pChar++;
 			}
 			if(!isalpha(*pChar))
-				return das_error(P_ERR, "Units missing in dsdf file %s, keyword %s.", sDsdf, sKey);
+				return daserrf(P_ERR, "Units missing in dsdf file %s, keyword %s.", sDsdf, sKey);
 			
 			sItemAry[1] = pChar;			
 		}
@@ -164,7 +164,7 @@ int readStoreMeth(
 		}
 		
 		if(sItemAry[3] == NULL) sItemAry[3] = "_noparam";
-		else sItemAry[3] = dsdf_valToNormParam(sItemAry[3], sBuf, 255);
+		else sItemAry[3] = dasdsdf_normParam(sItemAry[3], sBuf, 255);
 		
 		/* Check param match before assigning anything */
 		if(strcmp(sItemAry[3], sNormParam) != 0) continue;
@@ -176,11 +176,11 @@ int readStoreMeth(
 		}
 		else{
 			if((strchr(sItemAry[0], '.') != NULL)||(strchr(sItemAry[0], '-') != NULL))
-				return das_error(P_ERR, "Illegal BIN size, %s, must be a positive "
+				return daserrf(P_ERR, "Illegal BIN size, %s, must be a positive "
 				                  "integer", sItemAry[0]);
 			
-			if(!das_str2int(sItemAry[0], &(pCurTree->nBinSize)) || pCurTree->nBinSize <= 0)
-				return das_error(P_ERR, "Can't convert %s to positive integer "
+			if(!dasstr_toInt(sItemAry[0], &(pCurTree->nBinSize)) || pCurTree->nBinSize <= 0)
+				return daserrf(P_ERR, "Can't convert %s to positive integer "
 				                  "binsize", sItemAry[0]);
 		}
 		
@@ -188,17 +188,17 @@ int readStoreMeth(
 		/* UNITS */
 		pCurTree->binUnits = NULL;
 		if(sItemAry[1] != NULL){
-			if( (pCurTree->binUnits = Units_fromStr(sItemAry[1])) == NULL)
-				return das_error(P_ERR, "Can't convert %s to known units", sItemAry[1]);
+			if( (pCurTree->binUnits = DasUnits_fromStr(sItemAry[1])) == NULL)
+				return daserrf(P_ERR, "Can't convert %s to known units", sItemAry[1]);
 		}
 		
 		/* Convert units to seconds */
 		if(pCurTree->binUnits != NULL){
-			pCurTree->rBinSec = Units_convertTo(pCurTree->nBinSize, pCurTree->binUnits, UNIT_SECONDS);
+			pCurTree->rBinSec = DasUnits_convert(pCurTree->nBinSize, pCurTree->binUnits, DASUNITS_SECONDS);
 		}
 		else{
 			pCurTree->rBinSec = pCurTree->nBinSize;
-			pCurTree->binUnits = UNIT_SECONDS;
+			pCurTree->binUnits = DASUNITS_SECONDS;
 		}
 									
 		
@@ -218,7 +218,7 @@ int readStoreMeth(
 	}
 	
 	if(*pNum < 1)
-		return das_error(P_ERR, "No cache trees were defined in %s", sDsdf);
+		return daserrf(P_ERR, "No cache trees were defined in %s", sDsdf);
 	
 	/* Sort largest bin size to smallest bin size */
 	qsort(pTrees, *pNum, sizeof(cache_tree_t), _bigBinsFirst); 
@@ -240,7 +240,7 @@ bool isTimeBased(cache_tree_t* pTrees, size_t uTrees)
 			if(strcmp(pTrees[u].sStoreMeth, "yearly") == 0) return true;
 		}
 		else{		
-			if(Units_canConvert(pTrees[u].binUnits, UNIT_SECONDS)) return true;
+			if(DasUnits_canConvert(pTrees[u].binUnits, DASUNITS_SECONDS)) return true;
 		}
 	}
 	return false;
@@ -274,17 +274,17 @@ void sendNoData(handler_data_t* pHDat){
 		        pHDat->pTree->binUnits);
 	
 	/* Turn off exit-now style error handling in the das2 lib*/
-	daserr_setdisp(DASERR_DIS_RET);
+	daserr_setDisp(DASERRDISP_RET);
 	
-	das_time dtBeg = {0};  char sBeg[64] = {'\0'};
-	das_time dtEnd = {0};  char sEnd[64] = {'\0'};
-	Units_convertToDt(&dtBeg, pHDat->rBeg, UNIT_US2000);
-	Units_convertToDt(&dtEnd, pHDat->rEnd, UNIT_US2000);
+	DasTime dtBeg = {0};  char sBeg[64] = {'\0'};
+	DasTime dtEnd = {0};  char sEnd[64] = {'\0'};
+	DasTime_fromPoint(&dtBeg, pHDat->rBeg, DASUNITS_US2000);
+	DasTime_fromPoint(&dtEnd, pHDat->rEnd, DASUNITS_US2000);
 	
 	if(pHDat->bXIsTime){
 		snprintf(
 			sMsg, 1023, "No data in the interval %s to %s at %s", 
-			dt_isoc(&dtBeg, 6, sBeg, 63), dt_isoc(&dtEnd, 6, sEnd, 63), sLevel
+			DasTime_toIsoC(&dtBeg, 6, sBeg, 63), DasTime_toIsoC(&dtEnd, 6, sEnd, 63), sLevel
 		);
 	}
 	else{
@@ -292,10 +292,10 @@ void sendNoData(handler_data_t* pHDat){
 			      pHDat->rBeg, pHDat->rEnd, pHDat->pTree->nBinSize, sLevel);
 	}
 	
-	DasExcept* pEx = new_DasExcept(DAS_EX_NO_DATA, sMsg);
+	DasExcept* pEx = new_DasExcept(DASEXCEPTTYPE_NO_DATA, sMsg);
 	
 	/* Turn on exit-now style error handling */
-	daserr_setdisp(DASERR_DIS_EXIT);
+	daserr_setDisp(DASERRDISP_EXIT);
 	
 	DasIO_exception(pHDat->pOut, pEx);
 	del_DasExcept(pEx);
@@ -344,7 +344,7 @@ das_errcode timeFilePath(
 				   lTm[3], lTm[4], lTm[5], sResToken);
 		break;
 	default:
-		return das_error(P_ERR, "Expected to create a yearly, monthly, daily or hourly, "
+		return daserrf(P_ERR, "Expected to create a yearly, monthly, daily or hourly, "
 		                  "per-minute or per-second cache path");
 	}
 	
@@ -361,9 +361,9 @@ das_errcode timeFilePath(
    have been bumped past its range */
 static void _normArray(int* pComp)
 {
-	das_time dt;
-	dt_set(&dt, pComp[0], pComp[1], pComp[2], 0, pComp[3], pComp[4], pComp[5]);
-	dt_tnorm(&dt);
+	DasTime dt;
+	DasTime_set(&dt, pComp[0], pComp[1], pComp[2], 0, pComp[3], pComp[4], pComp[5]);
+	DasTime_normalize(&dt);
 	pComp[0] = dt.year;  pComp[1] = dt.month;   pComp[2] = dt.mday;
 	pComp[3] = dt.hour;  pComp[4] = dt.minute;  pComp[5] = (int) ceil(dt.second);
 }
@@ -373,8 +373,8 @@ char** timeBinFileList(
 	int nTmComp, size_t* puFiles
 ){
 
-	das_time dtBeg = {0};
-	das_time dtEnd = {0};
+	DasTime dtBeg = {0};
+	DasTime dtEnd = {0};
 	
 	/* fprintf(stderr, "HELLO1\n"); */
 	
@@ -397,8 +397,8 @@ char** timeBinFileList(
 		return NULL;
 	}
 	
-	Units_convertToDt(&dtBeg, rBeg, UNIT_US2000);
-	Units_convertToDt(&dtEnd, rEnd, UNIT_US2000);
+	DasTime_fromPoint(&dtBeg, rBeg, DASUNITS_US2000);
+	DasTime_fromPoint(&dtEnd, rEnd, DASUNITS_US2000);
 	lBeg[0] = dtBeg.year;    lEnd[0] = dtEnd.year;
 	lBeg[1] = dtBeg.month;   lEnd[1] = dtEnd.month;
 	lBeg[2] = dtBeg.mday;    lEnd[2] = dtEnd.mday;
@@ -429,7 +429,7 @@ char** timeBinFileList(
 		
 		timeFilePath(sPath, sRoot, nTmComp, lCur, pTree->sSubDir);
 		/* fprintf(stderr, "Looking for: %s\n", sPath); */
-		if(das_isfile(sPath)) *puFiles += 1;
+		if(dasfs_isFile(sPath)) *puFiles += 1;
 		
 		lCur[nTmComp - 1] += 1;                /* Bump last time component by 1 */
 		
@@ -451,7 +451,7 @@ char** timeBinFileList(
 		
 		timeFilePath(ppFiles[*puFiles], sRoot, nTmComp, lCur, pTree->sSubDir);
 		
-		if(das_isfile(ppFiles[*puFiles]))
+		if(dasfs_isFile(ppFiles[*puFiles]))
 			*puFiles += 1;
 		else
 			ppFiles[*puFiles][0] = '\0';
@@ -476,7 +476,7 @@ char** generalBinFileList(
 	const char* sRoot, cache_tree_t* pTree, double rBeg, double rEnd,
 	size_t* puFiles
 ){
-	das_error(P_ERR, "Getting general 1-D binned data (no-time based) is not "
+	daserrf(P_ERR, "Getting general 1-D binned data (no-time based) is not "
 	           "yet implemented.");
 	return NULL;
 }
@@ -501,28 +501,28 @@ das_errcode onStreamHdr(DasStream* pSdIn, void* vpHDat)
 	
 	if(!pHDat->bHdrSent){
 		/* Save our xCacheRange and xCacheResolution properties */
-		pProp = DasDesc_getProp(pSdOut, "xCacheRange");
+		pProp = DasDesc_prop(pSdOut, "xCacheRange");
 		if(pProp != NULL){
-			if(DasProp_units(pProp) != UNIT_DIMENSIONLESS){
+			if(DasProp_units(pProp) != DASUNITS_DIMENSIONLESS){
 				snprintf(
 					sRng, 127, "%s %s", DasProp_value(pProp), 
-					Units_toStr(DasProp_units(pProp))	
+					DasUnits_toStr(DasProp_units(pProp))	
 				);
 			}
 			else{
-				strncpy(sRng, DasDesc_getStr(pSdOut, "xCacheRange"), 127);
+				strncpy(sRng, DasDesc_val(pSdOut, "xCacheRange"), 127);
 			}
 		}
-		if( (pRes = DasDesc_getStr(pSdOut, "xCacheResolution")) != NULL)
+		if( (pRes = DasDesc_val(pSdOut, "xCacheResolution")) != NULL)
 			strncpy(sRes, pRes, 127);
 		
 		/* Copy everything */
 		DasDesc_copyIn(pSdOut, (DasDesc*)pSdIn);
 		
 		/* Put 'em back */
-		DasDesc_set(pSdOut, "DatumRange", "xCacheRange", sRng);
+		DasDesc_setProp(pSdOut, "DatumRange", "xCacheRange", sRng);
 		if(pRes != NULL)
-			DasDesc_set(pSdOut, "Datum", "xCacheResolution", sRes);
+			DasDesc_setProp(pSdOut, "Datum", "xCacheResolution", sRes);
 				
 		if( (nRet = DasIO_writeStreamDesc(pHDat->pOut, pHDat->pSdOut)) != 0) 
 			return nRet;
@@ -545,9 +545,9 @@ das_errcode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, int nPktId, void* vpHDat)
 		pHDat->uBufSz = uRecBytes;
 	}
 	
-	if((pPdOut = DasStream_getPkt(pSdOut, nPktId)) != NULL){
+	if((pPdOut = DasStream_pkt(pSdOut, nPktId)) != NULL){
 		/* Drop repeated packet descriptions */
-		if( DasPkt_equalFormat(pPdIn, pPdOut) )
+		if( DasPkt_isSameFmt(pPdIn, pPdOut) )
 			return 0;
 		
 		/* Not a repeat, but a reuse of the same ID, this is going to 
@@ -558,7 +558,7 @@ das_errcode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, int nPktId, void* vpHDat)
 	/* Attach the packet definitions to the output stream descriptor that */
 	/* way we know which packet types are being re-defined and those that */
 	/* are just being re-encountered */
-	if( (pPdOut = DasStream_clonePktById(pSdOut, pSdIn, nPktId)) == NULL)
+	if( (pPdOut = DasStream_clonePkt(pSdOut, pSdIn, nPktId)) == NULL)
 		return P_ERR;
 	
 	return DasIO_writeDesc(pHDat->pOut, (DasDesc*)pPdOut, nPktId);	
@@ -568,11 +568,11 @@ das_errcode onPktData(DasPkt* pPktIn, int nPktId, void* vpHDat){
 	handler_data_t* pHDat = (handler_data_t*)vpHDat;
 	
 	/* See if the packet is in bounds */
-	DasPlane* pPlane = DasPkt_getXPlane(pPktIn);
-	double rX = DasPlane_getValue(pPlane, 0);
+	DasPlane* pPlane = DasPkt_xPlane(pPktIn);
+	double rX = DasPlane_valAt(pPlane, 0);
 	if(pHDat->bXIsTime){
-		if( strcmp(DasPlane_getUnits(pPlane), UNIT_US2000) != 0)
-			rX = Units_convertTo(rX, DasPlane_getUnits(pPlane), UNIT_US2000);
+		if( strcmp(DasPlane_units(pPlane), DASUNITS_US2000) != 0)
+			rX = DasUnits_convert(rX, DasPlane_units(pPlane), DASUNITS_US2000);
 	}
 	if(rX < pHDat->rBeg) return 0;
 	if(rX >= pHDat->rEnd) return 0;
@@ -591,11 +591,11 @@ das_errcode onPktData(DasPkt* pPktIn, int nPktId, void* vpHDat){
 	   das3_from_das2.c does.  Only the first and last cache files can straddle
 	   BEG/END, packets of the files in between need no decoding at all. */
 	das_errcode nRet = DAS_OKAY;
-	DasBuf_reinit(pHDat->pBuf);
+	DasBuf_reset(pHDat->pBuf);
 	if((nRet = DasPkt_encodeData(pPktIn, pHDat->pBuf)) != DAS_OKAY) return nRet;
 
 	size_t uLen = 0;
-	const ubyte* pData = DasBuf_data(pHDat->pBuf, &uLen);
+	const uint8_t* pData = DasBuf_data(pHDat->pBuf, &uLen);
 	nRet = DasIO_writePktBytes(pHDat->pOut, nPktId, pData, uLen);
 	if(nRet == 0){
 		pHDat->nPktsSent += 1;
@@ -673,8 +673,8 @@ int readCache(
 	}
 
 	
-	if(!das_str2int(pTree->sStoreMeth, &nInterval)){
-		return das_error(P_ERR, "Can't convert storage interval '%s' to "
+	if(!dasstr_toInt(pTree->sStoreMeth, &nInterval)){
+		return daserrf(P_ERR, "Can't convert storage interval '%s' to "
 				            "an integer", pTree->sStoreMeth);
 		pFileList = generalBinFileList(sCacheLvlDir, pTree, rBeg, rEnd, &uFiles);
 	}
@@ -692,16 +692,16 @@ have_file_list:
 	if(bXIsTime){
 		char sVal[128] = {'\0'};
 		snprintf(sVal, 128, "%s to %s UTC", sBeg, sEnd);
-		DasDesc_set((DasDesc*)hdat.pSdOut, "DatumRange", "xCacheRange", sVal);
+		DasDesc_setProp((DasDesc*)hdat.pSdOut, "DatumRange", "xCacheRange", sVal);
 	}
 	else{
 		char sVal[128] = {'\0'};
 		snprintf(sVal, 128, "%s to %s UTC", sBeg, sEnd);
-		DasDesc_set((DasDesc*)hdat.pSdOut, "DatumRange", "xCacheRange", sVal);
+		DasDesc_setProp((DasDesc*)hdat.pSdOut, "DatumRange", "xCacheRange", sVal);
 	}
 	
 	if(hdat.pTree->nBinSize > 0){
-		DasDesc_setDatum((DasDesc*)hdat.pSdOut, "xCacheResolution",
+		DasDesc_setValDatum((DasDesc*)hdat.pSdOut, "xCacheResolution",
 				            pTree->nBinSize, pTree->binUnits);	
 	}
 	
@@ -711,10 +711,10 @@ have_file_list:
 		return 0;
 	}
 	
-	das_stream_proc proc;
-	das_stream_proc_init(&proc, &hdat);
-	proc.onStreamDesc = onStreamHdr;
-	proc.onPktDesc = onPktHdr;
+	DasIOProc proc;
+	init_DasIOProc(&proc, &hdat);
+	proc.onStream = onStreamHdr;
+	proc.onPkt = onPktHdr;
 	proc.onPktData = onPktData;
 	proc.onClose = onIgnoreExcept;
 			
@@ -731,7 +731,7 @@ have_file_list:
 		if(pIn == NULL)
 			continue;
 		
-		DasIO_addProcessor(pIn, &proc);	
+		DasIO_addProc(pIn, &proc);	
 		if( (nRet = DasIO_readAll(pIn)) != 0) break;
 	}
 	
@@ -824,7 +824,7 @@ int main(int argc, char* argv[]){
 	char* pArg = NULL;
 	
 	/* Exit on errors, log info messages and above */
-	das_init(argv[0], DASERR_DIS_EXIT, DASLOG_INFO, NULL);
+	daslib_init(argv[0], DASERRDISP_EXIT, DASLOG_INFO, NULL);
 	
 	int iParam = 1;
 	for(int i = 1; i < argc; i++){
@@ -838,7 +838,7 @@ int main(int argc, char* argv[]){
 				return 13;
 			}
 			i++;
-			if(! das_str2double(argv[i], &rPad) || (rPad < 0.0)){
+			if(! dasstr_toDouble(argv[i], &rPad) || (rPad < 0.0)){
 				fprintf(stderr, "Couldn't convert %s to a positive real value\n", argv[i]);
 				return 13;
 			}
@@ -846,7 +846,7 @@ int main(int argc, char* argv[]){
 		}
 		if(strncmp(argv[i], "--pad=", 6) == 0){
 			pArg = argv[i];
-			if(! das_str2double(pArg + 6, &rPad) || (rPad < 0.0)){
+			if(! dasstr_toDouble(pArg + 6, &rPad) || (rPad < 0.0)){
 				fprintf(stderr, "Couldn't convert %s to a positive real value\n", pArg+6);
 				return 13;
 			}
@@ -877,11 +877,11 @@ int main(int argc, char* argv[]){
 	iTmp = strlen(sEnd) - 1;
 	if(sEnd[iTmp] == 'Z') sEnd[iTmp] = '\0';
 						
-	if(!das_isfile(sDsdf))
-		return das_error(P_ERR, "Missing Data Source Description File (DSDF): %s", sDsdf);
+	if(!dasfs_isFile(sDsdf))
+		return daserrf(P_ERR, "Missing Data Source Description File (DSDF): %s", sDsdf);
 	
-	if(!das_isdir(sCacheRoot))
-		return das_error(P_ERR, "Cache directory %s doesn't exist", sCacheRoot);
+	if(!dasfs_isDir(sCacheRoot))
+		return daserrf(P_ERR, "Cache directory %s doesn't exist", sCacheRoot);
 
 	cache_tree_t pTrees[MAX_TREES+1];  /* Native should always be first */
 	size_t uTrees = MAX_TREES;
@@ -892,32 +892,32 @@ int main(int argc, char* argv[]){
 	bool bXisTime = isTimeBased(pTrees, uTrees);
 	
 	double rRes = 0.0, rBeg = 0.0, rEnd = 0.0;
-	das_time dtBeg = {0}, dtEnd = {0};
+	DasTime dtBeg = {0}, dtEnd = {0};
 	if(bXisTime){
-		dt_parsetime(&dtBeg, sBeg);
-		rBeg = Units_convertFromDt(&dtBeg, UNIT_US2000);
-		if(das_isfill(rBeg)) return P_ERR;
-		dt_parsetime(&dtEnd, sEnd);
-		rEnd = Units_convertFromDt(&dtEnd, UNIT_US2000);
-		if(das_isfill(rEnd)) return P_ERR;
+		DasTime_fromStr(&dtBeg, sBeg);
+		rBeg = DasTime_toPoint(&dtBeg, DASUNITS_US2000);
+		if(dasval_isFill(rBeg)) return P_ERR;
+		DasTime_fromStr(&dtEnd, sEnd);
+		rEnd = DasTime_toPoint(&dtEnd, DASUNITS_US2000);
+		if(dasval_isFill(rEnd)) return P_ERR;
 		rBeg -= rPad * 1.0e+6;
 		rEnd += rPad * 1.0e+6;
 	}
 	else{
-		if(!das_str2double(sBeg, &rBeg))
-			return das_error(P_ERR, "Can't convert begin point %s to a double value", sBeg);
-		if(!das_str2double(sEnd, &rEnd))
-			return das_error(P_ERR, "Can't convert end point %s to a double value", sEnd);
+		if(!dasstr_toDouble(sBeg, &rBeg))
+			return daserrf(P_ERR, "Can't convert begin point %s to a double value", sBeg);
+		if(!dasstr_toDouble(sEnd, &rEnd))
+			return daserrf(P_ERR, "Can't convert end point %s to a double value", sEnd);
 		rBeg -= rPad;
 		rEnd += rPad;
 	}
 	if(rEnd <= rBeg)
-		return das_error(P_ERR, "Begin point %s is <= to the ending point %s", sBeg, sEnd);
+		return daserrf(P_ERR, "Begin point %s is <= to the ending point %s", sBeg, sEnd);
 	
-	if(!das_str2double(sRes, &rRes))
-		return das_error(P_ERR, "Can't convert resolution %s to a double value", sRes);
+	if(!dasstr_toDouble(sRes, &rRes))
+		return daserrf(P_ERR, "Can't convert resolution %s to a double value", sRes);
 	if(rRes < 0.0)
-		return das_error(P_ERR, "Resolution value %s is <= 0", sRes);
+		return daserrf(P_ERR, "Resolution value %s is <= 0", sRes);
 	
 	/* Pick the directory tree to use */
 	cache_tree_t* pUseTree = NULL;
@@ -929,7 +929,7 @@ int main(int argc, char* argv[]){
 	}
 	
 	if(pUseTree == NULL)
-		return das_error(P_ERR, "Can't find a cache tree in %s with a resolution "
+		return daserrf(P_ERR, "Can't find a cache tree in %s with a resolution "
 				            "lower than %f", sCacheRoot, rRes);
 	snprintf(sParamRoot, PATH_MAX-1, "%s/%s", sCacheRoot, sNormParam);
 	return readCache(sParamRoot, pUseTree, rBeg, rEnd, bXisTime, sBeg, sEnd);

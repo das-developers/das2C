@@ -140,8 +140,8 @@ typedef struct proc_state {
 	bool bDatOut;
 	const char* sDsdfFile;
 	int nPktId;
-	das_time dtTrimBeg;
-	das_time dtTrimEnd;
+	DasTime dtTrimBeg;
+	DasTime dtTrimEnd;
 	DasDesc* pDsdf;
 	const char* sPlaneList;
 	
@@ -191,20 +191,20 @@ das_errcode OnPktHdr(DasStream* pSdIn, DasPkt* pPdIn, int nPktId, void* vpPs)
 	
 	const char* sDesc = NULL;
 	const char* sKey = NULL;
-	char sBeg[64] = {'\0'};  das_time dtBegin = {0};
-	char sEnd[64] = {'\0'};  das_time dtEnd = {0};
-	das_units units = UNIT_DIMENSIONLESS;
+	char sBeg[64] = {'\0'};  DasTime dtBegin = {0};
+	char sEnd[64] = {'\0'};  DasTime dtEnd = {0};
+	DasUnits units = DASUNITS_DIMENSIONLESS;
 	if(pPs->pDsdf && pPs->bHdrOut){
-		sDesc = DasDesc_getStr(pPs->pDsdf, "description");
+		sDesc = DasDesc_val(pPs->pDsdf, "description");
 				
-		if(DasDesc_getStrRng(pPs->pDsdf, "validRange", sBeg, sEnd, &units, 64) == 0){
-			if(dt_parsetime(&dtBegin, sBeg)){
-				dt_isoc(&dtBegin, 0, sBeg, 64);
+		if(DasDesc_valRng(pPs->pDsdf, "validRange", sBeg, sEnd, &units, 64) == 0){
+			if(DasTime_fromStr(&dtBegin, sBeg)){
+				DasTime_toIsoC(&dtBegin, 0, sBeg, 64);
 				printf("%s  \"startDate\":\"%s\",\n", sPre, sBeg);
 			}
 			
-			if(dt_parsetime(&dtEnd, sEnd)){
-				dt_isoc(&dtEnd, 0, sBeg, 64);
+			if(DasTime_fromStr(&dtEnd, sEnd)){
+				DasTime_toIsoC(&dtEnd, 0, sBeg, 64);
 				printf("%s  \"stopDate\":\"%s\",\n", sPre, sEnd);
 			}
 		}
@@ -217,26 +217,26 @@ das_errcode OnPktHdr(DasStream* pSdIn, DasPkt* pPdIn, int nPktId, void* vpPs)
 				sKey = "exampleRange_00";
 		}
 		if(sKey){
-			if(DasDesc_getStrRng(pPs->pDsdf, sKey, sBeg, sEnd, &units, 64) == 0){
-				if(dt_parsetime(&dtBegin, sBeg)){
-					dt_isoc(&dtBegin, 0, sBeg, 64);
+			if(DasDesc_valRng(pPs->pDsdf, sKey, sBeg, sEnd, &units, 64) == 0){
+				if(DasTime_fromStr(&dtBegin, sBeg)){
+					DasTime_toIsoC(&dtBegin, 0, sBeg, 64);
 					printf("%s  \"sampleStartDate\":\"%s\",\n", sPre, sBeg);
 				}
 			
-				if(dt_parsetime(&dtEnd, sEnd)){
-					dt_isoc(&dtEnd, 0, sBeg, 64);
+				if(DasTime_fromStr(&dtEnd, sEnd)){
+					DasTime_toIsoC(&dtEnd, 0, sBeg, 64);
 					printf("%s  \"sampleStopDate\":\"%s\",\n", sPre, sEnd);
 				}
 			}
 		}
 		if(DasDesc_has(pPs->pDsdf, "techContact"))
 			printf("%s  \"contact\":\"%s\",\n",
-			       sPre, DasDesc_getStr(pPs->pDsdf, "techContact"));
+			       sPre, DasDesc_val(pPs->pDsdf, "techContact"));
 	}
 	
 	/* Get the description out of the stream itself if not in the dsdf */
 	if( sDesc == NULL)
-		sDesc = DasDesc_getStr((DasDesc*)pSdIn, "title");
+		sDesc = DasDesc_val((DasDesc*)pSdIn, "title");
 	
 	if(pPs->bHdrOut && (sDesc != NULL))
 		printf("%s  \"description\":\"%s\",\n", sPre, sDesc);
@@ -256,17 +256,17 @@ das_errcode OnPktHdr(DasStream* pSdIn, DasPkt* pPdIn, int nPktId, void* vpPs)
 	DasEnc* pEncoder = NULL;
 	int nAsciiOutWidth = 13;
 	
-	for(size_t u = 0; u < DasPkt_getNPlanes(pPdIn); ++u){
-		pPlane = DasPkt_getPlane(pPdIn, u);
-		units = DasPlane_getUnits(pPlane);
-		sName = DasPlane_getName(pPlane);
-		pEncoder = DasPlane_getValEncoder(pPlane);
-		uItems = DasPlane_getNItems(pPlane);
+	for(size_t u = 0; u < DasPkt_numPlanes(pPdIn); ++u){
+		pPlane = DasPkt_planeAt(pPdIn, u);
+		units = DasPlane_units(pPlane);
+		sName = DasPlane_name(pPlane);
+		pEncoder = DasPlane_valEnc(pPlane);
+		uItems = DasPlane_numItems(pPlane);
 		
-		switch(DasPlane_getType(pPlane)){
+		switch(DasPlane_type(pPlane)){
 		
-		case DASPLANE_X:
-			if(! Units_haveCalRep(units)){
+		case DASPLANETYPE_X:
+			if(! DasUnits_isTimePoint(units)){
 				fprintf(stderr, "ERROR: <x> plane data is not convertable to UTC\n");
 				return ERR_HAPI_INCOMPAT;
 			}
@@ -296,7 +296,7 @@ das_errcode OnPktHdr(DasStream* pSdIn, DasPkt* pPdIn, int nPktId, void* vpPs)
 			uRowBufLen += DasEnc_width(pEncoder) +2;
 			break;
 		
-		case DASPLANE_Y:
+		case DASPLANETYPE_Y:
 			++nYs;			
 			
 			if(strlen(sName) == 0){
@@ -312,11 +312,11 @@ das_errcode OnPktHdr(DasStream* pSdIn, DasPkt* pPdIn, int nPktId, void* vpPs)
 			
 				if(DasDesc_has((DasDesc*)pPlane, "yLabel"))
 					printf("%s     \"description\":\"%s\",\n", sPre,
-							DasDesc_getStr((DasDesc*)pPlane, "yLabel"));
+							DasDesc_val((DasDesc*)pPlane, "yLabel"));
 			
 				sUnits = "null";
-				if((DasPlane_getUnits(pPlane) != NULL)&&(DasPlane_getUnits(pPlane) != UNIT_DIMENSIONLESS))
-					sUnits = Units_toStr(DasPlane_getUnits(pPlane));
+				if((DasPlane_units(pPlane) != NULL)&&(DasPlane_units(pPlane) != DASUNITS_DIMENSIONLESS))
+					sUnits = DasUnits_toStr(DasPlane_units(pPlane));
 			
 				printf("%s     \"units\":\"%s\"}\n", sPre, sUnits);
 			}
@@ -334,7 +334,7 @@ das_errcode OnPktHdr(DasStream* pSdIn, DasPkt* pPdIn, int nPktId, void* vpPs)
 			uRowBufLen += DasEnc_width(pEncoder) +2;
 			break;
 			
-		case DASPLANE_YSCAN:
+		case DASPLANETYPE_YSCAN:
 			++nYScans;
 
 			if(strlen(sName) == 0){
@@ -351,15 +351,15 @@ das_errcode OnPktHdr(DasStream* pSdIn, DasPkt* pPdIn, int nPktId, void* vpPs)
 			
 				if(DasDesc_has((DasDesc*)pPlane, "zLabel"))
 					printf("%s     \"description\":\"%s\",\n", sPre,
-							DasDesc_getStr((DasDesc*)pPlane, "zLabel"));
+							DasDesc_val((DasDesc*)pPlane, "zLabel"));
 			
 				sUnits = "null";
-				if((DasPlane_getUnits(pPlane) != NULL)&&(DasPlane_getUnits(pPlane) != UNIT_DIMENSIONLESS))
-					sUnits = Units_toStr(DasPlane_getUnits(pPlane));
+				if((DasPlane_units(pPlane) != NULL)&&(DasPlane_units(pPlane) != DASUNITS_DIMENSIONLESS))
+					sUnits = DasUnits_toStr(DasPlane_units(pPlane));
 			
 				sYUnits = "null";
-				if((DasPlane_getYTagUnits(pPlane) != NULL)&&(DasPlane_getYTagUnits(pPlane) != UNIT_DIMENSIONLESS))
-					sYUnits = Units_toStr(DasPlane_getYTagUnits(pPlane));
+				if((DasPlane_yTagUnits(pPlane) != NULL)&&(DasPlane_yTagUnits(pPlane) != DASUNITS_DIMENSIONLESS))
+					sYUnits = DasUnits_toStr(DasPlane_yTagUnits(pPlane));
 								
 				printf("%s     \"units\":\"%s\",\n", sPre, sUnits);
 			
@@ -372,11 +372,11 @@ das_errcode OnPktHdr(DasStream* pSdIn, DasPkt* pPdIn, int nPktId, void* vpPs)
 				
 				if(DasDesc_has((DasDesc*)pPlane, "yLabel"))
 					printf("%s     \"description\":\"%s\",\n", sPre,
-							DasDesc_getStr((DasDesc*)pPlane, "yLabel"));
+							DasDesc_val((DasDesc*)pPlane, "yLabel"));
 				
 				printf("%s       \"centers\":[", sPre);
 			
-				pTags = DasPlane_getOrMakeYTags(pPlane);
+				pTags = DasPlane_makeYTags(pPlane);
 				for(size_t v = 0; v < uItems; ++v){
 					if(v > 0) putchar(',');
 					printf("%.4e", pTags[v]);
@@ -430,7 +430,7 @@ das_errcode onPktData(DasPkt* pPdIn, int nPktId, void* vpPs)
 	/* Skip this if it's not the packet we are looking for */
 	if(pPs->nPktId != nPktId ) return DAS_OKAY;
 	
-	DasBuf_reinit(pPs->pRow);
+	DasBuf_reset(pPs->pRow);
 	
 	/* Convert it to CSV data */
 	const double* pVals = NULL;
@@ -441,41 +441,41 @@ das_errcode onPktData(DasPkt* pPdIn, int nPktId, void* vpPs)
 	char sNameBuf[64] = {'\0'};
 	
 
-	das_time dt = {0};
+	DasTime dt = {0};
 	size_t uItems = 0;
 	DasEnc* pEncoder = NULL;
-	das_units units;
+	DasUnits units;
 	
 	bool bWrite = true;
-	for(size_t u = 0; (u < DasPkt_getNPlanes(pPdIn)) && bWrite; ++u){
-		pPlane = DasPkt_getPlane(pPdIn, u);
+	for(size_t u = 0; (u < DasPkt_numPlanes(pPdIn)) && bWrite; ++u){
+		pPlane = DasPkt_planeAt(pPdIn, u);
 		
-		units = DasPlane_getUnits(pPlane);
-		sName = DasPlane_getName(pPlane);
-		pVals = DasPlane_getValues(pPlane);
+		units = DasPlane_units(pPlane);
+		sName = DasPlane_name(pPlane);
+		pVals = DasPlane_vals(pPlane);
 		
 		/* If the output encoder is different from the input encoder then we
 		   should have saved a pointer to it in the onPktHdr function above */
-		if(DasDesc_getUser((DasDesc*)pPlane)) 
-			pEncoder = (DasEnc*)(DasDesc_getUser((DasDesc*)pPlane));
+		if(DasDesc_user((DasDesc*)pPlane)) 
+			pEncoder = (DasEnc*)(DasDesc_user((DasDesc*)pPlane));
 		else
-			pEncoder = DasPlane_getValEncoder(pPlane);
+			pEncoder = DasPlane_valEnc(pPlane);
 		
-		switch(DasPlane_getType(pPlane)){
+		switch(DasPlane_type(pPlane)){
 			
-		case DASPLANE_X:
-			Units_convertToDt(&dt, pVals[0], units);
+		case DASPLANETYPE_X:
+			DasTime_fromPoint(&dt, pVals[0], units);
 			
 			/* Monotonic Assumption: If we are at or after the end, just be */
 			/* done with all output */
-			if((pPs->dtTrimEnd.year != 0) && (dt_compare(&dt, &(pPs->dtTrimEnd)) >= 0)){
+			if((pPs->dtTrimEnd.year != 0) && (DasTime_compare(&dt, &(pPs->dtTrimEnd)) >= 0)){
 				pPs->bDone = true;
 				bWrite = false;
 				break;
 			}
 			
 			/* If to early, don't output this packet */
-			if((pPs->dtTrimBeg.year != 0) && (dt_compare(&dt, &(pPs->dtTrimBeg)) < 0)){
+			if((pPs->dtTrimBeg.year != 0) && (DasTime_compare(&dt, &(pPs->dtTrimBeg)) < 0)){
 				bWrite = false;
 				break;
 			}
@@ -484,7 +484,7 @@ das_errcode onPktData(DasPkt* pPdIn, int nPktId, void* vpPs)
 			DasEnc_write(pEncoder, pPs->pRow, pVals[0], units);
 			break;
 		
-		case DASPLANE_Y:
+		case DASPLANETYPE_Y:
 			++nYs;
 			if(strlen(sName) == 0){
 				snprintf(sNameBuf, 63, "Y_%d", nYs);
@@ -500,14 +500,14 @@ das_errcode onPktData(DasPkt* pPdIn, int nPktId, void* vpPs)
 			}
 			break;
 		
-		case DASPLANE_YSCAN:
+		case DASPLANETYPE_YSCAN:
 			++nYScans;
 			if(strlen(sName) == 0){
 				snprintf(sNameBuf, 63, "YSCAN_%d", nYScans);
 				sName = sNameBuf;
 			}
 			if(outputPlane(pPs, sName)){
-				uItems = DasPlane_getNItems(pPlane);
+				uItems = DasPlane_numItems(pPlane);
 				for(u = 0; u < uItems; ++u){
 					DasBuf_puts(pPs->pRow, ",");
 	
@@ -526,7 +526,7 @@ das_errcode onPktData(DasPkt* pPdIn, int nPktId, void* vpPs)
 	if(bWrite){
 		DasBuf_puts(pPs->pRow, "\r\n");
 		size_t uRow = 0;
-		const ubyte* pRow = DasBuf_data(pPs->pRow, &uRow);
+		const uint8_t* pRow = DasBuf_data(pPs->pRow, &uRow);
 		if( fwrite(pRow, 1, uRow, stdout) != uRow){
 			fprintf(stderr, "   ERROR: das2_hapi can't write to standard output\n");
 			exit(101);
@@ -546,9 +546,9 @@ das_errcode onClose(DasStream* sd, const DasExcept* pExcept, void* vpPs)
 
 	/* Can't do much with an exception here but report it */
 	if(pExcept != NULL){
-		fprintf(stderr, "Stream Exception: %s, %s\n", DasExcept_typeStr(pExcept),
+		fprintf(stderr, "Stream Exception: %s, %s\n", DasExcept_typeStr3(pExcept),
 			DasExcept_msg(pExcept));
-		if(DasExcept_type(pExcept) != DAS_EX_NO_DATA) nRet = DASERR_OOB;
+		if(DasExcept_type(pExcept) != DASEXCEPTTYPE_NO_DATA) nRet = DASERR_OOB;
 	}
 	
 	/* TODO: STRIP this out use a count of zero bytes in the h_api/info.py 
@@ -588,8 +588,8 @@ void initProcState(proc_state_t* pPs){
 	pPs->bDatOut = true;
 	pPs->sDsdfFile = NULL;
 	pPs->nPktId = -1;
-	dt_null( &(pPs->dtTrimBeg));
-	dt_null( &(pPs->dtTrimEnd));
+	DasTime_clear( &(pPs->dtTrimBeg));
+	DasTime_clear( &(pPs->dtTrimEnd));
 	pPs->pDsdf = NULL;
 	pPs->sPlaneList = NULL;
 	
@@ -601,12 +601,12 @@ void initProcState(proc_state_t* pPs){
 int main( int argc, char *argv[]) {
 		
 	/* Exit on errors, log info messages and above */
-	das_init(argv[0], DASERR_DIS_EXIT, DASLOG_INFO, NULL);
+	daslib_init(argv[0], DASERRDISP_EXIT, DASLOG_INFO, NULL);
 	
 	proc_state_t ps;
 	DasBuf* pParamBuf = NULL;
 	
-	daserr_setdisp(DASERR_DIS_EXIT);  /* Make sure internal library problems cause an 
+	daserr_setDisp(DASERRDISP_EXIT);  /* Make sure internal library problems cause an 
 								  * exit to the shell with a non-zero value */
 	
 	initProcState(&ps);
@@ -654,7 +654,7 @@ int main( int argc, char *argv[]) {
 				return 13;
 			}
 			
-			if(!dt_parsetime(&(ps.dtTrimBeg), argv[i])){
+			if(!DasTime_fromStr(&(ps.dtTrimBeg), argv[i])){
 				fprintf(stderr, "ERROR: Couldn't parse begin trim time %s",argv[i]);
 				return 13;
 			}
@@ -667,7 +667,7 @@ int main( int argc, char *argv[]) {
 				return 13;
 			}
 			
-			if(!dt_parsetime(&(ps.dtTrimEnd), argv[i])){
+			if(!DasTime_fromStr(&(ps.dtTrimEnd), argv[i])){
 				fprintf(stderr, "ERROR: Couldn't parse begin trim time %s",argv[i]);
 				return 13;
 			}
@@ -703,7 +703,7 @@ int main( int argc, char *argv[]) {
 	
 	/* If we were given a DSDF, go ahead and parse it */
 	if(ps.sDsdfFile){
-		if( (ps.pDsdf = dsdf_parse(ps.sDsdfFile)) == NULL){
+		if( (ps.pDsdf = new_DasDesc_dsdf(ps.sDsdfFile)) == NULL){
 			fprintf(stderr, "ERROR: Problem parsing DSDF file %s\n", ps.sDsdfFile);
 			return 15;
 		}
@@ -711,17 +711,17 @@ int main( int argc, char *argv[]) {
 	
 	/* Create an input processor, pass in application state structure in a
 	   user data pointer */
-	das_stream_proc proc;
-	das_stream_proc_init(&proc, &ps);
+	DasIOProc proc;
+	init_DasIOProc(&proc, &ps);
 	
-	proc.onStreamDesc = NULL;
-	proc.onPktDesc    = OnPktHdr;
+	proc.onStream = NULL;
+	proc.onPkt    = OnPktHdr;
 	proc.onPktData    = onPktData;
 	proc.onComment    = NULL;
 	proc.onClose      = onClose;
 
 	DasIO* pIn = new_DasIO("Standard Input", new_DasXport_stdin(), NULL);
-	DasIO_addProcessor(pIn, &proc);
+	DasIO_addProc(pIn, &proc);
 	
 	int status = DasIO_readAll(pIn);
 	return status;

@@ -45,23 +45,23 @@ extern "C" {
  * 
  * // pDs is a pointer to a das dataset 
  * 
- * DasDim* pDimTime = DasDs_getDimByName(pDs, "time");
- * DasVar* pVarTime = DasDim_getPointVar(pDimTime);
+ * DasDim* pDimTime = DasDs_dim(pDs, "time");
+ * DasVar* pVarTime = DasDim_pointVar(pDimTime);
  * 
- * DasDim* pDimFreq = DasDs_getDimByName(pDs, "frequency");
- * DasVar* pVarFreq = DasDim_getPointVar(pDimFreq);
+ * DasDim* pDimFreq = DasDs_dim(pDs, "frequency");
+ * DasVar* pVarFreq = DasDim_pointVar(pDimFreq);
  * 
- * DasDim* pDimAmp  = DasDs_getDimByName(pDs, "e_spec_dens");
- * DasVar* pVarAmp  = DasDim_getPointVar(pDimAmp);
+ * DasDim* pDimAmp  = DasDs_dim(pDs, "e_spec_dens");
+ * DasVar* pVarAmp  = DasDim_pointVar(pDimAmp);
  * 
  * DasDsIter iter;
- * das_datum set[3];
+ * DasDatum set[3];
  * 
  * for(init_DasDsIter(&iter, pDs); !iter.done; DasDsIter_next(&iter)){
  *		
- *	  DasVar_get(pVarTime, iter.index, set);
- *	  DasVar_get(pVarFreq, iter.index, set + 1);
- *	  DasVar_get(pVarAmp,  iter.index, set + 2);
+ *	  DasVar_datumAt(pVarTime, iter.addr, set);
+ *	  DasVar_datumAt(pVarFreq, iter.addr, set + 1);
+ *	  DasVar_datumAt(pVarAmp,  iter.addr, set + 2);
  * 
  *	  // Plot, or bin, or what-have-you, the triplet here.
  *   // Plot() is not a real function in the  das2C API
@@ -70,19 +70,22 @@ extern "C" {
  * 
  * @endcode
  */
-typedef struct dasds_iterator_t{
+typedef struct das_dsiter_t{
 	
-	/** If true the value in index is valid, false otherwise */
+	/** If true the value in addr is valid, false otherwise */
 	bool       done;
 	
-	/** A dataset bulk iteration index suitable for use in DasVar functions like
-	 * ::DasVar_get */
-	ptrdiff_t index[VARIDX_MAX];
+	/** A dataset bulk iteration address suitable for use in DasVar functions
+	 * like ::DasVar_datumAt */
+	ptrdiff_t  addr[DASIDX_MAX];
 	
+	/** The number of valid entries in addr */
 	int        rank;
-	ptrdiff_t  shape[VARIDX_MAX];  /* Used for CUBIC datasets */
-	ptrdiff_t  nLenIn;            /* Used for ragged datasets */
-	bool      ragged;
+
+	/* Internal state, not for callers */
+	ptrdiff_t  aShape[DASIDX_MAX];  /* Used for CUBIC datasets */
+	ptrdiff_t  nLenLast;            /* Used for ragged datasets */
+	bool       bRagged;
 	const DasDs* pDs;
 } DasDsIter;
 
@@ -112,7 +115,7 @@ DAS_API void init_DasDsIter(DasDsIter* pThis, const DasDs* pDs);
  *
  * For usage see the example in ::DasDsIter
  * 
- * @param pThis A pointer to an iterator.  The index member of the iterator 
+ * @param pThis A pointer to an iterator.  The addr member of the iterator 
  *        will be incremented.
  * 
  * @return true if the new index is within range, false if the index could not
@@ -126,25 +129,24 @@ DAS_API bool DasDsIter_next(DasDsIter* pThis);
 
 /** A non-degenerate iterator
  */
-typedef struct das_uniq_iter_t{
-	/** If true the current value in the index is valid, false otherwise */
+typedef struct das_dsuniqiter_t{
+	/** If true the current value in addr is valid, false otherwise */
 	bool       done;
 	
-	/** A dataset bulk iteration index suitable for use in DasVar functions like
-	 * ::DasVar_get */
-	ptrdiff_t index[VARIDX_MAX];
+	/** A dataset bulk iteration address suitable for use in DasVar functions
+	 * like ::DasVar_datumAt */
+	ptrdiff_t  addr[DASIDX_MAX];
 	
-	/** A list of index values that will be auto assigned to zero */
-	bool       lock[VARIDX_MAX];
-
-	/** Shortcut iteration by saving off the indexes that matter */
-	int        first;
-	int        last;
-	
+	/** The number of valid entries in addr */
 	int        rank;
-	ptrdiff_t  shape[VARIDX_MAX];  /* Used for CUBIC datasets */
-	ptrdiff_t  nLenIn;            /* Used for ragged datasets */
-	bool       ragged;
+
+	/* Internal state, not for callers */
+	bool       aLock[DASIDX_MAX];   /* indices held at zero, the variable doesn't use them */
+	int        iIdxFirst;           /* first index that matters, inclusive */
+	int        iIdxLast;            /* last index that matters, inclusive */
+	ptrdiff_t  aShape[DASIDX_MAX];  /* Used for CUBIC datasets */
+	ptrdiff_t  nLenLast;            /* Used for ragged datasets */
+	bool       bRagged;
 	const DasDs* pDs;
 } DasDsUniqIter;
 
@@ -180,7 +182,7 @@ DAS_API void init_DasDsUniqIter(
  *
  * For usage see the example in ::DasDsIter
  * 
- * @param pThis A pointer to an iterator.  The index member of the iterator 
+ * @param pThis A pointer to an iterator.  The addr member of the iterator 
  *        will be incremented.
  * 
  * @return true if the new index is within range, false if the index could not
@@ -194,31 +196,46 @@ DAS_API bool DasDsUniqIter_next(DasDsUniqIter* pThis);
 
 /** Simple cubic iterator
  */
-typedef struct das_cube_iter_t{
+typedef struct das_dscubeiter_t{
 	
-	/** If true the value in index is valid, false otherwise */
+	/** If true the value in addr is valid, false otherwise */
 	bool       done;
 	
-	/** A dataset bulk iteration index suitable for use in DasVar functions like
-	 * ::DasVar_get */
-	ptrdiff_t index[VARIDX_MAX];
+	/** A dataset bulk iteration address suitable for use in DasVar functions
+	 * like ::DasVar_datumAt */
+	ptrdiff_t  addr[DASIDX_MAX];
 	
+	/** The number of valid entries in addr */
 	int        rank;
-	ptrdiff_t  idxmin[VARIDX_MAX]; 
-	ptrdiff_t  idxmax[VARIDX_MAX]; 
+
+	/* Internal state, not for callers */
+	ptrdiff_t  aAddrBeg[DASIDX_MAX];  /* first address */
+	ptrdiff_t  aAddrEnd[DASIDX_MAX];  /* exclusive, 1 after the last valid address */
 	
 } DasDsCubeIter;
 
 /** Initialize an iterator to cubic section in index space 
+ *
+ * @param pThis The iterator to initialize
+ *
+ * @param nRank The number of indices in pAddrBeg and pAddrEnd
+ *
+ * @param pAddrBeg The starting address, also the value each index rolls
+ *        back to when the index before it increments
+ *
+ * @param pAddrEnd The ending address.  This is an exclusive upper bound,
+ *        as for init_DasAryIter()
+ *
  * @memberof DasDsCubeIter
  */
 DAS_API void init_DasDsCubeIter(
-	DasDsCubeIter* pThis, int nRank, const ptrdiff_t* pMin, const ptrdiff_t* pMax
+	DasDsCubeIter* pThis, int nRank, const ptrdiff_t* pAddrBeg,
+	const ptrdiff_t* pAddrEnd
 );
 
 /** Increment a cubic iterator by one position, rolling as needed 
  * 
- * @param pThis A pointer to an iterator.  The index member of the iterator 
+ * @param pThis A pointer to an iterator.  The addr member of the iterator 
  *        will be incremented.
  * 
  * @return true if the new index is within range, false if the index could not
@@ -229,57 +246,65 @@ DAS_API void init_DasDsCubeIter(
 DAS_API bool DasDsCubeIter_next(DasDsCubeIter* pThis);
 
 /** Iterate over a sub-set of the index space of a DasAry */
-typedef struct das_array_iter_t{
-	const DasAry* pAry;
-	bool          done;
-	bool          ragged;             /* flag for no end_idx */
-	bool          bNaturalEnd;       
-	int           rank;
-	ptrdiff_t     index[VARIDX_MAX];   /* current index */
-	ptrdiff_t     end_idx[VARIDX_MAX]; /* 1 after last valid index */
-	int           dim_min;
-	int           dim_max;
+typedef struct das_aryiter_t{
 
-	ptrdiff_t  shape[VARIDX_MAX];  /* Used for CUBIC arrays */
-	ptrdiff_t  nLenLast;            /* Used for ragged arrays */
+	/** If true the value in addr is valid, false otherwise */
+	bool          done;
+
+	/** The current address, suitable for DasAry functions */
+	ptrdiff_t     addr[DASIDX_MAX];
+
+	/** The number of valid entries in addr */
+	int           rank;
+
+	/* Internal state, not for callers */
+	const DasAry* pAry;
+	bool          bRagged;              /* flag for no aAddrEnd */
+	bool          bNaturalEnd;          /* no end given, run to the array's end */
+	ptrdiff_t     aAddrEnd[DASIDX_MAX]; /* exclusive, 1 after the last valid address */
+	int           iIdxFirst;            /* first index to change, inclusive */
+	int           iIdxLast;             /* last index to change, inclusive */
+	ptrdiff_t     aShape[DASIDX_MAX];   /* Used for CUBIC arrays */
+	ptrdiff_t     nLenLast;             /* Used for ragged arrays */
 } DasAryIter;
 
 
 /** Initialize an array iterator
  * 
  * The iterator can be used to simple iterate over the whole array when
- * nDimMin = 0, nDimMax = -1, pBeg = NULL, and pEnd = NULL, though it's
- * primary purpose it to iterate over a subset of indices.
+ * iIdxFirst = 0, iIdxLast = -1, pAddrBeg = NULL, and pAddrEnd = NULL, though
+ * it's primary purpose it to iterate over a subset of indices.
  * 
  * @param pThis - The iterator to initialize
  * 
  * @param pAry  - The array over which it will iterate
  * 
- * @param iDimMin - The minimum (left most) index to change.  Use 0 to increment
- *        the highest level index as needed, 1 for the next highest and so on.
+ * @param iIdxFirst - The first (left most) index to change.  Use 0 to
+ *        increment the highest level index as needed, 1 for the next highest
+ *        and so on.
  * 
- * @param iDimMax - The maximum (right most) index to change.  So for a rank 3
- *        array this would be 2. Use -1 to allow changes for the last index,
- *        -2 for the next to last and so on.
+ * @param iIdxLast - The last (right most) index to change, inclusive.  So for
+ *        a rank 3 array this would be 2. Use -1 to allow changes for the last
+ *        index, -2 for the next to last and so on.
  * 
- * @param pBeg - The starting point for iteration, use NULL to start at
+ * @param pAddrBeg - The starting address for iteration, use NULL to start at
  *        the beginning.
  * 
- * @param pEnd - The ending point for iteration.  This is an exclusive
+ * @param pAddrEnd - The ending address for iteration.  This is an exclusive
  *        upper bound!  Use NULL to end after the last valid index in the
  *        array.
  * 
  * @memberof DasAryIter
  */
 DAS_API void init_DasAryIter(
-	DasAryIter* pThis, const DasAry* pAry, int iDimMin, int iDimMax,
-	const ptrdiff_t* pBeg, const ptrdiff_t* pEnd
+	DasAryIter* pThis, const DasAry* pAry, int iIdxFirst, int iIdxLast,
+	const ptrdiff_t* pAddrBeg, const ptrdiff_t* pAddrEnd
 );
 
 
 /** Increment an array iterated to the next expected index
  * 
- * Updates the .index member to the next value in range.
+ * Updates the .addr member to the next value in range.
  * 
  * @param pThis - The iterator in increment
  * 

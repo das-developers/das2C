@@ -18,13 +18,13 @@
 /* INTERNAL header, subject to change without notice.
  *
  * DasIO's packet size and ID limits.  They live here, not in io.c, so
- * util.c's daslimit_get() table reports the values this build enforces.
+ * util.c's DasLimit_lookup() table reports the values this build enforces.
  */
 
 #ifndef _das_io_p_h_
 #define _das_io_p_h_
 
-#include <das3/stream.h>   /* DAS2_MAX_PKTIDS */
+#include <das3/stream.h>   /* DASSTREAM_V2_ENDPKTID */
 
 /* The reusable serializing buffer (pDb) is elastic: it starts at
    DASIO_INIT_PKT_SZ and grows to the largest packet seen, read or written,

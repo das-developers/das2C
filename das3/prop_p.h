@@ -18,9 +18,9 @@
 /** @file prop_p.h INTERNAL header, subject to change without notice.
  *
  * Nothing here is API, and it is not installed.  Properties are packed into
- * storage owned by their container (DasDesc, das_form_param_buf); the calls
+ * storage owned by their container (DasDesc, DasFormParamBuf); the calls
  * below lay out and size that storage.  Applications set properties through
- * the DasDesc_set*() calls and read them with the accessors in prop.h.
+ * the DasDesc_setProp*() calls and read them with the accessors in prop.h.
  */
 
 #ifndef _das_prop_p_h_
@@ -35,9 +35,9 @@ extern "C" {
 /* Variable length: the name and value are packed into buffer, which is
    over-allocated to dasprop_memsz().  The bit layout of flags is charted in
    prop.c. */
-struct das_prop {
+struct das_prop_t {
 	uint64_t  flags;       /* property type, validity, value offset */
-	das_units units;       /* Units, if any */
+	DasUnits units;       /* Units, if any */
 	char      buffer[16];  /* The property name and value, typically
 	                          over-malloc'ed */
 };
@@ -93,7 +93,7 @@ size_t dasprop_memsz(const char* sName, const char* sValue);
  *
  * @param units The units for this value.  If the type is Datum or DatumRange
  *              this value will be ignored, otherwise if this value is NULL
- *              then UNIT_DIMENSIONLESS will be assigned.
+ *              then DASUNITS_DIMENSIONLESS will be assigned.
  *
  * @param nStandard.  One of 1, 2 or 3 for das1, das2, or das3.  For
  *              das2 & 3, property names may only consist of the characters
@@ -102,8 +102,8 @@ size_t dasprop_memsz(const char* sName, const char* sValue);
  * @memberof DasProp
  */
 das_errcode init_DasProp(
-   ubyte* pBuf, size_t uBufSz, const char* sType, ubyte uType, const char* sName,
-   const char* sValue, char cSep, das_units units, int nStandard
+   uint8_t* pBuf, size_t uBufSz, const char* sType, uint8_t uType, const char* sName,
+   const char* sValue, char cSep, DasUnits units, int nStandard
 );
 
 /* A property that has passed every check in init_DasProp() and has been
@@ -113,7 +113,7 @@ das_errcode init_DasProp(
    or move them between dasprop_plan() and dasprop_write(). */
 typedef struct das_propplan {
 	uint64_t    uFlags;
-	das_units   units;
+	DasUnits   units;
 	const char* sName;
 	size_t      uNameSz;
 	const char* sValue;    /* past any trimmed leading whitespace */
@@ -125,13 +125,13 @@ typedef struct das_propplan {
 /* Run the checks of init_DasProp() and fill in pPlan, writes nothing else.
    Arguments are as for init_DasProp(), less the buffer. */
 das_errcode dasprop_plan(
-	das_propplan* pPlan, const char* sType, ubyte uType, const char* sName,
-	const char* sValue, char cSep, das_units units, int nStandard
+	das_propplan* pPlan, const char* sType, uint8_t uType, const char* sName,
+	const char* sValue, char cSep, DasUnits units, int nStandard
 );
 
 /* Write a planned property.  Can't fail, pBuf must hold at least
    dasprop_memsz() bytes for the planned name and original value. */
-void dasprop_write(const das_propplan* pPlan, ubyte* pBuf);
+void dasprop_write(const das_propplan* pPlan, uint8_t* pBuf);
 
 /** Return the memory footprint of a property, never less than sizeof(DasProp)
  * @memberof DasProp
@@ -167,7 +167,7 @@ size_t DasProp_escapeSize(const DasProp* pProp);
  *          it may be the given buffer.  
  * 
  *          If XML escape codes are needed and the given buffer is too small
- *          das_error is called, which may (depending on the error disposition)
+ *          daserrf is called, which may (depending on the error disposition)
  *          halt the program.
  * 
  * @memberof DasProp

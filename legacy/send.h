@@ -25,7 +25,7 @@
  * messages.
  *
  * Note when writing your own output formatter, put stdout in to binary
- * mode first via das_stdio_binary() before sending packets.  This is 
+ * mode first via dasfs_setStdioBinary() before sending packets.  This is 
  * critical on Windows. Also, call flush after each packet (slow readers)
  * or group of packets (fast readers).
  */
@@ -36,8 +36,8 @@
 #include <stdarg.h>
 #include <stdlib.h>
 
-#include "das1.h"       /* das_swap_float, and defs.h for HOST_IS_LSB_FIRST */
-#include <das3/oob.h>   /* das_except_e */
+#include "das1.h"       /* das_swap_float, and defs.h for DASHOST_LSB_FIRST */
+#include <das3/oob.h>   /* das_excepttype */
 
 /** Send a stub stream header. 
  *
@@ -57,12 +57,12 @@ DAS_API void das_send_stub(int nDasVer);
  *        in-band exceptions, so for any other version nothing is written.
  *
  * @param nType The exception type, its name in the stream depends on
- *        nDasVer, see das_except_toStr()
+ *        nDasVer, see dasexcepttype_name()
  *
  * @param sMsg The message, a plain string not a format.  It's XML escaped
  *        here, so pass it as is.
  */
-DAS_API void das_send_except(int nDasVer, das_except_e nType, const char* sMsg);
+DAS_API void das_send_except(int nDasVer, das_excepttype nType, const char* sMsg);
 
 /** Output a no data in interval message
  * @returns the integer 0
@@ -136,13 +136,13 @@ void das_send_progup(int nDasVer,  const char* sSrc, double fCurrent);
  * @param nDasVer - The stream major version, 1, 2 or 3.  das1 streams have
  *        no in-band errors, so for 1 the message only goes to stderr.
  *
- * @param nType - The exception type, usually DAS_EX_SERVER_ERR.  The name
- *        written for it depends on nDasVer, see das_except_toStr().
+ * @param nType - The exception type, usually DASEXCEPTTYPE_SERVER_ERR.  The name
+ *        written for it depends on nDasVer, see dasexcepttype_name().
  *
  * @return DASERR_SPICE, always non-zero so that the das server knows the
  *      request did not complete.
  */
-static inline int das_send_spice_err(int nDasVer, das_except_e nType)
+static inline int das_send_spice_err(int nDasVer, das_excepttype nType)
 {
 	char sMsg[2048];
 	_das_spice_getmsg(sMsg, (int)sizeof(sMsg));
@@ -150,7 +150,7 @@ static inline int das_send_spice_err(int nDasVer, das_except_e nType)
 	fprintf(stderr, "ERROR: %s\n", sMsg);
 
 	if((nDasVer < 1)||(nDasVer > 3))
-		das_error(DASERR_SPICE, "Unknown stream version %d", nDasVer);
+		daserrf(DASERR_SPICE, "Unknown stream version %d", nDasVer);
 	else
 		das_send_except(nDasVer, nType, sMsg);  /* nothing for das1 */
 

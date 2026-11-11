@@ -182,9 +182,9 @@ void prnHelp()
 
 void _writeProps(DasDesc* pDesc, int nPktId, const char* sItem)
 {
-	size_t uProps = DasDesc_length(pDesc);
+	size_t uProps = DasDesc_numProps(pDesc);
 	for(size_t u = 0; u < uProps; ++u){
-		const DasProp* pProp = DasDesc_getPropByIdx(pDesc, u);
+		const DasProp* pProp = DasDesc_propAt(pDesc, u);
 		if(pProp == NULL) continue;
 
 		// Write in the order: sope name, type, units, value
@@ -196,7 +196,7 @@ void _writeProps(DasDesc* pDesc, int nPktId, const char* sItem)
 		if(g_bHeaders)
 			printf("\"property\"%s", g_sSep);
 
-		if(DasProp_units(pProp) == UNIT_DIMENSIONLESS){
+		if(DasProp_units(pProp) == DASUNITS_DIMENSIONLESS){
 			printf("\"%s\"%s\"%s\"%s\"%s\"%s%s", 
 				sItem, g_sSep, DasProp_name(pProp), g_sSep, DasProp_typeStr3(pProp), 
 				g_sSep, g_sSep
@@ -210,7 +210,7 @@ void _writeProps(DasDesc* pDesc, int nPktId, const char* sItem)
 		}
 
 		const char* sVal = DasProp_value(pProp);
-		if(DasProp_items(pProp) < 2){
+		if(DasProp_numItems(pProp) < 2){
 			printf("\"%s\"\r\n", sVal);
 		}
 		else{
@@ -264,7 +264,7 @@ static bool _isColumn(const DasDs* pDs, const DasVar* pVar)
 {
 	int nRank = DasDs_rank(pDs);
 	for(int i = 0; i < nRank; ++i)
-		if(!DasVar_degenerate(pVar, i)) return true;
+		if(!DasVar_isDegenerate(pVar, i)) return true;
 	return false;
 }
 
@@ -275,23 +275,23 @@ static bool _isColumn(const DasDs* pDs, const DasVar* pVar)
 static das_errcode _addCenter(DasDim* pDim)
 {
 	if(!g_bCenter) return DAS_OKAY;
-	if(DasDim_getVar(pDim, DASVAR_CENTER) != NULL) return DAS_OKAY;
+	if(DasDim_var(pDim, DASDIM_ROLE_CENTER) != NULL) return DAS_OKAY;
 
-	DasVar* pRef = DasDim_getVar(pDim, DASVAR_REF);
-	DasVar* pOff = DasDim_getVar(pDim, DASVAR_OFFSET);
+	DasVar* pRef = DasDim_var(pDim, DASDIM_ROLE_REF);
+	DasVar* pOff = DasDim_var(pDim, DASDIM_ROLE_OFFSET);
 	if((pRef == NULL)||(pOff == NULL)) return DAS_OKAY;
 
 	DasVar* pSum = new_DasVarBin(pRef, '+', pOff);
 	if(pSum == NULL)
-		return das_error(PERR,
+		return daserrf(PERR,
 			"Could not combine the reference and offset of dimension '%s'",
 			DasDim_name(pDim)
 		);
 	DasDesc_setUser((DasDesc*)pSum, DASCSV_SYNTH);
 
-	if(!DasDim_addVar(pDim, DASVAR_CENTER, pSum)){
+	if(!DasDim_addVar(pDim, DASDIM_ROLE_CENTER, pSum)){
 		dec_DasVar(pSum);
-		return das_error(PERR,
+		return daserrf(PERR,
 			"Could not attach a center to dimension '%s'", DasDim_name(pDim)
 		);
 	}
@@ -301,32 +301,32 @@ static das_errcode _addCenter(DasDim* pDim)
 static das_errcode _gatherCols(DasDs* pDs, CsvCols* pCols)
 {
 	pCols->nVars = 0;
-	das_dim_type_e aDt[2] = {DASDIM_COORD, DASDIM_DATA};
+	das_dimtype aDt[2] = {DASDIMTYPE_COORD, DASDIMTYPE_DATA};
 
 	for(int c = 0; c < 2; ++c){
 		size_t uDims = DasDs_numDims(pDs, aDt[c]);
 		for(size_t u = 0; u < uDims; ++u){
-			DasDim* pDim = DasDs_getDimByIdx(pDs, u, aDt[c]);
+			DasDim* pDim = DasDs_dimAt(pDs, u, aDt[c]);
 
 			das_errcode nRet = _addCenter(pDim);
 			if(nRet != DAS_OKAY) return nRet;
 
-			const DasVar* pCenter = DasDim_getVar(pDim, DASVAR_CENTER);
-			bool bSynth = (pCenter != NULL)&&(DasDesc_getUser((DasDesc*)pCenter) == DASCSV_SYNTH);
+			const DasVar* pCenter = DasDim_var(pDim, DASDIM_ROLE_CENTER);
+			bool bSynth = (pCenter != NULL)&&(DasDesc_user((DasDesc*)pCenter) == DASCSV_SYNTH);
 
 			for(size_t v = 0; v < DasDim_numVars(pDim); ++v){
-				DasVar* pVar = DasDim_getVarByIdx(pDim, v);
-				const char* sRole = DasDim_getRoleByIdx(pDim, v);
+				DasVar* pVar = DasDim_varAt(pDim, v);
+				const char* sRole = DasDim_roleAt(pDim, v);
 
 				/* the parts of a computed center are not printed again */
-				if(bSynth && ((strcasecmp(sRole, DASVAR_REF) == 0)||
-				              (strcasecmp(sRole, DASVAR_OFFSET) == 0)))
+				if(bSynth && ((strcasecmp(sRole, DASDIM_ROLE_REF) == 0)||
+				              (strcasecmp(sRole, DASDIM_ROLE_OFFSET) == 0)))
 					continue;
 
 				if(!_isColumn(pDs, pVar)) continue;
 
 				if(pCols->nVars == DASCSV_MAX_COLS)
-					return das_error(PERR,
+					return daserrf(PERR,
 						"More than %d variables to print in dataset '%s'",
 						DASCSV_MAX_COLS, DasDs_name(pDs)
 					);
@@ -342,7 +342,7 @@ static das_errcode _gatherCols(DasDs* pDs, CsvCols* pCols)
    on the dataset until the stream closes. */
 static CsvCols* _colsOf(DasDs* pDs)
 {
-	if(DasDesc_getUser((DasDesc*)pDs) != NULL) return (CsvCols*)DasDesc_getUser((DasDesc*)pDs);
+	if(DasDesc_user((DasDesc*)pDs) != NULL) return (CsvCols*)DasDesc_user((DasDesc*)pDs);
 
 	CsvCols* pCols = (CsvCols*)calloc(1, sizeof(CsvCols));
 	if(_gatherCols(pDs, pCols) != DAS_OKAY){
@@ -356,9 +356,9 @@ static CsvCols* _colsOf(DasDs* pDs)
 /* Columns a variable occupies: one per component, one for a scalar */
 static int _numCols(const DasVar* pVar)
 {
-	if(DasVar_valType(pVar) != vtComposite) return 1;
+	if(DasVar_vt(pVar) != DASVT_COMP) return 1;
 
-	ptrdiff_t aIntr[VARIDX_MAX] = VARIDX_INIT_UNUSED;
+	ptrdiff_t aIntr[DASIDX_MAX] = DASIDX_INIT_UNUSED;
 	int nRank = DasVar_intrShape(pVar, aIntr);
 	int nCols = 1;
 	for(int i = 0; i < nRank; ++i)
@@ -390,9 +390,9 @@ static das_errcode _prnHdrRow(const CsvCols* pCols, int nOutput)
 		char sOut[256] = {'\0'};
 		switch(nOutput){
 		case PRN_VARID: {
-			const char* sCat  = (DasDim_type(pDim) == DASDIM_COORD) ? "coord" : "data";
+			const char* sCat  = (DasDim_type(pDim) == DASDIMTYPE_COORD) ? "coord" : "data";
 			const char* sRole = DasVar_role(pVar);
-			if(strcasecmp(sRole, DASVAR_CENTER) == 0)
+			if(strcasecmp(sRole, DASDIM_ROLE_CENTER) == 0)
 				snprintf(sOut, 255, "%s:%s", sCat, DasDim_name(pDim));
 			else
 				snprintf(sOut, 255, "%s:%s:%s", sCat, DasDim_name(pDim), sRole);
@@ -401,9 +401,9 @@ static das_errcode _prnHdrRow(const CsvCols* pCols, int nOutput)
 			break;
 		}
 		case PRN_UNITS: {
-			das_units units = DasVar_units(pVar);
-			if(units != UNIT_DIMENSIONLESS)
-				snprintf(sOut, 255, "(%s)", Units_toStr(units));
+			DasUnits units = DasVar_units(pVar);
+			if(units != DASUNITS_DIMENSIONLESS)
+				snprintf(sOut, 255, "(%s)", DasUnits_toStr(units));
 			printf("\"%s\"", sOut);
 			for(int i = 1; i < nCols; ++i) fputs(g_sSep, stdout);
 			break;
@@ -411,13 +411,13 @@ static das_errcode _prnHdrRow(const CsvCols* pCols, int nOutput)
 		case PRN_LABEL: {
 			/* The library's default labelling, the same das3_cdf uses, so a
 			   stream labels alike in both outputs */
-			int nLbls = DasVar_compLabels(pVar, psLbl, DASCSV_MAX_COMP, DASCSV_LBL_SZ);
+			int nLbls = DasVar_compLbls(pVar, psLbl, DASCSV_MAX_COMP, DASCSV_LBL_SZ);
 			if(nLbls < 0) return -1 * nLbls;
 
 			/* A role other than center is part of the name, or a reference and
 			   an offset in one dimension would share a label */
 			const char* sRole = DasVar_role(pVar);
-			bool bRole = (strcasecmp(sRole, DASVAR_CENTER) != 0);
+			bool bRole = (strcasecmp(sRole, DASDIM_ROLE_CENTER) != 0);
 			for(int i = 0; i < nLbls; ++i){
 				if(i > 0) fputs(g_sSep, stdout);
 				if(bRole) printf("\"%s_%s\"", aLbl[i], sRole);
@@ -426,7 +426,7 @@ static das_errcode _prnHdrRow(const CsvCols* pCols, int nOutput)
 			break;
 		}
 		default:
-			return das_error(PERR, "Logic error in das3_csv");
+			return daserrf(PERR, "Logic error in das3_csv");
 		}
 	}
 	fputs("\r\n", stdout);
@@ -437,26 +437,26 @@ static das_errcode _prnHdrRow(const CsvCols* pCols, int nOutput)
 
 /* Formats a datum for the value rows.  The one departure from the library
    formatter is calendar time: das3_csv writes times as UTC by default; the
-   library value formatter stays faithful to storage, so the epoch->das_time
+   library value formatter stays faithful to storage, so the epoch->DasTime
    conversion is done here. */
 static const char* _csv_datumStr(
-	das_datum* pDm, char* sBuf, size_t uLen, int nFracDigits, const char* sSep
+	DasDatum* pDm, char* sBuf, size_t uLen, int nFracDigits, const char* sSep
 ){
-	das_datum dmT;
-	if((pDm->vt != vtTime) && Units_haveCalRep(pDm->units) && (pDm->units != UNIT_UTC)){
-		if((pDm->vt == vtLong) && (pDm->units == UNIT_TT2000))
-			dt_from_tt2k((das_time*)&dmT, *((uint64_t*)pDm));
+	DasDatum dmT;
+	if((pDm->vt != DASVT_TIME) && DasUnits_isTimePoint(pDm->units) && (pDm->units != DASUNITS_UTC)){
+		if((pDm->vt == DASVT_LONG) && (pDm->units == DASUNITS_TT2000))
+			DasTime_fromTt2k((DasTime*)&dmT, *((uint64_t*)pDm));
 		else{
 			double rEpoch;
-			if(!das_datum_toDbl(pDm, &rEpoch)) return NULL;
-			Units_convertToDt((das_time*)&dmT, rEpoch, pDm->units);
+			if(!DasDatum_toDouble(pDm, &rEpoch)) return NULL;
+			DasTime_fromPoint((DasTime*)&dmT, rEpoch, pDm->units);
 		}
-		dmT.vt    = vtTime;
-		dmT.vsize = sizeof(das_time);
-		dmT.units = UNIT_UTC;
+		dmT.vt    = DASVT_TIME;
+		dmT.vsize = sizeof(DasTime);
+		dmT.units = DASUNITS_UTC;
 		pDm = &dmT;
 	}
-	return das_datum_toStrValOnlySep(pDm, nFracDigits, sSep, sBuf, uLen);
+	return DasDatum_toValStrSep(pDm, nFracDigits, sSep, sBuf, uLen);
 }
 
 /* One datum as the cells it occupies.  A composite is one cell per element in
@@ -464,34 +464,34 @@ static const char* _csv_datumStr(
    base64 cell: the alphabet holds no delimiter or quote, so an image or a raw
    blob stays a legal field, and it is the encoding das3 text streams already
    use for the same bytes. */
-static das_errcode _prnCells(das_datum* pDm, int nSigDig)
+static das_errcode _prnCells(DasDatum* pDm, int nSigDig)
 {
 	char sBuf[128] = {'\0'};
 	const char* sVal = NULL;
 
-	if(pDm->vt == vtComposite){
-		size_t uElems = das_datum_nElems(pDm);
-		das_val_type et = das_datum_elemType(pDm);
-		size_t uElSz = das_vt_size(et);
-		const ubyte* pRun = das_datum_run(pDm);
+	if(pDm->vt == DASVT_COMP){
+		size_t uElems = DasDatum_numElems(pDm);
+		das_vt et = DasDatum_et(pDm);
+		size_t uElSz = dasvt_size(et);
+		const uint8_t* pRun = DasDatum_elems(pDm);
 		if((pRun == NULL)||(uElSz == 0))
-			return das_error(PERR, "Composite value carries no readable run");
+			return daserrf(PERR, "Composite value carries no readable run");
 
 		for(size_t v = 0; v < uElems; ++v){
-			das_datum dmCell;
-			das_datum_init(&dmCell, pRun + v*uElSz, et, (uint32_t)uElSz, pDm->units);
+			DasDatum dmCell;
+			DasDatum_set(&dmCell, pRun + v*uElSz, et, (uint32_t)uElSz, pDm->units);
 			if(v > 0) fputs(g_sSep, stdout);
 			if((sVal = _csv_datumStr(&dmCell, sBuf, 127, nSigDig, g_sSep)) == NULL)
-				return das_error(PERR, "Could not format a composite element");
+				return daserrf(PERR, "Could not format a composite element");
 			fputs(sVal, stdout);
 		}
 		return DAS_OKAY;
 	}
 
-	if(pDm->vt == vtByteSeq){
-		const das_cbyte_seq* pBs = (const das_cbyte_seq*)pDm;
+	if(pDm->vt == DASVT_BYTESEQ){
+		const DasCByteSeq* pBs = (const DasCByteSeq*)pDm;
 		size_t uOut = 0;
-		char* sB64 = das_b64_encode(pBs->ptr, pBs->sz, &uOut);
+		char* sB64 = dasb64_encode(pBs->data, pBs->size, &uOut);
 		if(sB64 != NULL){
 			fwrite(sB64, 1, uOut, stdout);   /* not null terminated */
 			free(sB64);
@@ -501,39 +501,39 @@ static das_errcode _prnCells(das_datum* pDm, int nSigDig)
 
 	/* Text goes out whole.  It needs no formatting, and the fixed buffer
 	   below would cut any string longer than 126 bytes. */
-	if(pDm->vt == vtText){
+	if(pDm->vt == DASVT_TEXT){
 		const char* sText = *((const char**)pDm);
 		if(sText != NULL) fputs(sText, stdout);
 		return DAS_OKAY;
 	}
 
 	if((sVal = _csv_datumStr(pDm, sBuf, 127, nSigDig, g_sSep)) == NULL)
-		return das_error(PERR, "Could not format a value");
+		return daserrf(PERR, "Could not format a value");
 	fputs(sVal, stdout);
 	return DAS_OKAY;
 }
 
 /* Scratch for values that have to be computed rather than pointed at, grown
-   to whatever DasVar_get() asks for and kept for the run */
-static ubyte* g_pWork = NULL;
+   to whatever DasVar_datumAt() asks for and kept for the run */
+static uint8_t* g_pWork = NULL;
 static size_t g_uWork = 0;
 
-static das_errcode _getAt(const DasVar* pVar, ptrdiff_t* pLoc, das_datum* pOut)
+static das_errcode _getAt(const DasVar* pVar, ptrdiff_t* pAddr, DasDatum* pOut)
 {
-	das_byte_seq work = { g_pWork, g_uWork };
-	int nRet = DasVar_get(pVar, pLoc, work, pOut);
+	DasByteSeq work = { g_pWork, g_uWork };
+	int nRet = DasVar_datumAt(pVar, pAddr, work, pOut);
 	if(nRet > 0){
-		ubyte* pNew = (ubyte*)realloc(g_pWork, (size_t)nRet);
+		uint8_t* pNew = (uint8_t*)realloc(g_pWork, (size_t)nRet);
 		if(pNew == NULL)
-			return das_error(PERR, "Could not allocate %d bytes of scratch", nRet);
+			return daserrf(PERR, "Could not allocate %d bytes of scratch", nRet);
 		g_pWork = pNew;
 		g_uWork = (size_t)nRet;
-		work.ptr = g_pWork;
-		work.sz  = g_uWork;
-		nRet = DasVar_get(pVar, pLoc, work, pOut);
+		work.data = g_pWork;
+		work.size  = g_uWork;
+		nRet = DasVar_datumAt(pVar, pAddr, work, pOut);
 	}
 	if(nRet != 0)
-		return das_error(PERR, "Failure to get item at valid index!");
+		return daserrf(PERR, "Failure to get item at valid index!");
 	return DAS_OKAY;
 }
 
@@ -545,7 +545,7 @@ das_errcode onDataSet(DasDs* pDs, int iPktId, void* pUser)
 	if(g_bPropOut && g_bHeaders){
 		/* (group, name) is the dataset key; a group alone is shared by every
 		   dataset that plots with it, so it can't label one dataset's props */
-		char sDs[DAS_MAX_ID_BUFSZ * 2] = {'\0'};
+		char sDs[DASID_SZ * 2] = {'\0'};
 		if(DasDs_group(pDs)[0] != '\0')
 			snprintf(sDs, sizeof(sDs) - 1, "%s:%s", DasDs_group(pDs), DasDs_name(pDs));
 		else
@@ -553,12 +553,12 @@ das_errcode onDataSet(DasDs* pDs, int iPktId, void* pUser)
 
 		_writeProps((DasDesc*)pDs, iPktId, sDs);
 
-		das_dim_type_e aDt[2] = {DASDIM_COORD, DASDIM_DATA};
+		das_dimtype aDt[2] = {DASDIMTYPE_COORD, DASDIMTYPE_DATA};
 		const DasDim* pDim;
-		char sBuf[DAS_MAX_ID_BUFSZ * 3] = {'\0'};
+		char sBuf[DASID_SZ * 3] = {'\0'};
 		for(size_t c = 0; c < 2; ++c){
 			for(size_t u = 0; u < DasDs_numDims(pDs, aDt[c]); ++u){
-				pDim = DasDs_getDimByIdx(pDs, u, aDt[c]);
+				pDim = DasDs_dimAt(pDs, u, aDt[c]);
 				snprintf(sBuf, sizeof(sBuf) - 1, "%s:%s", sDs, DasDim_name(pDim));
 				_writeProps((DasDesc*)pDim, iPktId, sBuf);
 			}
@@ -593,7 +593,7 @@ das_errcode onData(DasDs* pDs, int iPktId, void* pUser)
 	CsvCols* pCols = _colsOf(pDs);
 	if(pCols == NULL) return PERR;
 
-	das_datum dm;
+	DasDatum dm;
 	DasDsIter iter;
 	das_errcode nRet = DAS_OKAY;
 
@@ -605,10 +605,10 @@ das_errcode onData(DasDs* pDs, int iPktId, void* pUser)
 			if(c > 0) fputs(g_sSep, stdout);
 
 			memset(&dm, 0, sizeof(dm));
-			if((nRet = _getAt(pCols->aVars[c], iter.index, &dm)) != DAS_OKAY)
+			if((nRet = _getAt(pCols->aVars[c], iter.addr, &dm)) != DAS_OKAY)
 				return nRet;
 
-			int nSigDig = Units_haveCalRep(dm.units) ? g_nSecRes : g_nGenRes;
+			int nSigDig = DasUnits_isTimePoint(dm.units) ? g_nSecRes : g_nGenRes;
 			if((nRet = _prnCells(&dm, nSigDig)) != DAS_OKAY)
 				return nRet;
 		}
@@ -626,21 +626,21 @@ das_errcode onClose(DasStream* pSd, const DasExcept* pExcept, void* pUser)
 {
 	/* Can't do much with an exception here but report it */
 	if(pExcept != NULL)
-		fprintf(stderr, "Stream Exception: %s, %s\n", DasExcept_typeStr(pExcept),
+		fprintf(stderr, "Stream Exception: %s, %s\n", DasExcept_typeStr3(pExcept),
 			DasExcept_msg(pExcept));
 
 	/* The column lists ride on the datasets; the datasets go with the stream */
 	DasDesc* pDesc = NULL;
-	while((pSd != NULL)&&((pDesc = DasStream_nextDesc(pSd, pDesc, DASDESC_DS)) != NULL)){
+	while((pSd != NULL)&&((pDesc = DasStream_nextDesc(pSd, pDesc, DASDESCTYPE_DS)) != NULL)){
 		DasDs* pDs = (DasDs*)pDesc;
-		free(DasDesc_getUser((DasDesc*)pDs));
+		free(DasDesc_user((DasDesc*)pDs));
 		DasDesc_setUser((DasDesc*)pDs, NULL);
 	}
 	free(g_pWork);
 	g_pWork = NULL;
 	g_uWork = 0;
 
-	if((pExcept == NULL)||(DasExcept_type(pExcept) == DAS_EX_NO_DATA))
+	if((pExcept == NULL)||(DasExcept_type(pExcept) == DASEXCEPTTYPE_NO_DATA))
 		return DAS_OKAY;
 	return DASERR_OOB;
 }
@@ -655,7 +655,7 @@ int main( int argc, char *argv[]) {
 	const char* sLevel = "info";
 	
 	/* Exit on errors, log info messages and above */
-	das_init(argv[0], DASERR_DIS_EXIT, DASLOG_INFO, NULL);
+	daslib_init(argv[0], DASERRDISP_EXIT, DASLOG_INFO, NULL);
 	
 	for(i = 1; i < argc; i++){
 		if(strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0 ){
@@ -682,11 +682,11 @@ int main( int argc, char *argv[]) {
 		if(strcmp(argv[i], "-r") == 0){
 			i++;
 			if(i >= argc)
-				return das_error(PERR, "Resolution parameter missing after -r\n");
+				return daserrf(PERR, "Resolution parameter missing after -r\n");
 			
 			g_nGenRes = atoi(argv[i]);
 			if(g_nGenRes < 2 || g_nGenRes > 18)
-				return das_error(PERR, 
+				return daserrf(PERR, 
 					"Can't format to %d significant digits, supported range is "
 					"only 2 to 18 significant digits.\n", g_nGenRes
 				);
@@ -697,7 +697,7 @@ int main( int argc, char *argv[]) {
 		if(strcmp(argv[i], "-l") == 0 || strcmp(argv[i], "--log") == 0){
 			++i;
 			if(i >= argc){
-				return das_error(PERR, "Log level missing after -l");
+				return daserrf(PERR, "Log level missing after -l");
 			}
 			sLevel = argv[i];
 			continue;
@@ -705,11 +705,11 @@ int main( int argc, char *argv[]) {
 		if(strcmp(argv[i], "-s") == 0){
 			i++;
 			if(i >= argc)
-				return das_error(PERR,"Sub-seconds resolution parameter missing after -s\n");
+				return daserrf(PERR,"Sub-seconds resolution parameter missing after -s\n");
 			
 			g_nSecRes = atoi(argv[i]);
 			if(g_nSecRes < 0 || g_nSecRes > 9)
-				return das_error(
+				return daserrf(
 					PERR, "Only 0 to 9 sub-seconds digits supported don't know how to "
 					"handle %d sub-second digits.", g_nSecRes
 				);
@@ -725,10 +725,10 @@ int main( int argc, char *argv[]) {
 			continue;
 		}
 		
-		return das_error(PERR, "unknown parameter '%s'\n", argv[i]);
+		return daserrf(PERR, "unknown parameter '%s'\n", argv[i]);
 	}
 
-	daslog_setlevel(daslog_strlevel(sLevel));
+	daslog_setLevel(daslog_levelFromStr(sLevel));
 	
 	if(g_nGenRes != 7){
 		g_n4ByteWidth = g_nGenRes + 7;
@@ -746,10 +746,10 @@ int main( int argc, char *argv[]) {
 		g_sTimeFmt = sTimeFmt;
 	}
 	
-	das_stream_proc handler;
-	das_stream_proc_init(&handler, NULL);
-	handler.onStreamDesc = onStream;
-	handler.onDsDesc     = onDataSet;
+	DasIOProc handler;
+	init_DasIOProc(&handler, NULL);
+	handler.onStream = onStream;
+	handler.onDs     = onDataSet;
 	handler.onDsData     = onData;
 	handler.onClose      = onClose;
 	/* handler.pUser          = &ctx; */
@@ -757,7 +757,7 @@ int main( int argc, char *argv[]) {
 	DasIO* pIn = new_DasIO("Standard Input", new_DasXport_stdin(), NULL);
 	DasIO_setModel(pIn, 3); /* Upgrade any das2 <packets>s to das3 <datasets>s */
 
-	DasIO_addProcessor(pIn, &handler);
+	DasIO_addProc(pIn, &handler);
 	
 	int nRet = DasIO_readAll(pIn);
 	del_DasIO(pIn);     /* and the stream it read, datasets included */

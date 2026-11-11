@@ -37,13 +37,13 @@
 extern "C" {
 #endif
 
-/* Named only by the DAS_FORM_ROT macro below */
-DAS_API extern const DasForm_VTbl das_form_rot_vtbl;
+/* Named only by the DASFORM_ROT macro below */
+DAS_API extern const DasFormVTable DasFormRot_vtable;
 
 /** A rotation from one reference frame into another.  Applying one to a vector
  * gives a vector in the second frame.
- * @see DasForm_isKind(), DasVar_formIs().  @relates DasForm */
-#define DAS_FORM_ROT (&das_form_rot_vtbl)
+ * @see DasForm_isKind(), DasVar_hasForm().  @relates DasForm */
+#define DASFORM_ROT (&DasFormRot_vtable)
 
 
 /* The two representations, as element counts.
@@ -58,8 +58,8 @@ DAS_API extern const DasForm_VTbl das_form_rot_vtbl;
    A stream storing a matrix column major says sysorder="0;3;6;1;4;7;2;5;8";
    one storing a quaternion scalar last says sysorder="1;2;3;0".  Every element
    must be placed: a rotation has no default for a missing one. */
-#define ROT_MATRIX  9    /* intern="3;3" */
-#define ROT_QUAT    4    /* intern="4" */
+#define DASFORMROT_MATRIX  9    /* intern="3;3" */
+#define DASFORMROT_QUAT    4    /* intern="4" */
 
 /** Which layout does this rotation use?
  *
@@ -67,10 +67,10 @@ DAS_API extern const DasForm_VTbl das_form_rot_vtbl;
  * from a variable's internal shape.
  *
  * @param pThis the formalism to inspect
- * @returns ROT_MATRIX, ROT_QUAT, or 0 with das_error called if the form is
+ * @returns DASFORMROT_MATRIX, DASFORMROT_QUAT, or 0 with daserrf called if the form is
  *          not a rotation.
  * @memberof DasForm */
-DAS_API int DasFormRot_layout(const DasForm* pThis);
+DAS_API int DasFormRot_sysId(const DasForm* pThis);
 
 
 /** Build a rotation formalism from two named frames.
@@ -98,13 +98,13 @@ DAS_API int DasFormRot_layout(const DasForm* pThis);
 DAS_API DasForm* new_DasFormRot(const char* sFrom, const char* sTo);
 
 /** The frame this rotation starts in.
- * @returns the frame name, "" when unbound, or NULL with das_error called if
+ * @returns the frame name, "" when unbound, or NULL with daserrf called if
  *          the form is not a rotation.  @memberof DasForm */
-DAS_API const char* DasFormRot_from(const DasForm* pThis);
+DAS_API const char* DasFormRot_fromFrame(const DasForm* pThis);
 
-/** The frame this rotation lands in.  @see DasFormRot_from
+/** The frame this rotation lands in.  @see DasFormRot_fromFrame
  * @memberof DasForm */
-DAS_API const char* DasFormRot_to(const DasForm* pThis);
+DAS_API const char* DasFormRot_toFrame(const DasForm* pThis);
 
 #ifdef __cplusplus
 }

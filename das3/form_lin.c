@@ -28,7 +28,7 @@
  * write and reads back here, but is never emitted.
  *
  * This file has NO arithmetic of its own.  The elementwise math is
- * das_value_binop() in the value layer, shared with every other formalism
+ * dasval_binOp() in the value layer, shared with every other formalism
  * that needs an item-wise operation.  What linear owns is the RULES: which
  * operators are legal, what the result units are, and what the result type
  * is.
@@ -60,7 +60,7 @@
 #include "form_p.h"
 #include "form_lin.h"
 
-#define REFUSE(...) (das_error(DASERR_FORM, __VA_ARGS__), dbsRefuse)
+#define REFUSE(...) (daserrf(DASERR_FORM, __VA_ARGS__), dbsRefuse)
 
 /* ************************************************************************* */
 /* The formalism.  No state at all beyond the base.                          */
@@ -72,7 +72,7 @@ typedef struct das_form_lin {
 static DasForm* _new_DasFormLin_empty(void)
 {
 	DasFormLin* pThis = (DasFormLin*)calloc(1, sizeof(DasFormLin));
-	pThis->base.pVTbl = &das_form_lin_vtbl;
+	pThis->base.pVTbl = &DasFormLin_vtable;
 	return &(pThis->base);
 }
 
@@ -81,7 +81,7 @@ DasForm* new_DasFormLin(void){ return _new_DasFormLin_empty(); }
 static das_errcode _DasFormLin_setParam(
 	DasForm* pBase, const char* sName, const char* sVal
 ){
-	return das_error(DASERR_FORM,
+	return daserrf(DASERR_FORM,
 		"<ops kind=\"linear\"> takes no parameters, got '%s'", sName
 	);
 }
@@ -98,31 +98,31 @@ static das_errcode _DasFormLin_encode(
 /* Symmetric with _DasFormLin_setParam's refusal: linear takes no parameters, so
    there are none to hand back and every name is a miss. */
 static const char* _DasFormLin_getParam(
-	const DasForm* pBase, const char* sName, ubyte* pType
+	const DasForm* pBase, const char* sName, uint8_t* pType
 )
 {
 	return NULL;
 }
 
 static bool _DasFormLin_pack(
-	const DasForm* pBase, const das_operand* pOp, const ubyte* pRun,
-	das_datum* pOut
+	const DasForm* pBase, const das_operand* pOp, const uint8_t* pRun,
+	DasDatum* pOut
 ){
 	/* A plain number needs no assembly: the bits ARE the value.  A linear
 	   composite is a run of plain numbers, boxed as is; the datum layer's
 	   generic composite carries it with this form attached. */
 	if(pOp->nIntRank > 0)
-		return das_datum_box(
+		return DasDatum_wrapElems(
 			pOut, pBase, pRun, pOp->nIntRank, pOp->aIntShape, pOp->vtElem,
 			pOp->units
 		);
 
-	das_datum_init(pOut, pRun, pOp->vtElem, 0, pOp->units);
+	DasDatum_set(pOut, pRun, pOp->vtElem, 0, pOp->units);
 	return true;
 }
 
-/* vtUnknown means "no datum type of my own, use the element type". */
-static das_val_type _DasFormLin_datumType(const DasForm* pBase){ return vtUnknown; }
+/* DASVT_UNK means "no datum type of my own, use the element type". */
+static das_vt _DasFormLin_datumType(const DasForm* pBase){ return DASVT_UNK; }
 
 static DasForm* _DasFormLin_copy(const DasForm* pBase){ return _new_DasFormLin_empty(); }
 
@@ -134,7 +134,7 @@ static void _DasFormLin_release(DasForm* pBase){ free(pBase); }
 typedef struct das_binop_linear {
 	DasBinOp base;
 
-	das_val_type vtL, vtR;
+	das_vt vtL, vtR;
 	int    nOp;
 	size_t nElems;      /* item run length; 1 for a scalar */
 
@@ -145,20 +145,20 @@ typedef struct das_binop_linear {
 } DasBinOpLinear;
 
 static bool _DasBinOpLinear_apply(
-	const DasBinOp* pOp, const ubyte* pLRun, const ubyte* pRRun, ubyte* pOutRun
+	const DasBinOp* pOp, const uint8_t* pLRun, const uint8_t* pRRun, uint8_t* pOutRun
 ){
 	const DasBinOpLinear* pThis = (const DasBinOpLinear*)pOp;
 
-	size_t uL   = das_vt_size(pThis->vtL);
-	size_t uR   = das_vt_size(pThis->vtR);
-	size_t uOut = das_vt_size(pOp->vtOut);
+	size_t uL   = dasvt_size(pThis->vtL);
+	size_t uR   = dasvt_size(pThis->vtR);
+	size_t uOut = dasvt_size(pOp->vtOut);
 
 	/* Element i with element i, for as many as the shape check agreed on.  A
 	   scalar is just nElems == 1, so there is one loop and no special case. */
 	for(size_t u = 0; u < pThis->nElems; ++u){
 
-		const ubyte* pRight = pRRun + u*uR;
-		das_val_type vtRight = pThis->vtR;
+		const uint8_t* pRight = pRRun + u*uR;
+		das_vt vtRight = pThis->vtR;
 
 		/* The FACTOR is loop invariant -- units are one per variable, there being
 		   no holder for per-component units -- but each VALUE needs its own
@@ -167,16 +167,16 @@ static bool _DasBinOpLinear_apply(
 		   output wide enough to hold one. */
 		double rScaled;
 		if(pThis->rRightScale != 1.0){
-			if(das_value_binXform(
-				pThis->vtR, pRight, NULL, vtDouble, (ubyte*)&rScaled, NULL, 0
+			if(dasval_convert(
+				pThis->vtR, pRight, NULL, DASVT_DOUBLE, (uint8_t*)&rScaled, NULL, 0
 			) != DAS_OKAY)
 				return false;
 			rScaled *= pThis->rRightScale;
-			pRight  = (const ubyte*)&rScaled;
-			vtRight = vtDouble;
+			pRight  = (const uint8_t*)&rScaled;
+			vtRight = DASVT_DOUBLE;
 		}
 
-		if(das_value_binop(
+		if(dasval_binOp(
 			pThis->nOp, pThis->vtL, pLRun + u*uL, vtRight, pRight,
 			pOp->vtOut, pOutRun + u*uOut
 		) != DAS_OKAY)
@@ -204,7 +204,7 @@ static das_binop_stat _DasFormLin_binOpLeft(
 	   the knowledge graph, so it cannot include another form's header without
 	   inverting the arrow.  A non-linear partner is therefore declined, not
 	   refused, and the better informed side claims it through binOpRight. */
-	if(pR->pForm->pVTbl != &das_form_lin_vtbl) return dbsDecline;
+	if(pR->pForm->pVTbl != &DasFormLin_vtable) return dbsDecline;
 
 	/* Same shape, elementwise, and the SHAPE is compared rather than the
 	   element count: a 3;3 and a nine component run hold the same number of
@@ -217,7 +217,7 @@ static das_binop_stat _DasFormLin_binOpLeft(
 	   geovec, where real structure exists and ignoring it would be unfaithful.
 
 	   NO BROADCAST HERE.  das2C already broadcasts, one layer up: a generator
-	   maps an external index to VARIDX_UNUSED and hands back the same value
+	   maps an external index to DASIDX_UNUSED and hands back the same value
 	   however that index varies.  A form never sees an external index at all,
 	   only one item run at one location, so an internal scalar-against-run
 	   rule would be a SECOND mechanism wearing the same word.  Exact match
@@ -242,27 +242,27 @@ static das_binop_stat _DasFormLin_binOpLeft(
 	}
 
 	double rRightScale = 1.0;
-	das_units unitsOut = NULL;
+	DasUnits unitsOut = NULL;
 
 	switch(nOp){
-	case D2BOP_ADD:
-	case D2BOP_SUB:
+	case DASOP_ADD:
+	case DASOP_SUB:
 		if(pL->units != pR->units){
-			if(!Units_canConvert(pR->units, pL->units))
+			if(!DasUnits_canConvert(pR->units, pL->units))
 				return REFUSE("Can not %s %s and %s, the units do not convert",
-					(nOp == D2BOP_ADD) ? "add" : "subtract",
-					Units_toStr(pL->units), Units_toStr(pR->units));
-			rRightScale = Units_convertTo(1.0, pR->units, pL->units);
+					(nOp == DASOP_ADD) ? "add" : "subtract",
+					DasUnits_toStr(pL->units), DasUnits_toStr(pR->units));
+			rRightScale = DasUnits_convert(1.0, pR->units, pL->units);
 		}
 		unitsOut = pL->units;
 		break;
 
-	case D2BOP_MUL:
-		unitsOut = Units_multiply(pL->units, pR->units);
+	case DASOP_MUL:
+		unitsOut = DasUnits_mul(pL->units, pR->units);
 		break;
 
-	case D2BOP_DIV:
-		unitsOut = Units_divide(pL->units, pR->units);
+	case DASOP_DIV:
+		unitsOut = DasUnits_div(pL->units, pR->units);
 		break;
 
 	default:
@@ -270,7 +270,7 @@ static das_binop_stat _DasFormLin_binOpLeft(
 		   this to the right operand, which is also linear and would also
 		   decline, producing a vaguer message than the truth. */
 		return REFUSE("Operator '%s' is not implemented for plain numbers",
-		              das_op_toStr(nOp, NULL));
+		              dasop_name(nOp, NULL));
 	}
 
 	DasBinOpLinear* pRes = (DasBinOpLinear*)calloc(1, sizeof(DasBinOpLinear));
@@ -294,16 +294,16 @@ static das_binop_stat _DasFormLin_binOpLeft(
 
 	/* A scaled operand arrives as a double, so the result has to be wide
 	   enough to hold one; that is the rule's promise, made here. */
-	pRes->base.vtOut = das_vt_merge(
-		pL->vtElem, nOp, (rRightScale != 1.0) ? vtDouble : pR->vtElem
+	pRes->base.vtOut = dasvt_merge(
+		pL->vtElem, nOp, (rRightScale != 1.0) ? DASVT_DOUBLE : pR->vtElem
 	);
-	/* vtNull: no combination.  vtUnknown: a type this math cannot handle */
-	if((pRes->base.vtOut == vtNull)||(pRes->base.vtOut == vtUnknown)){
+	/* DASVT_NULL: no combination.  DASVT_UNK: a type this math cannot handle */
+	if((pRes->base.vtOut == DASVT_NULL)||(pRes->base.vtOut == DASVT_UNK)){
 		del_DasForm(pRes->base.pForm);
 		free(pRes);
 		return REFUSE("No result type for %s %s %s",
-			das_vt_toStr(pL->vtElem), das_op_toStr(nOp, NULL),
-			das_vt_toStr(pR->vtElem));
+			dasvt_name(pL->vtElem), dasop_name(nOp, NULL),
+			dasvt_name(pR->vtElem));
 	}
 
 	*ppOut = &(pRes->base);
@@ -315,7 +315,7 @@ static das_binop_stat _DasFormLin_binOpLeft(
    partner that wants to combine with a plain number implements the pairing in
    ITS file, which is the direction the arrow runs. */
 
-const DasForm_VTbl das_form_lin_vtbl = {
+const DasFormVTable DasFormLin_vtable = {
 	"linear",
 	_new_DasFormLin_empty,
 	_DasFormLin_setParam,

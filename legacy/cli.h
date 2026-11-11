@@ -127,13 +127,13 @@ void das_get_seltime(const DasSelector* pSels, const char* sKey, const char* sOp
 void das_seltime(const DasSelector* pSel, const char* sOp, int* yr, int* mon,
               int* dom, int* doy, int* hr, int* min, double* sec);
 
-/** Equivalent to das_get_seltime but uses the new das_time type from time.h */
+/** Equivalent to das_get_seltime but uses the new DasTime type from time.h */
 void das_get_seldastime(
-	const DasSelector* pSels, const char* sKey, const char* sOp, das_time* pDt
+	const DasSelector* pSels, const char* sKey, const char* sOp, DasTime* pDt
 );
 
-/** Equivalent to das_seltime but uses the new das_time type from time.h */
-void das_seldastime(const DasSelector* pSel, const char* sOp, das_time* pDt);
+/** Equivalent to das_seltime but uses the new DasTime type from time.h */
+void das_seldastime(const DasSelector* pSel, const char* sOp, DasTime* pDt);
 
 
 /** A short form of das_getstr for enumeration selectors

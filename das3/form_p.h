@@ -70,7 +70,7 @@
 extern "C" {
 #endif
 
-struct das_buffer;
+struct das_buf_t;
 
 /* ========================================================================= *
  * das_operand: what a variable tells a form.
@@ -91,14 +91,14 @@ typedef struct das_operand {
 	   vtable address.  Peer to peer, never upward. */
 	const DasForm* pForm;
 
-	das_val_type   vtElem;       /* what one element of this operand holds */
-	das_units      units;
+	das_vt   vtElem;       /* what one element of this operand holds */
+	DasUnits      units;
 
 	/* The internal shape as DECLARED.  Rank matters and the product does not:
 	   a 3;3 rotation and a nine component vector share an element count and
 	   are not the same thing. */
 	int            nIntRank;              /* 0 for a scalar, aIntShape untouched */
-	ptrdiff_t      aIntShape[VARIDX_MAX];
+	ptrdiff_t      aIntShape[DASIDX_MAX];
 
 } das_operand;
 
@@ -127,8 +127,8 @@ typedef struct DasBinOp_VTbl {
 	/* One item run from each side in, one item run out.  Item-at-a-time is
 	   the whole contract, see "Forms compute, variables walk" above. */
 	bool (*apply)(
-		const DasBinOp* pThis, const ubyte* pLRun, const ubyte* pRRun,
-		ubyte* pOutRun
+		const DasBinOp* pThis, const uint8_t* pLRun, const uint8_t* pRRun,
+		uint8_t* pOutRun
 	);
 
 	void (*release)(DasBinOp* pThis);   /* derived storage, then free */
@@ -141,10 +141,10 @@ struct das_binop {
 
 	/* Everything the walker needs, settled once by the resolving form. */
 	DasForm*     pForm;                    /* result formalism, owned here */
-	das_units    units;
-	das_val_type vtOut;
+	DasUnits    units;
+	das_vt vtOut;
 	int          nIntRank;                 /* result item shape; a rotation */
-	ptrdiff_t    aIntShape[VARIDX_MAX];    /* applied to a vector SHRINKS it */
+	ptrdiff_t    aIntShape[DASIDX_MAX];    /* applied to a vector SHRINKS it */
 
 	int nRef;
 };
@@ -173,7 +173,7 @@ int DasBinOp_decRef(DasBinOp* pThis);
  * DasForm, the base.
  * ========================================================================= */
 
-struct DasForm_VTbl {
+struct das_formvtable_t {
 
 	const char* sKind;          /* the wire kind= token, "vector", "rotation" */
 
@@ -212,7 +212,7 @@ struct DasForm_VTbl {
 	   Returns NULL if this form has no such parameter.  The returned string
 	   is owned by the form and lives as long as it does. */
 	const char* (*getParam)(
-		const DasForm* pThis, const char* sName, ubyte* pType
+		const DasForm* pThis, const char* sName, uint8_t* pType
 	);
 
 	/* The name of the iParam'th parameter this kind can carry, in the order
@@ -225,25 +225,25 @@ struct DasForm_VTbl {
 	/* Emit <ops .../>.  talkative: state a parameter even at its default,
 	   since the schema cannot carry a default behind an anyAttribute. */
 	das_errcode (*encode)(
-		const DasForm* pThis, struct das_buffer* pBuf
+		const DasForm* pThis, struct das_buf_t* pBuf
 	);
 
 	/* Read one item run into a typed datum.  NULL when the kind has no single
 	   datum form. */
 	bool (*pack)(
-		const DasForm* pThis, const das_operand* pOp, const ubyte* pRun,
-		das_datum* pOut
+		const DasForm* pThis, const das_operand* pOp, const uint8_t* pRun,
+		DasDatum* pOut
 	);
 
-	/* The das_val_type a datum from this kind carries, vtUnknown to fall back
+	/* The das_vt a datum from this kind carries, DASVT_UNK to fall back
 	   to the element type. */
-	das_val_type (*datumType)(const DasForm* pThis);
+	das_vt (*datumType)(const DasForm* pThis);
 
 	/* Render one item run.  NULL means "no rendering of my own", and the
 	   caller falls back to printing the elements as plain numbers. */
 	char* (*prnRun)(
-		const DasForm* pThis, const ubyte* pRun, uint32_t nElems,
-		das_val_type et, char* sBuf, size_t uLen
+		const DasForm* pThis, const uint8_t* pRun, uint32_t nElems,
+		das_vt et, char* sBuf, size_t uLen
 	);
 
 	/* The canonical symbol for one component, in storage order.  NULL if this
@@ -263,7 +263,7 @@ struct DasForm_VTbl {
 
 	   nOp is a D2BOP_* code from oper.h.  There is no separate formalism
 	   op enum; the library already has one vocabulary for operators and
-	   das_vt_merge() and Units_canMerge() both speak it. */
+	   dasvt_merge() and DasUnits_canMerge() both speak it. */
 	das_binop_stat (*binOpLeft)(
 		const DasForm* pThis, const das_operand* pL, int nOp,
 		const das_operand* pR, DasBinOp** ppOut
@@ -278,8 +278,8 @@ struct DasForm_VTbl {
 
 };
 
-struct das_form {
-	const DasForm_VTbl* pVTbl;
+struct das_form_t {
+	const DasFormVTable* pVTbl;
 };
 
 
@@ -295,14 +295,14 @@ struct das_form {
    uComps entries long slot to canonical component, so this works for a nine
    element rotation as readily as a three element vector. */
 das_errcode _dasform_prnOrder(
-	struct das_buffer* pBuf, const ubyte* pOrder, ubyte uComps
+	struct das_buf_t* pBuf, const uint8_t* pOrder, uint8_t uComps
 );
 
 /* The wire spelling of a component order, "1;0;2", for the forms that keep
    one beside the decoded order so getParam() stays a read.  Always all
    uComps slots, ascending or not: getParam reports defaults too. */
 void _dasform_fmtOrder(
-	char* sBuf, size_t uLen, const ubyte* pOrder, ubyte uComps
+	char* sBuf, size_t uLen, const uint8_t* pOrder, uint8_t uComps
 );
 
 #ifdef __cplusplus

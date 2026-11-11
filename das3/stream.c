@@ -50,47 +50,47 @@ static void _del_DasStream(DasDesc* pDesc);  /* del_DasDesc() target */
 /* ************************************************************************** */
 /* Version and type identification */
 
-das_stream_ver DasStream_getVer(const DasStream* pThis)
+das_streamver DasStream_ver(const DasStream* pThis)
 {
-	if(strcmp(pThis->version, das_stream_ver_toStr(STREAM_VER_2_2)) == 0)
-		return STREAM_VER_2_2;
-	if(strcmp(pThis->version, das_stream_ver_toStr(STREAM_VER_3_0)) == 0)
-		return STREAM_VER_3_0;
-	return STREAM_VER_UNK;
+	if(strcmp(pThis->version, DasStream_verToStr(DASSTREAMVER_2_2)) == 0)
+		return DASSTREAMVER_2_2;
+	if(strcmp(pThis->version, DasStream_verToStr(DASSTREAMVER_3_0)) == 0)
+		return DASSTREAMVER_3_0;
+	return DASSTREAMVER_UNK;
 }
 
-das_stream_type DasStream_getType(const DasStream* pThis)
+das_streamtype DasStream_type(const DasStream* pThis)
 {
 	/* No attribute is how das 2.2 spells "basic", and encode3 fills it in the
 	   same way, so the empty string is BASIC rather than UNKNOWN */
 	if(pThis->type[0] == '\0')
-		return STREAM_TYPE_BASIC;
-	if(strcmp(pThis->type, das_stream_type_toStr(STREAM_TYPE_BASIC)) == 0)
-		return STREAM_TYPE_BASIC;
-	if(strcmp(pThis->type, das_stream_type_toStr(STREAM_TYPE_DOC)) == 0)
-		return STREAM_TYPE_DOC;
-	return STREAM_TYPE_UNK;
+		return DASSTREAMTYPE_BASIC;
+	if(strcmp(pThis->type, DasStream_typeToStr(DASSTREAMTYPE_BASIC)) == 0)
+		return DASSTREAMTYPE_BASIC;
+	if(strcmp(pThis->type, DasStream_typeToStr(DASSTREAMTYPE_DOC)) == 0)
+		return DASSTREAMTYPE_DOC;
+	return DASSTREAMTYPE_UNK;
 }
 
-/* Only what DasStream_getVer() recognizes, so a set always reads back */
-das_errcode DasStream_setVer(DasStream* pThis, das_stream_ver nVer)
+/* Only what DasStream_ver() recognizes, so a set always reads back */
+das_errcode DasStream_setVer(DasStream* pThis, das_streamver nVer)
 {
-	if((nVer != STREAM_VER_2_2)&&(nVer != STREAM_VER_3_0))
-		return das_error(DASERR_STREAM, "Stream version %s can't be set, "
-			"only %s and %s are supported", das_stream_ver_toStr(nVer),
-			das_stream_ver_toStr(STREAM_VER_2_2), das_stream_ver_toStr(STREAM_VER_3_0)
+	if((nVer != DASSTREAMVER_2_2)&&(nVer != DASSTREAMVER_3_0))
+		return daserrf(DASERR_STREAM, "Stream version %s can't be set, "
+			"only %s and %s are supported", DasStream_verToStr(nVer),
+			DasStream_verToStr(DASSTREAMVER_2_2), DasStream_verToStr(DASSTREAMVER_3_0)
 		);
 	memset(pThis->version, 0, STREAMDESC_VER_SZ);
-	strncpy(pThis->version, das_stream_ver_toStr(nVer), STREAMDESC_VER_SZ - 1);
+	strncpy(pThis->version, DasStream_verToStr(nVer), STREAMDESC_VER_SZ - 1);
 	return DAS_OKAY;
 }
 
-das_errcode DasStream_setType(DasStream* pThis, das_stream_type nType)
+das_errcode DasStream_setType(DasStream* pThis, das_streamtype nType)
 {
-	if((nType != STREAM_TYPE_BASIC)&&(nType != STREAM_TYPE_DOC))
-		return das_error(DASERR_STREAM, "Unknown stream type %d", (int)nType);
+	if((nType != DASSTREAMTYPE_BASIC)&&(nType != DASSTREAMTYPE_DOC))
+		return daserrf(DASERR_STREAM, "Unknown stream type %d", (int)nType);
 	memset(pThis->type, 0, STREAMDESC_TYPE_SZ);
-	strncpy(pThis->type, das_stream_type_toStr(nType), STREAMDESC_TYPE_SZ - 1);
+	strncpy(pThis->type, DasStream_typeToStr(nType), STREAMDESC_TYPE_SZ - 1);
 	return DAS_OKAY;
 }
 
@@ -104,17 +104,17 @@ DasStream* new_DasStream()
 	DasStream* pThis;
     
 	pThis = (DasStream*) calloc(1, sizeof( DasStream ) );
-	DasDesc_init((DasDesc*)pThis, DASDESC_STREAM, _del_DasStream);
+	DasDesc_init((DasDesc*)pThis, DASDESCTYPE_STREAM, _del_DasStream);
 	 
 	strncpy(pThis->compression, "none", STREAMDESC_CMP_SZ - 1);
 
-	strncpy(pThis->version, das_stream_ver_toStr(STREAM_VER_2_2), STREAMDESC_VER_SZ - 1);
+	strncpy(pThis->version, DasStream_verToStr(DASSTREAMVER_2_2), STREAMDESC_VER_SZ - 1);
    
     return pThis;
 }
 
 /* Deep copy a stream descriptor */
-DasStream* DasStream_copy(const DasStream* pThis) 
+DasStream* new_DasStream_copy(const DasStream* pThis) 
 {
 	/* Since this is a deep copy do it by explicit assignment, less likely to
 	 * make a mistake that way */
@@ -156,7 +156,7 @@ static void _del_DasStream(DasDesc* pDesc){
 }
 
 /* ************************************************************************** */
-/* The first line of DasStream_info(), and all of DasStream_toStr() */
+/* The first line of DasStream_toInfoStr(), and all of DasStream_toStr() */
 static int _DasStream_catTitle(const DasStream* pThis, char* sBuf, size_t uLen, int n)
 {
 	char sComp[32] = {'\0'};
@@ -175,14 +175,14 @@ char* DasStream_toStr(const DasStream* pThis, char* sBuf, size_t uLen)
 	return _prn_fit(sBuf, uLen, _DasStream_catTitle(pThis, sBuf, uLen, 0));
 }
 
-int DasStream_info(const DasStream* pThis, char* sBuf, size_t uLen)
+int DasStream_toInfoStr(const DasStream* pThis, char* sBuf, size_t uLen)
 {
 	if(uLen > 0) sBuf[0] = '\0';
 
 	int n = _DasStream_catTitle(pThis, sBuf, uLen, 0);
 	n = _prn_catf(sBuf, uLen, n, "\n");
 
-	if(DasDesc_length((DasDesc*)pThis) > 0)
+	if(DasDesc_numProps((DasDesc*)pThis) > 0)
 		n += DasDesc_info(
 			(DasDesc*)pThis, "   ", _prn_at(sBuf, uLen, n), _prn_rem(uLen, n)
 		);
@@ -207,9 +207,9 @@ void DasStream_addStdProps(DasStream* pThis)
 	snprintf(sTime, 127, "%04d-%02d-%02dT%02d:%02d:%02d", pCur->tm_year+1900, pCur->tm_mon,
 			   pCur->tm_mday, pCur->tm_hour, pCur->tm_min, pCur->tm_sec);
 
-	DasDesc_setStr((DasDesc*)pThis, "creationTime", sTime);
+	DasDesc_setVal((DasDesc*)pThis, "creationTime", sTime);
 #ifdef __unix
-	DasDesc_setInt( (DasDesc*)pThis, "pid", getpid() );
+	DasDesc_setValInt( (DasDesc*)pThis, "pid", getpid() );
 #endif
     
 	/* This is not in the posix C99 standard, going to exclude it for now -cwp
@@ -222,9 +222,9 @@ void DasStream_addStdProps(DasStream* pThis)
 void DasStream_setMonotonic(DasStream* pThis, bool isMonotonic )
 {
 	if(isMonotonic)
-		DasDesc_setBool( (DasDesc*)pThis, "monotonicXTags", true );
+		DasDesc_setValBool( (DasDesc*)pThis, "monotonicXTags", true );
 	else
-		DasDesc_setBool( (DasDesc*)pThis, "monotonicXTags", false );
+		DasDesc_setValBool( (DasDesc*)pThis, "monotonicXTags", false );
 }
 
 /* ************************************************************************** */
@@ -234,7 +234,7 @@ void DasStream_setMonotonic(DasStream* pThis, bool isMonotonic )
 
 static bool _DasStream_idOkay(int nPktId)
 {
-	return (nPktId > 0)&&(nPktId < DAS3_MAX_PKTIDS);
+	return (nPktId > 0)&&(nPktId < DASSTREAM_V3_ENDPKTID);
 }
 
 /* Position of a descriptor in the list, -1 if not attached.  Compares
@@ -271,7 +271,7 @@ static das_errcode _DasStream_reserve(DasStream* pThis)
 	if((pNewDescs == NULL)||(pNewIds == NULL)){
 		free(pNewDescs);
 		free(pNewIds);
-		return das_error(DASERR_STREAM, "Couldn't grow the descriptor list to %zu", uNew);
+		return daserrf(DASERR_STREAM, "Couldn't grow the descriptor list to %zu", uNew);
 	}
 	memcpy(pNewDescs, _DasStream_descs(pThis), pThis->uDesc * sizeof(DasDesc*));
 	memcpy(pNewIds, _DasStream_ids(pThis), pThis->uDesc * sizeof(uint16_t));
@@ -309,12 +309,12 @@ static void _DasStream_removeAt(DasStream* pThis, size_t uIdx)
 	pThis->uLastHit = 0;
 }
 
-size_t DasStream_numDesc(const DasStream* pThis, das_desc_type_e dtype)
+size_t DasStream_numDesc(const DasStream* pThis, das_desctype dtype)
 {
 	DasDesc** pDescs = _DasStream_descs(pThis);
 	size_t nRet = 0;
 	for(size_t u = 0; u < pThis->uDesc; u++)
-		if((dtype == DASDESC_UNK)||(pDescs[u]->type == dtype)) nRet++;
+		if((dtype == DASDESCTYPE_UNK)||(pDescs[u]->type == dtype)) nRet++;
 	return nRet;
 }
 
@@ -322,14 +322,14 @@ size_t DasStream_numDesc(const DasStream* pThis, das_desc_type_e dtype)
    not, since a DasPkt never shares its ID */
 static int DasStream_nextPktId(DasStream* pThis)
 {
-	for(int i = 1; i < DAS2_MAX_PKTIDS; ++i){ /* 00 is reserved for stream descriptor */
+	for(int i = 1; i < DASSTREAM_V2_ENDPKTID; ++i){ /* 00 is reserved for stream descriptor */
 		const uint16_t* pIds = _DasStream_ids(pThis);
 		bool bUsed = false;
 		for(size_t u = 0; u < pThis->uDesc; u++)
 			if(pIds[u] == i){ bUsed = true; break; }
 		if(!bUsed) return i;
 	}
-	return -1 * das_error(DASERR_STREAM, "Ran out of Packet IDs only 99 allowed!" );
+	return -1 * daserrf(DASERR_STREAM, "Ran out of Packet IDs only 99 allowed!" );
 }
 
 static bool _DasStream_idUsed(const DasStream* pThis, int nPktId)
@@ -338,7 +338,7 @@ static bool _DasStream_idUsed(const DasStream* pThis, int nPktId)
 }
 
 DasPkt* DasStream_createPkt(
-	DasStream* pThis, DasEnc* pXEncoder, das_units xUnits 
+	DasStream* pThis, DasEnc* pXEncoder, DasUnits xUnits 
 ){
 	DasPkt* pPkt;
 
@@ -349,7 +349,7 @@ DasPkt* DasStream_createPkt(
 
 	pPkt= new_DasPkt();
 	 
-	DasPlane* pX = new_DasPlane(DASPLANE_X, "", pXEncoder, xUnits);
+	DasPlane* pX = new_DasPlane(DASPLANETYPE_X, "", pXEncoder, xUnits);
 	DasPkt_addPlane(pPkt, pX);
 	if(_DasStream_append(pThis, (DasDesc*)pPkt, nId) != DAS_OKAY){
 		del_DasDesc((DasDesc*)pPkt);
@@ -362,7 +362,7 @@ das_errcode DasStream_freeDesc(DasStream* pThis, DasDesc* pDesc)
 {
 	ptrdiff_t iIdx = _DasStream_index(pThis, pDesc);
 	if(iIdx < 0)
-		return das_error(DASERR_STREAM, "%s: descriptor is not attached to this stream",
+		return daserrf(DASERR_STREAM, "%s: descriptor is not attached to this stream",
 		                 __func__);
 
 	_DasStream_removeAt(pThis, (size_t)iIdx);
@@ -375,17 +375,17 @@ das_errcode DasStream_freeDesc(DasStream* pThis, DasDesc* pDesc)
 	return DAS_OKAY;
 }
 
-DasPkt* DasStream_getPkt(const DasStream* pThis, int nPacketId)
+DasPkt* DasStream_pkt(const DasStream* pThis, int nPacketId)
 {
-	DasDesc* pDesc = DasStream_getDesc(pThis, nPacketId);
-	return (pDesc == NULL)||(pDesc->type != DASDESC_PKT) ? NULL : (DasPkt*)pDesc;
+	DasDesc* pDesc = DasStream_desc(pThis, nPacketId);
+	return (pDesc == NULL)||(pDesc->type != DASDESCTYPE_PKT) ? NULL : (DasPkt*)pDesc;
 }
 
-DasDesc* DasStream_getDesc(const DasStream* pThis, int nPacketId)
+DasDesc* DasStream_desc(const DasStream* pThis, int nPacketId)
 {
 	if(!_DasStream_idOkay(nPacketId)){
-		das_error(DASERR_STREAM, "Illegal packet ID %d, expected 1 to %d",
-			nPacketId, DAS3_MAX_PKTIDS - 1
+		daserrf(DASERR_STREAM, "Illegal packet ID %d, expected 1 to %d",
+			nPacketId, DASSTREAM_V3_ENDPKTID - 1
 		);
 		return NULL;
 	}
@@ -409,7 +409,7 @@ DasDesc* DasStream_findDesc(DasStream* pThis, int nPktId)
 	return _DasStream_descs(pThis)[iIdx];
 }
 
-int DasStream_getPktId(const DasStream* pThis, const DasDesc* pDesc)
+int DasStream_pktId(const DasStream* pThis, const DasDesc* pDesc)
 {
 	ptrdiff_t iIdx = _DasStream_index(pThis, pDesc);
 	return (iIdx < 0) ? -1 : (int)(_DasStream_ids(pThis)[iIdx]);
@@ -423,13 +423,13 @@ bool DasStream_isDescActive(const DasStream* pThis, const DasDesc* pDesc)
 }
 
 DasDesc* DasStream_nextDesc(
-	const DasStream* pThis, const DasDesc* pPrev, das_desc_type_e dtype
+	const DasStream* pThis, const DasDesc* pPrev, das_desctype dtype
 ){
 	size_t uBeg = 0;
 	if(pPrev != NULL){
 		ptrdiff_t iIdx = _DasStream_index(pThis, pPrev);
 		if(iIdx < 0){
-			das_error(DASERR_STREAM, "Previous descriptor is not attached to this "
+			daserrf(DASERR_STREAM, "Previous descriptor is not attached to this "
 				"stream, fetch the next one before removing the current one");
 			return NULL;
 		}
@@ -438,7 +438,7 @@ DasDesc* DasStream_nextDesc(
 
 	DasDesc** pDescs = _DasStream_descs(pThis);
 	for(size_t u = uBeg; u < pThis->uDesc; u++)
-		if((dtype == DASDESC_UNK)||(pDescs[u]->type == dtype))
+		if((dtype == DASDESCTYPE_UNK)||(pDescs[u]->type == dtype))
 			return pDescs[u];
 	return NULL;
 }
@@ -448,13 +448,13 @@ das_errcode DasStream_cacheShapes(DasStream* pThis, bool bCache)
 	if(pThis == NULL) return DAS_OKAY;
 
 	DasDesc* pDesc = NULL;
-	while((pDesc = DasStream_nextDesc(pThis, pDesc, DASDESC_DS)) != NULL)
+	while((pDesc = DasStream_nextDesc(pThis, pDesc, DASDESCTYPE_DS)) != NULL)
 		DasDs_cacheShape((DasDs*)pDesc, bCache);
 	return DAS_OKAY;
 }
 
 
-void DasStream_addCmdLineProp(DasStream* pThis, int argc, char * argv[] ) 
+void DasStream_addArgvProp(DasStream* pThis, int argc, char * argv[] ) 
 {
 	/* Save up to 1023 bytes of command line info */
 	char sCmd[1024] = {'\0'};
@@ -476,13 +476,13 @@ void DasStream_addCmdLineProp(DasStream* pThis, int argc, char * argv[] )
 		++i;
 	}
    
-   DasDesc_setStr( (DasDesc*)pThis, "commandLine", sCmd);
+   DasDesc_setVal( (DasDesc*)pThis, "commandLine", sCmd);
 }
 
 /* ************************************************************************* */
 /* Copying stream objects */
 
-DasPkt* DasStream_clonePkt(DasStream* pThis, const DasPkt* pPdIn)
+DasPkt* _DasStream_clonePkt(DasStream* pThis, const DasPkt* pPdIn)
 {
 	DasPkt* pPdOut;
 
@@ -504,16 +504,16 @@ DasPkt* DasStream_clonePkt(DasStream* pThis, const DasPkt* pPdIn)
 	return pPdOut;
 }
 
-DasPkt* DasStream_clonePktById(
+DasPkt* DasStream_clonePkt(
 	DasStream* pThis, const DasStream* pOther, int nPacketId
 ){
 	DasPkt* pIn, *pOut;
 
-	pIn = DasStream_getPkt(pOther, nPacketId);
+	pIn = DasStream_pkt(pOther, nPacketId);
 	if(pIn == NULL) return NULL;   /* Empty slot, or a dataset not a packet */
 
 	if(_DasStream_idUsed(pThis, nPacketId)){
-		das_error(DASERR_STREAM, "ERROR: Stream descriptor already has a packet "
+		daserrf(DASERR_STREAM, "ERROR: Stream descriptor already has a packet "
 		                "descriptor with id %d", nPacketId); 
 		return NULL;
 	}
@@ -538,30 +538,30 @@ DasPkt* DasStream_clonePktById(
 das_errcode DasStream_addDesc(DasStream* pThis, DasDesc* pDesc, int nPktId)
 {
 	/* Only accept either das2 packet descriptors or das3 datasets */
-	if((pDesc->type != DASDESC_PKT)&&(pDesc->type != DASDESC_DS))
-		return das_error(DASERR_STREAM, "Unexpected packet desciptor type");
+	if((pDesc->type != DASDESCTYPE_PKT)&&(pDesc->type != DASDESCTYPE_DS))
+		return daserrf(DASERR_STREAM, "Unexpected packet desciptor type");
 
 	if((pDesc->parent != NULL)&&(pDesc->parent != (DasDesc*)pThis)){
 
 		/* Hint to random developer: If you are here because you wanted to copy 
 		 * another stream's packet descriptor onto this stream use one of 
-		 * DasStream_clonePkt() or DasStream_clonePktById() instead. 
+		 * DasStream_clonePkt() instead. 
 		 */
-		return das_error(DASERR_STREAM, "Packet Descriptor already belongs to different "
+		return daserrf(DASERR_STREAM, "Packet Descriptor already belongs to different "
 				                "stream");
 	}
 	
 	/* The same object under a second ID */
 	ptrdiff_t iIdx = _DasStream_index(pThis, pDesc);
 	if(iIdx >= 0)
-		return das_error(DASERR_STREAM,
+		return daserrf(DASERR_STREAM,
 			"Descriptor is already attached to this stream as ID %02d",
 			(int)(_DasStream_ids(pThis)[iIdx])
 		);
 
 	if(!_DasStream_idOkay(nPktId))
-		return das_error(DASERR_STREAM, "Illegal packet id %d, expected 1 to %d",
-			nPktId, DAS3_MAX_PKTIDS - 1
+		return daserrf(DASERR_STREAM, "Illegal packet id %d, expected 1 to %d",
+			nPktId, DASSTREAM_V3_ENDPKTID - 1
 		);
 
 	/* A das2 header identical to one already live under another ID is rejected.  
@@ -572,15 +572,15 @@ das_errcode DasStream_addDesc(DasStream* pThis, DasDesc* pDesc, int nPktId)
 
 	   Note that a new header for a das2 packet ID in use never gets here,
 	   io.c frees the old packet first.  Datasets are not compared,
-	   DasPkt_equalFormat() only understands das2 packets. Maybe some das3
+	   DasPkt_isSameFmt() only understands das2 packets. Maybe some das3
 	   stream will commit this same sin someday, but it hasn't happened so
 	   far.  -cwp 2026-10-21 */
 	DasDesc** pDescs = _DasStream_descs(pThis);
-	if((pDesc->type == DASDESC_PKT)&&(pDesc->parent == (DasDesc*)pThis)){
+	if((pDesc->type == DASDESCTYPE_PKT)&&(pDesc->parent == (DasDesc*)pThis)){
 		for(size_t u = 0; u < pThis->uDesc; ++u)
-			if(pDescs[u]->type == DASDESC_PKT)
-				if(DasPkt_equalFormat((DasPkt*)pDesc, (DasPkt*)(pDescs[u])))
-					return das_error(DASERR_STREAM,
+			if(pDescs[u]->type == DASDESCTYPE_PKT)
+				if(DasPkt_isSameFmt((DasPkt*)pDesc, (DasPkt*)(pDescs[u])))
+					return daserrf(DASERR_STREAM,
 						"Packet header for ID %02d repeats the header for ID %02d",
 						nPktId, (int)(_DasStream_ids(pThis)[u])
 					);
@@ -591,10 +591,10 @@ das_errcode DasStream_addDesc(DasStream* pThis, DasDesc* pDesc, int nPktId)
 	   datasets, the newest becomes active. */
 	ptrdiff_t iActive = _DasStream_active(pThis, nPktId);
 	if(iActive >= 0){
-		if(pDesc->type == DASDESC_PKT)
-			return das_error(DASERR_STREAM, "Packet ID %02d is already in use", nPktId);
-		if(pDescs[iActive]->type == DASDESC_PKT)
-			return das_error(DASERR_STREAM,
+		if(pDesc->type == DASDESCTYPE_PKT)
+			return daserrf(DASERR_STREAM, "Packet ID %02d is already in use", nPktId);
+		if(pDescs[iActive]->type == DASDESCTYPE_PKT)
+			return daserrf(DASERR_STREAM,
 				"Packet ID %02d is held by a das2 packet, a dataset can't share it", nPktId
 			);
 	}
@@ -604,15 +604,15 @@ das_errcode DasStream_addDesc(DasStream* pThis, DasDesc* pDesc, int nPktId)
 
 das_errcode DasStream_rmDesc(DasStream* pThis, DasDesc* pDesc)
 {
-	if((pDesc->type != DASDESC_PKT)&&(pDesc->type != DASDESC_DS))
-		return das_error(DASERR_STREAM, "Unexpected packet desciptor type");
+	if((pDesc->type != DASDESCTYPE_PKT)&&(pDesc->type != DASDESCTYPE_DS))
+		return daserrf(DASERR_STREAM, "Unexpected packet desciptor type");
 
 	if((pDesc->parent != (DasDesc*)pThis))
-		return das_error(DASERR_STREAM, "Descriptor dosen't belong to this stream");
+		return daserrf(DASERR_STREAM, "Descriptor dosen't belong to this stream");
 
 	ptrdiff_t iIdx = _DasStream_index(pThis, pDesc);
 	if(iIdx < 0)
-		return das_error(DASERR_STREAM, "Descriptor is not part of this stream");
+		return daserrf(DASERR_STREAM, "Descriptor is not part of this stream");
 
 	_DasStream_removeAt(pThis, (size_t)iIdx);
 	pDesc->parent = NULL;   /* Detach both ways */
@@ -679,11 +679,11 @@ static void parseDasStream_start(void* data, const char* el, const char** attr)
 			
 			if ( strcmp(attr[i], "version")== 0 ) {
 				strncpy( pSd->version, (char*)attr[i+1], STREAMDESC_VER_SZ-1);
-				if(DasStream_getVer(pSd) == STREAM_VER_UNK){
+				if(DasStream_ver(pSd) == DASSTREAMVER_UNK){
 					fprintf(stderr, "Warning: Stream is version %s, expected %s "
 						"or %s.  Some features might not be supported\n", pSd->version, 
-						das_stream_ver_toStr(STREAM_VER_2_2),
-						das_stream_ver_toStr(STREAM_VER_3_0)
+						DasStream_verToStr(DASSTREAMVER_2_2),
+						DasStream_verToStr(DASSTREAMVER_3_0)
 					);
 				}
 				continue;
@@ -700,17 +700,17 @@ static void parseDasStream_start(void* data, const char* el, const char** attr)
 				memset(sType, '\0', 64);
 				strncpy(sType, attr[i], pColon - attr[i]);
 				strncpy(sName, pColon+1, 63);
-				DasDesc_set( pCurDesc, sType, sName, attr[i+1] );
+				DasDesc_setProp( pCurDesc, sType, sName, attr[i+1] );
 			}
 			else{
-				DasDesc_set( pCurDesc, "String", attr[i], attr[i+1]);
+				DasDesc_setProp( pCurDesc, "String", attr[i], attr[i+1]);
 			}
 			continue;
 		}
 
 		if(strcmp(el, "p") == 0){
 			if(!(pPsd->bV3Okay)){
-				pPsd->nRet = das_error(DASERR_STREAM,
+				pPsd->nRet = daserrf(DASERR_STREAM,
 					"Element <p> is invalid in das2 stream headers"
 				);
 				return;
@@ -729,7 +729,7 @@ static void parseDasStream_start(void* data, const char* el, const char** attr)
 			continue;
 		}
 
-		pPsd->nRet = das_error(DASERR_STREAM,
+		pPsd->nRet = daserrf(DASERR_STREAM,
 			"Invalid element <%s> or attribute \"%s=\" under <stream> section",
 			el, attr[i]
 		);
@@ -753,7 +753,7 @@ static void parseDasStream_chardata(void* data, const char* sChars, int len)
 
 	DasAry* pAry = &(pPsd->aPropVal);
 
-	DasAry_append(pAry, (ubyte*) sChars, len);
+	DasAry_append(pAry, (uint8_t*) sChars, len);
 }
 
 /* Formerly nested function "end" in parseDasStreamriptor */
@@ -770,18 +770,18 @@ static void parseDasStream_end(void* data, const char* el)
 	pPsd->bInProp = false;
 
 	DasAry* pAry = &(pPsd->aPropVal);
-	ubyte uTerm = 0;
+	uint8_t uTerm = 0;
 	DasAry_append(pAry, &uTerm, 1);  /*  Null terminate the value string */
 	size_t uValLen = 0;
-	const char* sValue = DasAry_getCharsIn(pAry, DIM0, &uValLen);
+	const char* sValue = DasAry_charsIn(pAry, DAS_ADDR0, &uValLen);
 
 	DasDesc* pDest = (DasDesc*)pPsd->pStream;
 
 	/* Property units are input too.  Text that doesn't parse leaves the value
-	   unitless, Units_fromStr() said why; the value text is untouched.  "" is
+	   unitless, DasUnits_fromStr() said why; the value text is untouched.  "" is
 	   dimensionless. */
-	das_units propUnits = Units_fromStr(pPsd->sPropUnits);
-	if(propUnits == NULL) propUnits = UNIT_DIMENSIONLESS;
+	DasUnits propUnits = DasUnits_fromStr(pPsd->sPropUnits);
+	if(propUnits == NULL) propUnits = DASUNITS_DIMENSIONLESS;
 
 	DasDesc_flexSet(
 		pDest,
@@ -801,7 +801,7 @@ static void parseDasStream_end(void* data, const char* el)
 	DasAry_clear(pAry);
 }
 
-DasStream* new_DasStream_str(DasBuf* pBuf, das_stream_model nModel)
+DasStream* new_DasStream_str(DasBuf* pBuf, das_iomodel nModel)
 {
 	DasStream* pThis = new_DasStream();
 
@@ -816,18 +816,18 @@ DasStream* new_DasStream_str(DasBuf* pBuf, das_stream_model nModel)
 	parse_stream_desc_t psd;
 	memset(&psd, 0, sizeof(psd));
 	psd.pStream = pThis;
-	psd.bV3Okay = (nModel == STREAM_MODEL_MIXED) || (nModel == STREAM_MODEL_V3);
+	psd.bV3Okay = (nModel == DASIOMODEL_MIXED) || (nModel == DASIOMODEL_V3);
 	
 	XML_Parser p = XML_ParserCreate("UTF-8");
 	if(!p){
-		das_error(DASERR_STREAM, "couldn't create xml parser\n");
+		daserrf(DASERR_STREAM, "couldn't create xml parser\n");
 		return NULL;
 	}
 
 	/* Make a 1-D dynamic array to hold the current property value so that
 	   it has no up-front limits, but doesn't require a huge heap buffer 
 	  for what are typically very small strings.*/
-	init_DasAry(&(psd.aPropVal), "streamprops", vtUByte, 0, (const ubyte[1]){0}, RANK_1(0), NULL);
+	init_DasAry(&(psd.aPropVal), "streamprops", DASVT_UBYTE, 0, (const uint8_t[1]){0}, DAS_SHAPE1(0), NULL);
 	
 	XML_SetUserData(p, (void*) &psd);
 	XML_SetElementHandler(p, parseDasStream_start, parseDasStream_end);
@@ -839,7 +839,7 @@ DasStream* new_DasStream_str(DasBuf* pBuf, das_stream_model nModel)
 
 	if(!nParRet){
 		/* Report before the free: the line number and error code live in the parser */
-		das_error(DASERR_STREAM, "Parse error at line %lu:\n%s\n",
+		daserrf(DASERR_STREAM, "Parse error at line %lu:\n%s\n",
 		           (unsigned long)XML_GetCurrentLineNumber(p), XML_ErrorString(XML_GetErrorCode(p))
 		);
 		XML_ParserFree(p);
@@ -862,7 +862,7 @@ das_errcode DasStream_encode2(DasStream* pThis, DasBuf* pBuf)
 {
 
 	/* Save off the encoding request format */
-	strncpy(pThis->version, das_stream_ver_toStr(STREAM_VER_2_2), STREAMDESC_VER_SZ-1);
+	strncpy(pThis->version, DasStream_verToStr(DASSTREAMVER_2_2), STREAMDESC_VER_SZ-1);
 
 	das_errcode nRet = 0;
 	if((nRet = DasBuf_printf(pBuf, "<stream ")) !=0 ) return nRet;
@@ -884,9 +884,9 @@ das_errcode DasStream_encode3(DasStream* pThis, DasBuf* pBuf)
 {
 	/* Save off the encoding request format.  A stream read from a das2
 	   header has no type token, go with the non-namespace stream */
-	strncpy(pThis->version, das_stream_ver_toStr(STREAM_VER_3_0), STREAMDESC_VER_SZ-1);
+	strncpy(pThis->version, DasStream_verToStr(DASSTREAMVER_3_0), STREAMDESC_VER_SZ-1);
 	if(pThis->type[0] == '\0')
-		strncpy(pThis->type, das_stream_type_toStr(STREAM_TYPE_BASIC), STREAMDESC_TYPE_SZ-1);
+		strncpy(pThis->type, DasStream_typeToStr(DASSTREAMTYPE_BASIC), STREAMDESC_TYPE_SZ-1);
 
 	das_errcode nRet = 0;
 	if((nRet = DasBuf_printf(pBuf, "\n<stream ")) !=0 ) return nRet;
@@ -914,7 +914,7 @@ static bool _DasStream_hasDsKey(
 ){
 	DasDesc** pDescs = _DasStream_descs(pThis);
 	for(size_t u = 0; u < pThis->uDesc; u++){
-		if(pDescs[u]->type != DASDESC_DS) continue;
+		if(pDescs[u]->type != DASDESCTYPE_DS) continue;
 		const DasDs* pDs = (const DasDs*)pDescs[u];
 		if((strcmp(pDs->sId, sName) == 0)&&(strcmp(pDs->sGroupId, sGroup) == 0))
 			return true;
@@ -926,13 +926,13 @@ static bool _DasStream_hasDsKey(
 DasDesc* DasDesc_decode(
 	DasBuf* pBuf, DasStream* pSd, int nPktId, int nModel
 ){
-	char sName[DAS_XML_NODE_NAME_LEN] = {'\0'}; 
+	char sName[DASXML_NAME_LEN] = {'\0'}; 
 	
 	/* Eat the whitespace on either end */
 	DasBuf_strip(pBuf);
 	
 	if(DasBuf_unread(pBuf) == 0){
-		das_error(DASERR_STREAM, "Empty Descriptor Header in Stream");
+		daserrf(DASERR_STREAM, "Empty Descriptor Header in Stream");
 		return NULL;
 	}
 	
@@ -941,7 +941,7 @@ DasDesc* DasDesc_decode(
 	DasBuf_read(pBuf, &b, 1);
 
 	if(b != '<'){
-		das_error(DASERR_STREAM, "found \"%c\", expected \"<\"", b);
+		daserrf(DASERR_STREAM, "found \"%c\", expected \"<\"", b);
 		return NULL;
 	}
 	
@@ -955,7 +955,7 @@ DasDesc* DasDesc_decode(
 			i++;
 		}
 		if(b == '\0' || i == 256){
-			das_error(DASERR_STREAM, "Error finding the end of the XML prolog, was the"
+			daserrf(DASERR_STREAM, "Error finding the end of the XML prolog, was the"
 					     "entire prolog more that 255 characters long?");
 			return NULL;
 		}
@@ -976,7 +976,7 @@ DasDesc* DasDesc_decode(
 		i = 0; /* Get ready for using i below */
 	}
 	
-	while(i < (DAS_XML_NODE_NAME_LEN - 1) && 
+	while(i < (DASXML_NAME_LEN - 1) && 
 			!isspace(b) && b != '\0' && b != '>' && b != '/'){
 		sName[i] = b;
 		DasBuf_read(pBuf, &b, 1);
@@ -999,8 +999,8 @@ DasDesc* DasDesc_decode(
    	/* Up convert to a dataset if this is supposed to be a das3 stream.
    	   Note: The stream descriptor is needed to check for a "waveform" renderer.
    	         One of the spur-of-the-moment bad ideas in the v2 format. */
-   	if(nModel == STREAM_MODEL_V3){
-   		DasDs* pDs = new_DasDs_packet(pSd, pPkt, nPktId, NULL, true /* = add codecs */);
+   	if(nModel == DASIOMODEL_V3){
+   		DasDs* pDs = new_DasDs_fromPkt(pSd, pPkt, nPktId, NULL, true /* = add codecs */);
    		del_DasDesc((DasDesc*)pPkt);   /* transient scaffold: the DasDs copied all it needs */
 
    		/* The generated name is <group>_<id>, and (group, name) should be
@@ -1009,14 +1009,14 @@ DasDesc* DasDesc_decode(
    		   key, as happens when a legacy stream sends a new header under an
    		   ID in use, add _2, _3 and so on until the key is free. */
    		if((pDs != NULL)&&(pSd != NULL)){
-   			char sName[DAS_MAX_ID_BUFSZ] = {'\0'};
-   			strncpy(sName, pDs->sId, DAS_MAX_ID_BUFSZ - 1);
+   			char sName[DASID_SZ] = {'\0'};
+   			strncpy(sName, pDs->sId, DASID_SZ - 1);
    			for(int n = 2; _DasStream_hasDsKey(pSd, pDs->sGroupId, sName); ++n){
-   				memset(sName, 0, DAS_MAX_ID_BUFSZ);
-   				snprintf(sName, DAS_MAX_ID_BUFSZ, "%s_%d", pDs->sId, n);
+   				memset(sName, 0, DASID_SZ);
+   				snprintf(sName, DASID_SZ, "%s_%d", pDs->sId, n);
    				if(n == INT_MAX) break;   /* can't happen, but don't spin */
    			}
-   			memcpy(pDs->sId, sName, DAS_MAX_ID_BUFSZ);   /* NUL padded above */
+   			memcpy(pDs->sId, sName, DASID_SZ);   /* NUL padded above */
    		}
    		return (DasDesc*) pDs;
    	}
@@ -1025,36 +1025,36 @@ DasDesc* DasDesc_decode(
    }
 
 	if(strcmp(sName, "dataset") == 0){
-		if((nModel != STREAM_MODEL_MIXED)&&(nModel != STREAM_MODEL_V3)){
-   		das_error(DASERR_STREAM, "das3 <dateset> element found, expected das2 headers");
+		if((nModel != DASIOMODEL_MIXED)&&(nModel != DASIOMODEL_V3)){
+   		daserrf(DASERR_STREAM, "das3 <dateset> element found, expected das2 headers");
    		return NULL;
    	}
 		return (DasDesc*) new_DasDs_xml(pBuf, (DasDesc*)pSd, nPktId);
 	}
 	
-	das_error(DASERR_STREAM, "Unknown top-level descriptor object: %s", sName);
+	daserrf(DASERR_STREAM, "Unknown top-level descriptor object: %s", sName);
 	return NULL;
 }
 
 /* ************************************************************************** */
 /* Stream identification text, enums are in defs.h */
 
-const char* das_stream_ver_toStr(das_stream_ver ver)
+const char* DasStream_verToStr(das_streamver ver)
 {
 	switch(ver){
-	case STREAM_VER_1_0: return "1.0";
-	case STREAM_VER_1_1: return "1.1";
-	case STREAM_VER_2_2: return "2.2";
-	case STREAM_VER_3_0: return "3.0";
+	case DASSTREAMVER_1_0: return "1.0";
+	case DASSTREAMVER_1_1: return "1.1";
+	case DASSTREAMVER_2_2: return "2.2";
+	case DASSTREAMVER_3_0: return "3.0";
 	default:             return "unknown";
 	}
 }
 
-const char* das_stream_type_toStr(das_stream_type type)
+const char* DasStream_typeToStr(das_streamtype type)
 {
 	switch(type){
-	case STREAM_TYPE_BASIC: return "das-basic-stream";
-	case STREAM_TYPE_DOC:   return "das-basic-doc";
+	case DASSTREAMTYPE_BASIC: return "das-basic-stream";
+	case DASSTREAMTYPE_DOC:   return "das-basic-doc";
 	default:                return "unknown";
 	}
 }
