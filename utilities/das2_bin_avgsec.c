@@ -96,7 +96,7 @@ bool g_bExceptSent = false;
 /* ************************************************************************* */
 /* Maybe copy out Comments */
 
-DasErrCode onComment(DasStream* pSd, const DasComment* pCmt, void* vpOut)
+das_errcode onComment(DasStream* pSd, const DasComment* pCmt, void* vpOut)
 {
 	if(! g_bProgress && (
 		(strcmp(DasComment_get(pCmt, "type"), "taskProgress") == 0) ||
@@ -111,7 +111,7 @@ DasErrCode onComment(DasStream* pSd, const DasComment* pCmt, void* vpOut)
 /*****************************************************************************/
 /* Stream Header Processing */
 
-DasErrCode onStreamHdr(DasStream* pSdIn, void* v)
+das_errcode onStreamHdr(DasStream* pSdIn, void* v)
 {
 	g_pSdOut = DasStream_copy(pSdIn);
 	double rBinSzSec = g_rBinSzMicroSec*1e-6;
@@ -217,7 +217,7 @@ bool shouldCollapse(DasPlane* pPlane){
 #define COLLAPSE(P) ((size_t)DasDesc_getUser((DasDesc*)(P)) == 1)
 
 
-DasErrCode sendData(int nPktId)
+das_errcode sendData(int nPktId)
 {	
 	/* Don't flush a packet that hasn't seen any data */
 	if( ! g_lbHasBinNo[nPktId] ) 
@@ -358,7 +358,7 @@ DasErrCode sendData(int nPktId)
 /*****************************************************************************/
 /* Packet Header Processing */
 
-DasErrCode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, int nPktId, void* v)
+das_errcode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, int nPktId, void* v)
 {
 	/* char sNewName[128] = {'\0'}; */
 	
@@ -506,7 +506,7 @@ DasErrCode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, int nPktId, void* v)
 /*****************************************************************************/
 /* Packet Data Processing */
 
-DasErrCode onPktData(DasPkt* pPdIn, int nPktId, void* ud)
+das_errcode onPktData(DasPkt* pPdIn, int nPktId, void* ud)
 {
 	int nRet = 0;
 	bool bRange = g_bRangeOut; /* Avoid L1 cache miss in tight loop */
@@ -597,12 +597,12 @@ DasErrCode onPktData(DasPkt* pPdIn, int nPktId, void* ud)
 /* ************************************************************************* */
 /* Stream Close Handling */
 /* Flush the partial bins, then pass on an exception if the input ended on one */
-DasErrCode onClose(DasStream* pSdIn, const DasExcept* pExcept, void* ud){
+das_errcode onClose(DasStream* pSdIn, const DasExcept* pExcept, void* ud){
 	
 	if(g_bExceptSent) return P_ERR;
 
 	int nPktId;
-	DasErrCode nRet = 0;
+	das_errcode nRet = 0;
 	for (nPktId = 1; nPktId < 100; nPktId++){
 		if(DasStream_getDesc(g_pSdOut, nPktId) != NULL){
 			if( (nRet = sendData(nPktId) ) != 0) return nRet;

@@ -338,7 +338,7 @@ void del_DasDft(DasDft* pThis){
 /* ************************************************************************* */
 /* Calculate a DFT */
 
-DasErrCode DasDft_calculate(
+das_errcode DasDft_calculate(
 	DasDft* pThis, const double* pReal, const double* pImg
 ){
 	
@@ -593,7 +593,7 @@ void del_DasPsd(DasPsd* pThis)
 }
 
 
-DasErrCode DasPsd_calculate_f(
+das_errcode DasPsd_calculate_f(
 	DasPsd* pThis, const float* pfReal, const float* pfImg
 ){
 	
@@ -614,7 +614,7 @@ DasErrCode DasPsd_calculate_f(
 		return DasPsd_calculate(pThis, pThis->pUpConvReal, NULL);
 }
 
-DasErrCode DasPsd_calculate(
+das_errcode DasPsd_calculate(
 	DasPsd* pThis, const double* pReal, const double* pImg
 ){
 	

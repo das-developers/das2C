@@ -165,7 +165,7 @@ bool outputPlane(proc_state_t* pPs, const char* sName)
 }
 
 /* ************************************************************************* */
-DasErrCode OnPktHdr(DasStream* pSdIn, DasPkt* pPdIn, int nPktId, void* vpPs)
+das_errcode OnPktHdr(DasStream* pSdIn, DasPkt* pPdIn, int nPktId, void* vpPs)
 {
 	proc_state_t* pPs = (proc_state_t*)vpPs;
 	
@@ -420,7 +420,7 @@ DasErrCode OnPktHdr(DasStream* pSdIn, DasPkt* pPdIn, int nPktId, void* vpPs)
 }
 
 /* ************************************************************************* */
-DasErrCode onPktData(DasPkt* pPdIn, int nPktId, void* vpPs)
+das_errcode onPktData(DasPkt* pPdIn, int nPktId, void* vpPs)
 {
 	proc_state_t* pPs = (proc_state_t*)vpPs;
 	
@@ -540,9 +540,9 @@ DasErrCode onPktData(DasPkt* pPdIn, int nPktId, void* vpPs)
 			
 /* ************************************************************************* */
 /* Close Output */
-DasErrCode onClose(DasStream* sd, const DasExcept* pExcept, void* vpPs)
+das_errcode onClose(DasStream* sd, const DasExcept* pExcept, void* vpPs)
 {
-	DasErrCode nRet = 0;
+	das_errcode nRet = 0;
 
 	/* Can't do much with an exception here but report it */
 	if(pExcept != NULL){

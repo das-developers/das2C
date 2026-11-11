@@ -228,7 +228,7 @@ DasPlane* new_DasPlane_yscan_seq(
 
 /* Helper for new_DasPlane_pairs, tries to determine a reasonable
    encoding for the ytags values, assumes nItems is already valid */
-static DasErrCode _DasPlane_decodeYTags(DasPlane* pThis, const char* sYTags)
+static das_errcode _DasPlane_decodeYTags(DasPlane* pThis, const char* sYTags)
 {
 	int nCat = DAS2DT_ASCII;
 	char sFmt[64] = {'\0'};
@@ -779,7 +779,7 @@ const das_datum* DasPlane_getDatum(
 }
 
 
-DasErrCode DasPlane_setValue(DasPlane* pThis, size_t uIdx, double value)
+das_errcode DasPlane_setValue(DasPlane* pThis, size_t uIdx, double value)
 {
 	if(uIdx >= pThis->uItems)
 		return das_error(17, "Index %zu is out of range for %s plane", uIdx,		
@@ -795,10 +795,10 @@ DasErrCode DasPlane_setValue(DasPlane* pThis, size_t uIdx, double value)
 	return 0;
 }
 
-DasErrCode DasPlane_setTimeValue(
+das_errcode DasPlane_setTimeValue(
 	DasPlane* pThis, const char* sTime, size_t idx
 ){
-	DasErrCode nErr = 0;
+	das_errcode nErr = 0;
 	double rVal = DAS_FILL_VALUE;
 	
 	if(idx >= pThis->uItems)
@@ -953,7 +953,7 @@ das_units DasPlane_getUnits(const DasPlane* pThis ) {
 	return pThis->units;
 }
 
-DasErrCode DasPlane_setUnits(DasPlane* pThis, das_units units)
+das_errcode DasPlane_setUnits(DasPlane* pThis, das_units units)
 {
 	if(units == NULL)
 		return das_error(DASERR_PLANE, "NULL units, use UNIT_DIMENSIONLESS for none");
@@ -1136,7 +1136,7 @@ void DasPlane_setYTagSeq(
 /* Encode/Decode Values */
 
 
-DasErrCode DasPlane_decodeData(const DasPlane* pThis, DasBuf* pBuf)
+das_errcode DasPlane_decodeData(const DasPlane* pThis, DasBuf* pBuf)
 {
 	unsigned int u =0;
 	int nRet = 0; 
@@ -1156,7 +1156,7 @@ DasErrCode DasPlane_decodeData(const DasPlane* pThis, DasBuf* pBuf)
 }
 
 
-DasErrCode DasPlane_encodeData(DasPlane* pThis, DasBuf* pBuf, bool bLast)
+das_errcode DasPlane_encodeData(DasPlane* pThis, DasBuf* pBuf, bool bLast)
 {
 	int nRet = 0;
 	static const char cSpace = ' ';
@@ -1209,11 +1209,11 @@ static const char* _DasPlane_unitStr(DasPlane* pThis){
 }
 
 
-static DasErrCode _DasPlane_encodeYScan(
+static das_errcode _DasPlane_encodeYScan(
 	DasPlane* pThis, DasBuf* pBuf, const char* sIndent, const char* sSubIn,
 	const char* sValType
 ){
-	DasErrCode nRet = 0;
+	das_errcode nRet = 0;
 	const char comma = ',';
 	const char* sName = pThis->sName;
 	if(sName == NULL) sName = "";
@@ -1270,11 +1270,11 @@ static DasErrCode _DasPlane_encodeYScan(
    return DasBuf_printf(pBuf, "%s</yscan>\n", sIndent);
 }
 
-static DasErrCode _DasPlane_encodeX(
+static das_errcode _DasPlane_encodeX(
 	DasPlane* pThis, DasBuf* pBuf, const char* sIndent, const char* sSubIn, 
 	const char* sValType
 ){ 
-	DasErrCode nRet = 0;
+	das_errcode nRet = 0;
 	const char* sName = pThis->sName;
 	
 	/* Would like to go out on a limb here and just set the name to time if the
@@ -1291,11 +1291,11 @@ static DasErrCode _DasPlane_encodeX(
 
 /* Little tricky here because Y can be either a dependent or independent var
    depending on if we are a X-Y-Z scatter dataset or not */
-static DasErrCode _DasPlane_encodeY(
+static das_errcode _DasPlane_encodeY(
 	DasPlane* pThis, DasBuf* pBuf, const char* sIndent, const char* sSubIn, 
 	const char* sValType
 ) {
-	DasErrCode nRet = 0;
+	das_errcode nRet = 0;
 	const char* sName = pThis->sName;
 	if(sName == NULL) sName = "";
 	
@@ -1307,11 +1307,11 @@ static DasErrCode _DasPlane_encodeY(
 	return DasBuf_printf(pBuf, "%s</y>\n", sIndent);
 }
 
-static DasErrCode _DasPlane_encodeZ(
+static das_errcode _DasPlane_encodeZ(
 	DasPlane* pThis, DasBuf* pBuf, const char* sIndent, const char* sSubIn, 
 	const char* sValType
 ) {
-	DasErrCode nRet = 0;
+	das_errcode nRet = 0;
 	const char* sName = pThis->sName;
 	if(sName == NULL) sName = "";
 	
@@ -1322,7 +1322,7 @@ static DasErrCode _DasPlane_encodeZ(
 	return DasBuf_printf(pBuf, "%s</z>\n", sIndent);
 }
 
-DasErrCode DasPlane_encode(
+das_errcode DasPlane_encode(
 	DasPlane* pThis, DasBuf* pBuf, const char* sIndent
 ){	
 	char sValType[24] = {'\0'};

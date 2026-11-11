@@ -1259,7 +1259,7 @@ static char* _var_seqValToStr(
 	}
 }
 
-DasErrCode DasVar_encode(DasVar* pThis, const char* sRole, DasBuf* pBuf)
+das_errcode DasVar_encode(DasVar* pThis, const char* sRole, DasBuf* pBuf)
 {
 	const DasDim* pDim = (const DasDim*) ((DasDesc*)pThis)->parent;
 	const DasDs*  pDs  = (const DasDs*) ((DasDesc*)pDim)->parent;

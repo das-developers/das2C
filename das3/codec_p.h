@@ -88,7 +88,7 @@ struct das_codec {
  * and trim survive.  pAry is NOT checked for membership in any dataset, so
  * outside callers go through DasDs_updateCodec(), which resolves an array
  * id against the codec's own dataset. */
-DasErrCode DasCodec_update(
+das_errcode DasCodec_update(
 	bool bRead, DasCodec* pThis, DasAry* pAry, const char* sEncType,
 	int16_t nSzEach, ubyte cSep, das_units epoch, const char* sOutFmt
 );
@@ -155,7 +155,7 @@ DasErrCode DasCodec_update(
  * 
  * @memberof DasCodec 
  */
-DasErrCode init_DasCodec(
+das_errcode init_DasCodec(
 	bool bRead, DasCodec* pThis, DasAry* pAry, const char* sSemantic, 
 	const char* sEncType, int16_t uSzEach, ubyte cSep, das_units epoch, 
 	const char* sOutFmt

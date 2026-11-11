@@ -221,7 +221,7 @@ int DasReq_find(const DasReq* pThis, const char* sKey)
 	return -1;
 }
 
-DasErrCode DasReq_set(DasReq* pThis, const char* sKey, const char* sVal)
+das_errcode DasReq_set(DasReq* pThis, const char* sKey, const char* sVal)
 {
 	if((sKey == NULL)||(sKey[0] == '\0')){
 		daslog_error("Requisition keys may not be empty");
@@ -306,7 +306,7 @@ bool DasReq_derived(const DasReq* pThis, size_t u)
 /* ************************************************************************* */
 /* Raw parameters.  Names are protocol names and compare exactly. */
 
-DasErrCode DasReq_setRaw(DasReq* pThis, const char* sName, const char* sVal)
+das_errcode DasReq_setRaw(DasReq* pThis, const char* sName, const char* sVal)
 {
 	if((sName == NULL)||(sName[0] == '\0')){
 		daslog_error("Protocol parameter names may not be empty");
@@ -418,7 +418,7 @@ char* DasReq_text(const DasReq* pThis)
 	return o.s;
 }
 
-DasErrCode DasReq_write(const DasReq* pThis, const char* sPath)
+das_errcode DasReq_write(const DasReq* pThis, const char* sPath)
 {
 	char* sText = DasReq_text(pThis);
 	if(sText == NULL){

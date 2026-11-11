@@ -333,7 +333,7 @@ DAS_API const das_datum* DasPlane_getDatum(
  * @returns 0 if successful or a positive error number otherwise.
  * @memberof DasPlane
  */
-DAS_API DasErrCode DasPlane_setValue(DasPlane* pThis, size_t uIdx, double value);
+DAS_API das_errcode DasPlane_setValue(DasPlane* pThis, size_t uIdx, double value);
 
 /** Set a single time value in a plane 
  * 
@@ -351,7 +351,7 @@ DAS_API DasErrCode DasPlane_setValue(DasPlane* pThis, size_t uIdx, double value)
  * 
  * @memberof DasPlane
  */
-DAS_API DasErrCode DasPlane_setTimeValue(
+DAS_API das_errcode DasPlane_setTimeValue(
 	DasPlane* pThis, const char* sTime, size_t idx
 );
 
@@ -454,7 +454,7 @@ DAS_API das_units DasPlane_getUnits(const DasPlane* pThis );
  * @returns DAS_OKAY, or a non-zero error code
  * @memberof DasPlane
  */
-DAS_API DasErrCode DasPlane_setUnits(DasPlane* pThis, das_units units);
+DAS_API das_errcode DasPlane_setUnits(DasPlane* pThis, das_units units);
 
 /** Get Y axis units for a 2-D plane
  * @returns the Units of the YTags of a \<yscan\> plane.  

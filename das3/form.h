@@ -301,7 +301,7 @@ DAS_API char* DasForm_toStr(const DasForm* pThis, char* sBuf, size_t uLen);
  *          of that shape
  * @memberof DasForm
  */
-DAS_API DasErrCode DasForm_validate(
+DAS_API das_errcode DasForm_validate(
 	DasForm* pThis, int nIntRank, const ptrdiff_t* pIntShape
 );
 

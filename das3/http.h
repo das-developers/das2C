@@ -119,7 +119,7 @@ typedef struct das_http_opts {
  * @returns DAS_OKAY, or an error if uVersion is unknown to this library,
  *        in which case pOpts is not touched.
  */
-DAS_API DasErrCode das_http_opts_init_ver(das_http_opts* pOpts, size_t uVersion);
+DAS_API das_errcode das_http_opts_init_ver(das_http_opts* pOpts, size_t uVersion);
 
 /** Fill in the request defaults, the starting point for das_http_opts
  *

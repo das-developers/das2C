@@ -378,7 +378,7 @@ DAS_API void dt_from_tt2k(das_time* dt, int64_t nTime);
  * @returns DAS_OKAY, or DASERR_TIME for negative fields or a time outside
  *        the TT2000 range, in which case pTT is not written.
  */
-DAS_API DasErrCode tt2k_from_parts(
+DAS_API das_errcode tt2k_from_parts(
 	int year, int month, int mday, int hour, int minute, int second,
 	int32_t nanosec, int64_t* pTT
 );
@@ -442,7 +442,7 @@ DAS_API int das_julian_day (int year, int month, int day);
  *
  * @param[in] epoch_units Unit string
  */
-DAS_API DasErrCode Units_convertToDt(das_time* pDt, double value, das_units epoch_units);
+DAS_API das_errcode Units_convertToDt(das_time* pDt, double value, das_units epoch_units);
 
 /** Convert a calendar representation of a time to value in time offset units
  * 

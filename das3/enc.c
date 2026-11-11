@@ -361,7 +361,7 @@ char* DasEnc_toStr(const DasEnc* pThis, char* sType, size_t uLen)
 /* Encoding */
 
 
-static DasErrCode _writePacketMsb4(DasBuf* pBuf, void* pData)
+static das_errcode _writePacketMsb4(DasBuf* pBuf, void* pData)
 {
 #ifdef HOST_IS_LSB_FIRST
 	unsigned char cdata[4];
@@ -376,7 +376,7 @@ static DasErrCode _writePacketMsb4(DasBuf* pBuf, void* pData)
 #endif
 }
 
-static DasErrCode _writePacketLsb4(DasBuf* pBuf, void* pData)
+static das_errcode _writePacketLsb4(DasBuf* pBuf, void* pData)
 {
 #ifdef HOST_IS_LSB_FIRST
 	return DasBuf_write(pBuf, pData, 4);
@@ -391,7 +391,7 @@ static DasErrCode _writePacketLsb4(DasBuf* pBuf, void* pData)
 #endif
 }
 
-static DasErrCode _writePacketMsb8(DasBuf* pBuf, void* pData)
+static das_errcode _writePacketMsb8(DasBuf* pBuf, void* pData)
 {
 #ifdef HOST_IS_LSB_FIRST
 	unsigned char cdata[8];
@@ -410,7 +410,7 @@ static DasErrCode _writePacketMsb8(DasBuf* pBuf, void* pData)
 #endif
 }
 
-static DasErrCode _writePacketLsb8(DasBuf* pBuf, void* pData)
+static das_errcode _writePacketLsb8(DasBuf* pBuf, void* pData)
 {
 #ifdef HOST_IS_LSB_FIRST
 	return DasBuf_write(pBuf, pData, 8);
@@ -429,7 +429,7 @@ static DasErrCode _writePacketLsb8(DasBuf* pBuf, void* pData)
 #endif
 }
 
-static DasErrCode _encodeAsciiValue(DasEnc* pThis, DasBuf* pBuf, double data)
+static das_errcode _encodeAsciiValue(DasEnc* pThis, DasBuf* pBuf, double data)
 {	
 	int nExpect = pThis->nWidth - 1;
 	
@@ -456,7 +456,7 @@ static DasErrCode _encodeAsciiValue(DasEnc* pThis, DasBuf* pBuf, double data)
 	return DasBuf_write(pBuf, sVal, (size_t)nLen);
 }
 
-static DasErrCode _encodeTimeValue(
+static das_errcode _encodeTimeValue(
 	DasEnc* pThis, DasBuf* pBuf, double data, das_units units
 ){
 
@@ -490,7 +490,7 @@ static DasErrCode _encodeTimeValue(
 }
 
 
-DasErrCode DasEnc_write(
+das_errcode DasEnc_write(
 	DasEnc* pThis, DasBuf* pBuf, double value, das_units units
 ){
 	int nHash = DasEnc_hash(pThis);
@@ -521,7 +521,7 @@ DasErrCode DasEnc_write(
 /* ************************************************************************* */
 /* Decoding */
 
-DasErrCode DasEnc_read(
+das_errcode DasEnc_read(
 	const DasEnc* pThis, DasBuf* pBuf, das_units units, double* pOut
 ){
 	*pOut = DAS_FILL_VALUE;

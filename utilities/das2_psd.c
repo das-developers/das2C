@@ -72,7 +72,7 @@ See the help text in prnHelp() for mor info. -cwp
 
 /* End the output stream with a server error and give the code that stops the
    read, for callbacks that return rather than exit */
-static DasErrCode _srvErr(DasIO* pIo, const char* sMsg)
+static das_errcode _srvErr(DasIO* pIo, const char* sMsg)
 {
 	DasIO_exception_v(pIo, DAS_EX_SERVER_ERR, "%s", sMsg);
 	return P_ERR;
@@ -181,7 +181,7 @@ void del_AuxInfo(void* vpThis)
 /*****************************************************************************/
 /* Stream Header Processing */
 
-DasErrCode onStreamHdr(DasStream* pSdIn, void* vpIoOut)
+das_errcode onStreamHdr(DasStream* pSdIn, void* vpIoOut)
 {
 	g_pSdOut = DasStream_copy(pSdIn);
 
@@ -598,7 +598,7 @@ DasPlane* mkYscanPdFromYscanPd(
 /*****************************************************************************/
 /* Packet Header Processing */
 
-DasErrCode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, int nPktId, void* vpIoOut)
+das_errcode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, int nPktId, void* vpIoOut)
 {
 	DasIO* pIoOut = (DasIO*)vpIoOut;
 
@@ -805,7 +805,7 @@ const das_datum* getOrigSampInterval(
  *
  * Also assumes X axis accumulator has all needed points. */
 
-DasErrCode _finalizeXTransformHdrs(DasPkt* pPdIn, DasPkt* pPdOut, DasIO* pIoOut)
+das_errcode _finalizeXTransformHdrs(DasPkt* pPdIn, DasPkt* pPdOut, DasIO* pIoOut)
 {
 
 	DasPlane* pXIn  = DasPkt_getXPlane(pPdIn);
@@ -892,9 +892,9 @@ DasErrCode _finalizeXTransformHdrs(DasPkt* pPdIn, DasPkt* pPdOut, DasIO* pIoOut)
  * then a new packet ID is acquired and the data are emitted.
  */
 
-DasErrCode onXTransformPktData(DasPkt* pPdIn, DasPkt* pPdOut, DasIO* pIoOut)
+das_errcode onXTransformPktData(DasPkt* pPdIn, DasPkt* pPdOut, DasIO* pIoOut)
 {
-	DasErrCode nRet = DAS_OKAY;
+	das_errcode nRet = DAS_OKAY;
 	
 	/* Step 1: Accumulate values */
 	int nPlanes = DasPkt_getNPlanes(pPdIn);
@@ -1112,7 +1112,7 @@ bool _anyYscanInputInRng(DasPkt* pPdIn, size_t uReadPt, size_t uLen)
 	return false;
 }
 
-DasErrCode onYTransformPktData(DasPkt* pPdIn, DasPkt* pPdOut, DasIO* pIoOut)
+das_errcode onYTransformPktData(DasPkt* pPdIn, DasPkt* pPdOut, DasIO* pIoOut)
 {
 	DasPlane* pPlaneIn = NULL;
 	DasPlane* pPlaneOut = NULL;
@@ -1141,7 +1141,7 @@ DasErrCode onYTransformPktData(DasPkt* pPdIn, DasPkt* pPdOut, DasIO* pIoOut)
 	const double* pInData = NULL;
 	const double* pOutData = NULL;
 	size_t uPsdLen = 0;
-	DasErrCode nRet = DAS_OKAY;
+	das_errcode nRet = DAS_OKAY;
 	das_units utXInter = NULL;
 	AuxInfo* pAux = NULL;
 	bool bSkip = false;
@@ -1254,7 +1254,7 @@ DasErrCode onYTransformPktData(DasPkt* pPdIn, DasPkt* pPdOut, DasIO* pIoOut)
 	return DAS_OKAY;
 }
 
-DasErrCode onPktData(DasPkt* pPdIn, int nPktId, void* vpIoOut)
+das_errcode onPktData(DasPkt* pPdIn, int nPktId, void* vpIoOut)
 {
 	/* Remember, certain packet IDs may not be transformable and may have
 	   been dropped from the output */
@@ -1275,7 +1275,7 @@ DasErrCode onPktData(DasPkt* pPdIn, int nPktId, void* vpIoOut)
 /* Stream Close Handling - pass on an incoming exception, or if nothing could
    be written, send one of our own */
 
-DasErrCode onClose(DasStream* pSdIn, const DasExcept* pExcept, void* vIoOut)
+das_errcode onClose(DasStream* pSdIn, const DasExcept* pExcept, void* vIoOut)
 {
 	DasIO* pIoOut = (DasIO*)vIoOut;
 
@@ -1295,7 +1295,7 @@ DasErrCode onClose(DasStream* pSdIn, const DasExcept* pExcept, void* vIoOut)
 /* ************************************************************************* */
 /* Copy out Comments */
 
-DasErrCode onComment(DasStream* pSd, const DasComment* pCmt, void* vIoOut)
+das_errcode onComment(DasStream* pSd, const DasComment* pCmt, void* vIoOut)
 {
 	DasIO* pIoOut = (DasIO*)vIoOut;
 	return DasIO_comment(pIoOut, pCmt);

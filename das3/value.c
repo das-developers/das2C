@@ -780,7 +780,7 @@ static void _xform_prnVal(
 	}
 }
 
-DasErrCode das_value_binXform(
+das_errcode das_value_binXform(
    das_val_type vtIn,  const ubyte* pI, const ubyte* pFI,
    das_val_type vtOut,       ubyte* pO, const ubyte* pFO,
    uint32_t uFlags
@@ -1064,7 +1064,7 @@ static bool _binop_asDbl(das_val_type vt, const ubyte* p, double* pOut)
 	}
 }
 
-DasErrCode das_value_binop(
+das_errcode das_value_binop(
 	int nOp, das_val_type vtL, const ubyte* pL, das_val_type vtR,
 	const ubyte* pR, das_val_type vtOut, ubyte* pOut
 ){
@@ -1287,7 +1287,7 @@ static bool _das_accum_u64(
 		*((CTYPE*)pAccum) = (CTYPE)a; \
 	}while(0)
 
-DasErrCode das_value_accum(
+das_errcode das_value_accum(
 	das_val_type vt, ubyte* pAccum, const ubyte* pStep, ptrdiff_t nCount
 ){
 	if((pAccum == NULL)||(pStep == NULL))
@@ -1345,7 +1345,7 @@ ERR_NEG:
 /* ************************************************************************** */
 /* Parse any string into a value */
 
-DasErrCode das_value_fromStr(
+das_errcode das_value_fromStr(
    const char* sStr, das_val_type vt, ubyte* pBuf, int nBufLen
 ){
 	if(sStr == NULL){
@@ -1430,7 +1430,7 @@ ERR_PARSE:
  * types that have far greater range then the actual data */
 
 /* Don't fail for certain semantics, but do offer extra support where detected */
-DasErrCode das_value_fmt(
+das_errcode das_value_fmt(
 	das_val_type vt, const char* sSemantic, int nFitTo, char* sBuf, size_t uBufLen
 ){
 	bool bBlob = (strcmp(sSemantic, DAS_SEM_BLOB) == 0);

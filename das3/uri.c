@@ -239,7 +239,7 @@ DasUriTplt* new_DasUriTplt(void)
 	return (DasUriTplt*) calloc(1, sizeof(DasUriTplt));
 }
 
-DasErrCode DasUriTplt_register(DasUriTplt* pThis, const DasUriSegDef* pDef)
+das_errcode DasUriTplt_register(DasUriTplt* pThis, const DasUriSegDef* pDef)
 {
 	/* Zero means a table written without DAS_URISEG_VER.  A later library adds
 	   a case for each older layout it can still read, converting the rows
@@ -383,7 +383,7 @@ static bool _lookup_coord(
 
 /* Build sBase and pLevels from pThis->pSegs.  On failure del_DasUriTplt
  * frees whatever was allocated. */
-static DasErrCode _decompose_levels(DasUriTplt* pThis)
+static das_errcode _decompose_levels(DasUriTplt* pThis)
 {
 	/* Literal templates need no level plan */
 	if(pThis->bLiteral){
@@ -542,7 +542,7 @@ static DasErrCode _decompose_levels(DasUriTplt* pThis)
 	return DAS_OKAY;
 }
 
-DasErrCode DasUriTplt_pattern(DasUriTplt* pThis, const char* sTemplate)
+das_errcode DasUriTplt_pattern(DasUriTplt* pThis, const char* sTemplate)
 {
 #ifdef _WIN32
 	/* On Windows, rewrite user-supplied '\' to '/' for file:// templates so
@@ -933,7 +933,7 @@ overflow:
 	return NULL;
 }
 
-DasErrCode init_DasUriIter(
+das_errcode init_DasUriIter(
 	DasUriIter* pThis, const DasUriTplt* pTplt,
 	int nRanges, const das_dim_range* pRanges
 ){
@@ -1722,7 +1722,7 @@ const char* DasUriIter_next(DasUriIter* pThis, char* sBuf, size_t uLen)
 	return NULL;
 }
 
-DasErrCode DasUriIter_err(const DasUriIter* pThis)
+das_errcode DasUriIter_err(const DasUriIter* pThis)
 {
 	return (pThis->nState > 0) ? pThis->nState : DAS_OKAY;
 }

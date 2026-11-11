@@ -279,7 +279,7 @@ int DasPkt_addPlane(DasPkt* pThis, DasPlane* pPlane)
 	return iPos;
 }
 
-DasErrCode DasPkt_copyPlanes(DasPkt* pThis, const DasPkt* pOther)
+das_errcode DasPkt_copyPlanes(DasPkt* pThis, const DasPkt* pOther)
 {
 	/* I can imagine merge scenarios, maybe this check should be removed... */
 	if(pThis->uPlanes > 0)
@@ -330,7 +330,7 @@ bool DasPkt_validate(DasPkt* pThis ) {
 /* ************************************************************************** */
 /* Convenience routines to cut client code bloat */
 
-DasErrCode DasPkt_setValue(
+das_errcode DasPkt_setValue(
 	DasPkt* pThis, size_t uPlane, size_t uItem, double val
 ){
 	DasPlane* pPlane = DasPkt_getPlane(pThis, uPlane);
@@ -342,7 +342,7 @@ DasErrCode DasPkt_setValue(
 	return DasPlane_setValue(pPlane, uItem, val);
 }
 
-DasErrCode DasPkt_setValues(DasPkt* pThis, size_t uPlane, const double* pVals)
+das_errcode DasPkt_setValues(DasPkt* pThis, size_t uPlane, const double* pVals)
 {
 	DasPlane* pPlane = DasPkt_getPlane(pThis, uPlane);
 	if(pPlane == NULL){ 
@@ -476,9 +476,9 @@ DasPlane* DasPkt_replaceAt(DasPkt* pThis, int iPlane, DasPlane* pNew)
 /* ************************************************************************* */
 /* Encode Descriptor to XML */
 
-DasErrCode DasPkt_encode(const DasPkt* pThis, DasBuf* pBuf)
+das_errcode DasPkt_encode(const DasPkt* pThis, DasBuf* pBuf)
 {
-	DasErrCode nRet = 18;
+	das_errcode nRet = 18;
 	
 	nRet = DasBuf_printf(pBuf, "<packet>\n");
 	if(nRet != 0) return nRet;
@@ -523,7 +523,7 @@ size_t DasPkt_recBytes(const DasPkt* pThis)
 	return uRecBytes;
 }
 
-DasErrCode DasPkt_decodeData(DasPkt* pThis, DasBuf* pBuf){
+das_errcode DasPkt_decodeData(DasPkt* pThis, DasBuf* pBuf){
 	
 	size_t uRecBytes = DasPkt_recBytes(pThis);
 	
@@ -544,8 +544,8 @@ DasErrCode DasPkt_decodeData(DasPkt* pThis, DasBuf* pBuf){
 }
 
 
-DasErrCode DasPkt_encodeData(const DasPkt* pThis, DasBuf* pBuf){
-	DasErrCode nRet = 0;
+das_errcode DasPkt_encodeData(const DasPkt* pThis, DasBuf* pBuf){
+	das_errcode nRet = 0;
 	DasPlane* pPlane = NULL;
 	bool bLast = false;
 	

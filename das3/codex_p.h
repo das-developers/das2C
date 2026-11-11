@@ -34,24 +34,24 @@ struct das_codex {
 
 	/* Introspection (const). */
 	das_val_type (*storage)(const struct das_codex* pThis);
-	DasErrCode   (*path)(const struct das_codex* pThis, char* sBuf, size_t uLen);
-	DasErrCode   (*mime)(const struct das_codex* pThis, char* sBuf, size_t uLen);
+	das_errcode   (*path)(const struct das_codex* pThis, char* sBuf, size_t uLen);
+	das_errcode   (*mime)(const struct das_codex* pThis, char* sBuf, size_t uLen);
 
 	/* Write the codec's own properties (e.g. image dims, colorspace) into a
 	   dense rank-2 ubyte array in DasDesc's packed layout; *pPropsOut = count. */
-	DasErrCode (*properties)(
+	das_errcode (*properties)(
 		const struct das_codex* pThis, DasAry* pOut, size_t* pPropsOut
 	);
 
 	/* One blob -> samples appended to pAry; *pAppended = items written. */
-	DasErrCode (*decode)(
+	das_errcode (*decode)(
 		struct das_codex* pThis, const ubyte* pBlob, size_t uLen,
 		DasAry* pAry, size_t* pAppended
 	);
 
 	/* One record (at pLoc) -> blob bytes appended to pBuf; *pAppended = bytes.
 	   Caller guarantees pLoc subsumes enough items to form one object. */
-	DasErrCode (*encode)(
+	das_errcode (*encode)(
 		struct das_codex* pThis, const DasAry* pItems, const ptrdiff_t* pLoc,
 		DasBuf* pBuf, size_t* pAppended
 	);

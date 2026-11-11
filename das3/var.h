@@ -891,7 +891,7 @@ DAS_API ptrdiff_t das_varlength_merge(ptrdiff_t nLeft, ptrdiff_t nRight);
  * @returns DAS_OKAY, or an error code after logging why not.  The rank is
  *          not checked against anything; that is the caller's job.
  */
-DAS_API DasErrCode das_shape_fromStr(
+DAS_API das_errcode das_shape_fromStr(
 	const char* sShape, int nMaxRank, bool bAllowFlags, const char* sWhere,
 	ptrdiff_t* pShape, int* pnRank
 );

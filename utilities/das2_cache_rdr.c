@@ -311,7 +311,7 @@ int cmpArrays(int nLen, int* lOne, int* lTwo){
 	return 0;
 }
 
-DasErrCode timeFilePath(
+das_errcode timeFilePath(
 	char* sPath, const char* sBinRoot, int nTmCmp, int* lTm, const char* sResToken
 ){
 	
@@ -488,9 +488,9 @@ char** generalBinFileList(
 /* ************************************************************************* */
 /* Writing output data */
 
-DasErrCode onStreamHdr(DasStream* pSdIn, void* vpHDat)
+das_errcode onStreamHdr(DasStream* pSdIn, void* vpHDat)
 {
-	DasErrCode nRet = 0;
+	das_errcode nRet = 0;
 	handler_data_t* pHDat = (handler_data_t*)vpHDat;
 	
 	char sRng[128] = {'\0'};
@@ -531,7 +531,7 @@ DasErrCode onStreamHdr(DasStream* pSdIn, void* vpHDat)
 	return nRet;
 }
 
-DasErrCode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, int nPktId, void* vpHDat)
+das_errcode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, int nPktId, void* vpHDat)
 {
 	handler_data_t* pHDat = (handler_data_t*)vpHDat;
 	DasStream* pSdOut = pHDat->pSdOut;
@@ -564,7 +564,7 @@ DasErrCode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, int nPktId, void* vpHDat)
 	return DasIO_writeDesc(pHDat->pOut, (DasDesc*)pPdOut, nPktId);	
 }
 
-DasErrCode onPktData(DasPkt* pPktIn, int nPktId, void* vpHDat){
+das_errcode onPktData(DasPkt* pPktIn, int nPktId, void* vpHDat){
 	handler_data_t* pHDat = (handler_data_t*)vpHDat;
 	
 	/* See if the packet is in bounds */
@@ -590,7 +590,7 @@ DasErrCode onPktData(DasPkt* pPktIn, int nPktId, void* vpHDat){
 	   hand the payload to DasIO_writePktBytes() untouched, as onRawData() in
 	   das3_from_das2.c does.  Only the first and last cache files can straddle
 	   BEG/END, packets of the files in between need no decoding at all. */
-	DasErrCode nRet = DAS_OKAY;
+	das_errcode nRet = DAS_OKAY;
 	DasBuf_reinit(pHDat->pBuf);
 	if((nRet = DasPkt_encodeData(pPktIn, pHDat->pBuf)) != DAS_OKAY) return nRet;
 
@@ -614,7 +614,7 @@ DasErrCode onPktData(DasPkt* pPktIn, int nPktId, void* vpHDat){
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #endif
-DasErrCode onIgnoreExcept(DasStream* pSd, const DasExcept* pExcept, void* vpHDat)
+das_errcode onIgnoreExcept(DasStream* pSd, const DasExcept* pExcept, void* vpHDat)
 {
 	return DAS_OKAY;
 }

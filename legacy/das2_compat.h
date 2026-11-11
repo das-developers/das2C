@@ -91,6 +91,9 @@
    DasAry_*, getpkt() and friends take a ubyte* unchanged. */
 typedef ubyte byte;
 
+/* The error code type is snake case now, as every integer type is */
+typedef das_errcode DasErrCode;
+
 /* ************************************************************************* */
 /* Text output, 2026-10 (issue #7)
  *
@@ -341,7 +344,7 @@ static inline bool _das2_compat_isValidId(const DasStream* pSd, int nPktId)
 	if((nPktId < 1)||(nPktId >= DAS3_MAX_PKTIDS)) return false;
 	return DasStream_getDesc(pSd, nPktId) != NULL;
 }
-static inline DasErrCode _das2_compat_freePktDesc(DasStream* pSd, int nPktId)
+static inline das_errcode _das2_compat_freePktDesc(DasStream* pSd, int nPktId)
 {
 	DasDesc* pDesc = _das2_compat_isValidId(pSd, nPktId) ? DasStream_getDesc(pSd, nPktId) : NULL;
 	if(pDesc == NULL)

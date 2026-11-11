@@ -246,7 +246,7 @@ static DasForm* _new_DasFormGeneric_empty(void)
 	return &(pThis->base);
 }
 
-static DasErrCode _DasFormGeneric_setParam(
+static das_errcode _DasFormGeneric_setParam(
 	DasForm* pBase, const char* sName, const char* sVal
 ){
 	DasFormGeneric* pThis = (DasFormGeneric*)pBase;
@@ -273,11 +273,11 @@ static DasErrCode _DasFormGeneric_setParam(
 	return DAS_OKAY;
 }
 
-static DasErrCode _DasFormGeneric_encode(const DasForm* pBase, DasBuf* pBuf)
+static das_errcode _DasFormGeneric_encode(const DasForm* pBase, DasBuf* pBuf)
 {
 	const DasFormGeneric* pThis = (const DasFormGeneric*)pBase;
 
-	DasErrCode nRet = DasBuf_printf(pBuf, "      <ops kind=\"%s\"", pThis->sKind);
+	das_errcode nRet = DasBuf_printf(pBuf, "      <ops kind=\"%s\"", pThis->sKind);
 	if(nRet != DAS_OKAY) return nRet;
 
 	for(int i = 0; i < pThis->nParams; ++i){
@@ -487,7 +487,7 @@ DasForm* new_DasForm_pairs(const char** psAttr)
 	return pThis;
 }
 
-DasErrCode DasForm_validate(
+das_errcode DasForm_validate(
 	DasForm* pThis, int nIntRank, const ptrdiff_t* pIntShape
 ){
 	if(pThis == NULL) return DAS_OKAY;
@@ -513,7 +513,7 @@ void _dasform_fmtOrder(
  * two component vector tells the reader it has a third.  uComps is what
  * validate() saw; 0 means the form was never validated, so there is no count
  * to trust and nothing is written. */
-DasErrCode _dasform_prnOrder(
+das_errcode _dasform_prnOrder(
 	DasBuf* pBuf, const ubyte* pOrder, ubyte uComps
 ){
 	if((pOrder == NULL)||(uComps < 1)) return DAS_OKAY;
@@ -526,7 +526,7 @@ DasErrCode _dasform_prnOrder(
 
 	if(bCanon) return DAS_OKAY;
 
-	DasErrCode nRet = DasBuf_puts(pBuf, " sysorder=\"");
+	das_errcode nRet = DasBuf_puts(pBuf, " sysorder=\"");
 	for(ubyte u = 0; (u < uComps)&&(nRet == DAS_OKAY); ++u)
 		nRet = DasBuf_printf(pBuf, "%s%hhu", (u > 0) ? ";" : "", aDir[u]);
 

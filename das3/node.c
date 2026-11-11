@@ -1131,7 +1131,7 @@ const char* DasNodeWalk_uri(const DasNodeWalk* pThis)
 	return pThis->aFrame[pThis->uFrames - 1].sUri;
 }
 
-DasErrCode DasNodeWalk_feed(
+das_errcode DasNodeWalk_feed(
 	DasNodeWalk* pThis, size_t uIdx, const char* pBytes, size_t uBytes,
 	const char* sFinalUrl
 ){

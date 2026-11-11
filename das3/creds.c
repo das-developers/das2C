@@ -1004,7 +1004,7 @@ void _DasCredMngr_authFailed(DasCredMngr* pThis, int16_t nCred, const char* sMsg
 /* ************************************************************************* */
 /* Stores */
 
-DasErrCode DasCredMngr_setFileStore(DasCredMngr* pThis, const char* sPath)
+das_errcode DasCredMngr_setFileStore(DasCredMngr* pThis, const char* sPath)
 {
 	if(pThis == NULL) return das_error(DASERR_CRED, "NULL credentials manager");
 

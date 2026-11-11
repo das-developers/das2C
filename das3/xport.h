@@ -227,7 +227,7 @@ DAS_API ptrdiff_t DasXport_write(DasXport* pThis, const void* pIn, size_t uLen);
  * @param pUser  The opaque pointer handed to DasXport_copyTo()
  * @returns DAS_OKAY to keep copying, anything else to stop
  */
-typedef DasErrCode (*das_progress_f)(int64_t nBytes, void* pUser);
+typedef das_errcode (*das_progress_f)(int64_t nBytes, void* pUser);
 
 /** Copy everything that remains in one transport to another
  *
@@ -253,7 +253,7 @@ typedef DasErrCode (*das_progress_f)(int64_t nBytes, void* pUser);
  *          failed, or whatever onProgress returned if it stopped the copy
  * @memberof DasXport
  */
-DAS_API DasErrCode DasXport_copyTo(
+DAS_API das_errcode DasXport_copyTo(
 	DasXport* pThis, DasXport* pDest, das_progress_f onProgress, void* pUser,
 	int64_t* pCopied
 );
@@ -268,7 +268,7 @@ DAS_API DasErrCode DasXport_copyTo(
  *          DasXport_error()
  * @memberof DasXport
  */
-DAS_API DasErrCode DasXport_close(DasXport* pThis);
+DAS_API das_errcode DasXport_close(DasXport* pThis);
 
 /** Get the reason the transport failed
  *

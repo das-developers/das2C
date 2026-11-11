@@ -37,14 +37,14 @@
    handling: separator emission, the das3 whitespace canonicalization, and the
    long-stringArray line wrap -- none of which the read-only TestV3Read sees. */
 
-DasErrCode onStream(DasStream* pSd, void* pUser){
+das_errcode onStream(DasStream* pSd, void* pUser){
 	DasIO* pOut = (DasIO*)pUser;
 	/* Re-emit in the same version we read (output defaults to das2): set
 	   both the wire version and the internal model. */
 	das_stream_ver nVer = DasStream_getVer(pSd);
 	if(nVer == STREAM_VER_UNK)
 		return das_error(DASERR_IO, "Unknown stream version");
-	DasErrCode nRet;
+	das_errcode nRet;
 	if((nRet = DasIO_setOutVer(pOut, nVer)) != DAS_OKAY) return nRet;
 	nRet = DasIO_setModel(
 		pOut, (nVer == STREAM_VER_3_0) ? STREAM_MODEL_V3 : STREAM_MODEL_V2
@@ -53,11 +53,11 @@ DasErrCode onStream(DasStream* pSd, void* pUser){
 	return DasIO_writeStreamDesc(pOut, pSd);
 }
 
-DasErrCode onDataset(DasDs* pDs, int iPktId, void* pUser){
+das_errcode onDataset(DasDs* pDs, int iPktId, void* pUser){
 	return DasIO_writeDesc((DasIO*)pUser, (DasDesc*)pDs, iPktId);
 }
 
-DasErrCode onData(DasDs* pDs, int iPktId, void* pUser){
+das_errcode onData(DasDs* pDs, int iPktId, void* pUser){
 	return DasIO_writeData((DasIO*)pUser, (DasDesc*)pDs, iPktId);
 }
 

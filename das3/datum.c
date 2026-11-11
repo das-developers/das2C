@@ -789,7 +789,7 @@ bool das_range_hasEnd(const das_range* pRng)
 
 /* One end of a time range from text: "" stays open, anything else must be
    a time.  A plain number would make a "time" range consumers ignore. */
-static DasErrCode _das_datum_utc_edge(das_datum* pDm, const char* sVal, const char* sWhich)
+static das_errcode _das_datum_utc_edge(das_datum* pDm, const char* sVal, const char* sWhich)
 {
 	if(!das_datum_fromStr(pDm, sVal))
 		return das_error(DASERR_DATUM,
@@ -802,10 +802,10 @@ static DasErrCode _das_datum_utc_edge(das_datum* pDm, const char* sVal, const ch
 		"das_range_fromUtc: %s '%s' is not a time", sWhich, sVal);
 }
 
-DasErrCode das_range_fromUtc(das_range* pRng, const char* sBeg, const char* sEnd)
+das_errcode das_range_fromUtc(das_range* pRng, const char* sBeg, const char* sEnd)
 {
 	das_range_init(pRng);
-	DasErrCode nRet = _das_datum_utc_edge(&pRng->dmBeg, sBeg, "begin");
+	das_errcode nRet = _das_datum_utc_edge(&pRng->dmBeg, sBeg, "begin");
 	if(nRet != DAS_OKAY) return nRet;
 	return _das_datum_utc_edge(&pRng->dmEnd, sEnd, "end");
 }
@@ -825,7 +825,7 @@ void das_range_fromInt(das_range* pRng, int64_t nBeg, int64_t nEnd)
 	das_datum_fromDbl(&pRng->dmEnd, (double)nEnd, UNIT_DIMENSIONLESS);
 }
 
-DasErrCode das_range_fromDatum(
+das_errcode das_range_fromDatum(
 	das_range* pRng, const das_datum* dmBeg, const das_datum* dmEnd
 ){
 	das_range_init(pRng);
@@ -852,7 +852,7 @@ DasErrCode das_range_fromDatum(
 /* ************************************************************************* */
 /* Ranges on a named dimension */
 
-DasErrCode das_dim_range_init(
+das_errcode das_dim_range_init(
 	das_dim_range* pThis, const char* sDim, const das_range* pRng
 ){
 	memset(pThis, 0, sizeof(das_dim_range));

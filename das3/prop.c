@@ -128,7 +128,7 @@ static size_t _collapseItems(char* dst, const char* src, char cSep)
 	return n;
 }
 
-DasErrCode dasprop_plan(
+das_errcode dasprop_plan(
 	das_propplan* pPlan, const char* sType, ubyte uType, const char* sName,
 	const char* sValue, char cSep, das_units units, int nStandard
 ){
@@ -366,7 +366,7 @@ void dasprop_write(const das_propplan* pPlan, ubyte* pBuf)
 	pWrite[pPlan->uValSz] = 0;
 }
 
-DasErrCode init_DasProp(
+das_errcode init_DasProp(
 	ubyte* pBuf, size_t uBufSz, const char* sType, ubyte uType, const char* sName,
 	const char* sValue, char cSep, das_units units, int nStandard
 ){
@@ -374,7 +374,7 @@ DasErrCode init_DasProp(
 		return das_error(DASERR_PROP, "Property buffer is too small, %zu bytes", uBufSz);
 
 	das_propplan plan;
-	DasErrCode nRet = dasprop_plan(
+	das_errcode nRet = dasprop_plan(
 		&plan, sType, uType, sName, sValue, cSep, units, nStandard
 	);
 	if(nRet != DAS_OKAY) return nRet;

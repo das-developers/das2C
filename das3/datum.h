@@ -517,7 +517,7 @@ DAS_API bool das_range_hasEnd(const das_range* pRng);
  *         if a non-empty string parses to something other than a time.
  * @memberof das_range
  */
-DAS_API DasErrCode das_range_fromUtc(
+DAS_API das_errcode das_range_fromUtc(
 	das_range* pRng, const char* sBeg, const char* sEnd
 );
 
@@ -566,7 +566,7 @@ DAS_API void das_range_fromInt(das_range* pRng, int64_t nBeg, int64_t nEnd);
  *         own its bytes.
  * @memberof das_range
  */
-DAS_API DasErrCode das_range_fromDatum(
+DAS_API das_errcode das_range_fromDatum(
 	das_range* pRng, const das_datum* dmBeg, const das_datum* dmEnd
 );
 
@@ -619,7 +619,7 @@ typedef struct das_dim_range_t {
  *
  * @memberof das_dim_range
  */
-DAS_API DasErrCode das_dim_range_init(
+DAS_API das_errcode das_dim_range_init(
 	das_dim_range* pThis, const char* sDim, const das_range* pRng
 );
 

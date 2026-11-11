@@ -104,7 +104,7 @@ static int _DasBuf_ensure(DasBuf* pThis, size_t uFree)
 }
 
 /* The "no room" error for writers, worded for the kind of buffer */
-static DasErrCode _DasBuf_fullErr(const DasBuf* pThis, size_t uWant)
+static das_errcode _DasBuf_fullErr(const DasBuf* pThis, size_t uWant)
 {
 	if(pThis->uMax != 0)
 		return das_error(DASERR_BUF, "Can't write %zu more bytes, the buffer would "
@@ -117,7 +117,7 @@ static DasErrCode _DasBuf_fullErr(const DasBuf* pThis, size_t uWant)
    initialize all the fields.  
    Note: pData is not written so that a const array can be wrapped "r". 
 */
-DasErrCode _init_DasBuf_wrap(DasBuf* pThis, void* pData, size_t uLen, const char* sMode)
+das_errcode _init_DasBuf_wrap(DasBuf* pThis, void* pData, size_t uLen, const char* sMode)
 {
 	if((sMode == NULL)||(sMode[1] != '\0')||((sMode[0] != 'r')&&(sMode[0] != 'w')))
 		return das_error(DASERR_BUF, "Buffer mode must be \"r\" or \"w\", not \"%s\"",
@@ -176,7 +176,7 @@ void DasBuf_reinit(DasBuf* pThis)
 	}
 }
 
-DasErrCode DasBuf_zero(DasBuf* pThis)
+das_errcode DasBuf_zero(DasBuf* pThis)
 {
 	if(pThis->pWrite == NULL)
 		return das_error(DASERR_BUF, "Attempted to zero a read only buffer");
@@ -206,7 +206,7 @@ size_t DasBuf_written(const DasBuf* pThis){
 	return pThis->pWrite - pThis->sBuf;
 }
 
-DasErrCode DasBuf_printf(DasBuf* pThis, const char* sFmt, ...)
+das_errcode DasBuf_printf(DasBuf* pThis, const char* sFmt, ...)
 {
 	if(pThis->pWrite == NULL) 
 		return das_error(DASERR_BUF, "Attempted write to a read only buffer");
@@ -251,7 +251,7 @@ DasErrCode DasBuf_printf(DasBuf* pThis, const char* sFmt, ...)
 	return DAS_OKAY;
 }
 
-DasErrCode DasBuf_write(DasBuf* pThis, const void* pData, size_t uLen)
+das_errcode DasBuf_write(DasBuf* pThis, const void* pData, size_t uLen)
 {
 	if(pThis->pWrite == NULL) 
 		return das_error(DASERR_BUF, "Attempted write to a read only buffer");
@@ -268,7 +268,7 @@ DasErrCode DasBuf_write(DasBuf* pThis, const void* pData, size_t uLen)
 }
 
 /* version of write for null-terminated strings */
-DasErrCode DasBuf_puts(DasBuf* pThis, const char* sStr){
+das_errcode DasBuf_puts(DasBuf* pThis, const char* sStr){
 	return DasBuf_write(pThis, sStr, strlen(sStr));
 }
 
@@ -294,7 +294,7 @@ ubyte* DasBuf_prepare(DasBuf* pThis, size_t uWant, size_t* pSpace)
 	return (ubyte*)pThis->pWrite;
 }
 
-DasErrCode DasBuf_commit(DasBuf* pThis, size_t uLen)
+das_errcode DasBuf_commit(DasBuf* pThis, size_t uLen)
 {
 	if(uLen == 0) return DAS_OKAY;
 	size_t uLeft = DasBuf_writeSpace(pThis);
@@ -313,10 +313,10 @@ DasErrCode DasBuf_commit(DasBuf* pThis, size_t uLen)
    TODO: make it wrap based on number of characters not bytes, utf8.h
          maybe useful here.
  */
-DasErrCode DasBuf_wrapWrite(
+das_errcode DasBuf_wrapWrite(
 	DasBuf* pThis, int nWidth, const char* sIndent, const char* sTxt
 ){
-	DasErrCode nRet;
+	das_errcode nRet;
 	size_t uTmp = 0;
 	if(sIndent) uTmp = strlen(sIndent);
 		
@@ -464,7 +464,7 @@ size_t DasBuf_readOffset(const DasBuf* pThis){
 	return pThis->pReadBeg - pThis->sBuf;
 }
 
-DasErrCode DasBuf_setReadOffset(DasBuf* pThis, size_t uPos)
+das_errcode DasBuf_setReadOffset(DasBuf* pThis, size_t uPos)
 {
 	if(pThis->pWrite == NULL){
 		if(uPos > pThis->uLen)
@@ -496,7 +496,7 @@ const ubyte* DasBuf_data(const DasBuf* pThis, size_t* pLen)
 	return (const ubyte*) pThis->pReadBeg;
 }
 
-DasErrCode DasBuf_consume(DasBuf* pThis, size_t uLen)
+das_errcode DasBuf_consume(DasBuf* pThis, size_t uLen)
 {
 	size_t uLeft = DasBuf_unread(pThis);
 	if(uLen > uLeft)

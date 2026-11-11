@@ -120,7 +120,7 @@ static int _timeWidth(const Context* p)
 /* Stream header: copy it through, but first decide if we'll even handle this
    stream's major version. */
 
-DasErrCode onStream(DasStream* pSdIn, void* pUser)
+das_errcode onStream(DasStream* pSdIn, void* pUser)
 {
 	Context* pCtx = (Context*)pUser;
 
@@ -148,7 +148,7 @@ DasErrCode onStream(DasStream* pSdIn, void* pUser)
 static const char RUN_TERM_MARKS[] = { '!', '$', '#', '@', '^', '~' };
 
 /* A var-count text codec needs run terminators to bound its runs in-band. */
-static DasErrCode _installRunTerms(DasDs* pDs, size_t iCodec, DasCodec* pCodec)
+static das_errcode _installRunTerms(DasDs* pDs, size_t iCodec, DasCodec* pCodec)
 {
 	if(DasDs_pktItems(pDs, iCodec) >= 0)
 		return DAS_OKAY;   /* fixed item count: no run terminator needed */
@@ -187,7 +187,7 @@ static DasErrCode _installRunTerms(DasDs* pDs, size_t iCodec, DasCodec* pCodec)
 /* Dataset header: copy the structure, then re-aim every binary codec at a
    UTF-8 text encoding. */
 
-DasErrCode onDataSet(DasDs* pDsIn, int iPktId, void* pUser)
+das_errcode onDataSet(DasDs* pDsIn, int iPktId, void* pUser)
 {
 	Context* pCtx = (Context*)pUser;
 
@@ -320,7 +320,7 @@ DasErrCode onDataSet(DasDs* pDsIn, int iPktId, void* pUser)
 /* ************************************************************************* */
 /* Convert pending epoch values, write the packet, reset the record buffers. */
 
-static DasErrCode writeAndClear(Context* pCtx, int iPktId, DasDs* pDsIn)
+static das_errcode writeAndClear(Context* pCtx, int iPktId, DasDs* pDsIn)
 {
 	DasDs* pDsOut = (DasDs*)DasDesc_getUser((DasDesc*)pDsIn);
 	DsWork* pWork = (DsWork*)DasDesc_getUser((DasDesc*)pDsOut);
@@ -371,7 +371,7 @@ static DasErrCode writeAndClear(Context* pCtx, int iPktId, DasDs* pDsIn)
 		}
 	}
 
-	DasErrCode nRet = DasIO_writeData(pCtx->pOut, (DasDesc*)pDsOut, iPktId);
+	das_errcode nRet = DasIO_writeData(pCtx->pOut, (DasDesc*)pDsOut, iPktId);
 	if(nRet != DAS_OKAY) return nRet;
 
 	/* Clears the shared + das_time arrays.  DasIO clears the input's
@@ -380,7 +380,7 @@ static DasErrCode writeAndClear(Context* pCtx, int iPktId, DasDs* pDsIn)
 	return DAS_OKAY;
 }
 
-DasErrCode onData(DasDs* pDsIn, int iPktId, void* pUser)
+das_errcode onData(DasDs* pDsIn, int iPktId, void* pUser)
 {
 	return writeAndClear((Context*)pUser, iPktId, pDsIn);
 }
@@ -388,7 +388,7 @@ DasErrCode onData(DasDs* pDsIn, int iPktId, void* pUser)
 /* ************************************************************************* */
 /* Out of band content */
 
-DasErrCode onComment(DasStream* pSd, const DasComment* pCmt, void* pUser)
+das_errcode onComment(DasStream* pSd, const DasComment* pCmt, void* pUser)
 {
 	Context* pCtx = (Context*)pUser;
 	if(!pCtx->bAnnotations) return DAS_OKAY;
@@ -399,7 +399,7 @@ DasErrCode onComment(DasStream* pSd, const DasComment* pCmt, void* pUser)
 /* Flush any datasets still holding data, then free the per-dataset scratch */
 
 /* Write what arrived, then pass on an exception if annotations are kept */
-DasErrCode onClose(DasStream* pSdIn, const DasExcept* pExcept, void* pUser)
+das_errcode onClose(DasStream* pSdIn, const DasExcept* pExcept, void* pUser)
 {
 	Context* pCtx = (Context*)pUser;
 
@@ -413,7 +413,7 @@ DasErrCode onClose(DasStream* pSdIn, const DasExcept* pExcept, void* pUser)
 
 		DasDs_shape(pDsIn, aShape);
 		if(aShape[0] > 0){
-			DasErrCode nRet = writeAndClear(pCtx, nPktId, pDsIn);
+			das_errcode nRet = writeAndClear(pCtx, nPktId, pDsIn);
 			if(nRet != DAS_OKAY) return nRet;
 		}
 

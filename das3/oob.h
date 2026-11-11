@@ -35,7 +35,7 @@
  * callback returns.  Copy what you keep.
  *
  * @code
- *   DasErrCode onComment(DasStream* pSd, const DasComment* pCmt, void* pUser)
+ *   das_errcode onComment(DasStream* pSd, const DasComment* pCmt, void* pUser)
  *   {
  *       if(strcmp(DasComment_get(pCmt, "type"), "taskProgress") == 0)
  *           updateBar(atoi(DasComment_get(pCmt, "value")));
@@ -215,7 +215,7 @@ DAS_API DasComment* new_DasComment(void);
  * @returns DAS_OKAY, or a positive error code for an unknown name
  * @memberof DasComment
  */
-DAS_API DasErrCode DasComment_set(
+DAS_API das_errcode DasComment_set(
 	DasComment* pThis, const char* sName, const char* sVal
 );
 

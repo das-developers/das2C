@@ -400,7 +400,7 @@ DAS_API das_val_type das_vt_merge(das_val_type vtLeft, int op, das_val_type vtRi
  * @returns DAS_OKAY if the conversion was successful, a positive error
  *        value if a range violation was triggered.
  */
-DAS_API DasErrCode das_value_binXform(
+DAS_API das_errcode das_value_binXform(
 	das_val_type vtIn,  const ubyte* pValIn,  const ubyte* pFillIn,
 	das_val_type vtOut,       ubyte* pValOut, const ubyte* pFillOut,
 	uint32_t uFlags
@@ -434,7 +434,7 @@ DAS_API DasErrCode das_value_binXform(
  *          formalism understands the calendar.
  * @memberof das_val_type
  */
-DAS_API DasErrCode das_value_binop(
+DAS_API das_errcode das_value_binop(
 	int nOp, das_val_type vtL, const ubyte* pL, das_val_type vtR,
 	const ubyte* pR, das_val_type vtOut, ubyte* pOut
 );
@@ -471,7 +471,7 @@ DAS_API DasErrCode das_value_binop(
  *          *pAccum is left unchanged.
  * @memberof das_val_type
  */
-DAS_API DasErrCode das_value_accum(
+DAS_API das_errcode das_value_accum(
 	das_val_type vt, ubyte* pAccum, const ubyte* pStep, ptrdiff_t nCount
 );
 
@@ -492,7 +492,7 @@ DAS_API DasErrCode das_value_accum(
  * @returns DAS_OKAY if a format string could be generated, a positive error
  *             value otherwise.
  */
-DAS_API DasErrCode das_value_fmt(
+DAS_API das_errcode das_value_fmt(
 	das_val_type vt, const char* sSemantic, int nFitTo, char* sBuf, size_t uBufLen
 );
 
@@ -502,7 +502,7 @@ DAS_API DasErrCode das_value_fmt(
  * 
  * @returns DAS_OKAY if parsing was successful, an error return code otherwise.
  */
-DAS_API DasErrCode das_value_fromStr(
+DAS_API das_errcode das_value_fromStr(
 	const char* sStr, das_val_type vt, ubyte* pBuf, int uBufLen
 );
 

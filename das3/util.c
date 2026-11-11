@@ -126,7 +126,7 @@ const das_limit* daslimit_getNext(const das_limit* pPrev)
 /* ************************************************************************** */
 /* Unavoidable global library structure initialization */
 
-DasErrCode das_init(
+das_errcode das_init(
 	const char* sProgName, das_errdis_e nErrDis, int nLevel,
 	const das_loghook* pHook
 ){
@@ -442,7 +442,7 @@ bool das_copyfile(const char* src, const char* dest)
 	return true;	
 }
 
-DasErrCode das_mkdirsto(const char* path)
+das_errcode das_mkdirsto(const char* path)
 {
 	/* Walk the set of items, make directories for everything upto the last */
 

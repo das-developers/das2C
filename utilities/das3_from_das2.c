@@ -292,14 +292,14 @@ static char* _substitute(const Context* pCtx, const char* sIn, size_t uIn, size_
 /* Metafile walking.  Every section rejects keys it does not know, the same
    policy the forms apply to <ops> attributes: a misspelling must not pass. */
 
-static DasErrCode _mfErr(dastoml_datum_t d, const char* sMsg, const char* sArg)
+static das_errcode _mfErr(dastoml_datum_t d, const char* sMsg, const char* sArg)
 {
 	if(sArg != NULL)
 		return das_error(PERR, "Metafile line %d: %s '%s'", d.lineno, sMsg, sArg);
 	return das_error(PERR, "Metafile line %d: %s", d.lineno, sMsg);
 }
 
-static DasErrCode _mfCheckKeys(dastoml_datum_t tab, const char* sSection, const char** psAllowed)
+static das_errcode _mfCheckKeys(dastoml_datum_t tab, const char* sSection, const char** psAllowed)
 {
 	for(int i = 0; i < tab.u.tab.size; ++i){
 		bool bOk = false;
@@ -316,7 +316,7 @@ static DasErrCode _mfCheckKeys(dastoml_datum_t tab, const char* sSection, const 
 
 /* Copy a string key into a fixed buffer.  A missing optional key leaves the
    buffer empty. */
-static DasErrCode _mfGetStr(
+static das_errcode _mfGetStr(
 	dastoml_datum_t tab, const char* sKey, bool bRequired, char* sDest, size_t uDest
 ){
 	dastoml_datum_t d = dastoml_get(tab, sKey);
@@ -333,7 +333,7 @@ static DasErrCode _mfGetStr(
 }
 
 /* An optional table valued key.  Returns DASTOML_UNKNOWN when absent. */
-static DasErrCode _mfGetTab(dastoml_datum_t tab, const char* sKey, dastoml_datum_t* pDest)
+static das_errcode _mfGetTab(dastoml_datum_t tab, const char* sKey, dastoml_datum_t* pDest)
 {
 	*pDest = dastoml_get(tab, sKey);
 	if((pDest->type != DASTOML_UNKNOWN)&&(pDest->type != DASTOML_TABLE))
@@ -341,10 +341,10 @@ static DasErrCode _mfGetTab(dastoml_datum_t tab, const char* sKey, dastoml_datum
 	return DAS_OKAY;
 }
 
-static DasErrCode _mfVar(MfVar* pVar, dastoml_datum_t tab)
+static das_errcode _mfVar(MfVar* pVar, dastoml_datum_t tab)
 {
 	static const char* psKeys[] = {"match", "role", "props", "ops", NULL};
-	DasErrCode nRet;
+	das_errcode nRet;
 	if((nRet = _mfCheckKeys(tab, "[[dataset.dim.var]]", psKeys)) != DAS_OKAY) return nRet;
 
 	dastoml_datum_t match = dastoml_get(tab, "match");
@@ -385,10 +385,10 @@ static DasErrCode _mfVar(MfVar* pVar, dastoml_datum_t tab)
 	return DAS_OKAY;
 }
 
-static DasErrCode _mfDim(MfDim* pDim, dastoml_datum_t tab)
+static das_errcode _mfDim(MfDim* pDim, dastoml_datum_t tab)
 {
 	static const char* psKeys[] = {"physDim", "name", "props", "var", NULL};
-	DasErrCode nRet;
+	das_errcode nRet;
 	if((nRet = _mfCheckKeys(tab, "[[dataset.dim]]", psKeys)) != DAS_OKAY) return nRet;
 	if((nRet = _mfGetStr(tab, "physDim", true, pDim->sPhysDim, DAS_MAX_ID_BUFSZ)) != DAS_OKAY) return nRet;
 	if((nRet = _mfGetStr(tab, "name", false, pDim->sName, DAS_MAX_ID_BUFSZ)) != DAS_OKAY) return nRet;
@@ -408,10 +408,10 @@ static DasErrCode _mfDim(MfDim* pDim, dastoml_datum_t tab)
 	return DAS_OKAY;
 }
 
-static DasErrCode _mfDataset(MfDs* pDs, dastoml_datum_t tab)
+static das_errcode _mfDataset(MfDs* pDs, dastoml_datum_t tab)
 {
 	static const char* psKeys[] = {"match", "name", "group", "props", "dim", NULL};
-	DasErrCode nRet;
+	das_errcode nRet;
 	pDs->lineno = tab.lineno;
 	if((nRet = _mfCheckKeys(tab, "[[dataset]]", psKeys)) != DAS_OKAY) return nRet;
 
@@ -444,7 +444,7 @@ static DasErrCode _mfDataset(MfDs* pDs, dastoml_datum_t tab)
 	return DAS_OKAY;
 }
 
-static DasErrCode _mfLoad(Context* pCtx)
+static das_errcode _mfLoad(Context* pCtx)
 {
 	size_t uLen = 0;
 	char* sRaw = _readFile(pCtx->sMetaFile, &uLen);
@@ -466,7 +466,7 @@ static DasErrCode _mfLoad(Context* pCtx)
 
 	dastoml_datum_t root = pMf->toml.toptab;
 	static const char* psKeys[] = {"props", "dataset", NULL};
-	DasErrCode nRet;
+	das_errcode nRet;
 	if((nRet = _mfCheckKeys(root, "the top level", psKeys)) != DAS_OKAY) return nRet;
 	if((nRet = _mfGetTab(root, "props", &(pMf->props))) != DAS_OKAY) return nRet;
 
@@ -494,7 +494,7 @@ static DasErrCode _mfLoad(Context* pCtx)
    a scalar is a single, a homogeneous array is a set, and a table carries
    units or a min/max pair. */
 
-static DasErrCode _tomlTimeStr(dastoml_datum_t d, char* sBuf, size_t uLen)
+static das_errcode _tomlTimeStr(dastoml_datum_t d, char* sBuf, size_t uLen)
 {
 	if((d.type == DASTOML_DATETIMETZ) && (d.u.ts.tz != 0))
 		return _mfErr(d, "only UTC (Z) datetimes are accepted", NULL);
@@ -507,7 +507,7 @@ static DasErrCode _tomlTimeStr(dastoml_datum_t d, char* sBuf, size_t uLen)
 }
 
 /* One scalar as text, with the item type it implies */
-static DasErrCode _tomlScalar(dastoml_datum_t d, char* sBuf, size_t uLen, ubyte* pType)
+static das_errcode _tomlScalar(dastoml_datum_t d, char* sBuf, size_t uLen, ubyte* pType)
 {
 	switch(d.type){
 	case DASTOML_STRING:  *pType = DASPROP_STRING; snprintf(sBuf, uLen, "%s", d.u.s); return DAS_OKAY;
@@ -524,7 +524,7 @@ static DasErrCode _tomlScalar(dastoml_datum_t d, char* sBuf, size_t uLen, ubyte*
 
 #define PROP_VAL_SZ 4096
 
-static DasErrCode _propFromArray(
+static das_errcode _propFromArray(
 	DasDesc* pDesc, const char* sName, dastoml_datum_t arr, das_units units
 ){
 	if(arr.u.arr.size < 1) return _mfErr(arr, "empty array for property", sName);
@@ -533,7 +533,7 @@ static DasErrCode _propFromArray(
 	char sItem[256];
 	ubyte uType = 0, uFirst = 0;
 	size_t uLen = 0;
-	DasErrCode nRet = DAS_OKAY;
+	das_errcode nRet = DAS_OKAY;
 	for(int i = 0; i < arr.u.arr.size; ++i){
 		if((nRet = _tomlScalar(arr.u.arr.elem[i], sItem, 256, &uType)) != DAS_OKAY) break;
 		if(i == 0) uFirst = uType;
@@ -553,10 +553,10 @@ static DasErrCode _propFromArray(
 	return nRet;
 }
 
-static DasErrCode _propFromTable(DasDesc* pDesc, const char* sName, dastoml_datum_t tab)
+static das_errcode _propFromTable(DasDesc* pDesc, const char* sName, dastoml_datum_t tab)
 {
 	static const char* psKeys[] = {"value", "min", "max", "units", NULL};
-	DasErrCode nRet;
+	das_errcode nRet;
 	if((nRet = _mfCheckKeys(tab, "a property table", psKeys)) != DAS_OKAY) return nRet;
 
 	das_units units = NULL;
@@ -592,10 +592,10 @@ static DasErrCode _propFromTable(DasDesc* pDesc, const char* sName, dastoml_datu
 	return DasDesc_flexSet(pDesc, NULL, uLo|DASPROP_RANGE, sName, sVal, 0, units, DASPROP_DAS3);
 }
 
-static DasErrCode _applyProps(DasDesc* pDesc, dastoml_datum_t tab)
+static das_errcode _applyProps(DasDesc* pDesc, dastoml_datum_t tab)
 {
 	if(tab.type != DASTOML_TABLE) return DAS_OKAY;
-	DasErrCode nRet = DAS_OKAY;
+	das_errcode nRet = DAS_OKAY;
 	for(int i = 0; (i < tab.u.tab.size) && (nRet == DAS_OKAY); ++i){
 		const char* sName = tab.u.tab.key[i];
 		dastoml_datum_t v = tab.u.tab.value[i];
@@ -624,7 +624,7 @@ static int _pktId(DasPkt* pPd)
 	return DasStream_getPktId((DasStream*)DasDesc_parent((DasDesc*)pPd), (DasDesc*)pPd);
 }
 
-static DasErrCode _resolveVar(MfVar* pVar, DasPkt* pPd, bool bLoud, bool* pFound)
+static das_errcode _resolveVar(MfVar* pVar, DasPkt* pPd, bool bLoud, bool* pFound)
 {
 	*pFound = true;
 	for(int i = 0; i < pVar->nComps; ++i){
@@ -642,7 +642,7 @@ static DasErrCode _resolveVar(MfVar* pVar, DasPkt* pPd, bool bLoud, bool* pFound
 	return DAS_OKAY;
 }
 
-static DasErrCode _selectSection(Metafile* pMf, DasPkt* pPd, MfDs** ppSec)
+static das_errcode _selectSection(Metafile* pMf, DasPkt* pPd, MfDs** ppSec)
 {
 	*ppSec = NULL;
 	int nPktId = _pktId(pPd);
@@ -654,7 +654,7 @@ static DasErrCode _selectSection(Metafile* pMf, DasPkt* pPd, MfDs** ppSec)
 		for(int d = 0; (d < pSec->nDims) && bAll; ++d){
 			for(int v = 0; (v < pSec->aDims[d].nVars) && bAll; ++v){
 				bool bFound;
-				DasErrCode nRet = _resolveVar(pSec->aDims[d].aVars + v, pPd, pSec->bHasId, &bFound);
+				das_errcode nRet = _resolveVar(pSec->aDims[d].aVars + v, pPd, pSec->bHasId, &bFound);
 				if(nRet != DAS_OKAY) return nRet;
 				bAll = bFound;
 			}
@@ -702,7 +702,7 @@ static DasDim* _dimForAry(DasDs* pDs, const DasAry* pAry)
 }
 
 /* Copy a dimension and its variables the way DasDs_copy() does, sharing arrays */
-static DasErrCode _copyDim(DasDs* pDsOut, DasDim* pDimIn)
+static das_errcode _copyDim(DasDs* pDsOut, DasDim* pDimIn)
 {
 	DasDim* pDimOut = DasDs_makeDim(pDsOut, DasDim_type(pDimIn), DasDim_dim(pDimIn), DasDim_name(pDimIn));
 	if(pDimOut == NULL) return PERR;
@@ -730,7 +730,7 @@ typedef struct comp_src {
 /* The byte promise, checked before anything is built: the group must be a
    run of adjacent single-item planes that share encoding, width, value type,
    units and fill, so the composite's packet entry describes the same bytes. */
-static DasErrCode _checkGroup(DasDs* pDsIn, DasPkt* pPd, MfVar* pVar, CompSrc* pSrc)
+static das_errcode _checkGroup(DasDs* pDsIn, DasPkt* pPd, MfVar* pVar, CompSrc* pSrc)
 {
 	char sId[DAS_MAX_ID_BUFSZ];
 	for(int i = 0; i < pVar->nComps; ++i){
@@ -790,7 +790,7 @@ static DasErrCode _checkGroup(DasDs* pDsIn, DasPkt* pPd, MfVar* pVar, CompSrc* p
 
 /* Make the composite: array, generator, form, variable, codec, all in the
    output dataset, and hang it on the given dimension. */
-static DasErrCode _addComposite(
+static das_errcode _addComposite(
 	DasDs* pDsOut, DasDim* pDimOut, MfVar* pVar, const CompSrc* pSrc, DasPkt* pPd
 ){
 	const DasAry* pAry0 = pSrc[0].pAry;
@@ -849,7 +849,7 @@ static DasErrCode _addComposite(
 	if(bLabels)
 		DasDesc_flexSet((DasDesc*)pVarOut, NULL, DASPROP_STRING|DASPROP_SET, "label", sLabels, ';', NULL, DASPROP_DAS3);
 
-	DasErrCode nRet = _applyProps((DasDesc*)pVarOut, pVar->props);
+	das_errcode nRet = _applyProps((DasDesc*)pVarOut, pVar->props);
 	if(nRet != DAS_OKAY){ dec_DasVar(pVarOut); return nRet; }
 
 	if(!DasDim_addVar(pDimOut, pVar->sRole, pVarOut)){
@@ -859,10 +859,10 @@ static DasErrCode _addComposite(
 	return DAS_OKAY;
 }
 
-static DasErrCode _buildFromSection(
+static das_errcode _buildFromSection(
 	DasPkt* pPd, DasDs* pDsIn, MfDs* pSec, DasDs** ppDsOut
 ){
-	DasErrCode nRet = DAS_OKAY;
+	das_errcode nRet = DAS_OKAY;
 	int nCodecs = (int)DasDs_numCodecs(pDsIn);
 
 	/* Which input codec slots each group claims, and what it needs from them */
@@ -959,22 +959,22 @@ static DasErrCode _buildFromSection(
 /* ************************************************************************* */
 /* Stream handlers */
 
-DasErrCode onStream(DasStream* pSdIn, void* pUser)
+das_errcode onStream(DasStream* pSdIn, void* pUser)
 {
 	Context* pCtx = (Context*)pUser;
 	pCtx->pSdOut = DasStream_copy(pSdIn);
 	if(pCtx->pSdOut == NULL) return PERR;
 	if(pCtx->pMf != NULL){
-		DasErrCode nRet = _applyProps((DasDesc*)pCtx->pSdOut, pCtx->pMf->props);
+		das_errcode nRet = _applyProps((DasDesc*)pCtx->pSdOut, pCtx->pMf->props);
 		if(nRet != DAS_OKAY) return nRet;
 	}
 	return DasIO_writeDesc(pCtx->pOut, (DasDesc*)pCtx->pSdOut, 0);
 }
 
-DasErrCode onPktDesc(DasStream* pSdIn, DasPkt* pPd, int nPktId, void* pUser)
+das_errcode onPktDesc(DasStream* pSdIn, DasPkt* pPd, int nPktId, void* pUser)
 {
 	Context* pCtx = (Context*)pUser;
-	DasErrCode nRet;
+	das_errcode nRet;
 
 	MfDs* pSec = NULL;
 	if(pCtx->pMf != NULL){
@@ -1016,7 +1016,7 @@ DasErrCode onPktDesc(DasStream* pSdIn, DasPkt* pPd, int nPktId, void* pUser)
 
 /* The reader is about to drop the old definition of this ID; the output
    stream must vacate the slot too, or the redefinition can't be registered. */
-DasErrCode onPktRedef(DasStream* pSdIn, DasPkt* pPdIn, int nPktId, void* pUser)
+das_errcode onPktRedef(DasStream* pSdIn, DasPkt* pPdIn, int nPktId, void* pUser)
 {
 	Context* pCtx = (Context*)pUser;
 	DasDesc* pOld = DasStream_getDesc(pCtx->pSdOut, nPktId);
@@ -1026,7 +1026,7 @@ DasErrCode onPktRedef(DasStream* pSdIn, DasPkt* pPdIn, int nPktId, void* pUser)
 
 /* The byte promise in one place: the payload goes out as it came in, only
    the tag changes to the output stream's form (das3, see main). */
-DasErrCode onRawData(DasDesc* pDesc, const DasBuf* pBuf, int nPktId, void* pUser)
+das_errcode onRawData(DasDesc* pDesc, const DasBuf* pBuf, int nPktId, void* pUser)
 {
 	/* The das2 model keeps DasPkt objects, see main */
 	Context* pCtx = (Context*)pUser;
@@ -1036,13 +1036,13 @@ DasErrCode onRawData(DasDesc* pDesc, const DasBuf* pBuf, int nPktId, void* pUser
 	return DasIO_writePktBytes(pCtx->pOut, nPktId, pData, uLen);
 }
 
-DasErrCode onComment(DasStream* pSd, const DasComment* pCmt, void* pUser)
+das_errcode onComment(DasStream* pSd, const DasComment* pCmt, void* pUser)
 {
 	return DasIO_comment(((Context*)pUser)->pOut, pCmt);
 }
 
 /* Packets pass straight through, so there is nothing to flush */
-DasErrCode onClose(DasStream* pSdIn, const DasExcept* pExcept, void* pUser)
+das_errcode onClose(DasStream* pSdIn, const DasExcept* pExcept, void* pUser)
 {
 	DasIO* pOut = ((Context*)pUser)->pOut;
 	if(pExcept == NULL){

@@ -78,7 +78,7 @@ static DasForm* _new_DasFormLin_empty(void)
 
 DasForm* new_DasFormLin(void){ return _new_DasFormLin_empty(); }
 
-static DasErrCode _DasFormLin_setParam(
+static das_errcode _DasFormLin_setParam(
 	DasForm* pBase, const char* sName, const char* sVal
 ){
 	return das_error(DASERR_FORM,
@@ -89,7 +89,7 @@ static DasErrCode _DasFormLin_setParam(
 /* Deliberately silent.  Absence IS the wire form of linear, so emitting
    anything here would make every plain scalar in every stream carry a
    redundant element. */
-static DasErrCode _DasFormLin_encode(
+static das_errcode _DasFormLin_encode(
 	const DasForm* pBase, DasBuf* pBuf
 ){
 	return DAS_OKAY;

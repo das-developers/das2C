@@ -1024,7 +1024,7 @@ int main(int argc, char** argv)
 	das_init(argv[0], DASERR_DIS_RET,
 	         (g_nUserLevel > DASLOG_ERROR) ? DASLOG_ERROR : g_nUserLevel, &hook);
 
-	DasErrCode nDasStatus = DAS_OKAY;   /* for DAS_EXIT */
+	das_errcode nDasStatus = DAS_OKAY;   /* for DAS_EXIT */
 
 	DasUriTplt* pTplt = new_DasUriTplt();
 	DasUriTplt_register(pTplt, das_time_uridef());

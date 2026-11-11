@@ -87,7 +87,7 @@ typedef struct das_codec DasCodec;
  *
  * @memberof DasCodec
  */
-DAS_API DasErrCode DasCodec_setIdxTerms(DasCodec* pThis, ubyte nLevels, const char* sLevels);
+DAS_API das_errcode DasCodec_setIdxTerms(DasCodec* pThis, ubyte nLevels, const char* sLevels);
 
 /** Is this codec setup and a reader from external buffers or a write to them ?
  *

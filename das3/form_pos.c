@@ -164,7 +164,7 @@ static const char* _DasFormPos_compSym(const DasForm* pThis, int iComp)
 
 /* --- parameters ---------------------------------------------------------- */
 
-static DasErrCode _DasFormPos_setOrder(DasFormPos* pThis, const char* sOrd)
+static das_errcode _DasFormPos_setOrder(DasFormPos* pThis, const char* sOrd)
 {
 	ubyte aDir[3] = {0, 1, 2};
 	int iComp = 0;
@@ -178,7 +178,7 @@ static DasErrCode _DasFormPos_setOrder(DasFormPos* pThis, const char* sOrd)
 	return DAS_OKAY;
 }
 
-static DasErrCode _DasFormPos_setParam(
+static das_errcode _DasFormPos_setParam(
 	DasForm* pBase, const char* sName, const char* sVal
 ){
 	DasFormPos* pThis = (DasFormPos*)pBase;
@@ -220,7 +220,7 @@ static DasErrCode _DasFormPos_setParam(
 	);
 }
 
-static DasErrCode _DasFormPos_encode(
+static das_errcode _DasFormPos_encode(
 	const DasForm* pBase, DasBuf* pBuf
 ){
 	const DasFormPos* pThis = (const DasFormPos*)pBase;
@@ -229,7 +229,7 @@ static DasErrCode _DasFormPos_encode(
 		return das_error(DASERR_FORM,
 			"A position can not be written without its body");
 
-	DasErrCode nRet = DasBuf_printf(pBuf,
+	das_errcode nRet = DasBuf_printf(pBuf,
 		"      <ops kind=\"position\" body=\"%s\"", pThis->sBody);
 	if(nRet != DAS_OKAY) return nRet;
 
@@ -275,7 +275,7 @@ static bool _pos_frameNe(const char* sMine, const char* sTheirs)
    before this slot existed a stream could declare <ops kind="position"
    system="detic"/> and get an originless position that failed much later, at
    write time, or not at all. */
-static DasErrCode _DasFormPos_validate(
+static das_errcode _DasFormPos_validate(
 	DasForm* pBase, int nIntRank, const ptrdiff_t* pIntShape
 ){
 	DasFormPos* pThis = (DasFormPos*)pBase;

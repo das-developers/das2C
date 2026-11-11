@@ -127,7 +127,7 @@ DAS_API das_stream_ver DasStream_getVer(const DasStream* pThis);
  * @returns DAS_OKAY, or an error code for any other version
  * @memberof DasStream
  */
-DAS_API DasErrCode DasStream_setVer(DasStream* pThis, das_stream_ver nVer);
+DAS_API das_errcode DasStream_setVer(DasStream* pThis, das_stream_ver nVer);
 
 /** The stream container type as an enumeration, parsed from the type attribute.
  *
@@ -143,7 +143,7 @@ DAS_API das_stream_type DasStream_getType(const DasStream* pThis);
  * @returns DAS_OKAY, or an error code for STREAM_TYPE_UNK
  * @memberof DasStream
  */
-DAS_API DasErrCode DasStream_setType(DasStream* pThis, das_stream_type nType);
+DAS_API das_errcode DasStream_setType(DasStream* pThis, das_stream_type nType);
 
 
 /** Print a short description of the stream to a string buffer.
@@ -298,7 +298,7 @@ DAS_API DasDesc* DasStream_nextDesc(
  *
  * @memberof DasStream
  */
-DAS_API DasErrCode DasStream_addDesc(DasStream* pThis, DasDesc* pDesc, int nPktId);
+DAS_API das_errcode DasStream_addDesc(DasStream* pThis, DasDesc* pDesc, int nPktId);
 
 
 /** Indicates if the xtags on the stream are monotonic, in which
@@ -456,7 +456,7 @@ DAS_API bool DasStream_isDescActive(const DasStream* pThis, const DasDesc* pDesc
  * @returns DAS_OKAY, or an error code if pDesc is not attached to this stream
  * @memberof DasStream
  */
-DAS_API DasErrCode DasStream_freeDesc(DasStream* pThis, DasDesc* pDesc);
+DAS_API das_errcode DasStream_freeDesc(DasStream* pThis, DasDesc* pDesc);
 
 
 /** Up-convert a das2 packet descriptor into a new dataset object.

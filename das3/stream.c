@@ -73,7 +73,7 @@ das_stream_type DasStream_getType(const DasStream* pThis)
 }
 
 /* Only what DasStream_getVer() recognizes, so a set always reads back */
-DasErrCode DasStream_setVer(DasStream* pThis, das_stream_ver nVer)
+das_errcode DasStream_setVer(DasStream* pThis, das_stream_ver nVer)
 {
 	if((nVer != STREAM_VER_2_2)&&(nVer != STREAM_VER_3_0))
 		return das_error(DASERR_STREAM, "Stream version %s can't be set, "
@@ -85,7 +85,7 @@ DasErrCode DasStream_setVer(DasStream* pThis, das_stream_ver nVer)
 	return DAS_OKAY;
 }
 
-DasErrCode DasStream_setType(DasStream* pThis, das_stream_type nType)
+das_errcode DasStream_setType(DasStream* pThis, das_stream_type nType)
 {
 	if((nType != STREAM_TYPE_BASIC)&&(nType != STREAM_TYPE_DOC))
 		return das_error(DASERR_STREAM, "Unknown stream type %d", (int)nType);
@@ -260,7 +260,7 @@ static ptrdiff_t _DasStream_active(const DasStream* pThis, int nPktId)
 /* Make room for one more entry, moving to the heap when the inline arrays
    fill.  Rare, so plain malloc and copy rather than two reallocs that could
    fail separately. */
-static DasErrCode _DasStream_reserve(DasStream* pThis)
+static das_errcode _DasStream_reserve(DasStream* pThis)
 {
 	size_t uCap = (pThis->uDescCap == 0) ? DASSTREAM_LOC_DESC : pThis->uDescCap;
 	if(pThis->uDesc < uCap) return DAS_OKAY;
@@ -284,9 +284,9 @@ static DasErrCode _DasStream_reserve(DasStream* pThis)
 }
 
 /* Attach with no checks, callers have done them */
-static DasErrCode _DasStream_append(DasStream* pThis, DasDesc* pDesc, int nPktId)
+static das_errcode _DasStream_append(DasStream* pThis, DasDesc* pDesc, int nPktId)
 {
-	DasErrCode nRet = _DasStream_reserve(pThis);
+	das_errcode nRet = _DasStream_reserve(pThis);
 	if(nRet != DAS_OKAY) return nRet;
 
 	_DasStream_descs(pThis)[pThis->uDesc] = pDesc;
@@ -358,7 +358,7 @@ DasPkt* DasStream_createPkt(
 	return pPkt;
 }
 
-DasErrCode DasStream_freeDesc(DasStream* pThis, DasDesc* pDesc)
+das_errcode DasStream_freeDesc(DasStream* pThis, DasDesc* pDesc)
 {
 	ptrdiff_t iIdx = _DasStream_index(pThis, pDesc);
 	if(iIdx < 0)
@@ -443,7 +443,7 @@ DasDesc* DasStream_nextDesc(
 	return NULL;
 }
 
-DasErrCode DasStream_cacheShapes(DasStream* pThis, bool bCache)
+das_errcode DasStream_cacheShapes(DasStream* pThis, bool bCache)
 {
 	if(pThis == NULL) return DAS_OKAY;
 
@@ -535,7 +535,7 @@ DasPkt* DasStream_clonePktById(
 	return pOut;
 }
 
-DasErrCode DasStream_addDesc(DasStream* pThis, DasDesc* pDesc, int nPktId)
+das_errcode DasStream_addDesc(DasStream* pThis, DasDesc* pDesc, int nPktId)
 {
 	/* Only accept either das2 packet descriptors or das3 datasets */
 	if((pDesc->type != DASDESC_PKT)&&(pDesc->type != DASDESC_DS))
@@ -602,7 +602,7 @@ DasErrCode DasStream_addDesc(DasStream* pThis, DasDesc* pDesc, int nPktId)
 	return _DasStream_append(pThis, pDesc, nPktId);
 }
 
-DasErrCode DasStream_rmDesc(DasStream* pThis, DasDesc* pDesc)
+das_errcode DasStream_rmDesc(DasStream* pThis, DasDesc* pDesc)
 {
 	if((pDesc->type != DASDESC_PKT)&&(pDesc->type != DASDESC_DS))
 		return das_error(DASERR_STREAM, "Unexpected packet desciptor type");
@@ -639,7 +639,7 @@ DasErrCode DasStream_rmDesc(DasStream* pThis, DasDesc* pDesc)
 
 typedef struct parse_stream_desc{
 	DasStream* pStream;
-	DasErrCode nRet;
+	das_errcode nRet;
 	bool bInProp;
 	bool bV3Okay;
 	char sPropUnits[_UNIT_BUF_SZ+1];
@@ -806,7 +806,7 @@ DasStream* new_DasStream_str(DasBuf* pBuf, das_stream_model nModel)
 	DasStream* pThis = new_DasStream();
 
 	/*DasStream* pDesc;
-	DasErrCode nRet;
+	das_errcode nRet;
 	char sPropUnits[_UNIT_BUF_SZ+1];
 	char sPropName[_NAME_BUF_SZ+1];
 	char sPropType[_TYPE_BUF_SZ+1];
@@ -858,13 +858,13 @@ DasStream* new_DasStream_str(DasBuf* pBuf, das_stream_model nModel)
 	return pThis;
 }
 
-DasErrCode DasStream_encode2(DasStream* pThis, DasBuf* pBuf)
+das_errcode DasStream_encode2(DasStream* pThis, DasBuf* pBuf)
 {
 
 	/* Save off the encoding request format */
 	strncpy(pThis->version, das_stream_ver_toStr(STREAM_VER_2_2), STREAMDESC_VER_SZ-1);
 
-	DasErrCode nRet = 0;
+	das_errcode nRet = 0;
 	if((nRet = DasBuf_printf(pBuf, "<stream ")) !=0 ) return nRet;
 	
 	if(pThis->compression[0] != '\0') {
@@ -880,7 +880,7 @@ DasErrCode DasStream_encode2(DasStream* pThis, DasBuf* pBuf)
 	return DasBuf_printf(pBuf, "</stream>\n");
 }
 
-DasErrCode DasStream_encode3(DasStream* pThis, DasBuf* pBuf)
+das_errcode DasStream_encode3(DasStream* pThis, DasBuf* pBuf)
 {
 	/* Save off the encoding request format.  A stream read from a das2
 	   header has no type token, go with the non-namespace stream */
@@ -888,7 +888,7 @@ DasErrCode DasStream_encode3(DasStream* pThis, DasBuf* pBuf)
 	if(pThis->type[0] == '\0')
 		strncpy(pThis->type, das_stream_type_toStr(STREAM_TYPE_BASIC), STREAMDESC_TYPE_SZ-1);
 
-	DasErrCode nRet = 0;
+	das_errcode nRet = 0;
 	if((nRet = DasBuf_printf(pBuf, "\n<stream ")) !=0 ) return nRet;
 	
 	if((pThis->compression[0] != '\0') && (strcmp(pThis->compression, "none") != 0)){

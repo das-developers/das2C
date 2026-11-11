@@ -78,7 +78,7 @@ typedef struct das_xport_vt {
 	const char* sKind;    /* "file", "cmd", "mem", "sock", "ssl", "inflate" ... */
 	ptrdiff_t  (*read) (DasXport* pBase, void* pOut, size_t uLen);
 	ptrdiff_t  (*write)(DasXport* pBase, const void* pIn, size_t uLen);
-	DasErrCode (*close)(DasXport* pBase);
+	das_errcode (*close)(DasXport* pBase);
 	void       (*free) (DasXport* pBase);
 } das_xport_vt;
 
@@ -113,7 +113,7 @@ ptrdiff_t _DasXport_readFull(DasXport* pThis, void* pOut, size_t uLen);
 /* Return bytes to the front of the input, the next read gets them first.
  * They need not be the bytes last read, a filter may hand back what it
  * took from its inner transport.  DASERR_IO for a write-only transport. */
-DasErrCode _DasXport_unread(DasXport* pThis, const void* pIn, size_t uLen);
+das_errcode _DasXport_unread(DasXport* pThis, const void* pIn, size_t uLen);
 
 /* Read uLen bytes straight into a DasBuf, via DasBuf_prepare() and
  * DasBuf_commit().  Loops like _DasXport_readFull(), since DasIO reads

@@ -101,7 +101,7 @@ size_t dasprop_memsz(const char* sName, const char* sValue);
  *
  * @memberof DasProp
  */
-DasErrCode init_DasProp(
+das_errcode init_DasProp(
    ubyte* pBuf, size_t uBufSz, const char* sType, ubyte uType, const char* sName,
    const char* sValue, char cSep, das_units units, int nStandard
 );
@@ -124,7 +124,7 @@ typedef struct das_propplan {
 
 /* Run the checks of init_DasProp() and fill in pPlan, writes nothing else.
    Arguments are as for init_DasProp(), less the buffer. */
-DasErrCode dasprop_plan(
+das_errcode dasprop_plan(
 	das_propplan* pPlan, const char* sType, ubyte uType, const char* sName,
 	const char* sValue, char cSep, das_units units, int nStandard
 );

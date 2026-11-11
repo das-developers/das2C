@@ -70,8 +70,8 @@ extern "C" {
  * ------------------------------------------------------------------------- */
 
 /* Note: That sMime may have hints, a la: "image/png; gamma=2.2; interlace=adam7" */
-/* DAS_API DasErrCode  das_codex_reg(const char* sMime, const char* sFile); */
-/* DAS_API DasErrCode  das_codices_ready(void); */
+/* DAS_API das_errcode  das_codex_reg(const char* sMime, const char* sFile); */
+/* DAS_API das_errcode  das_codices_ready(void); */
 /* DAS_API void        das_codices_unload(void); */
 
 /** @addtogroup codec
@@ -137,11 +137,11 @@ DAS_API das_val_type DasCodex_storage(const DasCodex* pThis);
 
 /** Write this instance's plugin .so file path into a buffer, for diagnostics.
  * @memberof DasCodex */
-DAS_API DasErrCode DasCodex_path(const DasCodex* pThis, char* sBuf, size_t uLen);
+DAS_API das_errcode DasCodex_path(const DasCodex* pThis, char* sBuf, size_t uLen);
 
 /** Write this instance's mime/content-type into a buffer, e.g. for re-emit.
  * @memberof DasCodex */
-DAS_API DasErrCode DasCodex_mime(const DasCodex* pThis, char* sBuf, size_t uLen);
+DAS_API das_errcode DasCodex_mime(const DasCodex* pThis, char* sBuf, size_t uLen);
 
 /** Write the codec's own properties (image dims, colorspace, ...) into a
  * dense rank-2 ubyte array in DasDesc's packed layout
@@ -150,7 +150,7 @@ DAS_API DasErrCode DasCodex_mime(const DasCodex* pThis, char* sBuf, size_t uLen)
  * @param pOut receives the properties
  * @param pPropsOut receives the number of properties written
  * @memberof DasCodex */
-DAS_API DasErrCode DasCodex_properties(
+DAS_API das_errcode DasCodex_properties(
 	const DasCodex* pThis, DasAry* pOut, size_t* pPropsOut
 );
 
@@ -162,7 +162,7 @@ DAS_API DasErrCode DasCodex_properties(
  * @param pAry receives the decoded samples
  * @param pAppended receives the number of items written
  * @memberof DasCodex */
-DAS_API DasErrCode DasCodex_decode(
+DAS_API das_errcode DasCodex_decode(
 	DasCodex* pThis, const ubyte* pBlob, size_t uLen, DasAry* pAry,
 	size_t* pAppended
 );
@@ -177,7 +177,7 @@ DAS_API DasErrCode DasCodex_decode(
  * @param pBuf receives the blob bytes
  * @param pAppended receives the number of bytes appended to pBuf
  * @memberof DasCodex */
-DAS_API DasErrCode DasCodex_encode(
+DAS_API das_errcode DasCodex_encode(
 	DasCodex* pThis, const DasAry* pItems, const ptrdiff_t* pLoc,
 	DasBuf* pBuf, size_t* pAppended
 );

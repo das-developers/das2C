@@ -232,7 +232,7 @@ const char* DasFormRot_to(const DasForm* pThis)
 /* Slots drawn from [0-8], one entry per element and each element once.  The
    count is not checked here: which count is right depends on system=, and
    that may not have arrived yet.  validate() settles it. */
-static DasErrCode _DasFormRot_setOrder(DasFormRot* pThis, const char* sOrd)
+static das_errcode _DasFormRot_setOrder(DasFormRot* pThis, const char* sOrd)
 {
 	ubyte aOrder[ROT_MATRIX];
 	bool  aSeen[ROT_MATRIX] = {false};
@@ -269,7 +269,7 @@ static DasErrCode _DasFormRot_setOrder(DasFormRot* pThis, const char* sOrd)
 	return DAS_OKAY;
 }
 
-static DasErrCode _DasFormRot_setParam(
+static das_errcode _DasFormRot_setParam(
 	DasForm* pBase, const char* sName, const char* sVal
 ){
 	DasFormRot* pThis = (DasFormRot*)pBase;
@@ -299,7 +299,7 @@ static DasErrCode _DasFormRot_setParam(
 	return DAS_OKAY;
 }
 
-static DasErrCode _DasFormRot_encode(
+static das_errcode _DasFormRot_encode(
 	const DasForm* pBase, DasBuf* pBuf
 ){
 	const DasFormRot* pThis = (const DasFormRot*)pBase;
@@ -309,7 +309,7 @@ static DasErrCode _DasFormRot_encode(
 			"A rotation can not be written without both of its frames"
 		);
 
-	DasErrCode nRet = DasBuf_printf(pBuf,
+	das_errcode nRet = DasBuf_printf(pBuf,
 		"      <ops kind=\"rotation\" from=\"%s\" to=\"%s\"",
 		_rot_frameName(pThis->sFrom), _rot_frameName(pThis->sTo)
 	);
@@ -334,7 +334,7 @@ static DasErrCode _DasFormRot_encode(
    already said which.  All that is left is to hold the declared shape up
    against the declared system, which is why this cannot live in the factory:
    the form is built before the variable that carries the extents. */
-static DasErrCode _DasFormRot_validate(
+static das_errcode _DasFormRot_validate(
 	DasForm* pBase, int nIntRank, const ptrdiff_t* pIntShape
 ){
 	const DasFormRot* pThis = (const DasFormRot*)pBase;

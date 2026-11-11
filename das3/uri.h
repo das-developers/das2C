@@ -277,7 +277,7 @@ typedef struct das_uri_tplt_t DasUriTplt;
  * caller passes to each DasUriIter_next() call.
  *
  * nState is DURI_ITER_RUNNING until the iteration ends, DURI_ITER_DONE when
- * it ran to completion, or a positive DasErrCode when it stopped on a
+ * it ran to completion, or a positive das_errcode when it stopped on a
  * problem.  A zeroed DasUriIter reads as done.
  */
 typedef struct das_uri_iter_t {
@@ -335,7 +335,7 @@ DAS_API DasUriTplt* new_DasUriTplt(void);
  *
  * @memberof DasUriTplt
  */
-DAS_API DasErrCode DasUriTplt_register(DasUriTplt* pThis, const DasUriSegDef* pDef);
+DAS_API das_errcode DasUriTplt_register(DasUriTplt* pThis, const DasUriSegDef* pDef);
 
 
 /** Parse a template string using the registered coordinate definitions.
@@ -352,7 +352,7 @@ DAS_API DasErrCode DasUriTplt_register(DasUriTplt* pThis, const DasUriSegDef* pD
  *
  * @memberof DasUriTplt
  */
-DAS_API DasErrCode DasUriTplt_pattern(DasUriTplt* pThis, const char* sTemplate);
+DAS_API das_errcode DasUriTplt_pattern(DasUriTplt* pThis, const char* sTemplate);
 
 
 /** Free a template and all deep-copied coordinate definitions.
@@ -401,7 +401,7 @@ DAS_API char* DasUriTplt_toStr(const DasUriTplt* pThis, char* sBuf, size_t uLen)
  *
  * @memberof DasUriIter
  */
-DAS_API DasErrCode init_DasUriIter(
+DAS_API das_errcode init_DasUriIter(
 	DasUriIter* pThis, const DasUriTplt* pTplt,
 	int nRanges, const das_dim_range* pRanges
 );
@@ -468,7 +468,7 @@ DAS_API const char* DasUriIter_next(DasUriIter* pThis, char* sBuf, size_t uLen);
  *
  * @memberof DasUriIter
  */
-DAS_API DasErrCode DasUriIter_err(const DasUriIter* pThis);
+DAS_API das_errcode DasUriIter_err(const DasUriIter* pThis);
 
 
 /** Free a heap-allocated iterator.

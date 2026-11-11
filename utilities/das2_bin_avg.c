@@ -56,7 +56,7 @@ double binSize = 0.0;   /* Set from the command line */
 double bin0min= -1e31;  /* Place holder value with be replaced with starting
                            X coordinate the first output bin */
 
-DasErrCode sendData(DasIO* pOut, DasStream* pSd, int iPktId)
+das_errcode sendData(DasIO* pOut, DasStream* pSd, int iPktId)
 {
 	DasPkt*   pPkt = DasStream_getPkt(pSd, iPktId);
 	DasPlane* pPlane = NULL;
@@ -90,7 +90,7 @@ DasErrCode sendData(DasIO* pOut, DasStream* pSd, int iPktId)
 	return DasIO_writeData(pOut, (DasDesc*)pPkt, iPktId);
 }
 
-DasErrCode onStreamHdr( DasStream* sd, void* ud) {
+das_errcode onStreamHdr( DasStream* sd, void* ud) {
     DasIO* pOut = (DasIO*)ud;
 	 int i;
 	 
@@ -103,7 +103,7 @@ DasErrCode onStreamHdr( DasStream* sd, void* ud) {
    return DasIO_writeStreamDesc(pOut, g_pOutSd);
 }
 
-DasErrCode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, int nPktId, void* vpOut)
+das_errcode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, int nPktId, void* vpOut)
 {
 	DasIO* pOut = (DasIO*)vpOut;	
 
@@ -136,9 +136,9 @@ DasErrCode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, int nPktId, void* vpOut)
 	return DasIO_writeDesc(pOut, (DasDesc*)pPdOut, nPktId);
 }
 
-DasErrCode onPktData(DasPkt* pPdIn, int packetId, void* vpOut) {
+das_errcode onPktData(DasPkt* pPdIn, int packetId, void* vpOut) {
    DasIO* pOut = (DasIO*)vpOut;
-	DasErrCode nRet = 0;
+	das_errcode nRet = 0;
 	
 	int iPlane, i;
 	double xTag;
@@ -180,7 +180,7 @@ DasErrCode onPktData(DasPkt* pPdIn, int packetId, void* vpOut) {
 }
 
 /* Flush the partial bins, then pass on an exception if the input ended on one */
-DasErrCode onClose( DasStream* pSdIn, const DasExcept* pExcept, void* vpOut ) {
+das_errcode onClose( DasStream* pSdIn, const DasExcept* pExcept, void* vpOut ) {
    DasIO* pOut = (DasIO*)vpOut;
 	
 	int i;

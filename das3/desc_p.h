@@ -114,13 +114,13 @@ void DasDesc_freeProps(DasDesc* pThis);
  * @return 0 if the operation succeeded, a non-zero return code otherwise.
  * @memberof DasDesc
  */
-DasErrCode DasDesc_encode2(
+das_errcode DasDesc_encode2(
 	DasDesc* pThis, DasBuf* pBuf, const char* sIndent
 );
 
 /** Encode a generic set of properties to a buffer, in das3 format */
 
-DasErrCode DasDesc_encode3(
+das_errcode DasDesc_encode3(
    DasDesc* pThis, DasBuf* pBuf, const char* sIndent
 );
 
@@ -130,7 +130,7 @@ DasErrCode DasDesc_encode3(
  * <p> children ride bare.
  * @memberof DasDesc
  */
-DasErrCode DasDesc_encode3Bare(
+das_errcode DasDesc_encode3Bare(
    DasDesc* pThis, DasBuf* pBuf, const char* sIndent
 );
 

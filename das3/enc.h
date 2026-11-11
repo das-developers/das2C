@@ -300,7 +300,7 @@ DAS_API char* DasEnc_toStr(const DasEnc* pThis, char* sType, size_t uLen);
  * @returns 0 on success, a positive error value on an error.
  * @memberof DasEnc
  */
-DAS_API DasErrCode DasEnc_write(DasEnc* pThis, DasBuf* pBuf, double value,
+DAS_API das_errcode DasEnc_write(DasEnc* pThis, DasBuf* pBuf, double value,
                        das_units units);
 
 
@@ -323,7 +323,7 @@ DAS_API DasErrCode DasEnc_write(DasEnc* pThis, DasBuf* pBuf, double value,
  * @returns 0 on success or a positive error code if there is a problem.
  * @memberof DasEnc
  */
-DAS_API DasErrCode DasEnc_read(
+DAS_API das_errcode DasEnc_read(
 	const DasEnc* pThis, DasBuf* pBuf, das_units units, double* pOut
 );
 

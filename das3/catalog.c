@@ -666,7 +666,7 @@ static bool _DasCat_frozen(const DasCat* pThis)
 	return true;
 }
 
-DasErrCode DasCat_setPrefix(DasCat* pThis, const char* sUri)
+das_errcode DasCat_setPrefix(DasCat* pThis, const char* sUri)
 {
 	if(_DasCat_frozen(pThis)) return DASERR_CAT;
 	if(pThis->bSeed){
@@ -719,7 +719,7 @@ static int _DasCat_mountFor(const DasCat* pThis, const char* sUri)
 }
 
 /* Add to the mount list, the URI already checked */
-static DasErrCode _DasCat_addMount(DasCat* pThis, const char* sUrl, const char* sUri)
+static das_errcode _DasCat_addMount(DasCat* pThis, const char* sUrl, const char* sUri)
 {
 	struct das_cat_mount* a = (struct das_cat_mount*)realloc(
 		pThis->aMounts, (pThis->uMounts + 1) * sizeof(struct das_cat_mount)
@@ -751,7 +751,7 @@ static bool _dascat_locationOk(const char* sUrl, const char* sUri, bool bUriNeed
 	return true;
 }
 
-DasErrCode DasCat_setSeed(DasCat* pThis, const char* sUrl, const char* sUri)
+das_errcode DasCat_setSeed(DasCat* pThis, const char* sUrl, const char* sUri)
 {
 	if(_DasCat_frozen(pThis)) return DASERR_CAT;
 	if(pThis->bSeed){
@@ -769,7 +769,7 @@ DasErrCode DasCat_setSeed(DasCat* pThis, const char* sUrl, const char* sUri)
 
 const char* DasCat_seedUrl(const DasCat* pThis){ return pThis->sSeedUrl; }
 
-DasErrCode DasCat_mount(DasCat* pThis, const char* sUrl, const char* sUri)
+das_errcode DasCat_mount(DasCat* pThis, const char* sUrl, const char* sUri)
 {
 	if(_DasCat_frozen(pThis)) return DASERR_CAT;
 	if(!_dascat_locationOk(sUrl, sUri, true)) return DASERR_CAT;

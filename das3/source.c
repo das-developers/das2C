@@ -1037,7 +1037,7 @@ bool DasSrcCtrl_range(const DasSrcCtrl* pThis, const char** psLo, const char** p
 	return true;
 }
 
-DasErrCode DasSrcCtrl_check(const DasSrcCtrl* pThis, const char* sVal, char* sWhy, size_t uWhy)
+das_errcode DasSrcCtrl_check(const DasSrcCtrl* pThis, const char* sVal, char* sWhy, size_t uWhy)
 {
 	if(sVal == NULL) sVal = "";
 	if(sWhy && uWhy) sWhy[0] = '\0';
@@ -1300,7 +1300,7 @@ static bool _dassrc_rangeEntry(
 	return true;
 }
 
-DasErrCode DasSrc_check(const DasSrc* pThis, DasReq* pReq, size_t* puBad)
+das_errcode DasSrc_check(const DasSrc* pThis, DasReq* pReq, size_t* puBad)
 {
 	if(puBad) *puBad = 0;
 	if(!_DasSrc_stampMatches(pThis, pReq)){

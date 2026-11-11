@@ -135,7 +135,7 @@ bool right_shift(lin_ary_s* pAry, ptrdiff_t idx, size_t space)
 
 /*****************************************************************************/
 
-DasErrCode onStreamHdr(DasStream* pSdIn, void* vpOut)
+das_errcode onStreamHdr(DasStream* pSdIn, void* vpOut)
 {	
 	DasIO* pOut = (DasIO*)vpOut;
 	
@@ -175,7 +175,7 @@ DasErrCode onStreamHdr(DasStream* pSdIn, void* vpOut)
 /*****************************************************************************/
 /* Setup new output structures */
 
-DasErrCode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, int nPktId, void* vpOut)
+das_errcode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, int nPktId, void* vpOut)
 {
 	DasStream* pSdOut = (DasStream*)DasDesc_getUser((DasDesc*)pSdIn);
 	/* The output stream's user pointer carries the next packet ID by value */
@@ -268,7 +268,7 @@ DasErrCode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, int nPktId, void* vpOut)
 /* ************************************************************************* */
 /* Binary search and store */
 
-DasErrCode onPktData(DasPkt* pPdIn, int nPktId, void* vpOut)
+das_errcode onPktData(DasPkt* pPdIn, int nPktId, void* vpOut)
 {
 	DasPlane* pPlaneIn = NULL;
 	DasPkt* pPktOut = NULL;
@@ -336,7 +336,7 @@ DasErrCode onPktData(DasPkt* pPdIn, int nPktId, void* vpOut)
 /* ************************************************************************* */
 /* Pass on comments and exceptions */
 
-DasErrCode onComment(DasStream* pSd, const DasComment* pCmt, void* vpOut)
+das_errcode onComment(DasStream* pSd, const DasComment* pCmt, void* vpOut)
 {
 	DasIO* pOut = (DasIO*)vpOut;
 	return DasIO_comment(pOut, pCmt);
@@ -345,9 +345,9 @@ DasErrCode onComment(DasStream* pSd, const DasComment* pCmt, void* vpOut)
 /* ************************************************************************* */
 /* Writing out packet data */
 
-DasErrCode writeHisto(DasIO* pOut, DasPkt* pPktOut, int nOutId)
+das_errcode writeHisto(DasIO* pOut, DasPkt* pPktOut, int nOutId)
 {	
-	DasErrCode nRet = DAS_OKAY;
+	das_errcode nRet = DAS_OKAY;
 	DasPlane* pXOut = DasPkt_getXPlane(pPktOut);
 	lin_ary_s* pValAry = (lin_ary_s*) DasDesc_getUser((DasDesc*)pXOut);
 	DasPlane* pPlOut = NULL;
@@ -417,12 +417,12 @@ DasErrCode writeHisto(DasIO* pOut, DasPkt* pPktOut, int nOutId)
 /* ************************************************************************* */
 /* Emit early because the same packet ID is about to mean something else */
 
-DasErrCode emitAndFreePkts(DasStream* pSdIn, DasPkt* pPdIn, int nPktId, void* vpOut)
+das_errcode emitAndFreePkts(DasStream* pSdIn, DasPkt* pPdIn, int nPktId, void* vpOut)
 {
 	DasIO* pOut = (DasIO*)vpOut;
 	DasStream* pSdOut = (DasStream*)DasDesc_getUser((DasDesc*)pSdIn);
 
-	DasErrCode nRet = DAS_OKAY;
+	das_errcode nRet = DAS_OKAY;
 	size_t uPlanes = DasPkt_getNPlanes(pPdIn);
 	DasPkt* pPktOut = NULL;
 	DasPlane* pPlaneIn = NULL;
@@ -446,10 +446,10 @@ DasErrCode emitAndFreePkts(DasStream* pSdIn, DasPkt* pPdIn, int nPktId, void* vp
 /* Emit everything remaining */
 
 /* Flush the histograms, then pass on an exception if the input ended on one */
-DasErrCode onClose(DasStream* pSdIn, const DasExcept* pExcept, void* vpOut)
+das_errcode onClose(DasStream* pSdIn, const DasExcept* pExcept, void* vpOut)
 {
 	DasPkt* pPktIn = NULL;
-	DasErrCode nRet = DAS_OKAY;
+	das_errcode nRet = DAS_OKAY;
 	for(int i = 1; (pSdIn != NULL)&&(i < DAS2_MAX_PKTIDS); ++i){
 		pPktIn = DasStream_getPkt(pSdIn, i);
 		if(pPktIn == NULL) continue;

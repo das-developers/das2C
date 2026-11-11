@@ -52,30 +52,30 @@ das_val_type DasCodex_storage(const DasCodex* pThis)
 	return pThis->storage(pThis);
 }
 
-DasErrCode DasCodex_path(const DasCodex* pThis, char* sBuf, size_t uLen)
+das_errcode DasCodex_path(const DasCodex* pThis, char* sBuf, size_t uLen)
 {
 	return pThis->path(pThis, sBuf, uLen);
 }
 
-DasErrCode DasCodex_mime(const DasCodex* pThis, char* sBuf, size_t uLen)
+das_errcode DasCodex_mime(const DasCodex* pThis, char* sBuf, size_t uLen)
 {
 	return pThis->mime(pThis, sBuf, uLen);
 }
 
-DasErrCode DasCodex_properties(
+das_errcode DasCodex_properties(
 	const DasCodex* pThis, DasAry* pOut, size_t* pPropsOut
 ){
 	return pThis->properties(pThis, pOut, pPropsOut);
 }
 
-DasErrCode DasCodex_decode(
+das_errcode DasCodex_decode(
 	DasCodex* pThis, const ubyte* pBlob, size_t uLen, DasAry* pAry,
 	size_t* pAppended
 ){
 	return pThis->decode(pThis, pBlob, uLen, pAry, pAppended);
 }
 
-DasErrCode DasCodex_encode(
+das_errcode DasCodex_encode(
 	DasCodex* pThis, const DasAry* pItems, const ptrdiff_t* pLoc,
 	DasBuf* pBuf, size_t* pAppended
 ){

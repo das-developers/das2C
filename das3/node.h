@@ -470,7 +470,7 @@ DAS_API const char* DasNodeWalk_uri(const DasNodeWalk* pThis);
  *        changed, when the walk was not waiting or uIdx is out of range.
  * @memberof DasNodeWalk
  */
-DAS_API DasErrCode DasNodeWalk_feed(
+DAS_API das_errcode DasNodeWalk_feed(
 	DasNodeWalk* pThis, size_t uIdx, const char* pBytes, size_t uBytes,
 	const char* sFinalUrl
 );

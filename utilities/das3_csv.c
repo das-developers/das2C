@@ -230,7 +230,7 @@ void _writeProps(DasDesc* pDesc, int nPktId, const char* sItem)
 
 /* Stream Start ************************************************************* */
 
-DasErrCode onStream(DasStream* pSd, void* pUser)
+das_errcode onStream(DasStream* pSd, void* pUser)
 {
 	if(g_bPropOut && g_bHeaders)
 		_writeProps((DasDesc*)pSd, 0, "global");
@@ -272,7 +272,7 @@ static bool _isColumn(const DasDs* pDs, const DasVar* pVar)
    column, the sum, in place of its two parts.  The stream stays the faithful
    record of how the axis was made; a CSV reader wants the axis.  The dimension
    owns the new variable and frees it with the dataset. */
-static DasErrCode _addCenter(DasDim* pDim)
+static das_errcode _addCenter(DasDim* pDim)
 {
 	if(!g_bCenter) return DAS_OKAY;
 	if(DasDim_getVar(pDim, DASVAR_CENTER) != NULL) return DAS_OKAY;
@@ -298,7 +298,7 @@ static DasErrCode _addCenter(DasDim* pDim)
 	return DAS_OKAY;
 }
 
-static DasErrCode _gatherCols(DasDs* pDs, CsvCols* pCols)
+static das_errcode _gatherCols(DasDs* pDs, CsvCols* pCols)
 {
 	pCols->nVars = 0;
 	das_dim_type_e aDt[2] = {DASDIM_COORD, DASDIM_DATA};
@@ -308,7 +308,7 @@ static DasErrCode _gatherCols(DasDs* pDs, CsvCols* pCols)
 		for(size_t u = 0; u < uDims; ++u){
 			DasDim* pDim = DasDs_getDimByIdx(pDs, u, aDt[c]);
 
-			DasErrCode nRet = _addCenter(pDim);
+			das_errcode nRet = _addCenter(pDim);
 			if(nRet != DAS_OKAY) return nRet;
 
 			const DasVar* pCenter = DasDim_getVar(pDim, DASVAR_CENTER);
@@ -374,7 +374,7 @@ static int _numCols(const DasVar* pVar)
 
 /* One header row.  Every row has the same column count as the value rows
    because all of them are laid out from the same column list. */
-static DasErrCode _prnHdrRow(const CsvCols* pCols, int nOutput)
+static das_errcode _prnHdrRow(const CsvCols* pCols, int nOutput)
 {
 	char aLbl[DASCSV_MAX_COMP][DASCSV_LBL_SZ];
 	char* psLbl[DASCSV_MAX_COMP];
@@ -464,7 +464,7 @@ static const char* _csv_datumStr(
    base64 cell: the alphabet holds no delimiter or quote, so an image or a raw
    blob stays a legal field, and it is the encoding das3 text streams already
    use for the same bytes. */
-static DasErrCode _prnCells(das_datum* pDm, int nSigDig)
+static das_errcode _prnCells(das_datum* pDm, int nSigDig)
 {
 	char sBuf[128] = {'\0'};
 	const char* sVal = NULL;
@@ -518,7 +518,7 @@ static DasErrCode _prnCells(das_datum* pDm, int nSigDig)
 static ubyte* g_pWork = NULL;
 static size_t g_uWork = 0;
 
-static DasErrCode _getAt(const DasVar* pVar, ptrdiff_t* pLoc, das_datum* pOut)
+static das_errcode _getAt(const DasVar* pVar, ptrdiff_t* pLoc, das_datum* pOut)
 {
 	das_byte_seq work = { g_pWork, g_uWork };
 	int nRet = DasVar_get(pVar, pLoc, work, pOut);
@@ -539,7 +539,7 @@ static DasErrCode _getAt(const DasVar* pVar, ptrdiff_t* pLoc, das_datum* pOut)
 
 /* DataSet Start ************************************************************* */
 
-DasErrCode onDataSet(DasDs* pDs, int iPktId, void* pUser)
+das_errcode onDataSet(DasDs* pDs, int iPktId, void* pUser)
 {
 	// Maybe emit properties
 	if(g_bPropOut && g_bHeaders){
@@ -573,7 +573,7 @@ DasErrCode onDataSet(DasDs* pDs, int iPktId, void* pUser)
 	if(!g_bHeaders)
 		return DAS_OKAY;
 
-	DasErrCode nRet = DAS_OKAY;
+	das_errcode nRet = DAS_OKAY;
 	int aRows[3] = {PRN_VARID, PRN_UNITS, PRN_LABEL};
 	for(int r = 0; r < 3; ++r){
 		if(g_bIds) printf("%d%s", iPktId, g_sSep);
@@ -585,7 +585,7 @@ DasErrCode onDataSet(DasDs* pDs, int iPktId, void* pUser)
 
 /* Dataset update ************************************************************ */
 
-DasErrCode onData(DasDs* pDs, int iPktId, void* pUser)
+das_errcode onData(DasDs* pDs, int iPktId, void* pUser)
 {
 	/* Walk every location the buffered records cover, print a row for each,
 	   then let the record varying storage go */
@@ -595,7 +595,7 @@ DasErrCode onData(DasDs* pDs, int iPktId, void* pUser)
 
 	das_datum dm;
 	DasDsIter iter;
-	DasErrCode nRet = DAS_OKAY;
+	das_errcode nRet = DAS_OKAY;
 
 	for(init_DasDsIter(&iter, pDs); !iter.done; DasDsIter_next(&iter)){
 		if(g_bIds) printf("%d%s", iPktId, g_sSep);
@@ -622,7 +622,7 @@ DasErrCode onData(DasDs* pDs, int iPktId, void* pUser)
 /* Exceptions *************************************************************** */
 
 /* ************************************************************************* */
-DasErrCode onClose(DasStream* pSd, const DasExcept* pExcept, void* pUser)
+das_errcode onClose(DasStream* pSd, const DasExcept* pExcept, void* pUser)
 {
 	/* Can't do much with an exception here but report it */
 	if(pExcept != NULL)

@@ -56,7 +56,7 @@ extern "C" {
  * @param pUser The das_stream_proc::pUser pointer, may be NULL.
  * @see das_stream_proc
  */
-typedef DasErrCode (*das_stream_desc_f)(DasStream* pSd, void* pUser);
+typedef das_errcode (*das_stream_desc_f)(DasStream* pSd, void* pUser);
 
 /** Definition of the callback function invoked when a packet header is
  * encountered in the input.
@@ -66,7 +66,7 @@ typedef DasErrCode (*das_stream_desc_f)(DasStream* pSd, void* pUser);
  * @param pUser The das_stream_proc::pUser pointer, may be NULL.
  * @see das_stream_proc
  */
-typedef DasErrCode (*das_pkt_desc_f)(
+typedef das_errcode (*das_pkt_desc_f)(
 	DasStream* pSd, DasPkt* pPd, int nPktId, void* pUser
 );
 
@@ -93,7 +93,7 @@ typedef DasErrCode (*das_pkt_desc_f)(
  *
  * @see das_stream_proc
  */
-typedef DasErrCode (*das_pkt_redef_f)(
+typedef das_errcode (*das_pkt_redef_f)(
 	DasStream* pSd, DasPkt* pPd, int nPktId, void* pUser
 );
 
@@ -109,7 +109,7 @@ typedef DasErrCode (*das_pkt_redef_f)(
  * @param pUser The das_stream_proc::pUser pointer, may be NULL.
  * @see das_stream_proc
  */
-typedef DasErrCode (*das_pkt_data_f)(DasPkt* pPd, int nPktId, void* pUser);
+typedef das_errcode (*das_pkt_data_f)(DasPkt* pPd, int nPktId, void* pUser);
 
 
 /** Callback function invoked when a dataset header is encountered
@@ -130,7 +130,7 @@ typedef DasErrCode (*das_pkt_data_f)(DasPkt* pPd, int nPktId, void* pUser);
  * @param pUser The das_stream_proc::pUser pointer, may be NULL
  * @see das_stream_proc
  */
-typedef DasErrCode (*das_ds_desc_f)(DasDs* pDs, int nPktId, void* pUser);
+typedef das_errcode (*das_ds_desc_f)(DasDs* pDs, int nPktId, void* pUser);
 
 /** Callback function invoked when new data packets for a dataset are
  * encountered on the stream.
@@ -152,7 +152,7 @@ typedef DasErrCode (*das_ds_desc_f)(DasDs* pDs, int nPktId, void* pUser);
  * @param pUser The das_stream_proc::pUser pointer, may be NULL
  * @see das_stream_proc
  */
-typedef DasErrCode (*das_ds_data_f)(DasDs* pDs, int nPktId, void* pUser);
+typedef das_errcode (*das_ds_data_f)(DasDs* pDs, int nPktId, void* pUser);
 
 /** Callback function invoked with the undecoded bytes of a data packet.
  *
@@ -174,7 +174,7 @@ typedef DasErrCode (*das_ds_data_f)(DasDs* pDs, int nPktId, void* pUser);
  * @param pUser The das_stream_proc::pUser pointer, may be NULL
  * @see das_stream_proc
  */
-typedef DasErrCode (*das_raw_data_f)(
+typedef das_errcode (*das_raw_data_f)(
 	DasDesc* pDesc, const DasBuf* pBuf, int nPktId, void* pUser
 );
 
@@ -190,7 +190,7 @@ typedef DasErrCode (*das_raw_data_f)(
  * Here's an example of a filter preforming packet flush cleanup before
  * passing on an execption:
  * @code
- *   DasErrCode onClose(DasStream* pSd, const DasExcept* pExcept, void* pUser)
+ *   das_errcode onClose(DasStream* pSd, const DasExcept* pExcept, void* pUser)
  *   {
  *       flushBins(pUser);
  *       if(pExcept == NULL) return DAS_OKAY;
@@ -211,7 +211,7 @@ typedef DasErrCode (*das_raw_data_f)(
  * @param pUser The das_stream_proc::pUser pointer, may be NULL.
  * @see das_stream_proc
  */
-typedef DasErrCode (*das_close_f)(
+typedef das_errcode (*das_close_f)(
 	DasStream* pSd, const DasExcept* pExcept, void* pUser
 );
 
@@ -226,7 +226,7 @@ typedef DasErrCode (*das_close_f)(
  * @param pUser The das_stream_proc::pUser pointer, may be NULL.
  * @see das_stream_proc
  */
-typedef DasErrCode (*das_comment_f)(
+typedef das_errcode (*das_comment_f)(
 	DasStream* pSd, const DasComment* pCmt, void* pUser
 );
 
@@ -350,7 +350,7 @@ typedef struct das_stream_proc_t {
  * @returns DAS_OKAY, or an error if uVersion is unknown to this library,
  *        in which case pThis is not touched.
  */
-DAS_API DasErrCode das_stream_proc_init_ver(
+DAS_API das_errcode das_stream_proc_init_ver(
 	das_stream_proc* pThis, void* pUser, size_t uVersion
 );
 
@@ -460,7 +460,7 @@ DAS_API DasIO* new_DasIO(const char* sProg, DasXport* pX, const char* mode);
  * @returns DAS_OKAY if successful or an error code if not.
  * @memberof DasIO
  */
-DAS_API DasErrCode DasIO_setModel(DasIO* pThis, das_stream_model nModel);
+DAS_API das_errcode DasIO_setModel(DasIO* pThis, das_stream_model nModel);
 
 /** Get the in-memory data model, see DasIO_setModel()
  * @memberof DasIO
@@ -478,7 +478,7 @@ DAS_API das_stream_model DasIO_getModel(const DasIO* pThis);
  *          a writer whose header has already been sent.
  * @memberof DasIO
  */
-DAS_API DasErrCode DasIO_setOutVer(DasIO* pThis, das_stream_ver nVer);
+DAS_API das_errcode DasIO_setOutVer(DasIO* pThis, das_stream_ver nVer);
 
 /** Get the stream version a writer will emit, see DasIO_setOutVer()
  *
@@ -598,7 +598,7 @@ DAS_API DasIO* new_DasIO_feed(const char* sProg, const char* mode);
  *
  * @memberof DasIO
  */
-DAS_API DasErrCode DasIO_feed(DasIO* pThis, const ubyte* pData, size_t uLen);
+DAS_API das_errcode DasIO_feed(DasIO* pThis, const ubyte* pData, size_t uLen);
 
 /** Signal end-of-input to a feed-mode DasIO
  *
@@ -616,7 +616,7 @@ DAS_API DasErrCode DasIO_feed(DasIO* pThis, const ubyte* pData, size_t uLen);
  *
  * @memberof DasIO
  */
-DAS_API DasErrCode DasIO_feedEnd(DasIO* pThis);
+DAS_API das_errcode DasIO_feedEnd(DasIO* pThis);
 
 /** Free resources associated with a DasIO structure
  * Typically you don't need to do this as heap memory is free'ed when the
@@ -769,7 +769,7 @@ DAS_API DasStream* new_DasStream_path(const char* sProg, const char* sFile);
  * @returns 0 on success a positive integer error code other wise.
  * @memberof DasIO
  */
-DAS_API DasErrCode DasIO_writeStreamDesc(DasIO* pThis, DasStream* pSd);
+DAS_API das_errcode DasIO_writeStreamDesc(DasIO* pThis, DasStream* pSd);
 
 /** Serialize a top-level descriptor to an destination
  * 
@@ -794,7 +794,7 @@ DAS_API DasErrCode DasIO_writeStreamDesc(DasIO* pThis, DasStream* pSd);
  * 
  * @memberof DasIO
  */
-DAS_API DasErrCode DasIO_writeDesc(DasIO* pThis, DasDesc* pDesc, int iPktId);
+DAS_API das_errcode DasIO_writeDesc(DasIO* pThis, DasDesc* pDesc, int iPktId);
 
 /** Send all packet data associated with a descriptor
  * 
@@ -810,7 +810,7 @@ DAS_API DasErrCode DasIO_writeDesc(DasIO* pThis, DasDesc* pDesc, int iPktId);
  * 
  * @memberof DasIO
  */
-DAS_API DasErrCode DasIO_writeData(DasIO* pThis, DasDesc* pDesc, int iPktId);
+DAS_API das_errcode DasIO_writeData(DasIO* pThis, DasDesc* pDesc, int iPktId);
 
 /** Write one data packet whose payload is already encoded.
  *
@@ -829,7 +829,7 @@ DAS_API DasErrCode DasIO_writeData(DasIO* pThis, DasDesc* pDesc, int iPktId);
  *
  * @memberof DasIO
  */
-DAS_API DasErrCode DasIO_writePktBytes(
+DAS_API das_errcode DasIO_writePktBytes(
 	DasIO* pThis, int iPktId, const ubyte* pData, size_t uLen
 );
 
@@ -863,7 +863,7 @@ DAS_API DasErrCode DasIO_writePktBytes(
  *
  * @memberof DasIO
  */
-DAS_API DasErrCode DasIO_exception(DasIO* pThis, const DasExcept* pExcept);
+DAS_API das_errcode DasIO_exception(DasIO* pThis, const DasExcept* pExcept);
 
 /** End an output stream with an exception built from a printf style format
  *
@@ -882,7 +882,7 @@ DAS_API DasErrCode DasIO_exception(DasIO* pThis, const DasExcept* pExcept);
  *
  * @memberof DasIO
  */
-DAS_API DasErrCode DasIO_exception_v(
+DAS_API das_errcode DasIO_exception_v(
 	DasIO* pThis, das_except_e nType, const char* sFmt, ...
 );
 
@@ -900,7 +900,7 @@ DAS_API DasErrCode DasIO_exception_v(
  *
  * @memberof DasIO
  */
-DAS_API DasErrCode DasIO_comment(DasIO* pThis, const DasComment* pCmt);
+DAS_API das_errcode DasIO_comment(DasIO* pThis, const DasComment* pCmt);
 
 /** Output a comment built from a printf style format
  *
@@ -928,7 +928,7 @@ DAS_API DasErrCode DasIO_comment(DasIO* pThis, const DasComment* pCmt);
  *
  * @memberof DasIO
  */
-DAS_API DasErrCode DasIO_comment_v(
+DAS_API das_errcode DasIO_comment_v(
 	DasIO* pThis, const char* sType, const char* sFmt, ...
 );
 
@@ -941,7 +941,7 @@ DAS_API DasErrCode DasIO_comment_v(
  * 
  * @memberof DasIO
  */
-DAS_API DasErrCode DasIO_setTaskSize(DasIO* pThis, int size);
+DAS_API das_errcode DasIO_setTaskSize(DasIO* pThis, int size);
 
 /** Place rate-limited progress comments on an output stream.
  * 
@@ -955,7 +955,7 @@ DAS_API DasErrCode DasIO_setTaskSize(DasIO* pThis, int size);
  * 
  * @memberof DasIO
  */
-DAS_API DasErrCode DasIO_setTaskProgress( DasIO* pThis, int progress );
+DAS_API das_errcode DasIO_setTaskProgress( DasIO* pThis, int progress );
 
 /** Close a stream
  *

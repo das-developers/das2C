@@ -61,29 +61,29 @@ void init_DasComment(DasComment* pThis);
 void fini_DasComment(DasComment* pThis);
 
 /** Parse text data into a stream exception */
-DasErrCode OobExcept_decode(DasExcept* pThis, DasBuf* pBuf);
+das_errcode OobExcept_decode(DasExcept* pThis, DasBuf* pBuf);
 
 /** Serialize an exception in das2.2 format.
  * Writes: @c \<exception type="T" message="M" /\> */
-DasErrCode OobExcept_encode(const DasExcept* pThis, DasBuf* pBuf);
+das_errcode OobExcept_encode(const DasExcept* pThis, DasBuf* pBuf);
 
 /** Serialize an exception in das3.0 format.
  * Writes: @c \<exception type="T"\>M\</exception\> */
-DasErrCode OobExcept_encode3(const DasExcept* pThis, DasBuf* pBuf);
+das_errcode OobExcept_encode3(const DasExcept* pThis, DasBuf* pBuf);
 
 /** Parse text data into a stream comment */
-DasErrCode OobComment_decode(DasComment* pThis, DasBuf* pBuf);
+das_errcode OobComment_decode(DasComment* pThis, DasBuf* pBuf);
 
 /** Serialize a comment in das2.2 format.
  * Writes: @c \<comment type="T" source="S" value="V" /\>
  * Quote and markup characters in type and source are written as '_'. */
-DasErrCode OobComment_encode(const DasComment* pThis, DasBuf* pBuf);
+das_errcode OobComment_encode(const DasComment* pThis, DasBuf* pBuf);
 
 /** Serialize a comment in das3.0 format.
  * Writes: @c \<comment type="T" source="S"\>V\</comment\>
  * The source attribute is omitted when empty.  Quote and markup characters
  * in type and source are written as '_'. */
-DasErrCode OobComment_encode3(const DasComment* pThis, DasBuf* pBuf);
+das_errcode OobComment_encode3(const DasComment* pThis, DasBuf* pBuf);
 
 /** Decode whichever kind of out of band item is in a buffer
  *
@@ -97,7 +97,7 @@ DasErrCode OobComment_encode3(const DasComment* pThis, DasBuf* pBuf);
  *                    is skipped unparsed, so it is not checked.
  * @returns DAS_OKAY, or a positive error code for a malformed item
  */
-DasErrCode OutOfBand_decode(DasBuf* pBuf, OutOfBand** ppObjs, int* which);
+das_errcode OutOfBand_decode(DasBuf* pBuf, OutOfBand** ppObjs, int* which);
 
 #ifdef __cplusplus
 }

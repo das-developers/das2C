@@ -183,7 +183,7 @@ static void _dispatch(const das_logmsg* pMsg)
 }
 
 static void _daslog_vsend(
-	int nLevel, DasErrCode nErr, const char* sFile, const char* sFunc,
+	int nLevel, das_errcode nErr, const char* sFile, const char* sFunc,
 	int nLine, const char* sFmt, va_list ap
 ){
 	if(nLevel < g_nLevel) return;
@@ -205,7 +205,7 @@ static void _daslog_vsend(
 }
 
 static void _daslog_send(
-	int nLevel, DasErrCode nErr, const char* sFile, const char* sFunc,
+	int nLevel, das_errcode nErr, const char* sFile, const char* sFunc,
 	int nLine, const char* sMsg
 ){
 	if(nLevel < g_nLevel) return;
@@ -249,8 +249,8 @@ void daserr_setdisp(das_errdis_e nDisp){
  * disposition decides.  exit() comes only after the hook has returned and
  * the log lock is released, so atexit() functions may use the library. */
 
-DasErrCode daserr_func(
-	const char* sFile, const char* sFunc, int nLine, DasErrCode nCode,
+das_errcode daserr_func(
+	const char* sFile, const char* sFunc, int nLine, das_errcode nCode,
 	const char* sFmt, ...
 ){
 	bool bExit = (g_nErrDisposition != DASERR_DIS_RET);
@@ -265,8 +265,8 @@ DasErrCode daserr_func(
 	return nCode;
 }
 
-DasErrCode daserr_func_fixed(
-	const char* sFile, const char* sFunc, int nLine, DasErrCode nCode,
+das_errcode daserr_func_fixed(
+	const char* sFile, const char* sFunc, int nLine, das_errcode nCode,
 	const char* sMsg
 ){
 	bool bExit = (g_nErrDisposition != DASERR_DIS_RET);

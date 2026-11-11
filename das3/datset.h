@@ -246,7 +246,7 @@ DAS_API DasDs* DasDs_copy(const DasDs* pThis);
  *
  * @memberof DasDs
  */
-DAS_API DasErrCode DasDs_replaceAry(DasDs* pThis, const char* sOldId, DasAry* pNew);
+DAS_API das_errcode DasDs_replaceAry(DasDs* pThis, const char* sOldId, DasAry* pNew);
 
 
 /** Return current valid ranges for whole data set iteration
@@ -376,7 +376,7 @@ DAS_API const char* DasDs_getPlot(const DasDs* pThis);
  *        sPlot is not one of the schema's PlotType values
  * @memberof DasDs
  */
-DAS_API DasErrCode DasDs_setPlot(DasDs* pThis, const char* sPlot);
+DAS_API das_errcode DasDs_setPlot(DasDs* pThis, const char* sPlot);
 
 
 /** Get the rank of a dataset 
@@ -419,7 +419,7 @@ DAS_API int DasDs_rank(const DasDs* pThis);
  * 
  * @memberof DasDs
  */
-DAS_API DasErrCode DasDs_addAry(DasDs* pThis, DasAry* pAry);
+DAS_API das_errcode DasDs_addAry(DasDs* pThis, DasAry* pAry);
 
 
 /** Get the number of arrays in the dataset
@@ -700,7 +700,7 @@ DAS_API DasCodec* DasDs_addCodecFrom(
  *
  * @memberof DasDs
  */
-DAS_API DasErrCode DasDs_updateCodec(
+DAS_API das_errcode DasDs_updateCodec(
 	DasDs* pThis, size_t uIdx, bool bRead, const char* sAryId,
 	const char* sEncType, int16_t nItemBytes, ubyte cSep, das_units epoch,
 	const char* sOutFmt
@@ -741,7 +741,7 @@ DAS_API DasDs* new_DasDs_xml(DasBuf* pBuf, DasDesc* pParent, int nPktId);
  * @returns DAS_OKAY, or a das error code
  * @memberof DasDs
  */
-DAS_API DasErrCode DasDs_encodeHdr(DasDs* pThis, DasBuf* pBuf);
+DAS_API das_errcode DasDs_encodeHdr(DasDs* pThis, DasBuf* pBuf);
 
 
 /** Encode one record's worth of data from dataset memory.
@@ -760,7 +760,7 @@ DAS_API DasErrCode DasDs_encodeHdr(DasDs* pThis, DasBuf* pBuf);
  * @returns DAS_OKAY, or a das error code
  * @memberof DasDs
  */
-DAS_API DasErrCode DasDs_encodeData(DasDs* pThis, DasBuf* pBuf, ptrdiff_t iIdx0);
+DAS_API das_errcode DasDs_encodeData(DasDs* pThis, DasBuf* pBuf, ptrdiff_t iIdx0);
 
 
 /** Clear any arrays that are ragged in index 0
@@ -824,7 +824,7 @@ DAS_API DasDim* DasDs_makeDim(
  * 
  * @memberof DasDs
  */
-DAS_API DasErrCode DasDs_addDim(DasDs* pThis, DasDim* pDim);
+DAS_API das_errcode DasDs_addDim(DasDs* pThis, DasDim* pDim);
 
 /** Get the number of physical dimensions in this dataset
  *

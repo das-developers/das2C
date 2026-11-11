@@ -249,7 +249,7 @@ static DasAry* _serial_makeAry(
 /* ************************************************************************* */
 /* Internal storage and possible direct encoding */
 
-static DasErrCode _serial_addCodec(
+static das_errcode _serial_addCodec(
 	DasDs* pDs, const char* sAryId, int nItems, DasEnc* pEncoder
 ){
 

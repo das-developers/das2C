@@ -102,7 +102,7 @@ typedef struct das_logmsg {
 
 	/** The error code given to das_error(), or 0 (DAS_OKAY) for a message
 	 *  that did not come from das_error() */
-	DasErrCode nErr;
+	das_errcode nErr;
 
 	/** The message text, never NULL.  It carries no source location, that
 	 *  is in the next three members. */

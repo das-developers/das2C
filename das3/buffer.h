@@ -161,7 +161,7 @@ DAS_API void DasBuf_reinit(DasBuf* pThis);
  *          may not be writable
  * @memberof DasBuf
  */
-DAS_API DasErrCode DasBuf_zero(DasBuf* pThis);
+DAS_API das_errcode DasBuf_zero(DasBuf* pThis);
 
 /** Free a buffer
  *
@@ -224,7 +224,7 @@ DAS_API bool DasBuf_isReadOnly(const DasBuf* pThis);
  * @returns 0 if the operation succeeded, a positive error code otherwise.
  * @memberof DasBuf
  */
-DAS_API DasErrCode DasBuf_puts(DasBuf* pThis, const char* sStr);
+DAS_API das_errcode DasBuf_puts(DasBuf* pThis, const char* sStr);
 
 /** Write formatted strings to the buffer 
  * @param pThis the buffer to receive the bytes
@@ -232,7 +232,7 @@ DAS_API DasErrCode DasBuf_puts(DasBuf* pThis, const char* sStr);
  * @returns 0 if the operation succeeded, a positive error code otherwise.
  * @memberof DasBuf
  */
-DAS_API DasErrCode DasBuf_printf(DasBuf* pThis, const char* sFmt, ...);
+DAS_API das_errcode DasBuf_printf(DasBuf* pThis, const char* sFmt, ...);
 
 /** Write text to the buffer, word wrapped
  *
@@ -255,7 +255,7 @@ DAS_API DasErrCode DasBuf_printf(DasBuf* pThis, const char* sFmt, ...);
  *        including when the buffer fills part way through.
  * @memberof DasBuf
  */
-DAS_API DasErrCode DasBuf_wrapWrite(
+DAS_API das_errcode DasBuf_wrapWrite(
 	DasBuf* pThis, int nWidth, const char* sIndent, const char* sTxt
 );
 	
@@ -266,7 +266,7 @@ DAS_API DasErrCode DasBuf_wrapWrite(
  * @returns DAS_OKAY if the operation succeeded, a positive error code otherwise.
  * @memberof DasBuf
  */
-DAS_API DasErrCode DasBuf_write(DasBuf* pThis, const void* pData, size_t uLen);
+DAS_API das_errcode DasBuf_write(DasBuf* pThis, const void* pData, size_t uLen);
 
 /** Get a pointer for writing directly into the buffer
  *
@@ -322,7 +322,7 @@ DAS_API ubyte* DasBuf_prepare(DasBuf* pThis, size_t uWant, size_t* pSpace);
  *
  * @memberof DasBuf
  */
-DAS_API DasErrCode DasBuf_commit(DasBuf* pThis, size_t uLen);
+DAS_API das_errcode DasBuf_commit(DasBuf* pThis, size_t uLen);
 
 /** Get the size of the data in the buffer.
  * @returns the number of bytes written to the buffer
@@ -408,7 +408,7 @@ DAS_API const ubyte* DasBuf_data(const DasBuf* pThis, size_t* pLen);
  *
  * @memberof DasBuf
  */
-DAS_API DasErrCode DasBuf_consume(DasBuf* pThis, size_t uLen);
+DAS_API das_errcode DasBuf_consume(DasBuf* pThis, size_t uLen);
 
 /** Peak at bytes from a buffer
  * Copies bytes out of a buffer but does *not* increment the read point.
@@ -459,7 +459,7 @@ DAS_API size_t DasBuf_readOffset(const DasBuf* pThis);
  * @returns 0 on success an positive error code if uPos makes no sense for the
  *          buffers current state
  */
-DAS_API DasErrCode DasBuf_setReadOffset(DasBuf* pThis, size_t uPos);
+DAS_API das_errcode DasBuf_setReadOffset(DasBuf* pThis, size_t uPos);
 
 #ifdef	__cplusplus
 }

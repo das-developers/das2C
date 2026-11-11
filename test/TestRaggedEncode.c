@@ -87,7 +87,7 @@ static int _loadPayloads(const char* sPath)
 	return 0;
 }
 
-static DasErrCode onDataset(DasDs* pDs, int nPktId, void* pUser)
+static das_errcode onDataset(DasDs* pDs, int nPktId, void* pUser)
 {
 	if(g_pDs != NULL){
 		printf("ERROR: Test expects a single dataset per fixture\n");
@@ -97,7 +97,7 @@ static DasErrCode onDataset(DasDs* pDs, int nPktId, void* pUser)
 	return DAS_OKAY;
 }
 
-static DasErrCode onData(DasDs* pDs, int nPktId, void* pUser)
+static das_errcode onData(DasDs* pDs, int nPktId, void* pUser)
 {
 	++g_nRecs;
 	return DAS_OKAY;
@@ -106,7 +106,7 @@ static DasErrCode onData(DasDs* pDs, int nPktId, void* pUser)
 /* The re-encode comparison runs in the close handler, once every record is in.
    Needs DasIO_setAccum(), otherwise only the last packet's record would be
    left in the dataset. */
-static DasErrCode onClose(DasStream* pSd, const DasExcept* pEx, void* pUser)
+static das_errcode onClose(DasStream* pSd, const DasExcept* pEx, void* pUser)
 {
 	const char* sPath = (const char*)pUser;
 

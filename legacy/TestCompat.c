@@ -41,7 +41,7 @@ static int g_fails = 0;
 #define FAIL(...) do{ printf("FAIL (line %d): ", __LINE__); printf(__VA_ARGS__); \
                       printf("\n"); ++g_fails; }while(0)
 
-static DasErrCode onStream(StreamDesc* pSd, void* pUser)
+static das_errcode onStream(StreamDesc* pSd, void* pUser)
 {
 	(void)pSd; (void)pUser;
 	return DAS_OKAY;

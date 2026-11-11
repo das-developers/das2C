@@ -218,7 +218,7 @@ DAS_API int DasDim_numAxes(const DasDim* pThis);
  * 
  * @memberof DasDim
  */
-DAS_API DasErrCode DasDim_setAxis(DasDim* pThis, int iAxis, const char* sAxis);
+DAS_API das_errcode DasDim_setAxis(DasDim* pThis, int iAxis, const char* sAxis);
 
 /** Get the axis affinity, if any.
  * 

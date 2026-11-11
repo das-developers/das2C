@@ -110,7 +110,7 @@ DasDesc* DasDesc_decode(
  * @return 0 if encoding succeeded, a non-zero error code otherwise
  * @memberof DasStream
  */
-DasErrCode DasStream_encode2(DasStream* pThis, DasBuf* pBuf);
+das_errcode DasStream_encode2(DasStream* pThis, DasBuf* pBuf);
 
 /** Encode a DasStream to an version 3 XML string
  * 
@@ -119,7 +119,7 @@ DasErrCode DasStream_encode2(DasStream* pThis, DasBuf* pBuf);
  * @return 0 if encoding succeeded, a non-zero error code otherwise
  * @memberof DasStream
  */
-DasErrCode DasStream_encode3(DasStream* pThis, DasBuf* pBuf);
+das_errcode DasStream_encode3(DasStream* pThis, DasBuf* pBuf);
 
 /** Make a deep copy of a PacketDescriptor on a new stream.
  * This function makes a deep copy of the given packet descriptor and 
@@ -151,7 +151,7 @@ DasPkt* DasStream_clonePkt(DasStream* pThis, const DasPkt* pd);
  *
  * @memberof DasStream
  */
-DasErrCode DasStream_rmDesc(DasStream* pThis, DasDesc* pDesc);
+das_errcode DasStream_rmDesc(DasStream* pThis, DasDesc* pDesc);
 
 /** The active descriptor for a packet ID, for DasIO's per-packet lookup
  *
@@ -180,7 +180,7 @@ DasDesc* DasStream_findDesc(DasStream* pThis, int nPktId);
  *
  * @memberof DasStream
  */
-DasErrCode DasStream_cacheShapes(DasStream* pThis, bool bCache);
+das_errcode DasStream_cacheShapes(DasStream* pThis, bool bCache);
 
 DasStream* new_DasStream_str(DasBuf* pBuf, das_stream_model nModel);
 

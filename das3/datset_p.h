@@ -144,7 +144,7 @@ struct dataset {
  * @returns DAS_OKAY, or a das error code
  * @memberof DasDs
  */
-DasErrCode DasDs_decodeData(DasDs* pThis, DasBuf* pBuf);
+das_errcode DasDs_decodeData(DasDs* pThis, DasBuf* pBuf);
 
 /** Cache the dataset shape instead of recomputing it on every call
  * 
@@ -184,7 +184,7 @@ void DasDs_cacheShape(DasDs* pThis, bool bCache);
  *
  * @memberof DasDs
  */
-DasErrCode DasDs_recBytes(const DasDs* pThis, int* pBytes);
+das_errcode DasDs_recBytes(const DasDs* pThis, int* pBytes);
 
 #ifdef __cplusplus
 }

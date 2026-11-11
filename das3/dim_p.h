@@ -74,7 +74,7 @@ struct das_dim {
 /* Write this dimension's das3 <coord>/<data> element.  Not DAS_API, the
    dataset header writer in datset.c is the caller, user code writes whole
    datasets with DasIO_writeDesc(). */
-DasErrCode DasDim_encode(DasDim* pThis, DasBuf* pBuf);
+das_errcode DasDim_encode(DasDim* pThis, DasBuf* pBuf);
 
 #ifdef __cplusplus
 }

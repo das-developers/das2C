@@ -112,7 +112,7 @@ typedef enum das_errdis_e {
  *
  * @returns DAS_OKAY, or with DASERR_DIS_RET, DASERR_INIT if setup failed.
  */
-DAS_API DasErrCode das_init(
+DAS_API das_errcode das_init(
 	const char* sProgName, das_errdis_e nErrDis, int nLevel,
 	const das_loghook* pHook
 );
@@ -197,13 +197,13 @@ DAS_API const das_limit* daslimit_getNext(const das_limit* pPrev);
 /** A do nothing function on Unix, closes network sockets on windows */
 DAS_API void das_finish(void);
 
-DAS_API DasErrCode daserr_func(
-	const char* sFile, const char* sFunc, int nLine, DasErrCode nCode,
+DAS_API das_errcode daserr_func(
+	const char* sFile, const char* sFunc, int nLine, das_errcode nCode,
 	const char* sFmt, ...
 ) _das_fmt_check(5, 6);
 
-DAS_API DasErrCode daserr_func_fixed(
-	const char* sFile, const char* sFunc, int nLine, DasErrCode nCode,
+DAS_API das_errcode daserr_func_fixed(
+	const char* sFile, const char* sFunc, int nLine, das_errcode nCode,
 	const char* sMsg
 );
 
@@ -285,9 +285,9 @@ DAS_API DasErrCode daserr_func_fixed(
   daserr_func_fixed(__FILE__, __func__, __LINE__, nErrCode, sMsg)
 
 /** Raise an error and return false, for a function that reports failure as a
- * bool rather than a DasErrCode.
+ * bool rather than a das_errcode.
  *
- * `return das_error(...)` is correct in the DasErrCode functions that are most
+ * `return das_error(...)` is correct in the das_errcode functions that are most
  * of this library, and silently WRONG in a bool one: das_error() hands back a
  * non-zero code, which as a bool is true, so the failure reports success.  The
  * types are both integers and no compiler diagnostic exists for it.  Write
@@ -426,7 +426,7 @@ DAS_API bool das_isdir(const char* path);
  * @return true if directories up to the final location either exist, or 
  *        could be generated, false otherwise.
  */
-DAS_API DasErrCode das_mkdirsto(const char* path);
+DAS_API das_errcode das_mkdirsto(const char* path);
 
 
 /** Get the home directory for the current account 

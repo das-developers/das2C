@@ -823,7 +823,7 @@ static const char* _mapAttr(const struct context* pCtx, const char* sName)
 }
 
 /* "FROM:TO,FROM:TO" into the context's rename table */
-static DasErrCode _parseAttrMap(struct context* pCtx, const char* sMap)
+static das_errcode _parseAttrMap(struct context* pCtx, const char* sMap)
 {
 	pCtx->nAttrMap = 0;
 	if((sMap == NULL)||(sMap[0] == '\0')) return DAS_OKAY;
@@ -1177,7 +1177,7 @@ void* DasProp_cdfEntValue(const DasProp* pProp, long iEntry, bool bAsString){
 	return NULL;
 }
 
-DasErrCode writeGlobalProp(struct context* pCtx, const DasProp* pProp)
+das_errcode writeGlobalProp(struct context* pCtx, const DasProp* pProp)
 {	
 	CDFstatus iStatus = CDF_OK; /* Also used by CDF_MAD macro */
 
@@ -1259,7 +1259,7 @@ DasErrCode writeGlobalProp(struct context* pCtx, const DasProp* pProp)
 }
 
 /* Write a single-valued global string attribute */
-DasErrCode writeGlobalStrAttr(struct context* pCtx, const char* sKey, const char* sValue)
+das_errcode writeGlobalStrAttr(struct context* pCtx, const char* sKey, const char* sValue)
 {
 	sKey = _mapAttr(pCtx, sKey);
 	long iAttr = 0;
@@ -1287,7 +1287,7 @@ DasErrCode writeGlobalStrAttr(struct context* pCtx, const char* sKey, const char
 		return DAS_OKAY;
 }
 
-DasErrCode writeVarProp(struct context* pCtx, long iVarNum, const DasProp* pProp)
+das_errcode writeVarProp(struct context* pCtx, long iVarNum, const DasProp* pProp)
 {
 	CDFstatus iStatus; /* Used by CDF_MAD macro */
 
@@ -1355,7 +1355,7 @@ DasErrCode writeVarProp(struct context* pCtx, long iVarNum, const DasProp* pProp
 	return DAS_OKAY;
 }
 
-DasErrCode writeVarStrAttr(
+das_errcode writeVarStrAttr(
 	struct context* pCtx, long iVarNum, const char* sAttrName, const char* sValue
 ){
 	CDFstatus iStatus; /* Used by CDF_MAD macro */
@@ -1398,7 +1398,7 @@ DasErrCode writeVarStrAttr(
 		return DAS_OKAY;
 }
 
-DasErrCode writeVarAttr(
+das_errcode writeVarAttr(
 	struct context* pCtx, long iVarNum, const char* sAttrName, long nCdfType,
 	const ubyte* pValue
 ){
@@ -1444,7 +1444,7 @@ DasErrCode writeVarAttr(
 
 /* ************************************************************************* */
 
-DasErrCode _addUserGAttrs(struct context* pCtx)
+das_errcode _addUserGAttrs(struct context* pCtx)
 {
 	/* This function assumes there are always at least 2 NULL bytes at the end 
 	   of the string buffer.  It writes things that look like:
@@ -1533,7 +1533,7 @@ static bool _isCdfControl(const char* sName)
 	return (strcmp(sName, "cdfName") == 0)||(strcmp(sName, "cdfCharLen") == 0);
 }
 
-DasErrCode onStream(DasStream* pSd, void* pUser){
+das_errcode onStream(DasStream* pSd, void* pUser){
 	struct context* pCtx = (struct context*)pUser;
 
 	daslog_info_v("Writing to: %s", pCtx->sWriteTo);
@@ -2244,7 +2244,7 @@ static bool _DasVar_cdfIsRaggedText(const DasVar* pVar)
  * @param[out] sNameBuf a buffer to receive the variable name must point to at least
  *        DAS_MAX_ID_BUFSZ bytes of space
  */
-DasErrCode makeCdfVar(
+das_errcode makeCdfVar(
 	struct context* pCtx, DasDim* pDim, DasVar* pVar, int nDsRank, ptrdiff_t* pDsShape,
 	char* sNameBuf
 ){
@@ -2484,7 +2484,7 @@ static int _cdfCompDimIdx(const DasVar* pVar)
    an attribute at it.  LABL_PTR_n and UNIT_PTR_n are the same shape of thing:
    n is the component dimension and the pointee has one entry per component,
    space padded to a common length the way every ISTP label variable is. */
-static DasErrCode _writeCompPtr(
+static das_errcode _writeCompPtr(
 	struct context* pCtx, DasVar* pVar, const char* sSuffix, const char* sWhat,
 	const char* sAttr, char** psVals, int nComp
 ){
@@ -2572,7 +2572,7 @@ static void _opsAttrName(const char* sParam, char* sBuf, size_t uLen)
    written even for the defaults (cartesian, ascending): a non-das reader has
    no other way to know that a lone "theta" table is one component of a
    direction and not a free-standing angle.  See notes/das_cdf_extensions.md */
-static DasErrCode _addCompSysAttrs(struct context* pCtx, DasVar* pVar)
+static das_errcode _addCompSysAttrs(struct context* pCtx, DasVar* pVar)
 {
 	const DasForm* pForm = DasVar_form(pVar);
 	long iVar = DasVar_cdfId(pVar);
@@ -2592,7 +2592,7 @@ static DasErrCode _addCompSysAttrs(struct context* pCtx, DasVar* pVar)
 
 	const char* sSys = das_vsys_toStr(uSys);
 	if(sSys == NULL) return DAS_OKAY;
-	DasErrCode nRet = writeVarStrAttr(pCtx, iVar, "COMPONENT_SYSTEM", sSys);
+	das_errcode nRet = writeVarStrAttr(pCtx, iVar, "COMPONENT_SYSTEM", sSys);
 	if(nRet != DAS_OKAY) return nRet;
 
 	long nComp = DasVar_cdfNumComps(pVar);
@@ -2613,14 +2613,14 @@ static DasErrCode _addCompSysAttrs(struct context* pCtx, DasVar* pVar)
    (here or by _addFrameAttrs) and NOT again as ops<Param>; the rest are
    ops<Param>, values as they arrived.  Defaults a writer would leave off the
    wire are left off here too. */
-static DasErrCode _addFormAttrs(struct context* pCtx, DasVar* pVar)
+static das_errcode _addFormAttrs(struct context* pCtx, DasVar* pVar)
 {
 	const DasForm* pForm = DasVar_form(pVar);
 	if(pForm == NULL) return DAS_OKAY;
 	long iVar = DasVar_cdfId(pVar);
 
 	bool bExt = DasForm_isKind(pForm, DAS_FORM_EXT);
-	DasErrCode nRet = writeVarStrAttr(pCtx, iVar, "opsKind", DasForm_kind(pForm));
+	das_errcode nRet = writeVarStrAttr(pCtx, iVar, "opsKind", DasForm_kind(pForm));
 	if(nRet != DAS_OKAY) return nRet;
 
 	bool bGeom = DasForm_isKind(pForm, DAS_FORM_VEC)||DasForm_isKind(pForm, DAS_FORM_POS);
@@ -2669,12 +2669,12 @@ static DasErrCode _addFormAttrs(struct context* pCtx, DasVar* pVar)
    COORDINATE_SYSTEM, which reads too much like COMPONENT_SYSTEM; a consumer
    that wants the proposal spelling gets it from -p FRAME_NAME:COORDINATE_SYSTEM,
    just as a mission alias such as COORD_FRAME is --prop-map's job. */
-static DasErrCode _addFrameAttrs(struct context* pCtx, DasVar* pVar)
+static das_errcode _addFrameAttrs(struct context* pCtx, DasVar* pVar)
 {
 	const DasForm* pForm = DasVar_form(pVar);
 	if(pForm == NULL) return DAS_OKAY;
 	long iVar = DasVar_cdfId(pVar);
-	DasErrCode nRet = DAS_OKAY;
+	das_errcode nRet = DAS_OKAY;
 	int32_t nOrder = 0;
 
 	if(DasForm_isKind(pForm, DAS_FORM_ROT)){
@@ -2730,7 +2730,7 @@ static DasErrCode _addFrameAttrs(struct context* pCtx, DasVar* pVar)
 	return nRet;
 }
 
-DasErrCode makeCompLabels(struct context* pCtx, DasDim* pDim, DasVar* pVar)
+das_errcode makeCompLabels(struct context* pCtx, DasDim* pDim, DasVar* pVar)
 {
 	/* compLabel has been retired, warn for now. */
 	static bool bWarnedCompLbl = false;
@@ -2749,7 +2749,7 @@ DasErrCode makeCompLabels(struct context* pCtx, DasDim* pDim, DasVar* pVar)
 	char* pStore = (char*)calloc(nComp, DASCDF_COMP_STR_SZ);
 	for(long i = 0; i < nComp; ++i) psBuf[i] = pStore + i*DASCDF_COMP_STR_SZ;
 
-	DasErrCode nRet = DAS_OKAY;
+	das_errcode nRet = DAS_OKAY;
 	int nGot = DasVar_compLabels(pVar, psBuf, nComp, DASCDF_COMP_STR_SZ - 1);
 	if(nGot < 0)
 		nRet = -1 * nGot;
@@ -2820,7 +2820,7 @@ static int _cdfCompUnits(
 
 /* ************************************************************************ */
 
-DasErrCode writeVarProps(
+das_errcode writeVarProps(
 	struct context* pCtx, DasDim* pDim, DasVar* pVar, VarInfo* pCoords, size_t uCoords
 ){
 	char sAttrName[64] = {'\0'};
@@ -2937,7 +2937,7 @@ DasErrCode writeVarProps(
 	char* psUnits[3] = { aUnitStore[0], aUnitStore[1], aUnitStore[2] };
 	int nUnitComps = _cdfCompUnits(pVar, sUnits, psUnits, 3, DASCDF_COMP_STR_SZ);
 	if(nUnitComps > 0){
-		DasErrCode nUnitRet = _writeCompPtr(
+		das_errcode nUnitRet = _writeCompPtr(
 			pCtx, pVar, "comp_units", "units", "UNIT_PTR", psUnits, nUnitComps
 		);
 		if(nUnitRet != DAS_OKAY) return nUnitRet;
@@ -2965,7 +2965,7 @@ DasErrCode writeVarProps(
 	writeVarStrAttr(pCtx, DasVar_cdfId(pVar), "VAR_TYPE", sVarType);
 
 	/* Component labels for every composite, and the frame for those that have one */
-	DasErrCode nRet;
+	das_errcode nRet;
 	if(DasVar_cdfHasComps(pVar)){
 		if( (nRet = makeCompLabels(pCtx, pDim, pVar)) != DAS_OKAY)
 			return nRet;
@@ -3102,7 +3102,7 @@ DasErrCode writeVarProps(
 
 */
 
-DasErrCode onDataSet(DasDs* pDs, int nPktId, void* pUser)
+das_errcode onDataSet(DasDs* pDs, int nPktId, void* pUser)
 {
 	struct context* pCtx = (struct context*)pUser;
 
@@ -3244,7 +3244,7 @@ const ubyte* _valueToTT2k(
    stream with an itemBytes="8" utf8 <bytes> field came out as CDF_CHAR 8
    with the right values; before, it was CDF_UINT1 holding the first byte
    of each record. */
-static DasErrCode _writeRecVaryText(
+static das_errcode _writeRecVaryText(
 	struct context* pCtx, DasVar* pVar, DasAry* pAry, ptrdiff_t nRecs
 ){
 	CDFstatus iStatus; /* Used by the CDF_MAD macro */
@@ -3289,7 +3289,7 @@ static DasErrCode _writeRecVaryText(
 	return DAS_OKAY;
 }
 
-DasErrCode _writeRecVaryAry(struct context* pCtx, DasVar* pVar, DasAry* pAry)
+das_errcode _writeRecVaryAry(struct context* pCtx, DasVar* pVar, DasAry* pAry)
 {
 	CDFstatus iStatus; /* Used by the CDF_MAD macro */
 
@@ -3377,7 +3377,7 @@ DasErrCode _writeRecVaryAry(struct context* pCtx, DasVar* pVar, DasAry* pAry)
 	return DAS_OKAY;
 }
 
-DasErrCode putAllData(struct context* pCtx, int nDsRank, ptrdiff_t* pDsShape, DasVar* pVar)
+das_errcode putAllData(struct context* pCtx, int nDsRank, ptrdiff_t* pDsShape, DasVar* pVar)
 {
 	/* Take a short cut for array backed variables.  A NULL array is the
 	   answer for anything that computes its values, not a failure. */
@@ -3420,7 +3420,7 @@ DasErrCode putAllData(struct context* pCtx, int nDsRank, ptrdiff_t* pDsShape, Da
 }
 
 /* Assuming all variables were setup above, now write a bunch of data to the CDF */
-DasErrCode writeAndClearData(DasDs* pDs, struct context* pCtx)
+das_errcode writeAndClearData(DasDs* pDs, struct context* pCtx)
 {
 	ptrdiff_t aDsShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
 	int nDsRank = DasDs_shape(pDs, aDsShape);
@@ -3461,7 +3461,7 @@ DasErrCode writeAndClearData(DasDs* pDs, struct context* pCtx)
 
 /* ************************************************************************* */
 
-DasErrCode onData(DasDs* pDs, int nPktId, void* pUser)
+das_errcode onData(DasDs* pDs, int nPktId, void* pUser)
 {
 	struct context* pCtx = (struct context*)pUser;
 
@@ -3489,7 +3489,7 @@ DasErrCode onData(DasDs* pDs, int nPktId, void* pUser)
 }
 
 /* ************************************************************************* */
-DasErrCode onComment(DasStream* pSd, const DasComment* pComment, void* pUser)
+das_errcode onComment(DasStream* pSd, const DasComment* pComment, void* pUser)
 {
 	/* Don't care about comments, for now */
 	return DAS_OKAY;
@@ -3498,7 +3498,7 @@ DasErrCode onComment(DasStream* pSd, const DasComment* pComment, void* pUser)
 /* ************************************************************************* */
 /* Write what arrived, even if the input ended on an exception, then report
    the exception.  "No data" is not a failure. */
-DasErrCode onClose(DasStream* pSd, const DasExcept* pExcept, void* pUser)
+das_errcode onClose(DasStream* pSd, const DasExcept* pExcept, void* pUser)
 {
 	struct context* pCtx = (struct context*)pUser;
 
@@ -3531,7 +3531,7 @@ void _addTimeStampName(char* sDest, size_t uDest)
 	strncpy(sDest, sTmp, uDest - 1);
 }
 
-DasErrCode _addSourceName(char* sDest, size_t uDest, const char* sInFile)
+das_errcode _addSourceName(char* sDest, size_t uDest, const char* sInFile)
 {
 	char* pSep = strrchr(sInFile, DAS_DSEPC);
 #ifdef _WIN32
@@ -3566,7 +3566,7 @@ DasErrCode _addSourceName(char* sDest, size_t uDest, const char* sInFile)
 
 /* ************************************************************************* */
 
-DasErrCode writeFileToStdout(const char* sFile)
+das_errcode writeFileToStdout(const char* sFile)
 {
 	FILE* pIn = fopen(sFile, "rb");
 	if(pIn == NULL)
@@ -3592,7 +3592,7 @@ DasErrCode writeFileToStdout(const char* sFile)
 int main(int argc, char** argv) 
 {
 
-	DasErrCode nRet = DAS_OKAY;
+	das_errcode nRet = DAS_OKAY;
 
 	/* Exit on errors, log info messages and above */
 	das_init(argv[0], DASERR_DIS_EXIT, DASLOG_INFO, NULL);

@@ -472,7 +472,7 @@ static const char* _DasFormVec_compSym(const DasForm* pThis, int iComp)
 /* --- parameters ---------------------------------------------------------- */
 
 /* "1;0;2": storage slot i holds canonical direction sOrd[2i] */
-static DasErrCode _DasFormVec_setOrder(DasFormVec* pThis, const char* sOrd)
+static das_errcode _DasFormVec_setOrder(DasFormVec* pThis, const char* sOrd)
 {
 	ubyte aDir[3] = {0, 1, 2};
 	int iComp = 0;
@@ -486,7 +486,7 @@ static DasErrCode _DasFormVec_setOrder(DasFormVec* pThis, const char* sOrd)
 	return DAS_OKAY;
 }
 
-static DasErrCode _DasFormVec_setParam(
+static das_errcode _DasFormVec_setParam(
 	DasForm* pBase, const char* sName, const char* sVal
 ){
 	DasFormVec* pThis = (DasFormVec*)pBase;
@@ -548,12 +548,12 @@ static DasErrCode _DasFormVec_setParam(
 
 /* TALKATIVE: system= and sysorder= are stated even at their defaults, since
    the schema cannot carry a default behind an anyAttribute. */
-static DasErrCode _DasFormVec_encode(
+static das_errcode _DasFormVec_encode(
 	const DasForm* pBase, DasBuf* pBuf
 ){
 	const DasFormVec* pThis = (const DasFormVec*)pBase;
 
-	DasErrCode nRet = DasBuf_puts(pBuf, "      <ops kind=\"vector\"");
+	das_errcode nRet = DasBuf_puts(pBuf, "      <ops kind=\"vector\"");
 	if(nRet != DAS_OKAY) return nRet;
 
 	if(pThis->sFrame[0] != '\0'){
@@ -578,7 +578,7 @@ static DasErrCode _DasFormVec_encode(
 /* Every answer is either stored storage or a static constant, so nothing is
    rendered on demand and nothing is written to the form.  That is what keeps
    a read of a shared DasVar lock-free. */
-static DasErrCode _DasFormVec_validate(
+static das_errcode _DasFormVec_validate(
 	DasForm* pBase, int nIntRank, const ptrdiff_t* pIntShape
 ){
 	DasFormVec* pThis = (DasFormVec*)pBase;
@@ -763,7 +763,7 @@ static bool _DasBinOpVector_apply(
 					return false;
 				continue;
 			}
-			DasErrCode nRet = pThis->bVecLeft
+			das_errcode nRet = pThis->bVecLeft
 				? das_value_binop(pThis->nOp, vtVec, pVec + i*uVec,
 				                  vtNum, pNum, pOp->vtOut, pOutRun + i*uOut)
 				: das_value_binop(pThis->nOp, vtNum, pNum,

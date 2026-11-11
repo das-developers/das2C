@@ -61,7 +61,7 @@ static void tallyInit(void){ g_nData = g_nComment = g_nClose = 0; g_nExType = -1
 /* ************************************************************************* */
 /* Stream handlers: fold everything seen into the digest */
 
-static DasErrCode onStream(DasStream* pSd, void* pUser)
+static das_errcode onStream(DasStream* pSd, void* pUser)
 {
 	char sBuf[16000] = {'\0'};
 	DasStream_info(pSd, sBuf, 15999);
@@ -69,7 +69,7 @@ static DasErrCode onStream(DasStream* pSd, void* pUser)
 	return DAS_OKAY;
 }
 
-static DasErrCode onDataset(DasDs* pDs, int iPktId, void* pUser)
+static das_errcode onDataset(DasDs* pDs, int iPktId, void* pUser)
 {
 	char sBuf[16000] = {'\0'};
 	DasDs_info(pDs, sBuf, 15999);
@@ -78,7 +78,7 @@ static DasErrCode onDataset(DasDs* pDs, int iPktId, void* pUser)
 	return DAS_OKAY;
 }
 
-static DasErrCode onData(DasDs* pDs, int iPktId, void* pUser)
+static das_errcode onData(DasDs* pDs, int iPktId, void* pUser)
 {
 	ptrdiff_t aShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
 	int nRank = DasDs_shape(pDs, aShape);
@@ -90,7 +90,7 @@ static DasErrCode onData(DasDs* pDs, int iPktId, void* pUser)
 	return DAS_OKAY;
 }
 
-static DasErrCode onComment(DasStream* pSd, const DasComment* pCmt, void* pUser)
+static das_errcode onComment(DasStream* pSd, const DasComment* pCmt, void* pUser)
 {
 	++g_nComment;
 	hashStr(DasComment_get(pCmt, "type"));
@@ -135,7 +135,7 @@ static void hashAry(DasAry* pAry)
 	}
 }
 
-static DasErrCode onClose(DasStream* pSd, const DasExcept* pEx, void* pUser)
+static das_errcode onClose(DasStream* pSd, const DasExcept* pEx, void* pUser)
 {
 	char sBuf[16000] = {'\0'};
 
@@ -173,7 +173,7 @@ static void addHandlers(DasIO* pIo, das_stream_proc* pHndlr)
 	DasIO_addProcessor(pIo, pHndlr);
 }
 
-static DasErrCode onMonComment(DasStream* pSd, const DasComment* pCmt, void* pUser){ return DAS_OKAY; }
+static das_errcode onMonComment(DasStream* pSd, const DasComment* pCmt, void* pUser){ return DAS_OKAY; }
 
 /* A data-less sibling processor, the shape of a progress monitor.  Whether
    records are kept is DasIO_setAccum()'s call alone; an earlier rule keyed
@@ -268,7 +268,7 @@ static ubyte* slurp(const char* sPath, size_t* pLen)
 
 /* Parse via DasIO_readAll.  Returns the parser result and leaves the digest
  * in g_uHash. */
-static DasErrCode pullParse(const char* sPath, bool bMonitor)
+static das_errcode pullParse(const char* sPath, bool bMonitor)
 {
 	FILE* pFile = fopen(sPath, "rb");
 	DasIO* pIo = new_DasIO("TestFeed", new_DasXport_cfile(pFile, "r"), NULL);
@@ -282,7 +282,7 @@ static DasErrCode pullParse(const char* sPath, bool bMonitor)
 
 	hashInit();
 	tallyInit();
-	DasErrCode nRet = DasIO_readAll(pIo);
+	das_errcode nRet = DasIO_readAll(pIo);
 	del_DasIO(pIo);
 	fclose(pFile);    /* borrowed, see new_DasXport_cfile() */
 	return nRet;
@@ -290,7 +290,7 @@ static DasErrCode pullParse(const char* sPath, bool bMonitor)
 
 /* Parse via DasIO_feed in uChunk sized pieces.  Returns the parser result
  * and leaves the digest in g_uHash. */
-static DasErrCode feedParse(const ubyte* pData, size_t uLen, size_t uChunk)
+static das_errcode feedParse(const ubyte* pData, size_t uLen, size_t uChunk)
 {
 	DasIO* pIo = new_DasIO_feed("TestFeed", "r");
 	DasIO_setModel(pIo, 3);
@@ -302,12 +302,12 @@ static DasErrCode feedParse(const ubyte* pData, size_t uLen, size_t uChunk)
 
 	hashInit();
 	tallyInit();
-	DasErrCode nRet = DAS_OKAY;
+	das_errcode nRet = DAS_OKAY;
 	for(size_t u = 0; u < uLen && nRet == DAS_OKAY; u += uChunk){
 		size_t uThis = (uLen - u < uChunk) ? uLen - u : uChunk;
 		nRet = DasIO_feed(pIo, pData + u, uThis);
 	}
-	DasErrCode nEndRet = DasIO_feedEnd(pIo);
+	das_errcode nEndRet = DasIO_feedEnd(pIo);
 	if(nRet == DAS_OKAY) nRet = nEndRet;
 	del_DasIO(pIo);
 	return nRet;
@@ -342,7 +342,7 @@ static int selfChecks(void)
 
 	/* Garbage latches an error that repeats on every later call */
 	pIo = new_DasIO_feed("TestFeed", "r");
-	DasErrCode nRet = DasIO_feed(pIo, (const ubyte*)"garbage!", 8);
+	das_errcode nRet = DasIO_feed(pIo, (const ubyte*)"garbage!", 8);
 	if(nRet == DAS_OKAY){
 		printf("ERROR: garbage input accepted\n");
 		return 1;
@@ -372,7 +372,7 @@ static size_t g_uCmtLen;    /* length of the last comment value seen */
    prop.c), so big headers are built from several of them */
 #define BIG_MAX_PROPS 64
 
-static DasErrCode onBigStream(DasStream* pSd, void* pUser)
+static das_errcode onBigStream(DasStream* pSd, void* pUser)
 {
 	(void)pUser;
 	char sName[16];
@@ -385,7 +385,7 @@ static DasErrCode onBigStream(DasStream* pSd, void* pUser)
 	return DAS_OKAY;
 }
 
-static DasErrCode onBigComment(DasStream* pSd, const DasComment* pCmt, void* pUser)
+static das_errcode onBigComment(DasStream* pSd, const DasComment* pCmt, void* pUser)
 {
 	(void)pSd; (void)pUser;
 	const char* s = DasComment_get(pCmt, "value");
@@ -405,7 +405,7 @@ static char* patText(size_t uLen)
    pieces of at most 60000, and if uCmt > 0 a comment that long, into pOut.
    Returns the writer's result; *pWrote is the stream length (the output is
    text, pOut starts zeroed). */
-static DasErrCode writeBig(
+static das_errcode writeBig(
 	const char* sMode, size_t uProp, size_t uCmt, char* pOut, size_t uOutSz,
 	size_t* pWrote
 ){
@@ -425,7 +425,7 @@ static DasErrCode writeBig(
 		uDone += uPiece;
 	}
 
-	DasErrCode nRet = DasIO_writeStreamDesc(pIo, pSd);
+	das_errcode nRet = DasIO_writeStreamDesc(pIo, pSd);
 	if((nRet == DAS_OKAY)&&(uCmt > 0)){
 		char* sCmt = patText(uCmt);
 		DasComment* pCmt = new_DasComment();
@@ -444,7 +444,7 @@ static DasErrCode writeBig(
 
 /* Read a stream from memory; uChunk 0 is pull mode, else feed mode in
    uChunk pieces.  Leaves what was seen in g_uBigLen and g_uCmtLen. */
-static DasErrCode readBig(const char* pData, size_t uLen, size_t uChunk)
+static das_errcode readBig(const char* pData, size_t uLen, size_t uChunk)
 {
 	DasIO* pIo = (uChunk == 0) ?
 		new_DasIO("TestFeed", new_DasXport_mem((void*)pData, uLen, "r"), NULL) :
@@ -458,7 +458,7 @@ static DasErrCode readBig(const char* pData, size_t uLen, size_t uChunk)
 	DasIO_addProcessor(pIo, &handler);
 
 	g_uBigLen = g_uCmtLen = 0;
-	DasErrCode nRet = DAS_OKAY;
+	das_errcode nRet = DAS_OKAY;
 	if(uChunk == 0)
 		nRet = DasIO_readAll(pIo);
 	else{
@@ -466,7 +466,7 @@ static DasErrCode readBig(const char* pData, size_t uLen, size_t uChunk)
 			size_t uThis = (uLen - u < uChunk) ? uLen - u : uChunk;
 			nRet = DasIO_feed(pIo, (const ubyte*)pData + u, uThis);
 		}
-		DasErrCode nEndRet = DasIO_feedEnd(pIo);
+		das_errcode nEndRet = DasIO_feedEnd(pIo);
 		if(nRet == DAS_OKAY) nRet = nEndRet;
 	}
 	del_DasIO(pIo);
@@ -480,7 +480,7 @@ static int readBigAll(const char* sWhat, const char* pData, size_t uLen,
 	const size_t aChunks[] = {0 /* pull */, 7, 4096, 65536, 1048576};
 	int nBad = 0;
 	for(size_t i = 0; i < sizeof(aChunks)/sizeof(aChunks[0]); ++i){
-		DasErrCode nRet = readBig(pData, uLen, aChunks[i]);
+		das_errcode nRet = readBig(pData, uLen, aChunks[i]);
 		if((nRet != DAS_OKAY)||(g_uBigLen != uProp)||(g_uCmtLen != uCmt)){
 			printf("ERROR: %s, %s %zu: ret %d, property %zu of %zu, comment %zu of "
 			       "%zu bytes\n", sWhat, aChunks[i] ? "feed chunk" : "pull", aChunks[i],
@@ -656,7 +656,7 @@ fail:
 }
 
 /* Pull parse from memory, digest in g_uHash, same handlers as pullParse() */
-static DasErrCode pullMemParse(const ubyte* pData, size_t uLen)
+static das_errcode pullMemParse(const ubyte* pData, size_t uLen)
 {
 	DasIO* pIo = new_DasIO("TestFeed", new_DasXport_mem((void*)pData, uLen, "r"), NULL);
 	DasIO_setModel(pIo, 3);
@@ -665,7 +665,7 @@ static DasErrCode pullMemParse(const ubyte* pData, size_t uLen)
 	addHandlers(pIo, &handler);
 	hashInit();
 	tallyInit();
-	DasErrCode nRet = DasIO_readAll(pIo);
+	das_errcode nRet = DasIO_readAll(pIo);
 	del_DasIO(pIo);
 	return nRet;
 }
@@ -746,7 +746,7 @@ int main(int argc, char** argv)
 			return 64;
 		}
 
-		DasErrCode nPullRet = pullParse(argv[i], false);
+		das_errcode nPullRet = pullParse(argv[i], false);
 		uint64_t uPullHash = g_uHash;
 
 		bool bOk = stopOkay(argv[i], "pull");
@@ -764,7 +764,7 @@ int main(int argc, char** argv)
 		for(int j = 0; j < nChunks; ++j){
 			size_t uChunk = (aChunks[j] == 0) ? uLen : aChunks[j];
 
-			DasErrCode nFeedRet = feedParse(pData, uLen, uChunk);
+			das_errcode nFeedRet = feedParse(pData, uLen, uChunk);
 
 			if(nPullRet != DAS_OKAY){
 				/* Pull couldn't parse it: feed must refuse it too, but the

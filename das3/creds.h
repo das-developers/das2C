@@ -450,7 +450,7 @@ DAS_API das_prompt DasCredMngr_getPrompt(
  *        DASCRED_STORE_SZ - 1
  * @memberof DasCredMngr
  */
-DAS_API DasErrCode DasCredMngr_setFileStore(
+DAS_API das_errcode DasCredMngr_setFileStore(
 	DasCredMngr* pThis, const char* sPath
 );
 

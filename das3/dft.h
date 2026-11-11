@@ -217,7 +217,7 @@ DAS_API size_t DasDft_length(const DasDft* pThis);
  * @return 0 (DAS_OKAY) if the calculation was successful, a non-zero error code
  *           otherwise
  */
-DAS_API DasErrCode DasDft_calculate(
+DAS_API das_errcode DasDft_calculate(
 	DasDft* pThis, const double* pReal, const double* pImg
 );
 
@@ -330,7 +330,7 @@ DAS_API size_t DasPsd_length(const DasPsd* pThis);
  *           otherwise
  * @memberof DasPsd
  */
-DAS_API DasErrCode DasPsd_calculate(
+DAS_API das_errcode DasPsd_calculate(
 	DasPsd* pThis, const double* pReal, const double* pImg
 );
 
@@ -339,7 +339,7 @@ DAS_API DasErrCode DasPsd_calculate(
  * Internal calculations are still handled in double precision.
  * @memberof DasPsd
  */
-DAS_API DasErrCode DasPsd_calculate_f(
+DAS_API das_errcode DasPsd_calculate_f(
 	DasPsd* pThis, const float* pReal, const float* pImg
 );
 

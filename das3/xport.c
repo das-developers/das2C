@@ -147,7 +147,7 @@ ptrdiff_t DasXport_write(DasXport* pThis, const void* pIn, size_t uLen)
 	return nWrote;
 }
 
-DasErrCode _DasXport_unread(DasXport* pThis, const void* pIn, size_t uLen)
+das_errcode _DasXport_unread(DasXport* pThis, const void* pIn, size_t uLen)
 {
 	if(!(pThis->uFlags & DASXPORT_RD))
 		return das_error(DASERR_IO, "Unread on the %s transport, which is not "
@@ -200,12 +200,12 @@ ptrdiff_t _DasXport_drain(DasXport* pThis, DasBuf* pBuf)
 	return nWrote;
 }
 
-DasErrCode DasXport_close(DasXport* pThis)
+das_errcode DasXport_close(DasXport* pThis)
 {
 	if(pThis->bClosed) return DAS_OKAY;
 	pThis->bClosed = true;
 
-	DasErrCode nRet = DAS_OKAY;
+	das_errcode nRet = DAS_OKAY;
 	if(pThis->pVt->close != NULL)
 		nRet = pThis->pVt->close(pThis);
 	if(nRet != DAS_OKAY)
@@ -276,10 +276,10 @@ static ptrdiff_t _DasXportFile_write(DasXport* pBase, const void* pIn, size_t uL
 	return (ptrdiff_t)uLen;
 }
 
-static DasErrCode _DasXportFile_close(DasXport* pBase)
+static das_errcode _DasXportFile_close(DasXport* pBase)
 {
 	DasXportFile* pThis = (DasXportFile*)pBase;
-	DasErrCode nRet = DAS_OKAY;
+	das_errcode nRet = DAS_OKAY;
 
 	/* A full disk or a closed pipe downstream often only shows up here */
 	errno = 0;
@@ -295,7 +295,7 @@ static DasErrCode _DasXportFile_close(DasXport* pBase)
 	return nRet;
 }
 
-static DasErrCode _DasXportCmd_close(DasXport* pBase)
+static das_errcode _DasXportCmd_close(DasXport* pBase)
 {
 	/* A non-zero exit status is not a transport failure, the reader has
 	   already seen whatever the command wrote.  It is often why that output
@@ -554,7 +554,7 @@ static ptrdiff_t _DasXportSock_write(DasXport* pBase, const void* pIn, size_t uL
 	return (ptrdiff_t)uLen;
 }
 
-static DasErrCode _DasXportSock_close(DasXport* pBase)
+static das_errcode _DasXportSock_close(DasXport* pBase)
 {
 	DasXportSock* pThis = (DasXportSock*)pBase;
 	if(pThis->bOwn && (pThis->nSock != -1)) _xport_sockClose(pThis->nSock);
@@ -669,7 +669,7 @@ static ptrdiff_t _DasXportSsl_write(DasXport* pBase, const void* pIn, size_t uLe
 	return (ptrdiff_t)uLen;
 }
 
-static DasErrCode _DasXportSsl_close(DasXport* pBase)
+static das_errcode _DasXportSsl_close(DasXport* pBase)
 {
 	DasXportSsl* pThis = (DasXportSsl*)pBase;
 	if(pThis->pSsl != NULL){
@@ -727,11 +727,11 @@ DasXport* new_DasXport_sock(intptr_t nSock, const char* sMode)
 
 #define _XP_COPY_CHUNK 16384
 
-DasErrCode DasXport_copyTo(
+das_errcode DasXport_copyTo(
 	DasXport* pThis, DasXport* pDest, das_progress_f onProgress, void* pUser,
 	int64_t* pCopied
 ){
-	DasErrCode nRet = DAS_OKAY;
+	das_errcode nRet = DAS_OKAY;
 	int64_t nTotal = 0;
 	ubyte aBuf[_XP_COPY_CHUNK];
 
@@ -844,18 +844,18 @@ static ptrdiff_t _DasXportDeflate_write(DasXport* pBase, const void* pIn, size_t
 	return (ptrdiff_t)uLen;
 }
 
-static DasErrCode _DasXportInflate_close(DasXport* pBase)
+static das_errcode _DasXportInflate_close(DasXport* pBase)
 {
 	DasXportZlib* pThis = (DasXportZlib*)pBase;
 	return DasXport_close(pThis->pInner);
 }
 
-static DasErrCode _DasXportDeflate_close(DasXport* pBase)
+static das_errcode _DasXportDeflate_close(DasXport* pBase)
 {
 	DasXportZlib* pThis = (DasXportZlib*)pBase;
 	pThis->zs.avail_in = 0;
 	ptrdiff_t nFin = _xport_deflateRun(pThis, Z_FINISH);
-	DasErrCode nRet = DasXport_close(pThis->pInner);
+	das_errcode nRet = DasXport_close(pThis->pInner);
 	if(nFin < 0) return DASERR_IO;
 	if(nRet != DAS_OKAY)
 		_DasXport_fail(pBase, "%s", DasXport_error(pThis->pInner));

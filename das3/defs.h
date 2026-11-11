@@ -207,7 +207,7 @@ typedef uint8_t ubyte;
 /** return code type
  * 0 indicates success, negative integer indicates failure
  */
-typedef int DasErrCode;
+typedef int das_errcode;
 
 /** success return code */
 #define DAS_OKAY 0

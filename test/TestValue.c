@@ -108,7 +108,7 @@ static void test_accum_values(void)
 
 static void test_accum_guards(void)
 {
-	DasErrCode r;
+	das_errcode r;
 
 	{	/* int8 overflow: 100 + 3*30 = 190 > 127 -> guard, unchanged */
 		int8_t a=100, s=3;
@@ -170,7 +170,7 @@ static void test_accum_guards(void)
 
 static void test_accum_rejects(void)
 {
-	DasErrCode r;
+	das_errcode r;
 	int64_t a=0, s=1;
 
 	/* vtTime is rejected: calendar math needs two value types */
@@ -254,7 +254,7 @@ static void test_binxform_table(void)
 		memset(out, 0x5A, sizeof(out));
 		vt_store(aVt[i], in, v);
 
-		DasErrCode r = das_value_binXform(aVt[i], in, NULL, aVt[j], out, NULL, 0);
+		das_errcode r = das_value_binXform(aVt[i], in, NULL, aVt[j], out, NULL, 0);
 
 		if(r != DAS_OKAY){
 			FAIL("%s -> %s refused %g", das_vt_toStr(aVt[i]), das_vt_toStr(aVt[j]), v);
@@ -336,7 +336,7 @@ static void test_binxform_guards(void)
 
 static void test_binop_values(void)
 {
-	DasErrCode r;
+	das_errcode r;
 
 	{	/* the exactness claim: a TT2000 tick above 2^53 survives */
 		int64_t a=1500000000123456789LL, b=1LL, out=0;
@@ -387,7 +387,7 @@ static void test_binop_values(void)
 
 static void test_binop_guards(void)
 {
-	DasErrCode r;
+	das_errcode r;
 
 	{	/* int64 add overflow, output untouched */
 		int64_t a=INT64_MAX, b=1LL, out=0;
@@ -437,7 +437,7 @@ static void test_binop_guards(void)
 
 static void test_binop_rejects(void)
 {
-	DasErrCode r;
+	das_errcode r;
 	double a=1.0, b=2.0, out=0.0;
 
 	/* vtTime is refused: broken down calendar math mixes two value types */

@@ -107,7 +107,7 @@ static size_t ctrlCount(const DasSrc* pSrc, int nSec)
 	return n;
 }
 
-static DasErrCode chk(const DasSrcCtrl* pC, const char* sVal)
+static das_errcode chk(const DasSrcCtrl* pC, const char* sVal)
 {
 	return DasSrcCtrl_check(pC, sVal, NULL, 0);
 }

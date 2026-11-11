@@ -121,10 +121,10 @@ static int make_files(const char* sBase, const char** psFiles)
 
 /* Named ranges for the iterator, built the way a caller would: the bounds
    as a das_range, then the dimension name */
-static DasErrCode _dr_utc(das_dim_range* pDr, const char* sBeg, const char* sEnd)
+static das_errcode _dr_utc(das_dim_range* pDr, const char* sBeg, const char* sEnd)
 {
 	das_range rng;
-	DasErrCode nRet = das_range_fromUtc(&rng, sBeg, sEnd);
+	das_errcode nRet = das_range_fromUtc(&rng, sBeg, sEnd);
 	if(nRet != DAS_OKAY) return nRet;
 	return das_dim_range_init(pDr, "time", &rng);
 }

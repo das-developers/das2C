@@ -53,7 +53,7 @@ struct das_pkt {
  * @returns 0 if successful, or a positive integer if not.
  * @memberof DasPkt
  */
-DasErrCode DasPkt_decodeData(DasPkt* pThis, DasBuf* pBuf);
+das_errcode DasPkt_decodeData(DasPkt* pThis, DasBuf* pBuf);
 
 /** Check to see if a legal plane layout is present.
  * 
@@ -81,7 +81,7 @@ bool DasPkt_validate(DasPkt* pThis );
  *
  * @memberof DasPkt
  */
-DasErrCode DasPkt_copyPlanes(DasPkt* pThis,  const DasPkt* pOther);
+das_errcode DasPkt_copyPlanes(DasPkt* pThis,  const DasPkt* pOther);
 
 /** Create a DasPkt from XML data
  * 

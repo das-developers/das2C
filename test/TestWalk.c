@@ -89,7 +89,7 @@ struct drive_log {
 };
 
 /* Answer one step with candidate uIdx: feed the file or report it missing */
-static DasErrCode step(DasNodeWalk* pWalk, size_t uIdx, struct drive_log* pLog)
+static das_errcode step(DasNodeWalk* pWalk, size_t uIdx, struct drive_log* pLog)
 {
 	const char* sUrl = DasNodeWalk_url(pWalk, uIdx);
 	if((pLog != NULL) && (pLog->uUrls < MAX_LOG)) pLog->aUrl[pLog->uUrls++] = sUrl;
@@ -99,7 +99,7 @@ static DasErrCode step(DasNodeWalk* pWalk, size_t uIdx, struct drive_log* pLog)
 		DasNodeWalk_fail(pWalk, uIdx, "no such file");
 		return DASERR_NOTIMP;   /* any code that is not DAS_OKAY or DASERR_NODE */
 	}
-	DasErrCode rc = DasNodeWalk_feed(pWalk, uIdx, pDoc, uLen, NULL);
+	das_errcode rc = DasNodeWalk_feed(pWalk, uIdx, pDoc, uLen, NULL);
 	free(pDoc);
 	return rc;
 }
@@ -288,7 +288,7 @@ static void test_fallback(void)
 	/* A document that is not JSON: feed says so, the walk moves on */
 	pWalk = new_DasNodeWalk(pRoot, "junk/x");
 	daslog_setlevel(DASLOG_CRIT);
-	DasErrCode rc = step(pWalk, 0, NULL);
+	das_errcode rc = step(pWalk, 0, NULL);
 	daslog_setlevel(DASLOG_WARN);
 	CHECK(rc == DASERR_NODE, "junk is reported to the driver");
 	CHECK(DasNodeWalk_state(pWalk) == das_walk_failed, "and nothing else to try");
@@ -352,7 +352,7 @@ static void test_federated(void)
 	size_t uLen = 0;
 	char* pDoc = readFile("test/das_walk/src.json", &uLen);
 	daslog_setlevel(DASLOG_CRIT);
-	DasErrCode rc = DasNodeWalk_feed(pWalk, 0, pDoc, uLen, NULL);
+	das_errcode rc = DasNodeWalk_feed(pWalk, 0, pDoc, uLen, NULL);
 	daslog_setlevel(DASLOG_WARN);
 	free(pDoc);
 	CHECK(rc == DASERR_NODE, "a source is not a seed");

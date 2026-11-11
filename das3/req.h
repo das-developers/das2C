@@ -183,7 +183,7 @@ DAS_API void DasReq_setLabel(DasReq* pThis, const char* sLabel);
  * @returns DAS_OKAY, or DASERR_SRC if memory ran out or the key is empty.
  * @memberof DasReq
  */
-DAS_API DasErrCode DasReq_set(DasReq* pThis, const char* sKey, const char* sVal);
+DAS_API das_errcode DasReq_set(DasReq* pThis, const char* sKey, const char* sVal);
 
 /** The value stored under a key, exactly as set, or NULL when the key is
  * not present.  Only keys set directly are found, the derived entries a
@@ -235,7 +235,7 @@ DAS_API int DasReq_find(const DasReq* pThis, const char* sKey);
 
 /** Name a protocol parameter directly, see the group description.
  * @returns DAS_OKAY, or DASERR_SRC if memory ran out.  @memberof DasReq */
-DAS_API DasErrCode DasReq_setRaw(DasReq* pThis, const char* sName, const char* sVal);
+DAS_API das_errcode DasReq_setRaw(DasReq* pThis, const char* sName, const char* sVal);
 
 /** @memberof DasReq */
 DAS_API size_t DasReq_rawCount(const DasReq* pThis);
@@ -263,7 +263,7 @@ DAS_API char* DasReq_text(const DasReq* pThis);
 
 /** Write DasReq_text() to a file, replacing any existing file.
  * @returns DAS_OKAY, or DASERR_SRC after logging why not.  @memberof DasReq */
-DAS_API DasErrCode DasReq_write(const DasReq* pThis, const char* sPath);
+DAS_API das_errcode DasReq_write(const DasReq* pThis, const char* sPath);
 
 /** @} */
 /** @} */

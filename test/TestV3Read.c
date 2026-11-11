@@ -126,7 +126,7 @@ static void checkToStr(const char* sWhat, str_fn fn, const void* pObj, const cha
 	}
 }
 
-DasErrCode onStream(DasStream* pSd, void* pUser){
+das_errcode onStream(DasStream* pSd, void* pUser){
 	fputs("\n", stdout);
 	char* sInfo = checkInfo("DasStream_info", _infoSd, pSd);
 	checkToStr("DasStream_toStr", _strSd, pSd, sInfo);
@@ -135,7 +135,7 @@ DasErrCode onStream(DasStream* pSd, void* pUser){
 	return DAS_OKAY;	
 }
 
-DasErrCode onDataset(DasDs* pDs, int iPktId, void* pUser)
+das_errcode onDataset(DasDs* pDs, int iPktId, void* pUser)
 {
 	/* The ID handed to the callback has to agree with the stream's own table,
 	   and the dataset must be the active one for it */
@@ -182,7 +182,7 @@ static void prnShape(int iPktId, DasDs* pDs)
 static int64_t g_aDataCount[MAX_PKT_IDS] = {0};
 static DasDs*  g_aLastDs[MAX_PKT_IDS]    = {NULL};
 
-DasErrCode onData(DasDs* pDs, int iPktId, void* pUser)
+das_errcode onData(DasDs* pDs, int iPktId, void* pUser)
 {
 	if((iPktId < 0)||(iPktId >= MAX_PKT_IDS)){  /* out of range: don't subsample */
 		prnShape(iPktId, pDs);
@@ -196,7 +196,7 @@ DasErrCode onData(DasDs* pDs, int iPktId, void* pUser)
 	return DAS_OKAY;
 }
 
-DasErrCode onClose(DasStream* pSd, const DasExcept* pEx, void* pUser)
+das_errcode onClose(DasStream* pSd, const DasExcept* pEx, void* pUser)
 {
 	for(int i = 0; i < MAX_PKT_IDS; ++i){
 		if(g_aLastDs[i] != NULL){

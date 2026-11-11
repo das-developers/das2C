@@ -70,19 +70,19 @@ static bool streq(const char* a, const char* b)
 
 /* Refusals log at error level by design; keep expected ones out of the
  * test output */
-static DasErrCode quiet(DasErrCode (*f)(DasCat*, const char*), DasCat* p, const char* s)
+static das_errcode quiet(das_errcode (*f)(DasCat*, const char*), DasCat* p, const char* s)
 {
 	daslog_setlevel(DASLOG_CRIT);
-	DasErrCode n = f(p, s);
+	das_errcode n = f(p, s);
 	daslog_setlevel(DASLOG_WARN);
 	return n;
 }
 /* for the two-string setters, argument order is (url, uri) as in catalog.h */
-static DasErrCode quiet2(
-	DasErrCode (*f)(DasCat*, const char*, const char*), DasCat* p, const char* a, const char* b
+static das_errcode quiet2(
+	das_errcode (*f)(DasCat*, const char*, const char*), DasCat* p, const char* a, const char* b
 ){
 	daslog_setlevel(DASLOG_CRIT);
-	DasErrCode n = f(p, a, b);
+	das_errcode n = f(p, a, b);
 	daslog_setlevel(DASLOG_WARN);
 	return n;
 }

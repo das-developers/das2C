@@ -106,7 +106,7 @@ static void testBase(void)
 }
 
 /* ************************************************************************* */
-static DasErrCode _stopCopy(int64_t nBytes, void* pUser)
+static das_errcode _stopCopy(int64_t nBytes, void* pUser)
 {
 	(void)nBytes; (void)pUser;
 	return 77;

@@ -53,7 +53,7 @@ struct das_buffer {
 /* Initialize a stack DasBuf object. 
  * Does *not* zero pData on startup since the caller may just want to 
  * provide a nice interface over read-only memory. */
-DasErrCode _init_DasBuf_wrap(DasBuf* pThis, void* pData, size_t uLen, const char* sMode);
+das_errcode _init_DasBuf_wrap(DasBuf* pThis, void* pData, size_t uLen, const char* sMode);
 
 #ifdef __cplusplus
 }

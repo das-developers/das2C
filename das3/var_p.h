@@ -305,7 +305,7 @@ const ubyte* _DasVarBin_runAt(
  * @param pBuf receives the text
  * @returns DAS_OKAY, or an error code after logging why not
  * @memberof DasVar */
-DasErrCode DasVar_encode(DasVar* pThis, const char* sRole, DasBuf* pBuf);
+das_errcode DasVar_encode(DasVar* pThis, const char* sRole, DasBuf* pBuf);
 
 #ifdef __cplusplus
 }

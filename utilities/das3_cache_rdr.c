@@ -67,7 +67,7 @@ typedef struct handler_data {
 } handler_data_t;
 
 
-DasErrCode onStreamHdr(DasStream* pSdIn, void* vpHDat)
+das_errcode onStreamHdr(DasStream* pSdIn, void* vpHDat)
 {
 	handler_data_t* pHDat = (handler_data_t*)vpHDat;
 	DasDesc* pSdOut = (DasDesc*)(pHDat->pSdOut);
@@ -80,14 +80,14 @@ DasErrCode onStreamHdr(DasStream* pSdIn, void* vpHDat)
 		DasDesc_copyIn(pSdOut, (DasDesc*)pSdIn);
 		DasDesc_set(pSdOut, "DatumRange", "xCacheRange", sRng);
 
-		DasErrCode nRet = DasIO_writeStreamDesc(pHDat->pOut, pHDat->pSdOut);
+		das_errcode nRet = DasIO_writeStreamDesc(pHDat->pOut, pHDat->pSdOut);
 		if(nRet != 0) return nRet;
 		pHDat->bHdrSent = true;
 	}
 	return 0;
 }
 
-DasErrCode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* vpHDat)
+das_errcode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* vpHDat)
 {
 	handler_data_t* pHDat = (handler_data_t*)vpHDat;
 	DasStream* pSdOut = pHDat->pSdOut;
@@ -116,7 +116,7 @@ DasErrCode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, void* vpHDat)
 	return DasIO_writeDesc(pHDat->pOut, (DasDesc*)pPdOut, 0);
 }
 
-DasErrCode onPktData(DasPkt* pPktIn, void* vpHDat)
+das_errcode onPktData(DasPkt* pPktIn, void* vpHDat)
 {
 	handler_data_t* pHDat = (handler_data_t*)vpHDat;
 
@@ -131,7 +131,7 @@ DasErrCode onPktData(DasPkt* pPktIn, void* vpHDat)
 	if(rX < pHDat->rBeg) return 0;
 	if(rX >= pHDat->rEnd) return 0;
 
-	DasErrCode nRet = DAS_OKAY;
+	das_errcode nRet = DAS_OKAY;
 	DasBuf_reinit(pHDat->pBuf);
 	if((nRet = DasPkt_encodeData(pPktIn, pHDat->pBuf)) != DAS_OKAY)
 		return nRet;
@@ -153,7 +153,7 @@ DasErrCode onPktData(DasPkt* pPktIn, void* vpHDat)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #endif
-DasErrCode onIgnoreExcept(DasStream* pSd, const DasExcept* pExcept, void* vpHDat)
+das_errcode onIgnoreExcept(DasStream* pSd, const DasExcept* pExcept, void* vpHDat)
 {
 	return DAS_OKAY;
 }

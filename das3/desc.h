@@ -304,7 +304,7 @@ DAS_API const char* DasDesc_getTypeByIdx(const DasDesc* pThis, size_t uIdx);
  * @return 0 on success or a positive error code if there is a problem.
  * @memberof DasDesc
  */
-DAS_API DasErrCode DasDesc_set(
+DAS_API das_errcode DasDesc_set(
 	DasDesc* pThis, const char* sType, const char* sName, const char* sVal
 );
 
@@ -354,7 +354,7 @@ DAS_API DasErrCode DasDesc_set(
  * @return 0 on success or a positive error code if there is a problem.
  * @memberof DasDesc
  */
-DAS_API DasErrCode DasDesc_flexSet(
+DAS_API das_errcode DasDesc_flexSet(
    DasDesc* pThis, const char* sType, ubyte uType, const char* sName,
    const char* sVal, char cSep, das_units units, int nStandard
 );
@@ -363,7 +363,7 @@ DAS_API DasErrCode DasDesc_flexSet(
  * 
  * * @memberof DasDesc
  */
-DAS_API DasErrCode DasDesc_setProp(DasDesc* pThis, const DasProp* pProp);
+DAS_API das_errcode DasDesc_setProp(DasDesc* pThis, const DasProp* pProp);
 
 /** Get the type string for a property 
  * 
@@ -518,14 +518,14 @@ DAS_API size_t DasDesc_getArray(
  * a type so that it will be parsed into the given type.
  * @memberof DasDesc
  */
-DAS_API DasErrCode DasDesc_setStr(
+DAS_API das_errcode DasDesc_setStr(
 	DasDesc* pThis, const char* sName, const char* sVal
 );
 
 /** Set a string property in the manner of sprintf
  * @memberof DasDesc
  */
-DAS_API DasErrCode DasDesc_vSetStr(
+DAS_API das_errcode DasDesc_vSetStr(
 	DasDesc* pThis, const char* sName, const char* sFmt, ...
 );
 
@@ -539,7 +539,7 @@ DAS_API double DasDesc_getDouble(const DasDesc* pThis, const char* sName);
 /** Set property of type double.  
  * @memberof DasDesc
  */
-DAS_API DasErrCode DasDesc_setDouble(
+DAS_API das_errcode DasDesc_setDouble(
 	DasDesc* pThis, const char* sName, double value
 );
 
@@ -573,7 +573,7 @@ DAS_API double DasDesc_getDatum(
  *
  * @memberof DasDesc
  */
-DAS_API DasErrCode DasDesc_setDatum(
+DAS_API das_errcode DasDesc_setDatum(
    DasDesc* pThis, const char* sName, double rVal, das_units units
 );
 
@@ -602,7 +602,7 @@ DAS_API double* DasDesc_getDoubleAry(
 /** Set the property of type double array.
  * @memberof DasDesc
  */
-DAS_API DasErrCode DasDesc_setDoubleArray(
+DAS_API das_errcode DasDesc_setDoubleArray(
 	DasDesc* pThis, const char* sName, int nItems, double* pValues
 );
 
@@ -621,7 +621,7 @@ DAS_API int DasDesc_getInt(const DasDesc* pThis, const char* sName);
 /** Set the property of type int.
  * @memberof DasDesc
  */
-DAS_API DasErrCode DasDesc_setInt(DasDesc* pThis, const char* sName, int nVal);
+DAS_API das_errcode DasDesc_setInt(DasDesc* pThis, const char* sName, int nVal);
 
 /** Get a property boolean value
  * 
@@ -638,14 +638,14 @@ DAS_API bool DasDesc_getBool(DasDesc* pThis, const char* sName);
  * @param sName the name of the property
  * @param bVal either true or false.
  */
-DAS_API DasErrCode DasDesc_setBool(
+DAS_API das_errcode DasDesc_setBool(
 	DasDesc* pThis, const char* sName, bool bVal
 );
 
 /** Set property of type DatumRange (double, double, UnitType triple)
  * @memberof DasDesc
  */
-DAS_API DasErrCode DasDesc_setDatumRng(
+DAS_API das_errcode DasDesc_setDatumRng(
 	DasDesc* pThis, const char* sName, double beg, double end, das_units units
 );
 
@@ -656,7 +656,7 @@ DAS_API DasErrCode DasDesc_setDatumRng(
  * value.
  * @memberof DasDesc
  */
-DAS_API DasErrCode DasDesc_getStrRng(
+DAS_API das_errcode DasDesc_getStrRng(
 	DasDesc* pThis, const char* sName, char* sMin, char* sMax, 
 	das_units* pUnits, size_t uLen
 );
@@ -665,7 +665,7 @@ DAS_API DasErrCode DasDesc_getStrRng(
  * Note the array is cast to a double array before encoding.
  * @memberof DasDesc
  */
-DAS_API DasErrCode DasDesc_setFloatAry(
+DAS_API das_errcode DasDesc_setFloatAry(
 	DasDesc* pThis, const char* sName, int nItems, float* pValues
 );
 

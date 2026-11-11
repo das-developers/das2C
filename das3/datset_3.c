@@ -160,7 +160,7 @@ typedef struct serial_xml_context {
 	bool bInValues;
 	char cValSep;
 
-	DasErrCode nDasErr;
+	das_errcode nDasErr;
 	char sErrMsg[DS_XML_MAXERR];
 } context_t;
 
@@ -248,12 +248,12 @@ static void _serial_var_deinit(context_t* pCtx)
 #define _IDX_FOR_DS  false
 #define _IDX_FOR_VAR true
 
-static DasErrCode _serial_parseIndex(
+static das_errcode _serial_parseIndex(
 	const char* sIndex, int nRank, ptrdiff_t* pMap, bool bInVar,
 	const char* sElement
 ){
 	int nGot = 0;
-	DasErrCode nRet = das_shape_fromStr(
+	das_errcode nRet = das_shape_fromStr(
 		sIndex, VARIDX_MAX, bInVar, sElement, pMap, &nGot
 	);
 	if(nRet != DAS_OKAY)
@@ -279,14 +279,14 @@ static DasErrCode _serial_parseIndex(
 
    pnProduct receives the values-per-item, which is what the codec and the
    <sequence> child count want. */
-static DasErrCode _serial_parseIntern(
+static das_errcode _serial_parseIntern(
 	const char* sIntern, int nMaxRank, ptrdiff_t* pShape, int* pnRank,
 	int* pnProduct, int nPktId
 ){
 	char sWhere[64];
 	snprintf(sWhere, sizeof(sWhere), "intern= in dataset ID %02d", nPktId);
 
-	DasErrCode nRet = das_shape_fromStr(
+	das_errcode nRet = das_shape_fromStr(
 		sIntern, nMaxRank, false /* no ^ or - inside an item */, sWhere, pShape,
 		pnRank
 	);
@@ -322,7 +322,7 @@ static DasErrCode _serial_parseIntern(
    If the fill value string is NULL, just return a default fill from
    value.c 
 */
-static DasErrCode _serial_initfill(
+static das_errcode _serial_initfill(
 	ubyte* pBuf, int nBufLen, das_val_type vt, const char* sFill, bool bText, bool bBool
 ){
 	/* A boolean's fill must end up as a NUMBER in the array, but a user sets it to
@@ -431,7 +431,7 @@ static void _serial_onOpenDs(context_t* pCtx, const char** psAttr)
 		return;
 	}
 
-	DasErrCode nRet;
+	das_errcode nRet;
 	if((nRet = _serial_parseIndex(sIndex, nRank, pCtx->aExtShape, _IDX_FOR_DS, "dataset")) != DAS_OKAY){
 		pCtx->nDasErr = nRet;
 		return;
@@ -586,7 +586,7 @@ static void _serial_onOpenDim(
 		DasDim_setPrimeCoord(pDim, false);
 	}
 	
-	DasErrCode nRet = 0;
+	das_errcode nRet = 0;
 	if((nRet = DasDs_addDim(pCtx->pDs, pDim)) != DAS_OKAY){
 		pCtx->nDasErr = nRet;
 		del_DasDesc((DasDesc*)pDim);
@@ -902,7 +902,7 @@ static void _serial_onSequence(context_t* pCtx, const char** psAttr)
 	 * up from the packet description */
 	pCtx->varItemType = das_vt_fromStr(pCtx->valStorage);
 
-	DasErrCode nRet;
+	das_errcode nRet;
 	if((nRet = das_value_fromStr(sMin, pCtx->varItemType, pCtx->aSeqMin, _VAL_SEQ_CONST_SZ)) != 0){
 		das_error(DASERR_SERIAL, "Could not convert sequence minval string '%s' to a value", sMin);
 		pCtx->nDasErr = nRet;
@@ -1049,7 +1049,7 @@ static void _serial_onSequence(context_t* pCtx, const char** psAttr)
 #define NO_FILL  false
 #define SET_FILL true
 
-static DasErrCode _serial_makeVarAry(context_t* pCtx, bool bHandleFill)
+static das_errcode _serial_makeVarAry(context_t* pCtx, bool bHandleFill)
 {
 	/* Okay, make an array to hold the values since this is packet data */
 	assert(pCtx->pCurAry == NULL);
@@ -1202,7 +1202,7 @@ static DasErrCode _serial_makeVarAry(context_t* pCtx, bool bHandleFill)
 
 	/* Add it to the dataset.  The dataset adds its own reference, so the one
 	   made above is released here. pCurAry doesn't own the object anymore */
-	DasErrCode nRet = DasDs_addAry(pCtx->pDs, pCtx->pCurAry);
+	das_errcode nRet = DasDs_addAry(pCtx->pDs, pCtx->pCurAry);
 	dec_DasAry(pCtx->pCurAry);
 	if(nRet != DAS_OKAY){
 		pCtx->pCurAry = NULL;   /* nothing holds it now */
@@ -1484,7 +1484,7 @@ static void _serial_onPacket(context_t* pCtx, const char** psAttr)
 		pCtx->bFlattened = true;
 	}
 
-	DasErrCode nRet = _serial_makeVarAry(pCtx, SET_FILL);
+	das_errcode nRet = _serial_makeVarAry(pCtx, SET_FILL);
 	if(nRet != DAS_OKAY)
 		pCtx->nDasErr = nRet;
 }
@@ -1567,7 +1567,7 @@ static void _serial_onOpenVals(context_t* pCtx, const char** psAttr)
 
 	pCtx->sValEncType = DAS_ENC_UTF8;
 
-	DasErrCode nRet = _serial_makeVarAry(pCtx, NO_FILL);
+	das_errcode nRet = _serial_makeVarAry(pCtx, NO_FILL);
 	if(nRet != DAS_OKAY){
 		pCtx->nDasErr = nRet;
 		return;
@@ -2154,7 +2154,7 @@ static void _serial_onCloseVar(context_t* pCtx)
 						pCtx->nPktId);
 					goto NO_CUR_VAR;
 				}
-				DasErrCode nTRet = DasCodec_setIdxTerms(pNewCodec, nLvls, aLvls);
+				das_errcode nTRet = DasCodec_setIdxTerms(pNewCodec, nLvls, aLvls);
 				if(nTRet != DAS_OKAY){ pCtx->nDasErr = nTRet; goto NO_CUR_VAR; }
 			}
 			else if((nSpan >= 2) && DasCodec_isText(pNewCodec)){

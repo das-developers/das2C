@@ -538,7 +538,7 @@ DAS_API bool DasSrcCtrl_range(const DasSrcCtrl* pThis, const char** psLo, const 
  * @returns DAS_OKAY or DASERR_SRC.  Nothing is logged.
  * @memberof DasSrcCtrl
  */
-DAS_API DasErrCode DasSrcCtrl_check(
+DAS_API das_errcode DasSrcCtrl_check(
 	const DasSrcCtrl* pThis, const char* sVal, char* sWhy, size_t uWhy
 );
 
@@ -611,7 +611,7 @@ DAS_API void DasSrc_stamp(const DasSrc* pThis, DasReq* pReq);
  *        or the stamp does not match, the latter after logging.
  * @memberof DasSrc
  */
-DAS_API DasErrCode DasSrc_check(const DasSrc* pThis, DasReq* pReq, size_t* puBad);
+DAS_API das_errcode DasSrc_check(const DasSrc* pThis, DasReq* pReq, size_t* puBad);
 
 /** The MIME type a requisition is expected to produce.
  *

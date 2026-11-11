@@ -409,7 +409,7 @@ int DasDim_numAxes(const DasDim* pThis)
 	return nAxes;
 }
 
-DasErrCode DasDim_setAxis(DasDim* pThis, int iAxis, const char* sAxis)
+das_errcode DasDim_setAxis(DasDim* pThis, int iAxis, const char* sAxis)
 {
 	if((iAxis < 0)||(iAxis >= DASDIM_NAXES))
 		return das_error(DASERR_DIM, "Axis index %d is not valid for a dimension", iAxis);
@@ -472,9 +472,9 @@ static void _del_DasDim(DasDesc* pDesc){
 /* ************************************************************************* */
 /* Encoding as XML */
 
-DasErrCode DasDim_encode(DasDim* pThis, DasBuf* pBuf)
+das_errcode DasDim_encode(DasDim* pThis, DasBuf* pBuf)
 {
-	DasErrCode nRet = DAS_OKAY;
+	das_errcode nRet = DAS_OKAY;
 	char sAxis[64] = {'\0'};
 	const char* sType = "data";
 	if(DasDim_type(pThis) == DASDIM_COORD){

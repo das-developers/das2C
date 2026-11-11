@@ -263,7 +263,7 @@ DAS_API int DasCat_cacheAge(const DasCat* pThis);
  *        then start at the seed
  * @memberof DasCat
  */
-DAS_API DasErrCode DasCat_setPrefix(DasCat* pThis, const char* sUri);
+DAS_API das_errcode DasCat_setPrefix(DasCat* pThis, const char* sUri);
 
 /** Where relative paths start: the seed's URI when one is set, else the
  * prefix, DASCAT_DEF_PREFIX unless DasCat_setPrefix() was called
@@ -295,7 +295,7 @@ DAS_API const char* DasCat_prefix(const DasCat* pThis);
  * @returns DAS_OKAY, or DASERR_CAT with the reason logged
  * @memberof DasCat
  */
-DAS_API DasErrCode DasCat_setSeed(DasCat* pThis, const char* sUrl, const char* sUri);
+DAS_API das_errcode DasCat_setSeed(DasCat* pThis, const char* sUrl, const char* sUri);
 
 /** The location given to DasCat_setSeed(), or NULL if none was
  * @memberof DasCat
@@ -330,7 +330,7 @@ DAS_API DasNode* DasCat_seed(DasCat* pThis);
  * @returns DAS_OKAY, or DASERR_CAT with the reason logged
  * @memberof DasCat
  */
-DAS_API DasErrCode DasCat_mount(DasCat* pThis, const char* sUrl, const char* sUri);
+DAS_API das_errcode DasCat_mount(DasCat* pThis, const char* sUrl, const char* sUri);
 
 /** Number of nodes mounted with DasCat_mount(); the seed is not one
  * @memberof DasCat

@@ -340,7 +340,7 @@ DAS_API DasPlane* DasPkt_getXPlane(DasPkt* pThis);
  * 
  * @memberof DasPkt
  */
-DAS_API DasErrCode DasPkt_encode(const DasPkt* pThis, DasBuf* pBuf);
+DAS_API das_errcode DasPkt_encode(const DasPkt* pThis, DasBuf* pBuf);
 
 /** Serialize a packet's current data
  * In addition to holding the format information for Das2 Stream packets
@@ -353,7 +353,7 @@ DAS_API DasErrCode DasPkt_encode(const DasPkt* pThis, DasBuf* pBuf);
  * 
  * @memberof DasPkt
  */
-DAS_API DasErrCode DasPkt_encodeData(const DasPkt* pThis, DasBuf* pBuf);
+DAS_API das_errcode DasPkt_encodeData(const DasPkt* pThis, DasBuf* pBuf);
 
 
 /** Convenience function for setting a single value in a plane
@@ -369,7 +369,7 @@ DAS_API DasErrCode DasPkt_encodeData(const DasPkt* pThis, DasBuf* pBuf);
  * @return 0 on success or a positive error code if there is a problem
  * @memberof DasPkt
  */
-DAS_API DasErrCode DasPkt_setValue(
+DAS_API das_errcode DasPkt_setValue(
 	DasPkt* pThis, size_t uPlane, size_t uItem, double val
 );
 
@@ -386,7 +386,7 @@ DAS_API DasErrCode DasPkt_setValue(
  * @return 0 on success or a positive error code if there is a problem
  * @memberof DasPkt
  */
-DAS_API DasErrCode DasPkt_setValues(
+DAS_API das_errcode DasPkt_setValues(
 	DasPkt* pThis, size_t uPlane, const double* pVals
 );
 

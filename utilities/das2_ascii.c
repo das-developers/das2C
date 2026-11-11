@@ -39,7 +39,7 @@ bool g_bAnnotations = true;
 
 /* ************************************************************************* */
 /* Output a Stream Header */
-DasErrCode onStreamHdr(DasStream* pSdIn, void* vpOut)
+das_errcode onStreamHdr(DasStream* pSdIn, void* vpOut)
 {
 	DasIO* pOut = (DasIO*)vpOut;
 	g_pSdOut = DasStream_copy(pSdIn);               /* Copy input descriptor */
@@ -48,7 +48,7 @@ DasErrCode onStreamHdr(DasStream* pSdIn, void* vpOut)
 
 /* ************************************************************************* */
 /* Output a Packet Header with different value encodings */
-DasErrCode OnPktHdr(DasStream* pSdIn, DasPkt* pPdIn, int nPktId, void* vpOut)
+das_errcode OnPktHdr(DasStream* pSdIn, DasPkt* pPdIn, int nPktId, void* vpOut)
 {
 	DasIO* pOut = (DasIO*)vpOut;
 	DasPkt* pPdOut = NULL;
@@ -117,7 +117,7 @@ DasErrCode OnPktHdr(DasStream* pSdIn, DasPkt* pPdIn, int nPktId, void* vpOut)
 
 /* ************************************************************************* */
 /* Copy and output data */
-DasErrCode onPktData(DasPkt* pPdIn, int nPktId, void* vpOut )
+das_errcode onPktData(DasPkt* pPdIn, int nPktId, void* vpOut )
 {
 	DasIO* pOut = (DasIO*)vpOut;
 	DasPkt* pPdOut = DasStream_getPkt(g_pSdOut, nPktId);
@@ -136,7 +136,7 @@ DasErrCode onPktData(DasPkt* pPdIn, int nPktId, void* vpOut )
 /* ************************************************************************* */
 /* Maybe copy out Comments */
 
-DasErrCode onComment(DasStream* pSd, const DasComment* pCmt, void* vpOut)
+das_errcode onComment(DasStream* pSd, const DasComment* pCmt, void* vpOut)
 {
 	if(! g_bAnnotations) return 0;
 	
@@ -146,7 +146,7 @@ DasErrCode onComment(DasStream* pSd, const DasComment* pCmt, void* vpOut)
 
 /* ************************************************************************* */
 /* Close Output, passing on an exception if annotations are kept */
-DasErrCode onClose(DasStream* sd, const DasExcept* pExcept, void* vpOut)
+das_errcode onClose(DasStream* sd, const DasExcept* pExcept, void* vpOut)
 {
 	DasIO* pOut = (DasIO*)vpOut;
 	if((pExcept != NULL)&&(g_bAnnotations))

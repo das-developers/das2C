@@ -87,7 +87,7 @@ struct das_plane {
  * @return 0 if successful, or a positive integer if not.
  * @memberof DasPlane
  */
-DasErrCode DasPlane_decodeData(const DasPlane* pThis, DasBuf* pBuf);
+das_errcode DasPlane_decodeData(const DasPlane* pThis, DasBuf* pBuf);
 
 /** Serialize a Plane Descriptor as XML data
  *
@@ -99,7 +99,7 @@ DasErrCode DasPlane_decodeData(const DasPlane* pThis, DasBuf* pBuf);
  * @return 0 if successful, or a positive integer if not.
  * @memberof DasPlane
  */
-DasErrCode DasPlane_encode(
+das_errcode DasPlane_encode(
 	DasPlane* pThis, DasBuf* pBuf, const char* sIndent
 );
 
@@ -120,7 +120,7 @@ DasErrCode DasPlane_encode(
  * @returns 0 if successful, or a positive integer if not.
  * @memberof DasPlane
  */
-DasErrCode DasPlane_encodeData(DasPlane* pThis, DasBuf* pBuf, bool bLast);
+das_errcode DasPlane_encodeData(DasPlane* pThis, DasBuf* pBuf, bool bLast);
 
 /** Creates a Plane Descriptor with mostly empty settings.
  * @memberof DasPlane

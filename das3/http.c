@@ -1050,7 +1050,7 @@ static bool _das_http_sendRequest(
 		DasBuf_printf(pBuf, "Authorization: %s\r\n", sAuth);
 	if((sReqHdrs != NULL)&&(sReqHdrs[0] != '\0'))
 		DasBuf_printf(pBuf, "%s", sReqHdrs);   /* caller's lines, each CRLF ended */
-	DasErrCode nRet = DasBuf_printf(pBuf, "Connection: close\r\n\r\n");
+	das_errcode nRet = DasBuf_printf(pBuf, "Connection: close\r\n\r\n");
 
 	bool bOkay = (nRet == DAS_OKAY) && (_DasXport_drain(pX, pBuf) >= 0);
 	if(!bOkay)
@@ -1199,7 +1199,7 @@ bool _DasHttpResp_readHdrs(DasHttpResp* pRes, DasXport* pX)
 /* ************************************************************************* */
 /* Making requests */
 
-DasErrCode das_http_opts_init_ver(das_http_opts* pOpts, size_t uVersion)
+das_errcode das_http_opts_init_ver(das_http_opts* pOpts, size_t uVersion)
 {
 	/* A later library adds cases here for each older layout it can still
 	   serve, clearing and defaulting only the members that layout has */

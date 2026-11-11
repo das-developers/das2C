@@ -1855,7 +1855,7 @@ Units_convertTo_Error:
 #define DAS_INT32_MIN -2147483648LL
 #define DAS_INT32_MAX 2147483647LL
 
-static DasErrCode unixToCalDate(das_time* pDt, int64_t nUnix)
+static das_errcode unixToCalDate(das_time* pDt, int64_t nUnix)
 {
 	int64_t days, secs;
 	int32_t remdays, remsecs, remyears;
@@ -1978,7 +1978,7 @@ static int days[2][14] = {
 
 #define LEAP(y) ((y) % 4 ? 0 : ((y) % 100 ? 1 : ((y) % 400 ? 0 : 1)))
 
-DasErrCode Units_convertToDt(das_time* pDt, double value, das_units epoch_units)
+das_errcode Units_convertToDt(das_time* pDt, double value, das_units epoch_units)
 {
 	dt_null(pDt);
 
@@ -2027,7 +2027,7 @@ DasErrCode Units_convertToDt(das_time* pDt, double value, das_units epoch_units)
 	int64_t nUnix = (int64_t)rUnix;
 	double rRem = rUnix - (double)nUnix;
 
-	DasErrCode nRet;
+	das_errcode nRet;
 	if(rRem >= 0){
 		nRet = unixToCalDate(pDt, nUnix);
 		pDt->second += rRem;

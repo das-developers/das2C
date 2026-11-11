@@ -229,7 +229,7 @@ bool DasDs_cubicCoords(const DasDs* pThis,  const DasDim** pCoords)
 /* ************************************************************************* */
 /* Post-Construction sub-item addition */
 
-DasErrCode DasDs_addAry(DasDs* pThis, DasAry* pAry)
+das_errcode DasDs_addAry(DasDs* pThis, DasAry* pAry)
 {
 	/* Codecs and variables find their arrays here by id, so an id must name
 	   exactly one array */
@@ -310,7 +310,7 @@ size_t DasDs_memIndexed(const DasDs* pThis)
 
 
 
-DasErrCode DasDs_addDim(DasDs* pThis, DasDim* pDim)
+das_errcode DasDs_addDim(DasDs* pThis, DasDim* pDim)
 {
 	/* Since function maps mask off any un-used indices and since
 	 * Variables can have internal structure beyond those needed for
@@ -414,7 +414,7 @@ DasDim* DasDs_makeDim(
 /* Codec handling */
 
 /* Most only be triggered at the transition to large, or garbage will be copied in */
-static DasErrCode _DasDs_codecsGoLarge(DasDs* pThis)
+static das_errcode _DasDs_codecsGoLarge(DasDs* pThis)
 {
 	/* Copy over the current codecs */
 	size_t uNewSz = DASDS_LOC_ENC_SZ * 2;
@@ -440,7 +440,7 @@ static DasErrCode _DasDs_codecsGoLarge(DasDs* pThis)
 	return DAS_OKAY;
 }
 
-static DasErrCode _DasDs_codecsGoLarger(DasDs* pThis)
+static das_errcode _DasDs_codecsGoLarger(DasDs* pThis)
 {
 	/* We're already using dynamic codec array, now go even bigger */
 	size_t uNewSz = pThis->uSzCodecs * 2;
@@ -470,9 +470,9 @@ static DasErrCode _DasDs_codecsGoLarger(DasDs* pThis)
 
 /* Make room for one more codec.  Callers can't tell small-vector from heap and
    shouldn't have to. */
-static DasErrCode _DasDs_codecsMakeRoom(DasDs* pThis)
+static das_errcode _DasDs_codecsMakeRoom(DasDs* pThis)
 {
-	DasErrCode nRet = DAS_OKAY;
+	das_errcode nRet = DAS_OKAY;
 
 	/* Go dynamic? */
 	if(pThis->uCodecs == DASDS_LOC_ENC_SZ)
@@ -506,7 +506,7 @@ DasCodec* DasDs_addFixedCodec(
 
 	DasCodec* pCodec = pThis->lCodecs + pThis->uCodecs;
 
-	DasErrCode nRet = init_DasCodec(
+	das_errcode nRet = init_DasCodec(
 		bRead, pCodec, pAry, sSemantic, sEncType, nItemBytes, 0, DasAry_units(pAry), NULL
 	);
 
@@ -536,7 +536,7 @@ DasCodec* DasDs_addStringCodec(
 
 	DasCodec* pCodec = pThis->lCodecs + pThis->uCodecs;
 
-	DasErrCode nRet = init_DasCodec(
+	das_errcode nRet = init_DasCodec(
 		bRead, pCodec, pAry, sSemantic, sEncType, nItemTerm, uTerm, DasAry_units(pAry), NULL
 	);
 
@@ -583,7 +583,7 @@ DasCodec* DasDs_addCodecFrom(
 	return pDest;
 }
 
-DasErrCode DasDs_updateCodec(
+das_errcode DasDs_updateCodec(
 	DasDs* pThis, size_t uIdx, bool bRead, const char* sAryId,
 	const char* sEncType, int16_t nItemBytes, ubyte cSep, das_units epoch,
 	const char* sOutFmt
@@ -606,7 +606,7 @@ DasErrCode DasDs_updateCodec(
 	);
 }
 
-DasErrCode DasDs_recBytes(const DasDs* pThis, int* pBytes)
+das_errcode DasDs_recBytes(const DasDs* pThis, int* pBytes)
 {
 	int nBytesPerPkt = 0;
 	for(size_t u = 0; u < pThis->uCodecs; ++u){
@@ -936,7 +936,7 @@ FAIL:
 	return NULL;
 }
 
-DasErrCode DasDs_replaceAry(DasDs* pThis, const char* sOldId, DasAry* pNew)
+das_errcode DasDs_replaceAry(DasDs* pThis, const char* sOldId, DasAry* pNew)
 {
 	/* Locate the slot holding the array to retire */
 	size_t uSlot = 0;
@@ -1002,7 +1002,7 @@ DasErrCode DasDs_replaceAry(DasDs* pThis, const char* sOldId, DasAry* pNew)
 /* The schema's PlotType, xsd: (cartesian2d|cartesian3d|polar|cylindrical|
    spherical)(:movie)?  Kept as a literal list, so a schema change has to be
    mirrored here by hand. */
-DasErrCode DasDs_setPlot(DasDs* pThis, const char* sPlot)
+das_errcode DasDs_setPlot(DasDs* pThis, const char* sPlot)
 {
 	if((sPlot == NULL)||(sPlot[0] == '\0')){
 		pThis->sPlot[0] = '\0';
@@ -1034,7 +1034,7 @@ DasErrCode DasDs_setPlot(DasDs* pThis, const char* sPlot)
    we need to make sure packet bytes match variable defs, for variables that
    source data from packets anyway. Checked once for headers, not in the hot
    path */
-static DasErrCode _DasDs_checkCodecOrder(DasDs* pThis)
+static das_errcode _DasDs_checkCodecOrder(DasDs* pThis)
 {
 	ptrdiff_t iLast = -1;
 	const DasAry* pLastAry = NULL;
@@ -1090,9 +1090,9 @@ static DasErrCode _DasDs_checkCodecOrder(DasDs* pThis)
  * @returns DAS_OKAY if the operation succeeded, a positive error value
  *        otherwise
  */
-DasErrCode DasDs_encodeHdr(DasDs* pThis, DasBuf* pBuf)
+das_errcode DasDs_encodeHdr(DasDs* pThis, DasBuf* pBuf)
 {
-	DasErrCode nRet = _DasDs_checkCodecOrder(pThis);
+	das_errcode nRet = _DasDs_checkCodecOrder(pThis);
 	if(nRet != DAS_OKAY) return nRet;
 	ptrdiff_t aShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
 	int nRank = DasDs_shape(pThis, aShape);
@@ -1256,7 +1256,7 @@ static int _decode_ragged_run(
 
 /* Decode data from a buffer into dataset memory, See docs in datset.h */
 
-DasErrCode DasDs_decodeData(DasDs* pThis, DasBuf* pBuf)
+das_errcode DasDs_decodeData(DasDs* pThis, DasBuf* pBuf)
 {
 	if(DasDs_numCodecs(pThis) == 0){
 		return das_error(DASERR_SERIAL, 
@@ -1264,7 +1264,7 @@ DasErrCode DasDs_decodeData(DasDs* pThis, DasBuf* pBuf)
 		);
 	}
 
-	DasErrCode nErr = DAS_OKAY;
+	das_errcode nErr = DAS_OKAY;
 	int nUnReadBytes = 0;
 	int nSzEncs = (int)DasDs_numCodecs(pThis);
 	for(int i = 0; i < nSzEncs; ++i){
@@ -1416,7 +1416,7 @@ static int _encode_ragged_run(
 	const ptrdiff_t* aShape
 ){
 	char sTag[32];
-	DasErrCode nRet;
+	das_errcode nRet;
 
 	if(d == dLast){
 		size_t uVals = DasAry_itemsIn(pCodec->pAry, d, aLoc);
@@ -1484,7 +1484,7 @@ static int _encode_ragged_run(
  *          A positive error code if there was a problem sending data.
  */
 
-DasErrCode DasDs_encodeData(DasDs* pThis, DasBuf* pBuf, ptrdiff_t iIdx0)
+das_errcode DasDs_encodeData(DasDs* pThis, DasBuf* pBuf, ptrdiff_t iIdx0)
 {
 	
 	if(DasDs_numCodecs(pThis) == 0){

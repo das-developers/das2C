@@ -185,7 +185,7 @@ struct DasForm_VTbl {
 
 	/* Accept one <ops> attribute.  A form refuses a name it does not know: a
 	   reader that claims a kind must not skip a misspelled parameter. */
-	DasErrCode (*setParam)(
+	das_errcode (*setParam)(
 		DasForm* pThis, const char* sName, const char* sVal
 	);
 
@@ -199,7 +199,7 @@ struct DasForm_VTbl {
 
 	   NULL when a kind has nothing to insist on.
 	   Returns DAS_OKAY or an error naming what is wrong. */
-	DasErrCode (*validate)(
+	das_errcode (*validate)(
 		DasForm* pThis, int nIntRank, const ptrdiff_t* pIntShape
 	);
 
@@ -224,7 +224,7 @@ struct DasForm_VTbl {
 
 	/* Emit <ops .../>.  talkative: state a parameter even at its default,
 	   since the schema cannot carry a default behind an anyAttribute. */
-	DasErrCode (*encode)(
+	das_errcode (*encode)(
 		const DasForm* pThis, struct das_buffer* pBuf
 	);
 
@@ -294,7 +294,7 @@ struct das_form {
    Use sysorder= in XML headers when the order is not ascending.  pOrder is
    uComps entries long slot to canonical component, so this works for a nine
    element rotation as readily as a three element vector. */
-DasErrCode _dasform_prnOrder(
+das_errcode _dasform_prnOrder(
 	struct das_buffer* pBuf, const ubyte* pOrder, ubyte uComps
 );
 

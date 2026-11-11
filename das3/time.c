@@ -1012,7 +1012,7 @@ int64_t dt_to_tt2k(const das_time* pThis){
 	);
 }
 
-DasErrCode tt2k_from_parts(
+das_errcode tt2k_from_parts(
 	int year, int month, int mday, int hour, int minute, int second,
 	int32_t nanosec, int64_t* pTT
 ){

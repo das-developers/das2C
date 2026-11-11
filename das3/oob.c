@@ -183,7 +183,7 @@ static void _OobExcept_end(void *data, const char *el){
 		das_store_str(&(pThis->sMsg), &(pThis->uMsgLen), pStack->sTxtBuf);
 }
 
-DasErrCode OobExcept_decode(DasExcept* se, DasBuf* pBuf)
+das_errcode OobExcept_decode(DasExcept* se, DasBuf* pBuf)
 {
 	parse_stream_exception_t stack = {0};
 	stack.se = se;
@@ -200,7 +200,7 @@ DasErrCode OobExcept_decode(DasExcept* se, DasBuf* pBuf)
 	int nParRet = XML_Parse(p, sXml, (int)uXml, 1);
 	if(!nParRet){
 		/* Report before the free, the offset and code live in the parser */
-		DasErrCode nRet = das_error(20, "Parse error at offset %ld:\n%s\n",
+		das_errcode nRet = das_error(20, "Parse error at offset %ld:\n%s\n",
 			XML_GetCurrentByteIndex(p), XML_ErrorString(XML_GetErrorCode(p)));
 		XML_ParserFree(p);
 		return nRet;
@@ -258,7 +258,7 @@ static const char* _xml_escape_val(
 	return *ppAlloc;
 }
 
-DasErrCode OobExcept_encode(const DasExcept* pThis, DasBuf* pBuf)
+das_errcode OobExcept_encode(const DasExcept* pThis, DasBuf* pBuf)
 {
 	/* das2.2 format: type and message both in attributes.
 	   Type string comes from the table, no escaping needed, all entries are safe. */
@@ -267,14 +267,14 @@ DasErrCode OobExcept_encode(const DasExcept* pThis, DasBuf* pBuf)
 	char sMsgStk[256]; char* pMsgAlloc;
 	const char* pMsg = _xml_escape_val(DasExcept_msg(pThis), sMsgStk, &pMsgAlloc);
 
-	DasErrCode nRet = DasBuf_printf(pBuf,
+	das_errcode nRet = DasBuf_printf(pBuf,
 		"<exception type=\"%s\" message=\"%s\" />\n", sType, pMsg);
 
 	if(pMsgAlloc) free(pMsgAlloc);
 	return nRet;
 }
 
-DasErrCode OobExcept_encode3(const DasExcept* pThis, DasBuf* pBuf)
+das_errcode OobExcept_encode3(const DasExcept* pThis, DasBuf* pBuf)
 {
 	/* das3.0 format: type in attribute, message as element body text */
 	const char* sType = _except_wireType(pThis, 3);
@@ -282,7 +282,7 @@ DasErrCode OobExcept_encode3(const DasExcept* pThis, DasBuf* pBuf)
 	char sMsgStk[256]; char* pMsgAlloc;
 	const char* pMsg = _xml_escape_val(DasExcept_msg(pThis), sMsgStk, &pMsgAlloc);
 
-	DasErrCode nRet = DasBuf_printf(pBuf,
+	das_errcode nRet = DasBuf_printf(pBuf,
 		"<exception type=\"%s\">%s</exception>\n", sType, pMsg);
 
 	if(pMsgAlloc) free(pMsgAlloc);
@@ -353,7 +353,7 @@ static char** _DasComment_slot(
 	return NULL;
 }
 
-DasErrCode DasComment_set(DasComment* pThis, const char* sName, const char* sVal)
+das_errcode DasComment_set(DasComment* pThis, const char* sName, const char* sVal)
 {
 	size_t* puLen = NULL;
 	char** psSlot = _DasComment_slot(pThis, sName, &puLen);
@@ -445,7 +445,7 @@ static void _OobComment_end(void *data, const char *el){
 		das_store_str(&(pThis->sVal), &(pThis->uValLen), pStack->sTxtBuf);
 }
 
-DasErrCode OobComment_decode(DasComment* pSc, DasBuf* pBuf)
+das_errcode OobComment_decode(DasComment* pSc, DasBuf* pBuf)
 {
 	parse_stream_comment_t stack = {0};
 	stack.sc = pSc;
@@ -463,7 +463,7 @@ DasErrCode OobComment_decode(DasComment* pSc, DasBuf* pBuf)
 	int nParRet = XML_Parse(p, sXml, (int)uXml, 1);
 	if(!nParRet){
 		/* Report before the free, the offset and code live in the parser */
-		DasErrCode nRet = das_error(20, "Parse error at offset %ld:\n%s\n",
+		das_errcode nRet = das_error(20, "Parse error at offset %ld:\n%s\n",
 			XML_GetCurrentByteIndex(p), XML_ErrorString(XML_GetErrorCode(p)));
 		XML_ParserFree(p);
 		return nRet;
@@ -476,7 +476,7 @@ DasErrCode OobComment_decode(DasComment* pSc, DasBuf* pBuf)
 	return DAS_OKAY;
 }
 
-DasErrCode OobComment_encode(const DasComment* pSc, DasBuf* pBuf)
+das_errcode OobComment_encode(const DasComment* pSc, DasBuf* pBuf)
 {
 	char sTypeStk[256]; char* pTypeAlloc;
 	char sSrcStk[256];  char* pSrcAlloc = NULL;
@@ -514,14 +514,14 @@ cleanup:
 	return nRet;
 }
 
-DasErrCode OobComment_encode3(const DasComment* pSc, DasBuf* pBuf)
+das_errcode OobComment_encode3(const DasComment* pSc, DasBuf* pBuf)
 {
 	/* das3.0 format: type and source in attributes, value as element body text.
 	   Omit the source attribute when the field is empty. */
 	char sTypeStk[256]; char* pTypeAlloc;
 	char sSrcStk[256];  char* pSrcAlloc = NULL;
 	char sValStk[256];  char* pValAlloc = NULL;
-	DasErrCode nRet;
+	das_errcode nRet;
 
 	const char* sType = _stomp_xml_attr(DasComment_get(pSc, "type"), sTypeStk, &pTypeAlloc);
 	const char* sSrc  = _stomp_xml_attr(DasComment_get(pSc, "source"), sSrcStk, &pSrcAlloc);
@@ -547,7 +547,7 @@ cleanup:
 
 /* ************************************************************************* */
 /* Generic XX packet parser */
-DasErrCode OutOfBand_decode(DasBuf* pBuf, OutOfBand** ppObjs, int* which)
+das_errcode OutOfBand_decode(DasBuf* pBuf, OutOfBand** ppObjs, int* which)
 {
 	char sName[DAS_XML_NODE_NAME_LEN] = {'\0'};
 

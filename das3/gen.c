@@ -38,7 +38,7 @@
 /* var.h and has no business knowing what a variable is.  Callers apply */
 /* own policy (exact rank, whether a flag token is legal here, item counts).  */
 
-DasErrCode das_shape_fromStr(
+das_errcode das_shape_fromStr(
 	const char* sShape, int nMaxRank, bool bAllowFlags, const char* sWhere,
 	ptrdiff_t* pShape, int* pnRank
 ){

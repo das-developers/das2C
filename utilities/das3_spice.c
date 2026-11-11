@@ -740,7 +740,7 @@ static bool _frameIsBodyFixed(SpiceInt nFrameId)
 	return false;
 }
 
-DasErrCode addSpiceIDs(Context* pCtx)
+das_errcode addSpiceIDs(Context* pCtx)
 {
 	/* SpiceInt is always 32-bit, even on 64-bit systems */
 
@@ -862,7 +862,7 @@ DasErrCode addSpiceIDs(Context* pCtx)
 
 /* ************************************************************************* */
 
-DasErrCode onStream(DasStream* pSdIn, void* pUser){
+das_errcode onStream(DasStream* pSdIn, void* pUser){
 	Context* pCtx = (Context*)pUser;
 	
 	/* Make the output stream by copying the top properties. */
@@ -962,7 +962,7 @@ const char* g_sFloatEnc = "BEreal";
 
 int _addLocInfo(DasDim* pDim, const XReq* pReq)
 {
-	DasErrCode nRet = DAS_OKAY;
+	das_errcode nRet = DAS_OKAY;
 	char sLabel[50] = {0};
 	char sCoordSys[40] = {0};
 	char sTitle[50] = {0};
@@ -1016,7 +1016,7 @@ int _addLocInfo(DasDim* pDim, const XReq* pReq)
 
 /* Add record dependent location vectors to the output dataset */
 
-DasErrCode _addLocation(
+das_errcode _addLocation(
 	XCalc* pCalc, DasDs* pDsOut, const char* sAnnoteAxis, int nPrevLoc
 ){
 	int nDsRank = DasDs_rank(pDsOut);
@@ -1095,7 +1095,7 @@ const char* g_pRngProps[] = {
 	"nominalMin", "nominalMax", ""
 };
 
-DasErrCode _addRotation(XCalc* pCalc, const char* sAnonFrame, DasDs* pDsOut)
+das_errcode _addRotation(XCalc* pCalc, const char* sAnonFrame, DasDs* pDsOut)
 {
 	ptrdiff_t aDsShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
 	int nDsRank = DasDs_shape(pDsOut, aDsShape);
@@ -1381,18 +1381,18 @@ DasVar* _reframeVar(const DasVar* pVarIn, const char* sFrame)
 
 /* For each new upstream dataset, define a downstream dataset */
 
-DasErrCode writeAndClearDs(Context* pCtx, int iPktId, DasDs* pDsIn);
+das_errcode writeAndClearDs(Context* pCtx, int iPktId, DasDs* pDsIn);
 
 /* With -b, records wait in a dataset until the memory threshold is passed.
    If the stream then sends a new header under the same packet ID, what is
    waiting has to go out before that header does: DasIO only takes data for
    the header an output ID last carried.  Normally nothing is found here. */
-static DasErrCode _flushOthersOnId(Context* pCtx, DasDs* pDsNew, int iPktId)
+static das_errcode _flushOthersOnId(Context* pCtx, DasDs* pDsNew, int iPktId)
 {
 	DasStream* pSdIn = (DasStream*)DasDesc_parent((DasDesc*)pDsNew);
 	DasDesc* pDesc = NULL;
 	ptrdiff_t aShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
-	DasErrCode nRet = DAS_OKAY;
+	das_errcode nRet = DAS_OKAY;
 
 	while((pSdIn != NULL)&&((pDesc = DasStream_nextDesc(pSdIn, pDesc, DASDESC_DS)) != NULL)){
 		if(pDesc == (DasDesc*)pDsNew) continue;
@@ -1408,13 +1408,13 @@ static DasErrCode _flushOthersOnId(Context* pCtx, DasDs* pDsNew, int iPktId)
 	return DAS_OKAY;
 }
 
-DasErrCode onDataSet(DasDs* pDsIn, int iPktId, void* pUser)
+das_errcode onDataSet(DasDs* pDsIn, int iPktId, void* pUser)
 {
 	Context* pCtx = (struct context*)pUser;
 	DasStream* pSdOut = pCtx->pSdOut;
 
 	if(pCtx->uFlushSz > 0){
-		DasErrCode nFlush = _flushOthersOnId(pCtx, pDsIn, iPktId);
+		das_errcode nFlush = _flushOthersOnId(pCtx, pDsIn, iPktId);
 		if(nFlush != DAS_OKAY) return nFlush;
 	}
 
@@ -1658,7 +1658,7 @@ double _dm2et(const das_datum* pInput, double rTimeShift)
 
 /* We want the input dataset here because we need to know how many provided
 	values we're going to get */
-DasErrCode _writeLocation(DasDs* pDsIn, XCalc* pCalc, double rTimeShift)
+das_errcode _writeLocation(DasDs* pDsIn, XCalc* pCalc, double rTimeShift)
 {
 	double rEt, rLt;  /* ephemeris time, light time */ 
 	SpiceDouble aRecOut[3];
@@ -1783,7 +1783,7 @@ DasErrCode _writeLocation(DasDs* pDsIn, XCalc* pCalc, double rTimeShift)
 	}
  */
 
-DasErrCode _writeRotation(DasDs* pDsIn, XCalc* pCalc, double rTimeShift)
+das_errcode _writeRotation(DasDs* pDsIn, XCalc* pCalc, double rTimeShift)
 {
 	double rEt;  /* ephemeris time */ 
 	double mRot[3][3];
@@ -1901,11 +1901,11 @@ DasErrCode _writeRotation(DasDs* pDsIn, XCalc* pCalc, double rTimeShift)
 	return DAS_OKAY;
 }
 
-DasErrCode writeAndClearDs(Context* pCtx, int iPktId, DasDs* pDsIn)
+das_errcode writeAndClearDs(Context* pCtx, int iPktId, DasDs* pDsIn)
 {
 	DasDs* pDsOut = (DasDs*) DasDesc_getUser((DasDesc*)pDsIn);
 	XCalc* pCalc = (XCalc*) DasDesc_getUser((DasDesc*)pDsOut);
-	DasErrCode nRet = DAS_OKAY;
+	das_errcode nRet = DAS_OKAY;
 
 	while(pCalc->pVarOut != NULL){
 
@@ -1933,7 +1933,7 @@ DasErrCode writeAndClearDs(Context* pCtx, int iPktId, DasDs* pDsIn)
 	return DAS_OKAY;
 }
 
-DasErrCode onData(DasDs* pDsIn, int iPktId, void* pUser)
+das_errcode onData(DasDs* pDsIn, int iPktId, void* pUser)
 {
 	Context* pCtx = (struct context*)pUser;
 
@@ -1947,14 +1947,14 @@ DasErrCode onData(DasDs* pDsIn, int iPktId, void* pUser)
 /* ************************************************************************* */
 
 /* Write what arrived, then pass on an exception if the input ended on one */
-DasErrCode onClose(DasStream* pSdIn, const DasExcept* pExcept, void* pUser)
+das_errcode onClose(DasStream* pSdIn, const DasExcept* pExcept, void* pUser)
 {
 	struct context* pCtx = (struct context*)pUser;
 	
 	/* Loop over all the datasets in the stream and make sure they are flushed */
 	DasDesc* pDescIn = NULL;
 	DasDs* pDs = NULL;
-	DasErrCode nRet;
+	das_errcode nRet;
 	ptrdiff_t aShape[VARIDX_MAX] = VARIDX_INIT_UNUSED;
 	while((pSdIn != NULL)&&((pDescIn = DasStream_nextDesc(pSdIn, pDescIn, DASDESC_DS)) != NULL)){
 		int nPktId = DasStream_getPktId(pSdIn, pDescIn);

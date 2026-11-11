@@ -614,13 +614,13 @@ static char* _DasDesc_strcopy(const char* s)
 	return sCopy;
 }
 
-static DasErrCode _DasDesc_flexSet(
+static das_errcode _DasDesc_flexSet(
 	DasDesc* pThis, const char* sType, ubyte uType, const char* sName, 
 	const char* sVal, char cSep, das_units units, int nStandard
 ){
 	/* Check before taking a slot, the property array can't give one back */
 	das_propplan plan;
-	DasErrCode nRet = dasprop_plan(
+	das_errcode nRet = dasprop_plan(
 		&plan, sType, uType, sName, sVal, cSep, units, nStandard
 	);
 	if(nRet != DAS_OKAY) return nRet;
@@ -640,7 +640,7 @@ static DasErrCode _DasDesc_flexSet(
 }
 
 /* copies the property into the property array */
-DasErrCode DasDesc_flexSet(
+das_errcode DasDesc_flexSet(
 	DasDesc* pThis, const char* sType, ubyte uType, const char* sName, 
 	const char* sVal, char cSep, das_units units, int nStandard
 ){
@@ -654,7 +654,7 @@ DasErrCode DasDesc_flexSet(
 
 	char* sNameCopy = bName ? _DasDesc_strcopy(sName) : NULL;
 	char* sValCopy  = bVal  ? _DasDesc_strcopy(sVal)  : NULL;
-	DasErrCode nRet;
+	das_errcode nRet;
 	if((bName && (sNameCopy == NULL))||(bVal && (sValCopy == NULL)))
 		nRet = das_error(DASERR_DESC, "Couldn't copy a property from its own descriptor");
 	else
@@ -666,7 +666,7 @@ DasErrCode DasDesc_flexSet(
 	return nRet;
 }
 
-DasErrCode DasDesc_setProp(DasDesc* pThis, const DasProp* pProp)
+das_errcode DasDesc_setProp(DasDesc* pThis, const DasProp* pProp)
 {
 	size_t uPropSz = DasProp_size(pProp);
 	const char* sName = pProp->buffer;
@@ -683,7 +683,7 @@ DasErrCode DasDesc_setProp(DasDesc* pThis, const DasProp* pProp)
 		sName = pProp->buffer;
 	}
 
-	DasErrCode nRet = DAS_OKAY;
+	das_errcode nRet = DAS_OKAY;
 	ubyte* pBuf = _DasDesc_getWriteBuf(pThis, sName, uPropSz);
 	if(pBuf == NULL)
 		nRet = das_error(DASERR_DESC, 
@@ -697,7 +697,7 @@ DasErrCode DasDesc_setProp(DasDesc* pThis, const DasProp* pProp)
 	return nRet;
 }
 
-DasErrCode DasDesc_set(
+das_errcode DasDesc_set(
 	DasDesc* pThis, const char* sType, const char* sName, const char* sVal
 ){
 	int nStandard = pThis->bLooseParsing ? DASPROP_DAS1 : DASPROP_DAS2;
@@ -705,7 +705,7 @@ DasErrCode DasDesc_set(
 }
 
 
-DasErrCode DasDesc_setStr(
+das_errcode DasDesc_setStr(
 	DasDesc* pThis, const char* sName, const char * sVal 
 ) {
 	return DasDesc_flexSet(
@@ -714,7 +714,7 @@ DasErrCode DasDesc_setStr(
 	);
 }
 
-DasErrCode DasDesc_vSetStr(
+das_errcode DasDesc_vSetStr(
 	DasDesc* pThis, const char* sName, const char* sFmt, ...
 ) {
 	
@@ -746,7 +746,7 @@ DasErrCode DasDesc_vSetStr(
 			return das_error(DASERR_DESC, "Unable to malloc %d bytes", nLen);
 	}
 	
-	DasErrCode nRet = DasDesc_flexSet(
+	das_errcode nRet = DasDesc_flexSet(
 		pThis, NULL, DASPROP_STRING|DASPROP_SINGLE, sName, sVal, 0, NULL, 
 		DASPROP_DAS3
 	);
@@ -755,7 +755,7 @@ DasErrCode DasDesc_vSetStr(
 	return nRet;
 }
 
-DasErrCode DasDesc_setBool(DasDesc* pThis, const char* sName, bool bVal)
+das_errcode DasDesc_setBool(DasDesc* pThis, const char* sName, bool bVal)
 {
 	return DasDesc_flexSet(
 		pThis, NULL, DASPROP_BOOL|DASPROP_SINGLE, sName, 
@@ -763,7 +763,7 @@ DasErrCode DasDesc_setBool(DasDesc* pThis, const char* sName, bool bVal)
 	);
 }
 
-DasErrCode DasDesc_setDatum( 
+das_errcode DasDesc_setDatum( 
 	DasDesc* pThis, const char* sName, double rVal, das_units units 
 ) {
 	char sVal[50] = {'\0'};
@@ -778,7 +778,7 @@ DasErrCode DasDesc_setDatum(
 	);
 }
 
-DasErrCode DasDesc_setDatumRng(
+das_errcode DasDesc_setDatumRng(
 	DasDesc* pThis, const char * sName, double beg, double end, das_units units 
 ){
 	char sVal[50] = {'\0'};
@@ -793,7 +793,7 @@ DasErrCode DasDesc_setDatumRng(
 	);
 }
 
-DasErrCode DasDesc_getStrRng(
+das_errcode DasDesc_getStrRng(
 	DasDesc* pThis, const char* sName, char* sMin, char* sMax, 
 	das_units* pUnits, size_t uLen
 ){
@@ -860,7 +860,7 @@ DasErrCode DasDesc_getStrRng(
 	return das_error(DASERR_DESC, "Malformed range string %s", buf);	
 }
 
-DasErrCode DasDesc_setDouble(DasDesc* pThis, const char* sName, double rVal) 
+das_errcode DasDesc_setDouble(DasDesc* pThis, const char* sName, double rVal) 
 {
 	/* Keep the precision the value has. trimming significant digits for
 	   display is a text formatters' job */
@@ -872,7 +872,7 @@ DasErrCode DasDesc_setDouble(DasDesc* pThis, const char* sName, double rVal)
 	);
 }
 
-DasErrCode DasDesc_setInt(DasDesc* pThis, const char* sName, int nVal) 
+das_errcode DasDesc_setInt(DasDesc* pThis, const char* sName, int nVal) 
 {
 	char sVal[50] = {'\0'};
 	snprintf(sVal, 49, "%d", nVal);
@@ -881,7 +881,7 @@ DasErrCode DasDesc_setInt(DasDesc* pThis, const char* sName, int nVal)
 	);
 }
 
-DasErrCode DasDesc_setDoubleArray(
+das_errcode DasDesc_setDoubleArray(
 	DasDesc* pThis, const char* sName, int nItems, double* pValues
 ){
 
@@ -893,14 +893,14 @@ DasErrCode DasDesc_setDoubleArray(
 	}
 	das_doubles2csv(pValues, nItems, sVal, nItems*50);
 
-	DasErrCode nRet = DasDesc_flexSet(
+	das_errcode nRet = DasDesc_flexSet(
 		pThis, NULL, DASPROP_REAL|DASPROP_SET, sName, sVal, ',', NULL, DASPROP_DAS3
 	);
 	free(sVal);
 	return nRet;
 }
 
-DasErrCode DasDesc_setFloatAry(
+das_errcode DasDesc_setFloatAry(
 	DasDesc* pThis, const char* sName, int nItems, float* pValues
 ){ 
 	char* sVal = (char*)calloc(nItems, 50);
@@ -911,7 +911,7 @@ DasErrCode DasDesc_setFloatAry(
 	}
 	das_floats2csv(pValues, nItems, sVal, nItems*50);
 	
-	DasErrCode nRet = DasDesc_flexSet(
+	das_errcode nRet = DasDesc_flexSet(
 		pThis, NULL, DASPROP_REAL|DASPROP_SET, sName, sVal, ',', NULL, DASPROP_DAS3
 	);
 	free(sVal);
@@ -964,7 +964,7 @@ bool DasDesc_remove(DasDesc* pThis, const char* sName)
    make the inserted newline read as an empty item.  Never wrapped when the
    separator is an XML metacharacter (so the scan can't trip over an escape
    sequence). */
-static DasErrCode _writePropVal(DasBuf* pBuf, const DasProp* pProp, const char* sVal)
+static das_errcode _writePropVal(DasBuf* pBuf, const DasProp* pProp, const char* sVal)
 {
 	char cSep = DasProp_sep(pProp);
 	if( !DasProp_isSet(pProp) || !DasProp_isType(pProp, DASPROP_STRING)
@@ -972,7 +972,7 @@ static DasErrCode _writePropVal(DasBuf* pBuf, const DasProp* pProp, const char* 
 	    || (cSep=='<')||(cSep=='>')||(cSep=='&')||(cSep=='"')||(cSep=='\'') )
 		return DasBuf_puts(pBuf, sVal);
 
-	DasErrCode nRet = DAS_OKAY;
+	das_errcode nRet = DAS_OKAY;
 	size_t uRun = 0;
 	for(const char* p = sVal; (*p != '\0') && (nRet == DAS_OKAY); ++p){
 		nRet = DasBuf_write(pBuf, p, 1);
@@ -988,7 +988,7 @@ static DasErrCode _writePropVal(DasBuf* pBuf, const DasProp* pProp, const char* 
 /* bWrap: emit the <properties> wrapper (the classic form).  Stream context
    entries ARE property arrays, so their <p> children ride bare and they pass
    false. */
-static DasErrCode _DasDesc_encodeMaybeWrap(
+static das_errcode _DasDesc_encodeMaybeWrap(
 	DasDesc* pThis, DasBuf* pBuf, const char* sIndent, int nVer, bool bWrap
 ){
 	const DasAry* pProps = &(pThis->properties);
@@ -1011,7 +1011,7 @@ static DasErrCode _DasDesc_encodeMaybeWrap(
 			DasBuf_puts(pBuf, "<properties\n");
 	}
 	
-	DasErrCode nRet = DAS_OKAY; 
+	das_errcode nRet = DAS_OKAY; 
 	for(u = 0; u < uProps; ++u){
 		size_t uPropLen = 0;
 		pProp = (const DasProp*) DasAry_getBytesIn(pProps, DIM1_AT(u), &uPropLen);
@@ -1125,17 +1125,17 @@ static DasErrCode _DasDesc_encodeMaybeWrap(
 		return DasBuf_puts(pBuf, "/>\n");
 }
 
-DasErrCode DasDesc_encode2(DasDesc* pThis, DasBuf* pBuf, const char* sIndent)
+das_errcode DasDesc_encode2(DasDesc* pThis, DasBuf* pBuf, const char* sIndent)
 {
 	return _DasDesc_encodeMaybeWrap(pThis, pBuf, sIndent, 2, true);
 }
 
-DasErrCode DasDesc_encode3(DasDesc* pThis, DasBuf* pBuf, const char* sIndent)
+das_errcode DasDesc_encode3(DasDesc* pThis, DasBuf* pBuf, const char* sIndent)
 {
 	return _DasDesc_encodeMaybeWrap(pThis, pBuf, sIndent, 3, true);
 }
 
-DasErrCode DasDesc_encode3Bare(DasDesc* pThis, DasBuf* pBuf, const char* sIndent)
+das_errcode DasDesc_encode3Bare(DasDesc* pThis, DasBuf* pBuf, const char* sIndent)
 {
 	return _DasDesc_encodeMaybeWrap(pThis, pBuf, sIndent, 3, false);
 }

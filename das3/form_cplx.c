@@ -202,7 +202,7 @@ ubyte DasFormCplx_sysType(const DasForm* pThis)
 
 /* --- parameters ---------------------------------------------------------- */
 
-static DasErrCode _DasFormCplx_setParam(
+static das_errcode _DasFormCplx_setParam(
 	DasForm* pBase, const char* sName, const char* sVal
 ){
 	DasFormCplx* pThis = (DasFormCplx*)pBase;
@@ -248,7 +248,7 @@ static DasErrCode _DasFormCplx_setParam(
    and a missing one costs a reader nothing, while rectangular and polar hold
    the same two numbers to wildly different meaning.  Stating it always means a
    das2C-written stream can never be misread for want of one attribute. */
-static DasErrCode _DasFormCplx_encode(const DasForm* pBase, DasBuf* pBuf)
+static das_errcode _DasFormCplx_encode(const DasForm* pBase, DasBuf* pBuf)
 {
 	const DasFormCplx* pThis = (const DasFormCplx*)pBase;
 
@@ -279,7 +279,7 @@ static const char* _DasFormCplx_paramName(const DasForm* pBase, int iParam)
    count": three complex numbers making up a spectral field is a real thing and
    a real formalism, and it is not this one wearing intern="3;2".  Saying so
    here is cheaper than discovering it in the arithmetic. */
-static DasErrCode _DasFormCplx_validate(
+static das_errcode _DasFormCplx_validate(
 	DasForm* pBase, int nIntRank, const ptrdiff_t* pIntShape
 ){
 	if(nIntRank != 1)

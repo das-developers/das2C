@@ -174,7 +174,7 @@ const char* g_pRmProps[] = {
 	"zFill","zLabel","zRange","zScaleType","zSummary","zValidMin","zValidMax"
 };
 
-DasErrCode onStreamHdr(DasStream* pSdIn, void* vpState)
+das_errcode onStreamHdr(DasStream* pSdIn, void* vpState)
 {
 	UserData* pState = (UserData*)vpState;
 	DasDesc* pIn = NULL;
@@ -257,7 +257,7 @@ DasErrCode onStreamHdr(DasStream* pSdIn, void* vpState)
  * dataset.
  */
  
-DasErrCode onPktData(DasPkt* pPdIn, int nPktId, void* vpState)
+das_errcode onPktData(DasPkt* pPdIn, int nPktId, void* vpState)
 {
 	UserData* pState = (UserData*)vpState;
 	DasPlane* pXIn = DasPkt_getXPlane(pPdIn);
@@ -325,14 +325,14 @@ DasErrCode onPktData(DasPkt* pPdIn, int nPktId, void* vpState)
 
 /* ************************************************************************* */
 /* Stream Close Handling */
-DasErrCode onClose(DasStream* pSdIn, const DasExcept* pExcept, void* vpState)
+das_errcode onClose(DasStream* pSdIn, const DasExcept* pExcept, void* vpState)
 {
 	UserData* pState = (UserData*)vpState;
 	DasIO*    pIoOut = pState->pIoOut;
 	DasPkt* pPdOut = DasStream_getPkt(pState->pSdOut, 1);
 	DasPlane* pXOut = DasPkt_getXPlane(pPdOut);
 	DasPlane* pYOut = DasPkt_getPlane(pPdOut, 1);
-	DasErrCode nRet = 0;
+	das_errcode nRet = 0;
 	double rTime = 0.0, rVal = 0.0;
 	Via* pVia = pState->pVia;
 	

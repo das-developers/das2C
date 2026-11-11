@@ -92,7 +92,7 @@ typedef struct seen {
 } seen_t;
 
 /* The only place a reader sees an exception, and the last call it gets */
-static DasErrCode onClose(DasStream* pSd, const DasExcept* pEx, void* pUser)
+static das_errcode onClose(DasStream* pSd, const DasExcept* pEx, void* pUser)
 {
 	seen_t* pSeen = (seen_t*)pUser;
 	++(pSeen->nClose);
@@ -107,7 +107,7 @@ static DasErrCode onClose(DasStream* pSd, const DasExcept* pEx, void* pUser)
 	return DAS_OKAY;   /* the default would fail the read on a server error */
 }
 
-static DasErrCode onComment(DasStream* pSd, const DasComment* pCmt, void* pUser)
+static das_errcode onComment(DasStream* pSd, const DasComment* pCmt, void* pUser)
 {
 	seen_t* pSeen = (seen_t*)pUser;
 	pSeen->bCmtSd = (pSeen->nComment == 0 || pSeen->bCmtSd) && (pSd != NULL);
@@ -121,7 +121,7 @@ static DasErrCode onComment(DasStream* pSd, const DasComment* pCmt, void* pUser)
 
 /* Read with a chosen processor set: 'n' none, 'm' a comment-only monitor,
    'h' the full handler, "hm" both.  Only the outcome is wanted. */
-static DasErrCode _read(const char* sFile, seen_t* pSeen)
+static das_errcode _read(const char* sFile, seen_t* pSeen)
 {
 	memset(pSeen, 0, sizeof(seen_t));
 
@@ -135,7 +135,7 @@ static DasErrCode _read(const char* sFile, seen_t* pSeen)
 	handler.onComment = onComment;
 	DasIO_addProcessor(pIn, &handler);
 
-	DasErrCode nRet = DasIO_readAll(pIn);
+	das_errcode nRet = DasIO_readAll(pIn);
 	del_DasIO(pIn);
 	return nRet;
 }

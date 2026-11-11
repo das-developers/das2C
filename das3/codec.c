@@ -174,7 +174,7 @@ bool DasCodec_isTrim(const DasCodec* pThis){
 #define ENCODER_SETUP_ERROR "Logic error in encoder setup"
 
 /* Change the external format info for a codec, very useful for das3_text! */
-DasErrCode DasCodec_update(
+das_errcode DasCodec_update(
 	bool bRead, DasCodec* pThis, DasAry* pAry, const char* sEncType,
 	int16_t nSzEach, ubyte cSep, das_units epoch, const char* sOutFmt
 ){
@@ -212,7 +212,7 @@ DasErrCode DasCodec_update(
 	if(pThis->pOverflow){ free(pThis->pOverflow); pThis->pOverflow = NULL; }
 	pThis->uOverflow = 0;
 
-	DasErrCode nRet = init_DasCodec(
+	das_errcode nRet = init_DasCodec(
 		bRead, pThis, _pAry, _sSemantic, _sEncType, _nSzEach, _cSep, _epoch, _sOutFmt
 	);
 
@@ -232,7 +232,7 @@ DasErrCode DasCodec_update(
 }
 
 /* Perform various checks to see if this is even possible */ 
-DasErrCode init_DasCodec(
+das_errcode init_DasCodec(
    bool bRead, DasCodec* pThis, DasAry* pAry, const char* sSemantic, 
    const char* sEncType, int16_t nSzEach, ubyte cSep, das_units epoch, 
    const char* sOutFmt
@@ -558,7 +558,7 @@ DasErrCode init_DasCodec(
 	We don't have access to DasVar here and it's index map.  Maybe a re-design is in
 	order so that variables encode/decode themselves.
 */
-DasErrCode DasCodec_setIdxTerms(DasCodec* pThis, ubyte nLevels, const char* sLevels)
+das_errcode DasCodec_setIdxTerms(DasCodec* pThis, ubyte nLevels, const char* sLevels)
 {
 	if(nLevels >= VARIDX_MAX)
 		return das_error(DASERR_ENC,
@@ -944,7 +944,7 @@ void fini_DasCodec(DasCodec* pThis){
 /* ************************************************************************* */
 /* Read helper */
 
-static DasErrCode _swap_read(ubyte* pDest, const ubyte* pSrc, size_t uVals, int nSzEa){
+static das_errcode _swap_read(ubyte* pDest, const ubyte* pSrc, size_t uVals, int nSzEa){
    /* Now swap and write */
 	ubyte uSwap[8];
 
@@ -988,7 +988,7 @@ static DasErrCode _swap_read(ubyte* pDest, const ubyte* pSrc, size_t uVals, int 
 /* Read helper */
 
 /* TODO: Refactor via das_value_binXform */
-static DasErrCode _cast_read(
+static das_errcode _cast_read(
 	ubyte* pDest, const ubyte* pSrc, size_t uVals, das_val_type vtAry, das_val_type vtBuf
 ){
 	size_t v;
@@ -1076,7 +1076,7 @@ static DasErrCode _cast_read(
 #define _SWP2(p) val[0] = *(p+1); val[1] = *(p)
 #define _SWP4(p) val[0] = *(p+3); val[1] = *(p+2); val[2] = *(p+1); val[3] = *(p)
 
-static DasErrCode _swap_cast_read(
+static das_errcode _swap_cast_read(
 	ubyte* pDest, const ubyte* pSrc, size_t uVals, das_val_type vtAry, das_val_type vtBuf
 ){
 	size_t v;
@@ -1636,7 +1636,7 @@ int DasCodec_decode(
 
 	das_val_type vtAry = DasAry_valType( pThis->pAry );  
 	
-	DasErrCode nRet = DAS_OKAY;
+	das_errcode nRet = DAS_OKAY;
 	ubyte uNull = 0;
 
 	int nValsToRead = -1;  /* Becomes vals we did read before return */
@@ -1838,7 +1838,7 @@ int DasCodec_decode(
 
 /* TODO: Refactor via das_value_binXform */
 
-static DasErrCode _swap_write(DasBuf* pBuf, const ubyte* pSrc, size_t uVals, int nSzEa){
+static das_errcode _swap_write(DasBuf* pBuf, const ubyte* pSrc, size_t uVals, int nSzEa){
    /* Now swap and write */
 	ubyte uSwap[8];
 
@@ -1880,7 +1880,7 @@ static DasErrCode _swap_write(DasBuf* pBuf, const ubyte* pSrc, size_t uVals, int
 
 /* Encode helper: change widths with checks and swap *********************** */
 
-static DasErrCode _cast_swap_write(
+static das_errcode _cast_swap_write(
 	DasBuf* pBuf, const ubyte* pSrc, size_t uVals, das_val_type vtAry, 
 	const ubyte* pFillIn, das_val_type vtBuf, const ubyte* pFillOut
 ){
@@ -1922,7 +1922,7 @@ static DasErrCode _cast_swap_write(
 
 /* Encode helper: change widths with checks ******************************** */
 
-static DasErrCode _cast_write(
+static das_errcode _cast_write(
 	DasBuf* pBuf, const ubyte* pSrc, size_t uVals, das_val_type vtAry, 
 	const ubyte* pFillIn, das_val_type vtBuf, const ubyte* pFillOut
 ){
@@ -1954,7 +1954,7 @@ static DasErrCode _cast_write(
 /* This one has more presentation layer stuff the normal so that <values> blocks
    in headers look attractive */
 
-static DasErrCode _DasCodec_printItems(
+static das_errcode _DasCodec_printItems(
 	DasCodec* pThis, DasBuf* pBuf, const ubyte* pItem0, int nToWrite, 
 	uint32_t uFlags
 ){
@@ -2108,11 +2108,11 @@ static DasErrCode _DasCodec_printItems(
    byte count. For base64 the field is the RFC 4648 encoding of those bytes and N
    is the length of the encoded field, not it's payload.  bNewline appends a '\n'
    inside the count, only for trimmed text where the reader strips it again. */
-static DasErrCode _blob_write_item(
+static das_errcode _blob_write_item(
 	DasBuf* pBuf, const ubyte* pRun, size_t uLen, bool bBase64, bool bNewline
 ){
 	char sHdr[24];
-	DasErrCode nRet;
+	das_errcode nRet;
 
 	if(bBase64){
 		size_t uArm = 0;
@@ -2143,7 +2143,7 @@ int DasCodec_encode(
 			"Codec is set to decode mode, call DasCodec_update() to change"
 		);
 
-	DasErrCode nRet    = DAS_OKAY;
+	das_errcode nRet    = DAS_OKAY;
 	DasAry* pAry       = pThis->pAry;
 	das_val_type vtAry = DasAry_valType(pAry);
 	
@@ -2471,7 +2471,7 @@ static int _encode_run_lvl(
 		}
 	}
 	if(aTerm[d] != '\0'){
-		DasErrCode nRet = DasBuf_write(pBuf, aTerm + d, 1);
+		das_errcode nRet = DasBuf_write(pBuf, aTerm + d, 1);
 		if(nRet != DAS_OKAY)
 			return -1 * nRet;
 	}

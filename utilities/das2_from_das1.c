@@ -443,7 +443,7 @@ FILE* openReader(
 	return pCmd;
 }
 
-DasErrCode das1ToDas2(FILE* pIn, DasPkt* pPkt, DasIO* pIoOut)
+das_errcode das1ToDas2(FILE* pIn, DasPkt* pPkt, DasIO* pIoOut)
 {
 	size_t uTotItems = 0;
 	bool g_bXIsTime = false;

@@ -59,7 +59,7 @@ static DasForm* _new_DasFormPt_empty(void)
 
 DasForm* new_DasFormPt(void){ return _new_DasFormPt_empty(); }
 
-static DasErrCode _DasFormPt_setParam(
+static das_errcode _DasFormPt_setParam(
 	DasForm* pBase, const char* sName, const char* sVal
 ){
 	return das_error(DASERR_FORM,
@@ -67,7 +67,7 @@ static DasErrCode _DasFormPt_setParam(
 	);
 }
 
-static DasErrCode _DasFormPt_encode(
+static das_errcode _DasFormPt_encode(
 	const DasForm* pBase, DasBuf* pBuf
 ){
 	return DasBuf_puts(pBuf, "      <ops kind=\"point\"/>\n");
@@ -214,7 +214,7 @@ static bool _DasBinOpAffine_apply(
 
 		/* Operand ORDER is preserved: the scaled interval goes back on the
 		   side it came in on, because no hook ever reorders operands. */
-		DasErrCode nRet = pThis->bPointLeft
+		das_errcode nRet = pThis->bPointLeft
 			? das_value_binop(pThis->nOp, vtPoint, pPoint,
 			                  vtDouble, (const ubyte*)&rScaled, pOp->vtOut, pOut)
 			: das_value_binop(pThis->nOp, vtDouble, (const ubyte*)&rScaled,
