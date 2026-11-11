@@ -119,7 +119,9 @@ CFLAGS= $(WARNINGS) $(OPTFLAGS) $(DEFINES) -fPIC -std=c99  -I.
 #CTESTFLAGS=-Wall -fPIC -std=c99 -ggdb -I. $(CFLAGS)
 CTESTFLAGS=$(CFLAGS)
 
-LFLAGS= -lfftw3 -lexpat -lssl -lcrypto -lz -lm -lpthread
+# LDFLAGS is for packagers, rpm and deb builds pass their hardening flags
+# (PIE, full RELRO) here.  Unset in a plain build.
+LFLAGS= $(LDFLAGS) -lfftw3 -lexpat -lssl -lcrypto -lz -lm -lpthread
 
 else
 
@@ -286,8 +288,10 @@ $(BD)/$(TARG).so:$(BUILD_OBJS) $(BD)/lib_members | $(BD)
 # Robert's tagged das1 reader breaks strict-aliasing expectations for C99
 # and thus should not be optimized least it provide incorrect output. 
 # An explicit override to build a debug version instead is provided here.
+# -Wno-error since distribution flags carry -D_FORTIFY_SOURCE, which needs
+# optimization and warns at -O0.  That warning is expected here.
 $(BD)/das2_from_tagged_das1.o:utilities/das2_from_tagged_das1.c $(BD)/$(TARG).a | $(BD)
-	$(CC) -c $(CFLAGS) -O0 -fno-strict-aliasing -o $@ $<
+	$(CC) -c $(CFLAGS) -O0 -Wno-error -fno-strict-aliasing -o $@ $<
 	
 # override pattern rule for das2_bin_ratesec.c, it hase two object files
 $(BD)/das2_bin_ratesec:$(BD)/das2_bin_ratesec.o $(BD)/via.o $(BD)/$(TARG).a
