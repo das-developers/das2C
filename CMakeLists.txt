@@ -339,6 +339,39 @@ include(buildfiles/cmake/das2CDeps.cmake)
 ##############################################################################
 # The library
 
+# The source's git description for daslib_version(), as the makefiles do.
+# Asked only when the source directory is the top of its own repository
+# (--show-cdup is empty there), so a copy of the sources inside some other
+# checkout does not report that project's commit.  Without git, ver_p.h
+# answers instead, stamped by git archive.
+#
+# Unlike the makefiles this is asked at configure time, so a build tree
+# reports the commit it was configured at until cmake runs again.  A fresh
+# configure, as in CI and package builds, is always current.
+find_package(Git QUIET)
+if(GIT_FOUND)
+	execute_process(
+		COMMAND "${GIT_EXECUTABLE}" rev-parse --show-cdup
+		WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+		RESULT_VARIABLE _das_git_rc OUTPUT_VARIABLE _das_git_cdup
+		OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET
+	)
+	if(_das_git_rc EQUAL 0 AND _das_git_cdup STREQUAL "")
+		execute_process(
+			COMMAND "${GIT_EXECUTABLE}" describe --tags --always --dirty
+			WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+			RESULT_VARIABLE _das_git_rc OUTPUT_VARIABLE _das_git_desc
+			OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET
+		)
+		if(_das_git_rc EQUAL 0 AND NOT _das_git_desc STREQUAL "")
+			message(STATUS "daslib_version(): ${_das_git_desc}")
+			set_property(SOURCE das3/util.c APPEND PROPERTY
+				COMPILE_DEFINITIONS "DAS_GIT_DESC=\"${_das_git_desc}\""
+			)
+		endif()
+	endif()
+endif()
+
 # _das_lib(<target> <STATIC|SHARED>) - libdas3 from the same sources both ways
 function(_das_lib targ kind)
 	add_library(${targ} ${kind} ${LIB_SRCS} ${LIB_HDRS})
