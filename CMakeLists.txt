@@ -83,6 +83,15 @@ if(CMAKE_HOST_WIN32 AND NOT DEFINED VCPKG_TARGET_TRIPLET
 	set(VCPKG_TARGET_TRIPLET x64-windows-static-md CACHE STRING "vcpkg triplet")
 endif()
 
+# A static triplet leaves vcpkg's bin\ empty, so its app-local DLL copy after
+# each link has nothing to deploy.  It still opens every new program and the
+# DLLs beside it while other links run, and on CI that failed at random with
+# "being used by another process".  A normal variable, so it also wins over
+# the ON already cached in an older build tree.  Dynamic triplets keep it.
+if(VCPKG_TARGET_TRIPLET MATCHES "-static(-md)?$")
+	set(VCPKG_APPLOCAL_DEPS OFF)
+endif()
+
 # One version number, kept in vcpkg.json
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/vcpkg.json" _das_manifest)
 string(JSON _das_version GET "${_das_manifest}" version-string)
