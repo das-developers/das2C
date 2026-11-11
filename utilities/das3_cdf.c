@@ -475,43 +475,43 @@ int parseArgs(int argc, char** argv, popts_t* pOpts)
 				continue;
 			}
 			if(dascmd_getArgVal(
-				sMemThresh,       32,                          argv, argc, &i, "-b", "--buffer="
+				argv, argc, "-b", "--buffer=", &i, sMemThresh, 32
 			))
 				continue;
 			if(dascmd_getArgVal(
-				pOpts->aTpltFile, DAS_FIELD_SZ(popts_t,aTpltFile), argv, argc, &i, "-s", "--skeleton="
+				argv, argc, "-s", "--skeleton=", &i, pOpts->aTpltFile, DAS_FIELD_SZ(popts_t,aTpltFile)
 			))
 				continue;
 			if(dascmd_getArgVal(
-				pOpts->aSource,   DAS_FIELD_SZ(popts_t,aSource),   argv, argc, &i, "-i", "--input="
+				argv, argc, "-i", "--input=", &i, pOpts->aSource, DAS_FIELD_SZ(popts_t,aSource)
 			))
 				continue;
 			if(dascmd_getArgVal(
-				pOpts->aOutFile,  DAS_FIELD_SZ(popts_t,aOutFile),  argv, argc, &i, "-o", "--output="
+				argv, argc, "-o", "--output=", &i, pOpts->aOutFile, DAS_FIELD_SZ(popts_t,aOutFile)
 			))
 				continue;
 			if(dascmd_getArgVal(
-				pOpts->aTmpDir,   DAS_FIELD_SZ(popts_t,aTmpDir),   argv, argc, &i, "-t", "--temp-dir="
+				argv, argc, "-t", "--temp-dir=", &i, pOpts->aTmpDir, DAS_FIELD_SZ(popts_t,aTmpDir)
 			))
 				continue;
 			if(dascmd_getArgVal(
-				pOpts->aMapFile,  DAS_FIELD_SZ(popts_t,aMapFile),  argv, argc, &i, "-m", "--map-vars="
+				argv, argc, "-m", "--map-vars=", &i, pOpts->aMapFile, DAS_FIELD_SZ(popts_t,aMapFile)
 			))
 				continue;
 			if(dascmd_getArgVal(
-				pOpts->aLevel,    DAS_FIELD_SZ(popts_t,aLevel),    argv, argc, &i, "-l", "--log="
+				argv, argc, "-l", "--log=", &i, pOpts->aLevel, DAS_FIELD_SZ(popts_t,aLevel)
 			))
 				continue;
 			if(dascmd_getArgVal(
-				pOpts->aCredFile, DAS_FIELD_SZ(popts_t,aCredFile), argv, argc, &i, "-a", "--auth-toks="
+				argv, argc, "-a", "--auth-toks=", &i, pOpts->aCredFile, DAS_FIELD_SZ(popts_t,aCredFile)
 			))
 				continue;
 			if(dascmd_getArgVal(
-				pOpts->aGlobAttr, DAS_FIELD_SZ(popts_t,aGlobAttr), argv, argc, &i, "-g", "--global="
+				argv, argc, "-g", "--global=", &i, pOpts->aGlobAttr, DAS_FIELD_SZ(popts_t,aGlobAttr)
 			))
 				continue;
 			if(dascmd_getArgVal(
-				pOpts->aPropMap,  DAS_FIELD_SZ(popts_t,aPropMap),  argv, argc, &i, "-p", "--prop-map="
+				argv, argc, "-p", "--prop-map=", &i, pOpts->aPropMap, DAS_FIELD_SZ(popts_t,aPropMap)
 			))
 				continue;
 			return das_error(PERR, "Unknown command line argument %s", argv[i]);
@@ -3228,7 +3228,7 @@ const ubyte* _valueToTT2k(
 		/* TODO: Check endianness here! */
 		pDblSrc = (const double*)pData;
 		for(size_t u = 0; u < uTimes; ++u){
-			g_pTimeValBuf[u] = Units_convertTo(UNIT_TT2000, pDblSrc[u], units);
+			g_pTimeValBuf[u] = Units_convertTo(pDblSrc[u], units, UNIT_TT2000);
 		}
 		return (const ubyte*)g_pTimeValBuf;
 

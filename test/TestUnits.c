@@ -69,7 +69,7 @@ int main(int argc, char** argv) {
 		return 15;	
 	}
 
-	double rTime = Units_convertFromDt(units, &dt);
+	double rTime = Units_convertFromDt(&dt, units);
 	if( rTime != 3600000001.0){
 		printf("ERROR: Test 5 Failed, %s (%f) != 3600000001.0 μs since 2000-01-01\n",
 				sTime, rTime);
@@ -90,7 +90,7 @@ int main(int argc, char** argv) {
 	/* Test US2000 backward transformations */
 	Units_convertToDt(&dt, rTime, units);
 	char sBuf[64] = {'\0'};
-	dt_isoc(&dt, sBuf, 64, 0);
+	dt_isoc(&dt, 0, sBuf, 64);
 	if( strcmp(sBuf, "2000-01-01T01:00:00") != 0){
 		printf("ERROR: Test 8 Failed, %s != %f US2000\n", sBuf, rTime);
 		return 15;
@@ -104,7 +104,7 @@ int main(int argc, char** argv) {
 		printf("ERROR: Test 9 Failed, can't parse %s as a string\n", sTime);
 		return 15;
 	}	
-	rTime = Units_convertFromDt(units, &dt);
+	rTime = Units_convertFromDt(&dt, units);
 	if( rTime != 15340.041666666666){
 		printf("ERROR: Test 10 Failed, %s != %f MJ1958\n", sTime, rTime);
 		return 15;
@@ -115,14 +115,14 @@ int main(int argc, char** argv) {
 		printf("ERROR: Test 11 Failed, can't parse %s as a string\n", sTime);
 		return 15;
 	}	
-	rTime = Units_convertFromDt(units, &dt);
+	rTime = Units_convertFromDt(&dt, units);
 	if( rTime != 0.5416666666666666){
 		printf("ERROR: Test 12 Failed, %s != %f MJ1958\n", sTime, rTime);
 		return 15;
 	}
 	
 	/* Test conversion from MJ1958 to US2000 */
-	double rUs2000 = Units_convertTo(UNIT_US2000, rTime, units);
+	double rUs2000 = Units_convertTo(rTime, units, UNIT_US2000);
 	if( rUs2000 != -1325329200000000.0){ 
 		printf("ERROR: Test 13 Failed, %f MJ1958 != %f US2000\n", rTime, rUs2000);
 		return 15;
@@ -146,7 +146,7 @@ int main(int argc, char** argv) {
 	rTime = 0.541667;
 	das_time dt1 = {0};
 	Units_convertToDt(&dt1, rTime, units);
-	dt_isod(&dt1, sBuf, 64, 0);
+	dt_isod(&dt1, 0, sBuf, 64);
 	if( strcmp(sBuf, "1958-001T13:00:00") != 0){
 		printf("ERROR: Test 16 Failed, %f MJ1958 is not %s UTC\n", rTime, sBuf);
 		return 15;
@@ -158,7 +158,7 @@ int main(int argc, char** argv) {
 	dt_null(&dt1);
 	units = Units_fromStr("ns1970");
 	Units_convertToDt(&dt1, rTime, units);
-	dt_isoc(&dt1, sBuf, 64, 3);
+	dt_isoc(&dt1, 3, sBuf, 64);
 	if( strcmp(sBuf, "2016-01-01T00:00:00.000") != 0){
 		printf("ERROR: Test 17 Failed, %f ns1970 is not %s UTC\n", rTime, sBuf);
 		return 15;
@@ -170,7 +170,7 @@ int main(int argc, char** argv) {
 	dt_null(&dt1);
 	units = Units_fromStr("ns1970");
 	Units_convertToDt(&dt1, rTime, units);
-	dt_isoc(&dt1, sBuf, 64, 6);
+	dt_isoc(&dt1, 6, sBuf, 64);
 	if( strcmp(sBuf, "1913-12-31T23:59:59.999999") != 0){
 		printf("ERROR: Test 18 Failed, %f ns1970 is not %s UTC\n", rTime, sBuf);
 		return 15;
@@ -219,7 +219,7 @@ int main(int argc, char** argv) {
 	/* Test unit conversions */
 	das_units ms = Units_fromStr("microsecond");
 	das_units delta = Units_invert( ms );
-	double rFactor = Units_convertTo(UNIT_HERTZ, 1.0, delta);
+	double rFactor = Units_convertTo(1.0, delta, UNIT_HERTZ);
 	if( rFactor != 1.0e+6){ 
 		printf("ERROR: Test 26 Failed, '%s' to '%s' factor = %.1e, expected 1.0e+06\n", 
 				 delta, UNIT_HERTZ, rFactor);
@@ -229,7 +229,7 @@ int main(int argc, char** argv) {
 	das_units perday = Units_fromStr("kilodonut/day");
 	das_units persec = Units_fromStr("donut hertz");
 	
-	double rTo = Units_convertTo(persec, 86.4, perday);
+	double rTo = Units_convertTo(86.4, perday, persec);
 	if( rTo != 1.0){
 		printf("ERROR: Test 27 Failed, 86.4 %s is %.4f %s, expected 1.0\n", perday,
 				 rTo, persec);
@@ -402,6 +402,22 @@ int main(int argc, char** argv) {
 			}
 		}
 		if(nBad > 0) return 15;
+	}
+
+	/* dt_in_range() takes the time tested first, then the range.  All three are
+	   das_time*, so a call left in the old (begin, end, test) order would
+	   compile; these four answers would not all survive it. */
+	{
+		das_time dtBeg, dtEnd, dtIn, dtOut;
+		dt_parsetime(&dtBeg, "2026-01-01");
+		dt_parsetime(&dtEnd, "2026-02-01");
+		dt_parsetime(&dtIn,  "2026-01-15");
+		dt_parsetime(&dtOut, "2026-03-01");
+		if(!dt_in_range(&dtIn, &dtBeg, &dtEnd) || dt_in_range(&dtOut, &dtBeg, &dtEnd)
+		   || !dt_in_range(&dtBeg, &dtBeg, &dtEnd) || dt_in_range(&dtEnd, &dtBeg, &dtEnd)){
+			printf("ERROR: dt_in_range(test, begin, end) gave a wrong answer\n");
+			return 15;
+		}
 	}
 
 	printf("INFO: All unit manipulation tests passed\n\n");

@@ -120,20 +120,34 @@ typedef ubyte byte;
       DasVar_toStr, DasAry_toStr, das_datum_toStr, das_datum_toStrValOnly,
       Units_toLabel
 
-   Their int length arguments are now size_t.
+   Their int length arguments are now size_t, and the two datum calls take
+   nFracDigits before the buffer, (pThis, nFracDigits, sStr, uLen).
 
-   das_doubles2csv() gained a buffer length after pBuf.  No macro, there is no
-   honest default; the compiler's "too few arguments" marks each call. */
+   das_doubles2csv() gained a buffer length and now takes its values first,
+   (pValues, nValues, pBuf, uBufSz).  No macro, there is no honest default;
+   the compiler's "too few arguments" marks each call. */
+
+#define das_datum_toStr(P, S, N, F)        das_datum_toStr((P), (F), (S), (N))
+#define das_datum_toStrValOnly(P, S, N, F) das_datum_toStrValOnly((P), (F), (S), (N))
 
 /* das_idx_prn() was declared in array.h but never exported, it is private */
 #define das_idx_prn(...) das_idx_prn_is_private__see_das2_compat_h
 
 /* ************************************************************************* */
-/* Time functions, 2026-10: das_time* first, as if it were "this" */
+/* Time functions, 2026-10: das_time* first, as if it were "this".
+   2026-11: then inputs, then the output buffer and its size last. */
 
-#define dt_isoc(B, N, T, F)     dt_isoc((T), (B), (size_t)(N), (F))
-#define dt_isod(B, N, T, F)     dt_isod((T), (B), (size_t)(N), (F))
-#define dt_dual_str(B, N, T, F) dt_dual_str((T), (B), (size_t)(N), (F))
+#define dt_isoc(B, N, T, F)     dt_isoc((T), (F), (B), (size_t)(N))
+#define dt_isod(B, N, T, F)     dt_isod((T), (F), (B), (size_t)(N))
+#define dt_dual_str(B, N, T, F) dt_dual_str((T), (F), (B), (size_t)(N))
+
+/* All three are das_time*, so an old order call would compile and test the
+   wrong time.  v2.3.0 was (begin, end, test). */
+#define dt_in_range(B, E, T)    dt_in_range((T), (B), (E))
+
+/* Inputs first: the value, then its units, then the units wanted */
+#define Units_convertTo(TO, V, FROM) Units_convertTo((V), (FROM), (TO))
+#define Units_convertFromDt(U, T)    Units_convertFromDt((T), (U))
 #define dt_parsetime(S, T)      dt_parsetime((T), (S))
 #define dt_emitt(TT, T)         dt_emitt((T), (TT))
 #define dt_from_1958(D, MS, T)  dt_from_1958((T), (D), (MS))
@@ -744,7 +758,12 @@ typedef enum var_type {
 #define das_swapBufInPlace  das_swap_buf
 #define swapU4              das_swap_u4
 
-/* Was a second copy of das_xml_escape() with the arguments in another order */
+/* das_xml_escape() takes its source first now.  A const char* source in the
+   old place would only warn, so the adapter is required, not a courtesy. */
+#define das_xml_escape(D, S, L)  das_xml_escape((S), (D), (L))
+
+/* Was a second copy of das_xml_escape() with the arguments in another order.
+   Written in v2.3.0 order, the adapter above puts it right. */
 #define _das_escape_xml(D, L, S) ((void)das_xml_escape((D), (S), (L)))
 
 /* ************************************************************************* */

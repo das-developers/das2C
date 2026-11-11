@@ -485,21 +485,21 @@ static void test_fromstr_int64(void)
 	uint64_t u = 0;
 
 	memset(aBuf, 0x55, sizeof(aBuf));
-	if(das_value_fromStr(aBuf, sizeof(aBuf), vtLong, "-9007199254740993") != DAS_OKAY)
+	if(das_value_fromStr("-9007199254740993", vtLong, aBuf, sizeof(aBuf)) != DAS_OKAY)
 		FAIL("vtLong parse of -(2^53+1) rejected");
 	memcpy(&n, aBuf, 8);
 	if(n != -9007199254740993LL)
 		FAIL("vtLong -(2^53+1) stored as %lld", (long long)n);
 
 	memset(aBuf, 0x55, sizeof(aBuf));
-	if(das_value_fromStr(aBuf, sizeof(aBuf), vtLong, "-9223372036854775808") != DAS_OKAY)
+	if(das_value_fromStr("-9223372036854775808", vtLong, aBuf, sizeof(aBuf)) != DAS_OKAY)
 		FAIL("vtLong parse of INT64_MIN rejected");
 	memcpy(&n, aBuf, 8);
 	if(n != INT64_MIN)
 		FAIL("vtLong INT64_MIN stored as %lld", (long long)n);
 
 	memset(aBuf, 0x55, sizeof(aBuf));
-	if(das_value_fromStr(aBuf, sizeof(aBuf), vtULong, "18446744073709551615") != DAS_OKAY)
+	if(das_value_fromStr("18446744073709551615", vtULong, aBuf, sizeof(aBuf)) != DAS_OKAY)
 		FAIL("vtULong parse of UINT64_MAX rejected");
 	memcpy(&u, aBuf, 8);
 	if(u != UINT64_MAX)

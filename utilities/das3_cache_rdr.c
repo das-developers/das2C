@@ -127,7 +127,7 @@ DasErrCode onPktData(DasPkt* pPktIn, void* vpHDat)
 	DasPlane* pPlane = DasPkt_getXPlane(pPktIn);
 	double rX = DasPlane_getValue(pPlane, 0);
 	if(strcmp(DasPlane_getUnits(pPlane), UNIT_US2000) != 0)
-		rX = Units_convertTo(UNIT_US2000, rX, DasPlane_getUnits(pPlane));
+		rX = Units_convertTo(rX, DasPlane_getUnits(pPlane), UNIT_US2000);
 	if(rX < pHDat->rBeg) return 0;
 	if(rX >= pHDat->rEnd) return 0;
 
@@ -297,8 +297,8 @@ int main(int argc, char* argv[])
 	if(!dt_parsetime(&dtEnd, sEnd))
 		return das_error(P_ERR, "Can't parse end time '%s'", sEnd);
 
-	double rBeg = Units_convertFromDt(UNIT_US2000, &dtBeg) - rPad*1.0e+6;
-	double rEnd = Units_convertFromDt(UNIT_US2000, &dtEnd) + rPad*1.0e+6;
+	double rBeg = Units_convertFromDt(&dtBeg, UNIT_US2000) - rPad*1.0e+6;
+	double rEnd = Units_convertFromDt(&dtEnd, UNIT_US2000) + rPad*1.0e+6;
 	if(rEnd <= rBeg)
 		return das_error(P_ERR, "Begin %s is not before end %s", sBeg, sEnd);
 
@@ -308,8 +308,8 @@ int main(int argc, char* argv[])
 	Units_convertToDt(&dtSelBeg, rBeg, UNIT_US2000);
 	Units_convertToDt(&dtSelEnd, rEnd, UNIT_US2000);
 	char sSelBeg[64] = {'\0'}, sSelEnd[64] = {'\0'};
-	dt_isoc(&dtSelBeg, sSelBeg, 63, 0);
-	dt_isoc(&dtSelEnd, sSelEnd, 63, 0);
+	dt_isoc(&dtSelBeg, 0, sSelBeg, 63);
+	dt_isoc(&dtSelEnd, 0, sSelEnd, 63);
 
 	das_range rng;
 	if(das_range_fromUtc(&rng, sSelBeg, sSelEnd) != DAS_OKAY)

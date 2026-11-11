@@ -581,7 +581,7 @@ int dt_compare(const das_time* pA, const das_time* pB)
 
 
 bool dt_in_range(
-	const das_time* begin, const das_time* end, const das_time* test
+	const das_time* test, const das_time* begin, const das_time* end
 ){
 	return ( (dt_compare(test, begin) >= 0 ) && (dt_compare(test, end) < 0));
 }
@@ -624,7 +624,7 @@ static char* _dt_fit(char* sBuf, size_t uLen, int n)
 	return ((n >= 0)&&((size_t)n < uLen)) ? sBuf : NULL;
 }
 
-char* dt_isoc(const das_time* pDt, char* sBuf, size_t uLen, int nFracSec)
+char* dt_isoc(const das_time* pDt, int nFracSec, char* sBuf, size_t uLen)
 {
 	int n = 0;
 	char sFmt[48] = {'\0'};
@@ -648,7 +648,7 @@ char* dt_isoc(const das_time* pDt, char* sBuf, size_t uLen, int nFracSec)
 	return _dt_fit(sBuf, uLen, n);
 }
 
-char* dt_isod(const das_time* pDt, char* sBuf, size_t uLen, int nFracSec)
+char* dt_isod(const das_time* pDt, int nFracSec, char* sBuf, size_t uLen)
 {
 	int n = 0;
 	char sFmt[48] = {'\0'};
@@ -672,7 +672,7 @@ char* dt_isod(const das_time* pDt, char* sBuf, size_t uLen, int nFracSec)
 	return _dt_fit(sBuf, uLen, n);
 }
 
-char* dt_dual_str(const das_time* pDt, char* sBuf, size_t uLen, int nFracSec)
+char* dt_dual_str(const das_time* pDt, int nFracSec, char* sBuf, size_t uLen)
 {
 	int n = 0;
 	char sFmt[64] = {'\0'};

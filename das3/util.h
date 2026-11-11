@@ -385,13 +385,13 @@ DAS_API char* das_strip(char* sLine, char cComment);
  * dropped from the first source character that won't fit whole, so neither
  * an entity nor a multi-byte UTF-8 character is ever cut in half.
  *
- * @param dest The buffer to receive the output
  * @param src  The data source
+ * @param dest The buffer to receive the output
  * @param uOutLen the size of the dest buffer.  
  *
  * @returns the parameter dest cast to a constant pointer.
  */
-DAS_API const char* das_xml_escape(char* dest, const char* src, size_t uOutLen);
+DAS_API const char* das_xml_escape(const char* src, char* dest, size_t uOutLen);
 
 /** Copy a string into a new buffer allocated on the heap
  *
@@ -456,20 +456,20 @@ typedef struct das_url_parts {
  *
  * @code
  *   das_url_parts parts;
- *   if(das_url_parse(sUrl, &parts)){
+ *   if(das_url_parse(&parts, sUrl)){
  *       size_t uLen;
- *       const char* pHost = das_url_part(sUrl, &parts, DASURL_HOST, &uLen);
+ *       const char* pHost = das_url_part(&parts, sUrl, DASURL_HOST, &uLen);
  *       printf("host: %.*s\n", (int)uLen, pHost);
  *   }
  * @endcode
  *
- * @param sUrl The URL, at most 65534 bytes
  * @param pParts Receives the part locations
+ * @param sUrl The URL, at most 65534 bytes
  * @returns true if sUrl has a scheme and the rest is well formed, false
  *          otherwise.  Nothing is logged; a caller with a user to tell
  *          decides what to say.
  */
-DAS_API bool das_url_parse(const char* sUrl, das_url_parts* pParts);
+DAS_API bool das_url_parse(das_url_parts* pParts, const char* sUrl);
 
 /** Get one part of a URL split by das_url_parse()
  *
@@ -480,8 +480,8 @@ DAS_API bool das_url_parse(const char* sUrl, das_url_parts* pParts);
  * the scheme's default, "80" for http and "443" for https; for other schemes
  * without one it is absent.
  *
- * @param sUrl The same string given to das_url_parse()
  * @param pParts The result of das_url_parse()
+ * @param sUrl The same string given to das_url_parse()
  * @param ePart Which part
  * @param pLen Receives the length of the part, 0 when it is absent
  * @returns A pointer to the start of the part within sUrl (or to a static
@@ -489,7 +489,7 @@ DAS_API bool das_url_parse(const char* sUrl, das_url_parts* pParts);
  *          such as the query of "http://h/p?", is non-NULL with length 0.
  */
 DAS_API const char* das_url_part(
-	const char* sUrl, const das_url_parts* pParts, das_url_part_e ePart, size_t* pLen
+	const das_url_parts* pParts, const char* sUrl, das_url_part_e ePart, size_t* pLen
 );
 
 /** Is this string a node location rather than a catalog path?
@@ -752,16 +752,16 @@ DAS_API bool dascmd_isArg(const char* sArg, const char* sShort, const char* sLon
  * The form that has spaces between the long option name and the value
  * is not supported
  *
+ * @param argv -  The list of command line parameters
+ * @param argc -  The number of command line parameters
+ * @param sShort - The short form of the option
+ * @param sLong - The long form of the option
+ * @param pArgIdx - A pointer to the current argument index.  It is 
+ *        incremented if the option is found.
  * @param sDest - The location to receive the option value
  * @param uDest - The size of the location to receive the option value
  *                Note the macro DAS_FIELD_SZ is useful for getting 
  *                the size of a field in a structure.
- * @param argv -  The list of command line parameters
- * @param argc -  The number of command line parameters
- * @param pArgIdx - A pointer to the current argument index.  It is 
- *        incremented if the option is found.
- * @param sShort - The short form of the option
- * @param sLong - The long form of the option
  * 
  * @returns false if the argument was not found or the option value
  *   missing often the argument, true otherwise and the index at 
@@ -770,8 +770,8 @@ DAS_API bool dascmd_isArg(const char* sArg, const char* sShort, const char* sLon
  * @see also DAS_FIELD_SZ
  */
 DAS_API bool dascmd_getArgVal(
-  char* sDest, size_t uDest, char** argv, int argc, int* pArgIdx, 
-  const char* sShort, const char* sLong
+  char** argv, int argc, const char* sShort, const char* sLong, int* pArgIdx, 
+  char* sDest, size_t uDest
 );
 
 /** @} */

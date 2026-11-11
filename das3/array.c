@@ -1223,7 +1223,7 @@ size_t Array_rmTail(Array* pThis, size_t uRecs)
 
 DasAry* new_DasAry(
 	const char* id, das_val_type et, size_t sz_each, const ubyte* fill, 
-	int rank, size_t* shape, das_units units
+	int rank, const size_t* shape, das_units units
 ){
 	DasAry* pThis = (DasAry*) calloc(1, sizeof(DasAry));
 	if( ! init_DasAry(pThis, id, et, sz_each, fill, rank, shape, units) ) {
@@ -1235,7 +1235,7 @@ DasAry* new_DasAry(
 
 bool init_DasAry(
 	DasAry* pThis, const char* id, das_val_type et, size_t sz_each, const ubyte* fill, 
-	int rank, size_t* shape, das_units units
+	int rank, const size_t* shape, das_units units
 ){
 	
 	int i = 0;

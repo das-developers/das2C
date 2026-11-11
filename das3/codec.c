@@ -1170,7 +1170,7 @@ static int _convert_n_store_text(DasCodec* pThis, const char* sValue)
 		return DAS_OKAY;
 	}
 
-	int nRet = das_value_fromStr(aValue, sizeof(das_time), vtAry, sValue);
+	int nRet = das_value_fromStr(sValue, vtAry, aValue, sizeof(das_time));
 	if(nRet != DAS_OKAY)
 		return -1 * nRet;
 
@@ -1210,7 +1210,7 @@ static int _convert_n_store_text(DasCodec* pThis, const char* sValue)
 	}
 
 	/* Any other time conversion */
-	double rTime = Units_convertFromDt(pThis->timeUnits, (das_time*)aValue);
+	double rTime = Units_convertFromDt((das_time*)aValue, pThis->timeUnits);
 	if(vtAry != vtDouble){
 		if(vtAry == vtFloat){
 			if(! pThis->bResLossWarn){
@@ -1968,8 +1968,8 @@ static DasErrCode _DasCodec_printItems(
 		/* We add a separator after all ascii items, so use one less then
 		   the allotted space for the format string */
 		nRet = das_value_fmt(
-			pThis->sOutFmt, DASENC_FMT_LEN, vt, (pThis->sSemantic ? pThis->sSemantic : ""),
-			(pThis->nBufValSz > 1) ? (pThis->nBufValSz -1) : - 1
+			vt, (pThis->sSemantic ? pThis->sSemantic : ""), (pThis->nBufValSz > 1) ? (pThis->nBufValSz -1) : - 1, pThis->sOutFmt,
+			DASENC_FMT_LEN
 		);
 		if(nRet != DAS_OKAY)
 			return nRet;

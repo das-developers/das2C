@@ -1271,8 +1271,8 @@ static bool _dassrc_rangeEntry(
 			return false;
 		}
 		char sBeg[40], sEnd[40];
-		dt_isoc(&dtBeg, sBeg, sizeof(sBeg), 0);
-		dt_isoc(&dtEnd, sEnd, sizeof(sEnd), 0);
+		dt_isoc(&dtBeg, 0, sBeg, sizeof(sBeg));
+		dt_isoc(&dtEnd, 0, sEnd, sizeof(sEnd));
 		return _dassrc_rangeItem(pThis, pReq, pG, "min", sBeg, aPresent, aCovered, sWhy, uWhy) &&
 		       _dassrc_rangeItem(pThis, pReq, pG, "max", sEnd, aPresent, aCovered, sWhy, uWhy);
 	}

@@ -348,17 +348,17 @@ DAS_API bool Units_canConvert(das_units fromUnits , das_units toUnits);
 
 /** Generic unit conversion utility
  * 
- * @param toUnits The new units that the value should be represented in
- *
  * @param rVal The value to convert, to get a conversion factor from one unit
  *              type to another set this to 1.0.
  *
  * @param fromUnits The original units of the value
  *
+ * @param toUnits The new units that the value should be represented in
+ *
  * @note: Thanks Wikipedia.  This code incorporates the algorithm on page
  *        http://en.wikipedia.org/wiki/Julian_day
  */
-DAS_API double Units_convertTo( das_units toUnits, double rVal, das_units fromUnits );
+DAS_API double Units_convertTo( double rVal, das_units fromUnits, das_units toUnits );
 
 
 /** Determine if the units in question can be converted to date-times 
@@ -394,12 +394,12 @@ DAS_API DasErrCode Units_convertToDt(das_time* pDt, double value, das_units epoc
 
 /** Convert a calendar representation of a time to value in time offset units
  * 
- * @param epoch_units The units associated with the return value
  * @param pDt the calendar time object from which to derive the value
+ * @param epoch_units The units associated with the return value
  * @return the value as a floating point offset from the epoch associated with 
  *         epoch_units, or DAS_FILL_VALUE on an error
  */
-DAS_API double Units_convertFromDt(das_units epoch_units, const das_time* pDt);
+DAS_API double Units_convertFromDt(const das_time* pDt, das_units epoch_units);
 
 /** Get seconds since midnight for some value of an epoch time unit
  * @param rVal the value of the epoch time

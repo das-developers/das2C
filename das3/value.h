@@ -481,19 +481,19 @@ DAS_API DasErrCode das_value_accum(
  *       without any warning.  Checking the length of text output produced
  *       when writing a formatted value is recommended.
  * 
- * @param sBuf where to store the format string
- * @param uBufLen space for the format string storage, including the NUL
  * @param vt the value type in need of a format string
  * @param sSemantic how the value is used.  Format code changes for binary
  *        usage versus text or regular values.
  * @param nFitTo If -1 the format string will produce variable length output
  *        if a positive number > 2 a fixed length format will be generated.
+ * @param sBuf where to store the format string
+ * @param uBufLen space for the format string storage, including the NUL
  * 
  * @returns DAS_OKAY if a format string could be generated, a positive error
  *             value otherwise.
  */
 DAS_API DasErrCode das_value_fmt(
-	char* sBuf, size_t uBufLen, das_val_type vt, const char* sSemantic, int nFitTo
+	das_val_type vt, const char* sSemantic, int nFitTo, char* sBuf, size_t uBufLen
 );
 
 /** Small helper for printing reals in less space 
@@ -512,7 +512,7 @@ DAS_API void das_value_trimReal(char* sVal);
  * @returns DAS_OKAY if parsing was successful, an error return code otherwise.
  */
 DAS_API DasErrCode das_value_fromStr(
-	ubyte* pBuf, int uBufLen, das_val_type vt, const char* sStr
+	const char* sStr, das_val_type vt, ubyte* pBuf, int uBufLen
 );
 
 
@@ -615,18 +615,18 @@ DAS_API double* das_csv2doubles(const char * s, int* nitems);
  *
  * @todo this function is a potential source of buffer overruns, fix it.
  *
- * @param[out] pBuf a pointer to the buffer to receive the printed values
- * @param[in]  uBufSz The length of the buffer to received the converted values
  * @param[in] pValues an array of doubles
  * @param[in] nValues the number of items to print to the array
+ * @param[out] pBuf a pointer to the buffer to receive the printed values
+ * @param[in]  uBufSz The length of the buffer to received the converted values
  *
  * @returns A pointer to the supplied buffer.
  */
-DAS_API char* das_doubles2csv(char* pBuf, size_t uBufSz, const double* pValues, int nValues);
+DAS_API char* das_doubles2csv(const double* pValues, int nValues, char* pBuf, size_t uBufSz);
 
 
 /** Similar to das_doubles2csv, but for 32-bit floats */
-DAS_API char* das_floats2csv(char* pBuf, size_t uBufSz, const float* pValues, int nValues);
+DAS_API char* das_floats2csv(const float* pValues, int nValues, char* pBuf, size_t uBufSz);
 
 
 #ifdef __cplusplus

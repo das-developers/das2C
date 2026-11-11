@@ -229,7 +229,7 @@ static void test_helpers(void)
 	char sB[40], sE[40];
 #define SPAN_IS(str, b, e) do{ \
 	bool _ok = dt_parsespan(str, &dtB, &dtE); \
-	if(_ok){ dt_isoc(&dtB, sB, 40, 0); dt_isoc(&dtE, sE, 40, 0); } \
+	if(_ok){ dt_isoc(&dtB, 0, sB, 40); dt_isoc(&dtE, 0, sE, 40); } \
 	CHECK(_ok && streq(sB, b) && streq(sE, e), "%s -> %s %s, want %s %s", str, \
 	      _ok ? sB : "(refused)", _ok ? sE : "", b, e); \
 }while(0)

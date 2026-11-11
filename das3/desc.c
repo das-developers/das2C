@@ -131,7 +131,7 @@ void DasDesc_clearProps(DasDesc* pThis){
 /* ************************************************************************* */
 /* Property summaries */
 
-int DasDesc_info(const DasDesc* pThis, char* sBuf, size_t uLen, const char* sIndent)
+int DasDesc_info(const DasDesc* pThis, const char* sIndent, char* sBuf, size_t uLen)
 {
 	if(uLen > 0) sBuf[0] = '\0';
 	int n = 0;
@@ -478,7 +478,7 @@ double DasDesc_getDatum(DasDesc* pThis, const char* sName, das_units units)
 				das_error(DASERR_DESC, "Couldn't parse %s as a date time", sValue);
 				return DAS_FILL_VALUE;	
 			}
-			return Units_convertFromDt(pProp->units, &dt);
+			return Units_convertFromDt(&dt, pProp->units);
 		}
 	}
 
@@ -488,7 +488,7 @@ double DasDesc_getDatum(DasDesc* pThis, const char* sName, das_units units)
 		return DAS_FILL_VALUE;
 	}
 	
-	return Units_convertTo(units, rValue, pProp->units);
+	return Units_convertTo(rValue, pProp->units, units);
 }
 
 double* DasDesc_getDoubleAry(DasDesc* pThis, const char* sName, int* pNumItems)
@@ -843,7 +843,7 @@ DasErrCode DasDesc_getStrRng(
 	/* If the end string is 'now' return the max as the current UTC time */
 	if(strcasecmp(sMax, "now") == 0){
 		dt_now(&dt);
-		dt_isoc(&dt, sMax, 63, 0);
+		dt_isoc(&dt, 0, sMax, 63);
 	}
 
 	*pUnits = pProp->units;
@@ -884,7 +884,7 @@ DasErrCode DasDesc_setDoubleArray(
 			nItems*50, nItems
 		);
 	}
-	das_doubles2csv(sVal, nItems*50, pValues, nItems);
+	das_doubles2csv(pValues, nItems, sVal, nItems*50);
 
 	DasErrCode nRet = DasDesc_flexSet(
 		pThis, NULL, DASPROP_REAL|DASPROP_SET, sName, sVal, ',', NULL, DASPROP_DAS3
@@ -902,7 +902,7 @@ DasErrCode DasDesc_setFloatAry(
 			nItems*50, nItems
 		);
 	}
-	das_floats2csv(sVal, nItems*50, pValues, nItems);
+	das_floats2csv(pValues, nItems, sVal, nItems*50);
 	
 	DasErrCode nRet = DasDesc_flexSet(
 		pThis, NULL, DASPROP_REAL|DASPROP_SET, sName, sVal, ',', NULL, DASPROP_DAS3

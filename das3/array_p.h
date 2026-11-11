@@ -110,7 +110,7 @@ struct das_array {
  * stack object) instead of making a heap object.  Returns true on success. */
 bool init_DasAry(
    DasAry* pThis, const char* id, das_val_type et, size_t sz_each,
-   const ubyte* fill, int rank, size_t* shape, das_units units
+   const ubyte* fill, int rank, const size_t* shape, das_units units
 );
 
 /* Similar to dec_DasAry, but for objects set up by init_DasAry */

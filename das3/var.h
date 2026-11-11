@@ -346,7 +346,7 @@ DAS_API int ref_DasVar(const DasVar* pThis);
  *          too small, or a negative das error code after logging why not.
  * @memberof DasVar */
 DAS_API int DasVar_get(
-	const DasVar* pThis, ptrdiff_t* pLoc, das_byte_seq work, das_datum* pOut
+	const DasVar* pThis, const ptrdiff_t* pLoc, das_byte_seq work, das_datum* pOut
 );
 
 /** Will DasVar_get() ever need a scratch buffer for this variable?
@@ -885,15 +885,15 @@ DAS_API ptrdiff_t das_varlength_merge(ptrdiff_t nLeft, ptrdiff_t nRight);
  * @param nMaxRank the most entries pShape can hold
  * @param bAllowFlags false to refuse '^' and '-'.  Only a variable may use
  *        them; a dataset's own index= carries neither.
+ * @param sWhere context for the error message, e.g. "<composite> in dataset 30"
  * @param pShape receives a count or VARIDX_* mark per entry
  * @param pnRank receives the number of entries
- * @param sWhere context for the error message, e.g. "<composite> in dataset 30"
  * @returns DAS_OKAY, or an error code after logging why not.  The rank is
  *          not checked against anything; that is the caller's job.
  */
 DAS_API DasErrCode das_shape_fromStr(
-	const char* sShape, int nMaxRank, bool bAllowFlags, ptrdiff_t* pShape,
-	int* pnRank, const char* sWhere
+	const char* sShape, int nMaxRank, bool bAllowFlags, const char* sWhere,
+	ptrdiff_t* pShape, int* pnRank
 );
 
 /** Write a shape as an index= or intern= attribute value, the inverse of

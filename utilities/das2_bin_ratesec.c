@@ -264,7 +264,7 @@ DasErrCode onPktData(DasPkt* pPdIn, int nPktId, void* vpState)
 	Via* pVia = pState->pVia;
 	
 	double rCurTime = DasPlane_getValue(pXIn, 0);
-	rCurTime = Units_convertTo(UNIT_US2000, rCurTime, DasPlane_getUnits(pXIn));
+	rCurTime = Units_convertTo(rCurTime, DasPlane_getUnits(pXIn), UNIT_US2000);
 	
 	/* Initialize location of bin 0 if not already set */
 	if(pState->rStartMicroSec == DAS_FILL_VALUE)
@@ -490,7 +490,7 @@ int main(int argc, char* argv[])
 			i++;
 			if(!dt_parsetime(&dt, argv[i]))
 				return das_error(P_ERR, "Couldn't convert %s to a date-time", argv[i]);
-			ud.rStartMicroSec = Units_convertFromDt(UNIT_US2000, &dt);
+			ud.rStartMicroSec = Units_convertFromDt(&dt, UNIT_US2000);
 			continue;
 		}
 		if((strcmp(argv[i], "-m")==0)||(strcmp(argv[i], "--monotonic")==0)){

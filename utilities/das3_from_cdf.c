@@ -403,7 +403,7 @@ static int _argError(const char* sMsg)
 static void _rangeEndStr(const das_datum* pDm, char* sBuf, size_t uLen, int nFrac)
 {
 	if(das_datum_isNull(pDm)) snprintf(sBuf, uLen, "(open)");
-	else das_datum_toStr(pDm, sBuf, uLen, nFrac);
+	else das_datum_toStr(pDm, nFrac, sBuf, uLen);
 }
 
 /* One --range value, "COORD,BEG,END".  Time bounds parse as UTC; anything
@@ -525,25 +525,25 @@ int parseArgs(int argc, char** argv, popts_t* pOpts)
 				continue;
 			}
 			sRange[0] = '\0';
-			if(dascmd_getArgVal(sRange, sizeof(sRange), argv, argc, &i, "-r", "--range=")){
+			if(dascmd_getArgVal(argv, argc, "-r", "--range=", &i, sRange, sizeof(sRange))){
 				if(_parseRange(pOpts, sRange) != DAS_OKAY)
 					return PERR;
 				continue;
 			}
 			if(dascmd_getArgVal(
-				pOpts->aCoordMap, DAS_FIELD_SZ(popts_t, aCoordMap), argv, argc, &i, "-c", "--coord="
+				argv, argc, "-c", "--coord=", &i, pOpts->aCoordMap, DAS_FIELD_SZ(popts_t, aCoordMap)
 			))
 				continue;
 			if(dascmd_getArgVal(
-				pOpts->aLevel, DAS_FIELD_SZ(popts_t, aLevel), argv, argc, &i, "-l", "--log="
+				argv, argc, "-l", "--log=", &i, pOpts->aLevel, DAS_FIELD_SZ(popts_t, aLevel)
 			))
 				continue;
 			if(dascmd_getArgVal(
-				pOpts->aDefVars, DAS_FIELD_SZ(popts_t, aDefVars), argv, argc, &i, "-d", "--def-vars="
+				argv, argc, "-d", "--def-vars=", &i, pOpts->aDefVars, DAS_FIELD_SZ(popts_t, aDefVars)
 			))
 				continue;
 			if(dascmd_getArgVal(
-				pOpts->aPropMap, DAS_FIELD_SZ(popts_t, aPropMap), argv, argc, &i, "-p", "--prop-map="
+				argv, argc, "-p", "--prop-map=", &i, pOpts->aPropMap, DAS_FIELD_SZ(popts_t, aPropMap)
 			))
 				continue;
 			snprintf(sMsg, sizeof(sMsg) - 1, "Unknown command line argument %s", argv[i]);

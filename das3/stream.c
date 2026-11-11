@@ -184,7 +184,7 @@ int DasStream_info(const DasStream* pThis, char* sBuf, size_t uLen)
 
 	if(DasDesc_length((DasDesc*)pThis) > 0)
 		n += DasDesc_info(
-			(DasDesc*)pThis, _prn_at(sBuf, uLen, n), _prn_rem(uLen, n), "   "
+			(DasDesc*)pThis, "   ", _prn_at(sBuf, uLen, n), _prn_rem(uLen, n)
 		);
 	else
 		n = _prn_catf(sBuf, uLen, n, "   (no global properties)\n");

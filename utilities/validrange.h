@@ -52,7 +52,7 @@ static bool _das2_validBound(
 			);
 			return false;
 		}
-		rVal = Units_convertTo(want, rVal, have);
+		rVal = Units_convertTo(rVal, have, want);
 	}
 	*pBound = rVal;
 	return true;

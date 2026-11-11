@@ -114,9 +114,9 @@ static void test_datum_ctors(void)
 	bs.ptr = aPng; bs.sz = 4;
 	das_datum_byteSeq(&dm, bs, UNIT_DIMENSIONLESS);
 	char sHex[32] = {'\0'};
-	das_datum_toStrValOnlySep(&dm, sHex, sizeof(sHex), -1, ", ");
+	das_datum_toStrValOnlySep(&dm, -1, ", ", sHex, sizeof(sHex));
 	if(strcmp(sHex, "89, 50, 4E, 0A") != 0) FAIL("hex bytes rendered as '%s'", sHex);
-	das_datum_toStrValOnlySep(&dm, sHex, 8, -1, ";");
+	das_datum_toStrValOnlySep(&dm, -1, ";", sHex, 8);
 	if(strcmp(sHex, "89;50") != 0) FAIL("short buffer cut mid-byte: '%s'", sHex);
 }
 
@@ -176,7 +176,7 @@ static void test_null(void)
 	char sBuf[32];
 	memset(sBuf, 'x', sizeof(sBuf));
 	das_datum_initNull(&dm);
-	if(das_datum_toStr(&dm, sBuf, sizeof(sBuf), -1) == NULL) FAIL("null did not print");
+	if(das_datum_toStr(&dm, -1, sBuf, sizeof(sBuf)) == NULL) FAIL("null did not print");
 	if(sBuf[0] != '\0') FAIL("null printed as '%s'", sBuf);
 
 	das_datum_fromDbl(&dm, 1.0, UNIT_SECONDS);
@@ -426,7 +426,7 @@ static void test_composite_read(void)
 
 	/* the formalism renders it; a form with no opinion gets bracketed cells */
 	char sBuf[128] = {'\0'};
-	das_datum_toStr(&dm, sBuf, sizeof(sBuf), -1);
+	das_datum_toStr(&dm, -1, sBuf, sizeof(sBuf));
 	if(strstr(sBuf, "4") == NULL) FAIL("printed as '%s'", sBuf);
 
 	dec_DasAry(pAry);

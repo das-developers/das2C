@@ -137,7 +137,7 @@ static void testBuf(void)
 	int64_t nCopied = -1;
 	pIn = new_DasXport_mem((void*)g_sText, 20, "r");
 	pOut = new_DasXport_mem(aCopy, sizeof(aCopy), "w");
-	CHECK(DasXport_copyTo(pIn, pOut, &nCopied, NULL, NULL) == DAS_OKAY, "copyTo");
+	CHECK(DasXport_copyTo(pIn, pOut, NULL, NULL, &nCopied) == DAS_OKAY, "copyTo");
 	CHECK(nCopied == 20 && memcmp(aCopy, g_sText, 20) == 0, "copyTo moved every byte");
 	del_DasXport(pIn);
 	del_DasXport(pOut);
@@ -153,7 +153,7 @@ static void testBuf(void)
 
 	pIn = new_DasXport_mem((void*)g_sText, 20, "r");
 	pOut = new_DasXport_mem(aCopy, sizeof(aCopy), "w");
-	CHECK(DasXport_copyTo(pIn, pOut, &nCopied, _stopCopy, NULL) == 77 && nCopied == 20,
+	CHECK(DasXport_copyTo(pIn, pOut, _stopCopy, NULL, &nCopied) == 77 && nCopied == 20,
 	      "progress callback stops the copy with its own code");
 	del_DasXport(pIn);
 	del_DasXport(pOut);

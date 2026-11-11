@@ -26,7 +26,7 @@
 
 void init_DasAryIter(
    DasAryIter* pThis, const DasAry* pAry, int iDimMin, int iDimMax, 
-   ptrdiff_t* pLocBeg,  ptrdiff_t* pLocEnd
+   const ptrdiff_t* pLocBeg, const ptrdiff_t* pLocEnd
 )
 {
 	memset(pThis, 0, sizeof(DasAryIter));
@@ -356,7 +356,7 @@ bool DasDsUniqIter_next(DasDsUniqIter* pThis){
 /* ************************************************************************* */
 
 void init_DasDsCubeIter(
-	DasDsCubeIter* pThis, int nRank, ptrdiff_t* pMin, ptrdiff_t* pMax 
+	DasDsCubeIter* pThis, int nRank, const ptrdiff_t* pMin, const ptrdiff_t* pMax
 ){
 	pThis->done = true;
 

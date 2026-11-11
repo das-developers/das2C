@@ -28,7 +28,7 @@ void das_send_except(int nDasVer, das_except_e nType, const char* sMsg)
 	/* Sized for SPICE long messages, up to 1840 characters before escaping */
 	char sMsgEsc[2048] = {'\0'};
 	char sOut[2176] = {'\0'};
-	das_xml_escape(sMsgEsc, sMsg, sizeof(sMsgEsc));
+	das_xml_escape(sMsg, sMsgEsc, sizeof(sMsgEsc));
 
 	if(nDasVer == 2){
 		snprintf(sOut, sizeof(sOut), "<exception type=\"%s\"\n"
@@ -52,8 +52,8 @@ static void _send_comment(
 	char sSrcEsc[1024] = {'\0'};
 	char sValEsc[1024] = {'\0'};
 	char sOut[2176] = {'\0'};
-	das_xml_escape(sSrcEsc, sSrc, sizeof(sSrcEsc));
-	das_xml_escape(sValEsc, sVal, sizeof(sValEsc));
+	das_xml_escape(sSrc, sSrcEsc, sizeof(sSrcEsc));
+	das_xml_escape(sVal, sValEsc, sizeof(sValEsc));
 
 	if(nDasVer == 2){
 		snprintf(sOut, 2175, "<comment type=\"%s\"\n"

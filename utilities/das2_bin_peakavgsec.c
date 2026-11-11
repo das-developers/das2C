@@ -291,7 +291,7 @@ DasErrCode onPktData(DasPkt* pPdIn, int nPktId, void* ud)
 	   been seen  (Note: output packet ID's mirror the input) */
 	DasPlane* pX = DasPkt_getXPlane(pPdIn);
 	double rCurTime = DasPlane_getValue(pX, 0);
-	rCurTime = Units_convertTo(UNIT_US2000, rCurTime, DasPlane_getUnits(pX));
+	rCurTime = Units_convertTo(rCurTime, DasPlane_getUnits(pX), UNIT_US2000);
 	
 	/* Could be the first data packet of the entire stream */
 	if(! g_bHasStartTime){
@@ -449,7 +449,7 @@ int main( int argc, char *argv[])
 			if(! dt_parsetime(&dt, argv[i+1]))
 				return das_error(P_ERR, "Couldn't convert %s to a date-time", 
 						            argv[i+1]);
-			g_rStartMicroSec = Units_convertFromDt(UNIT_US2000, &dt);
+			g_rStartMicroSec = Units_convertFromDt(&dt, UNIT_US2000);
 			g_bHasStartTime = true;
 			break;
 		}

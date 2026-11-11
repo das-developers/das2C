@@ -89,18 +89,18 @@ static void test_escape(void)
 	char sBuf[16];
 
 	/* each '&' grows to five bytes, three fit exactly with the NUL */
-	das_xml_escape(sBuf, "&&&&&&&&a", sizeof(sBuf));
+	das_xml_escape("&&&&&&&&a", sBuf, sizeof(sBuf));
 	if(strcmp(sBuf, "&amp;&amp;&amp;") != 0) FAIL("escape fill, got '%s'", sBuf);
 
 	/* an entity that won't fit whole is left out, not cut */
-	das_xml_escape(sBuf, "ab&", 5);
+	das_xml_escape("ab&", sBuf, 5);
 	if(strcmp(sBuf, "ab") != 0) FAIL("escape cut entity, got '%s'", sBuf);
 
 	/* nor is a two byte character, e-acute here */
-	das_xml_escape(sBuf, "ab\xc3\xa9", 4);
+	das_xml_escape("ab\xc3\xa9", sBuf, 4);
 	if(strcmp(sBuf, "ab") != 0) FAIL("escape cut utf-8, got '%s'", sBuf);
 
-	das_xml_escape(sBuf, "a\"b'c<d>e", sizeof(sBuf));
+	das_xml_escape("a\"b'c<d>e", sBuf, sizeof(sBuf));
 	if(strcmp(sBuf, "a&quot;b&apos;c") != 0) FAIL("escape set, got '%s'", sBuf);
 }
 

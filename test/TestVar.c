@@ -453,7 +453,7 @@ static int test_datum_cplx_rot(void)
 	CHECK(das_datum_nElems(&dm) == 2);
 	MUST(das_datum_toDoubles(&dm, aComp, 2) == 2);
 	CHECK((aComp[0] == -0.05220497)&&(aComp[1] == -0.81409886));
-	CHECK(das_datum_toStrValOnly(&dm, sBuf, 64, 6) != NULL);
+	CHECK(das_datum_toStrValOnly(&dm, 6, sBuf, 64) != NULL);
 	CHECK(strcmp(sBuf, "-0.052205-0.814099i") == 0);
 
 	aLoc[0] = 1;
@@ -488,7 +488,7 @@ static int test_datum_cplx_rot(void)
 	CHECK(DasFormCplx_sysType(das_datum_form(&dm)) == DAS_VSYS_POLAR);
 	MUST(das_datum_toDoubles(&dm, aComp, 2) == 2);
 	CHECK((aComp[0] == (double)0.815771f)&&(aComp[1] == (double)-93.66913f));
-	CHECK(das_datum_toStrValOnly(&dm, sBuf, 64, 6) != NULL);
+	CHECK(das_datum_toStrValOnly(&dm, 6, sBuf, 64) != NULL);
 	CHECK(strcmp(sBuf, "0.815771@-93.6691deg") == 0);
 
 	/* a complex form refuses any shape but a pair, at construction */
@@ -532,7 +532,7 @@ static int test_datum_cplx_rot(void)
 	CHECK(das_datum_nElems(&dm) == 9);
 	MUST(das_datum_toDoubles(&dm, aComp, 9) == 9);
 	CHECK((aComp[1] == -1.0)&&(aComp[3] == 1.0)&&(aComp[8] == 1.0)&&(aComp[0] == 0.0));
-	CHECK(das_datum_toStrValOnly(&dm, sBuf, 64, 6) != NULL);
+	CHECK(das_datum_toStrValOnly(&dm, 6, sBuf, 64) != NULL);
 	CHECK(strcmp(sBuf, "rotation[0 -1 0 1 0 0 0 0 1]") == 0);
 
 	CHECK(dec_DasVar(pCplx) == 0);
@@ -1581,7 +1581,7 @@ static int test_seq_vttime(void)
 			++nErrs;
 			continue;
 		}
-		das_datum_toStrValOnly(&dm, sGot, sizeof(sGot), 3);
+		das_datum_toStrValOnly(&dm, 3, sGot, sizeof(sGot));
 		if(strcmp(sGot, aWant[k]) != 0){
 			printf("ERROR: time [%td]: got %s, expected %s\n",
 				aIdx[k], sGot, aWant[k]);

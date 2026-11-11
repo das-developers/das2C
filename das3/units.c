@@ -1765,7 +1765,7 @@ static double _Units_convertFromUS2000( double value, das_units toUnits ) {
 }
 
 
-double Units_convertTo(das_units to, double rFrom, das_units from)
+double Units_convertTo(double rFrom, das_units from, das_units to)
 {
 	/* Up top since the error exit below reads it from every path */
 	char sErr[_UNITS_PARSE_ERR_SZ] = {'\0'};
@@ -1946,7 +1946,7 @@ double Units_secondsSinceMidnight(double rVal, das_units epoch_units )
 	/* Handle other time types with via default calc */
 	double xx;
 GENERIC:
-	xx = Units_convertTo( UNIT_T2000, rVal, epoch_units );
+	xx = Units_convertTo( rVal, epoch_units, UNIT_T2000 );
 	double result;
 	if(xx<0){
 		xx= fmod( xx, 86400 );
@@ -1964,7 +1964,7 @@ GENERIC:
 /* TODO: Bugged! Julian days start an NOON not midnight! */
 int Units_getJulianDay( double time, das_units units)
 {
-	double rDays = Units_convertTo(UNIT_MJ1958, time, units);
+	double rDays = Units_convertTo(time, units, UNIT_MJ1958);
 
 	return (int)floor(rDays) + DAS_MJ1958_EPOCH;
 }
@@ -2077,7 +2077,7 @@ DasErrCode Units_convertToDt(das_time* pDt, double value, das_units epoch_units)
 	*/
 }
 
-double Units_convertFromDt(das_units epoch_units, const das_time* pDt)
+double Units_convertFromDt(const das_time* pDt, das_units epoch_units)
 {
 	/* If input is TT2K, use a dedicated converter that allows seconds field > 59 */
 	if((epoch_units == UNIT_TT2000)||(epoch_units == UNIT_ET2000)){

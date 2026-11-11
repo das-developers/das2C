@@ -536,7 +536,7 @@ int main(int argc, char** argv)
 		DasAry_append(pTime, (const ubyte*)&dt, 1);
 	}
 	dt = DasAry_getTimeAt(pTime, DIM1_AT(5));
-	dt_isoc(&dt, sInfo, 127, 3);
+	dt_isoc(&dt, 3, sInfo, 127);
 	if(strcmp("1997-05-07T15:01:49.541", sInfo) != 0){
 		printf("ERROR: Test 22 (time array retrieval) failed\n");
 		return 122;

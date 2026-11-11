@@ -117,7 +117,7 @@ struct map_t {
 
 bool testETtoTT(double rEt2k, int nTest)
 {
-	double rTt2k = Units_convertTo(UNIT_TT2000, rEt2k, UNIT_ET2000);
+	double rTt2k = Units_convertTo(rEt2k, UNIT_ET2000, UNIT_TT2000);
 	double rDiff = (rEt2k*1e3) - (rTt2k*1e-6);
 	double rExpectMsDiff = 1.658;
 	if(fabs(rDiff) > (rExpectMsDiff*1.1)){
@@ -141,13 +141,13 @@ bool testETtoTT(double rEt2k, int nTest)
 	}
 
 	/* For good measure test a trip out to us2000 and back */
-	double rUs2k = Units_convertTo(UNIT_US2000, rEt2k, UNIT_ET2000);
-	double rEtRev = Units_convertTo(UNIT_ET2000, rUs2k, UNIT_US2000);
+	double rUs2k = Units_convertTo(rEt2k, UNIT_ET2000, UNIT_US2000);
+	double rEtRev = Units_convertTo(rUs2k, UNIT_US2000, UNIT_ET2000);
 
 	das_time dt;
 	Units_convertToDt(&dt, rEt2k, UNIT_ET2000);
 	char sBuf[32];
-	dt_isoc(&dt, sBuf, 31, 9);
+	dt_isoc(&dt, 9, sBuf, 31);
 	/* us2000 is microseconds in a double, so for these dates the trip back
 	   agrees to about 0.25 us.  The tolerance was 10 s before 2026-10, which
 	   is how a mostly uninitialized leap table in tt2000.c went unnoticed
@@ -166,7 +166,7 @@ bool testETtoTT(double rEt2k, int nTest)
 
 bool testTTtoET(double rTt2k, int nTest)
 {
-	double rEt2k = Units_convertTo(UNIT_ET2000, rTt2k, UNIT_TT2000);
+	double rEt2k = Units_convertTo(rTt2k, UNIT_TT2000, UNIT_ET2000);
 	double rDiff = (rTt2k*1e-6) - (rEt2k*1e3) ;
 	double rExpectMsDiff = 1.658;
 	if(fabs(rDiff) > (rExpectMsDiff*1.1)){
@@ -254,7 +254,7 @@ int main(int argc, char** argv)
 					 sTmp, dUS2K, a.us2000, (a.us2000 - dUS2K)*1e-6);
 			
 			Units_convertToDt(&dtTmp, a.us2000, UNIT_US2000);
-			dt_isoc(&dtTmp, sBuf, 63, 3);
+			dt_isoc(&dtTmp, 3, sBuf, 63);
 			
 			printf("%s, Direct conversion: %s\n\n", sTmp, sBuf);
 			bFail = true;
@@ -320,10 +320,10 @@ int main(int argc, char** argv)
 	/* Demonstrate pre-2000 missing second on us2000 scale */
 	das_time dtPre;  dt_set(&dtPre,  1976, 12, 31,  366, 23, 59, 59.0);
 	das_time dtPost; dt_set(&dtPost, 1977,  1,  1,    1,  0,  0,  0.0);
-	double rNoLeapPre  = Units_convertFromDt(UNIT_US2000, &dtPre);
-	double rNoLeapPost = Units_convertFromDt(UNIT_US2000, &dtPost);
-	double rLeapPre    = Units_convertFromDt(UNIT_TT2000, &dtPre);
-	double rLeapPost   = Units_convertFromDt(UNIT_TT2000, &dtPost);
+	double rNoLeapPre  = Units_convertFromDt(&dtPre, UNIT_US2000);
+	double rNoLeapPost = Units_convertFromDt(&dtPost, UNIT_US2000);
+	double rLeapPre    = Units_convertFromDt(&dtPre, UNIT_TT2000);
+	double rLeapPost   = Units_convertFromDt(&dtPost, UNIT_TT2000);
 
 	/* Check tt2000 and us2000 differences across leap seconds */
 	if( (rNoLeapPost - rNoLeapPre) != 1e6){
@@ -342,8 +342,8 @@ int main(int argc, char** argv)
 	/* Now do it again for positive values */
 	das_time dt_preleap = {2016, 12, 31, 0, 23, 59, 59};
 	das_time dt_postleap = {2017,  1,  1, 0};
-	double rPreLeap = Units_convertFromDt(UNIT_TT2000, &dt_preleap);
-	double rPostLeap = Units_convertFromDt(UNIT_TT2000, &dt_postleap);
+	double rPreLeap = Units_convertFromDt(&dt_preleap, UNIT_TT2000);
+	double rPostLeap = Units_convertFromDt(&dt_postleap, UNIT_TT2000);
 	if( fabs((rPostLeap - rPreLeap) - 2e9) > 1e-9) {
 		printf("ERROR: Test 5 Failed, TT2000 difference was %e s, expected ~2.0 s "
 		       "across leapsecond boundary.\n", (rPostLeap - rPreLeap)*1e-9);
@@ -385,14 +385,14 @@ int main(int argc, char** argv)
 		dt_from_tt2k(&dtOut, aLs[i]);
 		if(dt_to_tt2k(&dtOut) != aLs[i]){
 			printf("ERROR: Test 5c failed, %s did not round trip (%lld ns off)\n",
-			       dt_isoc(&dtOut, sBuf, 63, 9), (long long)(dt_to_tt2k(&dtOut) - aLs[i]));
+			       dt_isoc(&dtOut, 9, sBuf, 63), (long long)(dt_to_tt2k(&dtOut) - aLs[i]));
 			return 15;
 		}
 	}
 	das_time dtMid; dt_from_tt2k(&dtMid, nLs);
 	if((dtMid.second < 60.0)||(dtMid.yday != 366)){
 		printf("ERROR: Test 5c failed, leap second read as %s (yday %d)\n",
-		       dt_isoc(&dtMid, sBuf, 63, 3), dtMid.yday);
+		       dt_isoc(&dtMid, 3, sBuf, 63), dtMid.yday);
 		return 15;
 	}
 
@@ -473,14 +473,14 @@ int main(int argc, char** argv)
 	
 	/* Make sure seconds == 60 is handled correctly by das_time to tt2000 */
 	das_time dtLeap1; dt_set(&dtLeap1, 2020, 12, 31, 366, 23, 59, 60.0);
-	double rLeap = Units_convertFromDt(UNIT_TT2000, &dtLeap1);
+	double rLeap = Units_convertFromDt(&dtLeap1, UNIT_TT2000);
 	das_time dtLeap2;
 	Units_convertToDt(&dtLeap2, rLeap, UNIT_TT2000);
 	if( dtLeap1.second != dtLeap2.second){
 		printf(
 			"ERROR: Test 7 failed, round-trip to das_time did not preserve leap "
-			"second, pre %s, post %s, diff %.5e.\n", dt_isoc(&dtLeap1, sBuf, 63, 3),
-			dt_isoc(&dtLeap2, sBuf2, 63, 3), dtLeap2.second - dtLeap1.second
+			"second, pre %s, post %s, diff %.5e.\n", dt_isoc(&dtLeap1, 3, sBuf, 63),
+			dt_isoc(&dtLeap2, 3, sBuf2, 63), dtLeap2.second - dtLeap1.second
 				);
 		return 13;
 	}
@@ -488,8 +488,8 @@ int main(int argc, char** argv)
 	/* Test the fake leap second at 2021-01-01 */
 	dt_set(&dtPre, 2020, 12, 31,  366, 23, 59, 59.0);
 	dt_set(&dtPost, 2021,  1,  1,    1,  0,  0,  1.0);
-	rLeapPre  = Units_convertFromDt(UNIT_TT2000, &dtPre);
-	rLeapPost = Units_convertFromDt(UNIT_TT2000, &dtPost);
+	rLeapPre  = Units_convertFromDt(&dtPre, UNIT_TT2000);
+	rLeapPost = Units_convertFromDt(&dtPost, UNIT_TT2000);
 	
 	if(rLeapPost - rLeapPre != 3e9){
 		printf("ERROR: Test 8 failed, time calculations not altered by external table\n");

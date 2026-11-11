@@ -125,6 +125,9 @@ static void test_values(void)
 	char sEsc[16];
 	_das_escape_xml(sEsc, sizeof(sEsc), "a&b");
 	if(strcmp(sEsc, "a&amp;b") != 0) FAIL("_das_escape_xml");
+	const char* sSrc = "x<y";
+	das_xml_escape(sEsc, sSrc, sizeof(sEsc));          /* v2.3.0: (dest, src, len) */
+	if(strcmp(sEsc, "x&lt;y") != 0) FAIL("das_xml_escape(dest, src, len): %s", sEsc);
 
 	char sJsonErr[64];
 	struct das_json_parse_result_s jRes = {0};
@@ -143,6 +146,26 @@ static void test_time(void)
 	if(strcmp(dt_isod(sBuf, 63, &dt, 0), "1958-001T00:00:00") != 0)
 		FAIL("dt_emitt/dt_isod: %s", sBuf);
 	if(dt_cmp(&dt, &dt) != 0) FAIL("dt_cmp");
+
+	/* v2.3.0 argument orders, which das2_compat.h adapts to the current ones.
+	   dt_in_range() is the silent one: three das_time* in any order compile. */
+	das_time dtBeg, dtEnd, dtIn;
+	dt_parsetime("2026-01-01", &dtBeg);
+	dt_parsetime("2026-02-01", &dtEnd);
+	dt_parsetime("2026-01-15", &dtIn);
+	if(!dt_in_range(&dtBeg, &dtEnd, &dtIn)) FAIL("dt_in_range(begin, end, test)");
+	if(dt_in_range(&dtIn, &dtEnd, &dtBeg))  FAIL("dt_in_range, test before begin");
+
+	if(Units_convertTo(UNIT_MILLISECONDS, 2.0, UNIT_SECONDS) != 2000.0)
+		FAIL("Units_convertTo(to, value, from)");
+	double rT2k = Units_convertFromDt(UNIT_T2000, &dtBeg);  /* 9497 days */
+	if(rT2k != 820540800.0)
+		FAIL("Units_convertFromDt(units, time) gave %.3f", rT2k);
+
+	das_datum dm;
+	das_datum_fromDbl(&dm, 2.25, UNIT_DIMENSIONLESS);
+	if((das_datum_toStrValOnly(&dm, sBuf, 63, 2) == NULL)||(strcmp(sBuf, "2.25e+00") != 0))
+		FAIL("das_datum_toStrValOnly(datum, buf, len, digits): %s", sBuf);
 
 	/* The das1 component functions, wrappers in das1.c */
 	int nYr, nMo, nDom, nDoy, nHr, nMn;

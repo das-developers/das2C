@@ -1156,7 +1156,7 @@ static int streamUrl(DasCat* pCat, const char* sUrl, float rTimeout)
 	 * a closed pipe downstream often only shows up at the final flush. */
 	int64_t nTotal = 0;
 	int nRet = RET_OK;
-	if(DasXport_copyTo(pBody, pOut, &nTotal, NULL, NULL) != DAS_OKAY){
+	if(DasXport_copyTo(pBody, pOut, NULL, NULL, &nTotal) != DAS_OKAY){
 		if(DasXport_error(pOut) != NULL){
 			daslog_error_v("Writing output, %s", DasXport_error(pOut));
 			nRet = RET_WRITE;

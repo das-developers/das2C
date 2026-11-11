@@ -1345,7 +1345,7 @@ ERR_NEG:
 /* Parse any string into a value */
 
 DasErrCode das_value_fromStr(
-   ubyte* pBuf, int nBufLen, das_val_type vt, const char* sStr
+   const char* sStr, das_val_type vt, ubyte* pBuf, int nBufLen
 ){
 	if(sStr == NULL){
 		return das_error(DASERR_VALUE, "Empty string can't be converted to a value");
@@ -1430,7 +1430,7 @@ ERR_PARSE:
 
 /* Don't fail for certain semantics, but do offer extra support where detected */
 DasErrCode das_value_fmt(
-	char* sBuf, size_t uBufLen, das_val_type vt, const char* sSemantic, int nFitTo
+	das_val_type vt, const char* sSemantic, int nFitTo, char* sBuf, size_t uBufLen
 ){
 	bool bBlob = (strcmp(sSemantic, DAS_SEM_BLOB) == 0);
 	bool bText = (strcmp(sSemantic, DAS_SEM_TEXT) == 0);
@@ -1805,7 +1805,7 @@ double* das_csv2doubles(const char* arrayString, int* p_nitems )
     return result;
 }
 
-char* das_doubles2csv(char* pBuf, size_t uSz, const double* pValues, int nValues) 
+char* das_doubles2csv(const double* pValues, int nValues, char* pBuf, size_t uSz) 
 {
 	if((pBuf == NULL)||(uSz < 12)){
 		das_error(DASERR_ARRAY, "Invalid arguments, buffer too small or non-existant");
@@ -1834,7 +1834,7 @@ char* das_doubles2csv(char* pBuf, size_t uSz, const double* pValues, int nValues
 	return pBuf;
 }
 
-char* das_floats2csv(char* pBuf, size_t uSz, const float* pValues, int nValues) 
+char* das_floats2csv(const float* pValues, int nValues, char* pBuf, size_t uSz) 
 {
 	if((pBuf == NULL)||(uSz < 12)){
 		das_error(DASERR_ARRAY, "Invalid arguments, buffer too small or non-existant");

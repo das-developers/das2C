@@ -1134,7 +1134,7 @@ static bool _parseLine(char* sLine, cred_line* pOut, const char* sFile, int nLin
 				              sFile, nLine);
 				return false;
 			}
-			pOut->nExpires = (int64_t)Units_convertFromDt(UNIT_T1970, &dt);
+			pOut->nExpires = (int64_t)Units_convertFromDt(&dt, UNIT_T1970);
 			if(pOut->nExpires == 0) pOut->nExpires = 1;
 		}
 		else{
@@ -1215,7 +1215,7 @@ static bool _DasCredMngr_emit(
 		das_time dt;
 		char sTime[64];
 		Units_convertToDt(&dt, (double)pRec->nExpires, UNIT_T1970);
-		fprintf(pOut, "|expires|%s", dt_isoc(&dt, sTime, sizeof(sTime), 0));
+		fprintf(pOut, "|expires|%s", dt_isoc(&dt, 0, sTime, sizeof(sTime)));
 	}
 	if(pRec->iSecret >= 0)
 		fprintf(pOut, "|%s\n", _DasCredMngr_row(pThis, pRec->iSecret));

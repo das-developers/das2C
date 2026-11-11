@@ -497,7 +497,7 @@ bool das_datum_toEpoch(
 	das_time dt;
 	
 	if(pThis->vt == vtTime){ 
-		*pResult = Units_convertFromDt(epoch, (das_time*)pThis);
+		*pResult = Units_convertFromDt((das_time*)pThis, epoch);
 		return (*pResult != DAS_FILL_VALUE);
 	}
 	
@@ -507,7 +507,7 @@ bool das_datum_toEpoch(
 	double rDbl = 0.0;
 	if(pThis->vt == vtText){
 		if( dt_parsetime(&dt, (const char*)pThis)){
-			return Units_convertFromDt(epoch, &dt);
+			return Units_convertFromDt(&dt, epoch);
 		}
 		else{
 			/* parsetime failed, try to convert as an ASCII real */
@@ -517,7 +517,7 @@ bool das_datum_toEpoch(
 			if(!Units_haveCalRep(pThis->units) || (pThis->units == UNIT_UTC)) 
 				return false;
 			
-			*pResult = Units_convertTo(epoch, rDbl, pThis->units);
+			*pResult = Units_convertTo(rDbl, pThis->units, epoch);
 			return (*pResult != DAS_FILL_VALUE);
 		}
 	}
@@ -544,7 +544,7 @@ bool das_datum_toEpoch(
 		return false;
 	}
 	
-	*pResult = Units_convertTo(epoch, rDbl, pThis->units);
+	*pResult = Units_convertTo(rDbl, pThis->units, epoch);
 	return (*pResult != DAS_FILL_VALUE);
 }
 
@@ -657,7 +657,7 @@ static int _das_datum_prn(
 		
 	case vtTime: {
 		char sTime[64] = {'\0'};
-		dt_isoc((const das_time*)pThis, sTime, sizeof(sTime), nFracDigits);
+		dt_isoc((const das_time*)pThis, nFracDigits, sTime, sizeof(sTime));
 		n = _prn_catf(sBuf, uLen, n, "%s", sTime);
 		break;
 	}
@@ -743,7 +743,7 @@ static int _das_datum_prn(
 }
 
 char* das_datum_toStr(
-	const das_datum* pThis, char* sStr, size_t uLen, int nFracDigits
+	const das_datum* pThis, int nFracDigits, char* sStr, size_t uLen
 ){
 	return _prn_fit(sStr, uLen, 
 		_das_datum_prn(pThis, sStr, uLen, nFracDigits, true, ";")
@@ -751,7 +751,7 @@ char* das_datum_toStr(
 }
 
 char* das_datum_toStrValOnly(
-	const das_datum* pThis, char* sStr, size_t uLen, int nFracDigits
+	const das_datum* pThis, int nFracDigits, char* sStr, size_t uLen
 ){
 	return _prn_fit(sStr, uLen,
 		_das_datum_prn(pThis, sStr, uLen, nFracDigits, false, ";")
@@ -759,8 +759,8 @@ char* das_datum_toStrValOnly(
 }
 
 char* das_datum_toStrValOnlySep(
-	const das_datum* pThis, char* sStr, size_t uLen, int nFracDigits, 
-	const char* sSep
+	const das_datum* pThis, int nFracDigits, const char* sSep, char* sStr, 
+	size_t uLen
 ){
 	return _prn_fit(sStr, uLen,
 		_das_datum_prn(pThis, sStr, uLen, nFracDigits, false, sSep)

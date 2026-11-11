@@ -467,7 +467,7 @@ static bool LoadLeapSecondsTable ()
 					   to be small. */
 					US2K_LEAPS_0_POS[ius2k*2] = LTD[ix][3] - LEAPS_BEFORE_ZERO;
 					dt_set(&dt, yy, mm, dd, 0, 0, 0, 0.0);
-					US2K_LEAPS_0_POS[ius2k*2+1] = Units_convertFromDt(UNIT_US2000,&dt);
+					US2K_LEAPS_0_POS[ius2k*2+1] = Units_convertFromDt(&dt,UNIT_US2000);
 					++ius2k;
 					US2K_LEAPS_0_POS_SZ = ius2k*2;
 				}

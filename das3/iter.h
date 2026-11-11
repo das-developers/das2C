@@ -213,7 +213,7 @@ typedef struct das_cube_iter_t{
  * @memberof DasDsCubeIter
  */
 DAS_API void init_DasDsCubeIter(
-	DasDsCubeIter* pThis, int nRank, ptrdiff_t* pMin, ptrdiff_t* pMax 
+	DasDsCubeIter* pThis, int nRank, const ptrdiff_t* pMin, const ptrdiff_t* pMax
 );
 
 /** Increment a cubic iterator by one position, rolling as needed 
@@ -272,8 +272,8 @@ typedef struct das_array_iter_t{
  * @memberof DasAryIter
  */
 DAS_API void init_DasAryIter(
-	DasAryIter* pThis, const DasAry* pAry, int iDimMin, int iDimMax, ptrdiff_t* pBeg, 
-	ptrdiff_t* pEnd
+	DasAryIter* pThis, const DasAry* pAry, int iDimMin, int iDimMax,
+	const ptrdiff_t* pBeg, const ptrdiff_t* pEnd
 );
 
 

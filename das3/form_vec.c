@@ -957,7 +957,7 @@ static das_binop_stat _DasFormVec_binOpLeft(
 		if(!Units_canConvert(pR->units, pL->units))
 			return REFUSE("Can not combine vectors in %s and %s",
 			              Units_toStr(pL->units), Units_toStr(pR->units));
-		rRightScale = Units_convertTo(pL->units, 1.0, pR->units);
+		rRightScale = Units_convertTo(1.0, pR->units, pL->units);
 	}
 
 	DasBinOpVector* pRes = (DasBinOpVector*)calloc(1, sizeof(DasBinOpVector));

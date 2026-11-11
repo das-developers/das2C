@@ -317,10 +317,6 @@ DAS_API bool das_datum_byteSeq(
  *
  * @param pThis The datum to write
  * 
- * @param sStr The buffer to write the representation to
- * 
- * @param uLen The amount of space available for writing
- * 
  * @param nFracDigits Number of digits after the decimal place to print.
  *        for multi-part values, such a calendar times this refers to the
  *        number of digits after the decimal point for the last component
@@ -328,12 +324,16 @@ DAS_API bool das_datum_byteSeq(
  *        Use -1 to get default fractional digits which are 5 for a float,
  *        9 for a double and millisec precision for times.
  * 
+ * @param sStr The buffer to write the representation to
+ * 
+ * @param uLen The amount of space available for writing
+ * 
  * @return sStr, or NULL if the whole value did not fit.  sStr is always NUL
  *         terminated when uLen > 0.
  * @memberof das_datum
  */
 DAS_API char* das_datum_toStr(
-	const das_datum* pThis, char* sStr, size_t uLen, int nFracDigits
+	const das_datum* pThis, int nFracDigits, char* sStr, size_t uLen
 );
 
 /** Same as das_datum_toStr, but never print the units
@@ -342,14 +342,14 @@ DAS_API char* das_datum_toStr(
  * @memberof das_datum
  */
 DAS_API char* das_datum_toStrValOnly(
-	const das_datum* pThis, char* sStr, size_t uLen, int nFracDigits
+	const das_datum* pThis, int nFracDigits, char* sStr, size_t uLen
 );
 
 /** Similar to das_datum_toStr, but can specify a separator for vectors.
  * The separator is ignored if the element type is not multi-valued */
 DAS_API char* das_datum_toStrValOnlySep(
-   const das_datum* pThis, char* sStr, size_t uLen, int nFracDigits, 
-   const char* sSep
+   const das_datum* pThis, int nFracDigits, const char* sSep, char* sStr, 
+   size_t uLen
 );
 
 

@@ -244,18 +244,18 @@ typedef DasErrCode (*das_progress_f)(int64_t nBytes, void* pUser);
  *
  * @param pThis      The source
  * @param pDest      The destination
- * @param pCopied    If not NULL, receives the number of bytes copied.  Set
- *                   even on failure or an early stop.
  * @param onProgress If not NULL, called after each chunk is written.  A
  *                   non-zero return stops the copy.
  * @param pUser      Passed through to onProgress untouched
+ * @param pCopied    If not NULL, receives the number of bytes copied.  Set
+ *                   even on failure or an early stop.
  * @returns DAS_OKAY at the end of the source, DASERR_IO if a read or write
  *          failed, or whatever onProgress returned if it stopped the copy
  * @memberof DasXport
  */
 DAS_API DasErrCode DasXport_copyTo(
-	DasXport* pThis, DasXport* pDest, int64_t* pCopied, das_progress_f onProgress,
-	void* pUser
+	DasXport* pThis, DasXport* pDest, das_progress_f onProgress, void* pUser,
+	int64_t* pCopied
 );
 
 /** Finish with a transport, reporting whether that went well

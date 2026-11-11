@@ -252,7 +252,7 @@ static DasErrCode _serial_parseIndex(
 ){
 	int nGot = 0;
 	DasErrCode nRet = das_shape_fromStr(
-		sIndex, VARIDX_MAX, bInVar, pMap, &nGot, sElement
+		sIndex, VARIDX_MAX, bInVar, sElement, pMap, &nGot
 	);
 	if(nRet != DAS_OKAY)
 		return nRet;
@@ -285,8 +285,8 @@ static DasErrCode _serial_parseIntern(
 	snprintf(sWhere, sizeof(sWhere), "intern= in dataset ID %02d", nPktId);
 
 	DasErrCode nRet = das_shape_fromStr(
-		sIntern, nMaxRank, false /* no ^ or - inside an item */, pShape, pnRank,
-		sWhere
+		sIntern, nMaxRank, false /* no ^ or - inside an item */, sWhere, pShape,
+		pnRank
 	);
 	if(nRet != DAS_OKAY)
 		return nRet;
@@ -347,7 +347,7 @@ static DasErrCode _serial_initfill(
 			return das_error(DASERR_SERIAL,
 				"Invalid boolean fill '%s': use a fill glyph ('*', '?' or '-') or a "
 				"numeric sentinel (e.g. \"255\")", sFill);
-		return das_value_fromStr(pBuf, nBufLen, vt, sFill);
+		return das_value_fromStr(sFill, vt, pBuf, nBufLen);
 	}
 
 	/* A string array stores chars, so its fill is a literal byte, NOT a parsed
@@ -383,7 +383,7 @@ static DasErrCode _serial_initfill(
 	}
 
 	// Ugh, now we have to parse the damn thing.
-	return das_value_fromStr(pBuf, nBufLen, vt, sFill);
+	return das_value_fromStr(sFill, vt, pBuf, nBufLen);
 }
 
 /* ****************************************************************************
@@ -901,7 +901,7 @@ static void _serial_onSequence(context_t* pCtx, const char** psAttr)
 	pCtx->varItemType = das_vt_fromStr(pCtx->valStorage);
 
 	DasErrCode nRet;
-	if((nRet = das_value_fromStr(pCtx->aSeqMin, _VAL_SEQ_CONST_SZ, pCtx->varItemType, sMin)) != 0){
+	if((nRet = das_value_fromStr(sMin, pCtx->varItemType, pCtx->aSeqMin, _VAL_SEQ_CONST_SZ)) != 0){
 		das_error(DASERR_SERIAL, "Could not convert sequence minval string '%s' to a value", sMin);
 		pCtx->nDasErr = nRet;
 		return;
@@ -967,8 +967,8 @@ static void _serial_onSequence(context_t* pCtx, const char** psAttr)
 			}
 			if(bDep){
 				if((nRet = das_value_fromStr(
-					pCtx->aSeqInter + (size_t)k * uItem, _VAL_SEQ_CONST_SZ,
-					vtSlope, aTok[i]
+					aTok[i], vtSlope,
+					pCtx->aSeqInter + (size_t)k * uItem, _VAL_SEQ_CONST_SZ
 				)) != 0){
 					das_error(DASERR_SERIAL,
 						"Could not convert sequence interval slope '%s' to a value", aTok[i]
@@ -994,8 +994,8 @@ static void _serial_onSequence(context_t* pCtx, const char** psAttr)
 				return;
 			}
 			if((nRet = das_value_fromStr(
-				pCtx->aSeqInter + (size_t)k * uItem, _VAL_SEQ_CONST_SZ,
-				vtSlope, aTok[k]
+				aTok[k], vtSlope,
+				pCtx->aSeqInter + (size_t)k * uItem, _VAL_SEQ_CONST_SZ
 			)) != 0){
 				das_error(DASERR_SERIAL,
 					"Could not convert sequence interval slope '%s' to a value", aTok[k]

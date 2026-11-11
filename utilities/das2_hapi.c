@@ -199,12 +199,12 @@ DasErrCode OnPktHdr(DasStream* pSdIn, DasPkt* pPdIn, int nPktId, void* vpPs)
 				
 		if(DasDesc_getStrRng(pPs->pDsdf, "validRange", sBeg, sEnd, &units, 64) == 0){
 			if(dt_parsetime(&dtBegin, sBeg)){
-				dt_isoc(&dtBegin, sBeg, 64, 0);
+				dt_isoc(&dtBegin, 0, sBeg, 64);
 				printf("%s  \"startDate\":\"%s\",\n", sPre, sBeg);
 			}
 			
 			if(dt_parsetime(&dtEnd, sEnd)){
-				dt_isoc(&dtEnd, sBeg, 64, 0);
+				dt_isoc(&dtEnd, 0, sBeg, 64);
 				printf("%s  \"stopDate\":\"%s\",\n", sPre, sEnd);
 			}
 		}
@@ -219,12 +219,12 @@ DasErrCode OnPktHdr(DasStream* pSdIn, DasPkt* pPdIn, int nPktId, void* vpPs)
 		if(sKey){
 			if(DasDesc_getStrRng(pPs->pDsdf, sKey, sBeg, sEnd, &units, 64) == 0){
 				if(dt_parsetime(&dtBegin, sBeg)){
-					dt_isoc(&dtBegin, sBeg, 64, 0);
+					dt_isoc(&dtBegin, 0, sBeg, 64);
 					printf("%s  \"sampleStartDate\":\"%s\",\n", sPre, sBeg);
 				}
 			
 				if(dt_parsetime(&dtEnd, sEnd)){
-					dt_isoc(&dtEnd, sBeg, 64, 0);
+					dt_isoc(&dtEnd, 0, sBeg, 64);
 					printf("%s  \"sampleStopDate\":\"%s\",\n", sPre, sEnd);
 				}
 			}

@@ -310,7 +310,7 @@ typedef struct das_array DasAry;
  */
 DAS_API DasAry* new_DasAry(
 	const char* id, das_val_type et, size_t sz_each, const ubyte* fill,
-	int rank, size_t* shape, das_units units
+	int rank, const size_t* shape, das_units units
 );
 
 /** This array's elements aren't intended to be addressed to the last index,

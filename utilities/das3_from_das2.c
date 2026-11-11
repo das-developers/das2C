@@ -1066,12 +1066,12 @@ int main(int argc, char** argv)
 
 	for(int i = 1; i < argc; ++i){
 		if(dascmd_isArg(argv[i], "-h", "--help", NULL)){ prnHelp(); return 0; }
-		if(dascmd_getArgVal(ctx.aLevel, DAS_FIELD_SZ(Context, aLevel), argv, argc, &i, "-l", "--log="))
+		if(dascmd_getArgVal(argv, argc, "-l", "--log=", &i, ctx.aLevel, DAS_FIELD_SZ(Context, aLevel)))
 			continue;
-		if(dascmd_getArgVal(ctx.sMetaFile, DAS_FIELD_SZ(Context, sMetaFile), argv, argc, &i, "-m", "--meta-file="))
+		if(dascmd_getArgVal(argv, argc, "-m", "--meta-file=", &i, ctx.sMetaFile, DAS_FIELD_SZ(Context, sMetaFile)))
 			continue;
 		char sDef[256] = {'\0'};
-		if(dascmd_getArgVal(sDef, 256, argv, argc, &i, "-D", "--define=")){
+		if(dascmd_getArgVal(argv, argc, "-D", "--define=", &i, sDef, 256)){
 			char* pEq = strchr(sDef, '=');
 			if((pEq == NULL)||(pEq == sDef))
 				return das_error(PERR, "-D expects NAME=VALUE, not '%s'", sDef);

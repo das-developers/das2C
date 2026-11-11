@@ -243,17 +243,17 @@ static const char* _xml_escape_val(
 ){
 	*ppAlloc = NULL;
 	if(strlen(src) < 128){
-		das_xml_escape(stk, src, 256);
+		das_xml_escape(src, stk, 256);
 		return stk;
 	}
 	size_t uSz = strlen(src) * 6 + 2;
 	*ppAlloc = malloc(uSz);
 	if(!*ppAlloc){
 		/* malloc failed: encode into stack buffer, value will be truncated */
-		das_xml_escape(stk, src, 256);
+		das_xml_escape(src, stk, 256);
 		return stk;
 	}
-	das_xml_escape(*ppAlloc, src, uSz);
+	das_xml_escape(src, *ppAlloc, uSz);
 	return *ppAlloc;
 }
 

@@ -514,21 +514,21 @@ int parseArgs(int argc, char** argv, Context* pCtx)
 				continue;
 			}
 			if(dascmd_getArgVal(
-				sMemThresh,  32, argv, argc, &i, "-b", "--buffer="
+				argv, argc, "-b", "--buffer=", &i, sMemThresh, 32
 			))
 				continue;
 			if(dascmd_getArgVal(
-				pCtx->aLevel, DAS_FIELD_SZ(Context,aLevel), argv, argc, &i, "-l", "--log="
+				argv, argc, "-l", "--log=", &i, pCtx->aLevel, DAS_FIELD_SZ(Context,aLevel)
 			))
 				continue;
 			if(dascmd_getArgVal(
-				pCtx->aAnonFrame, DAS_FIELD_SZ(Context,aAnonFrame), argv, argc, &i, "-a", "--anon-frame"
+				argv, argc, "-a", "--anon-frame", &i, pCtx->aAnonFrame, DAS_FIELD_SZ(Context,aAnonFrame)
 			))
 				continue;
 
 			memset(aOpBuf, 0, 64);
 
-			if(dascmd_getArgVal(aOpBuf, 64, argv, argc, &i, "-L", "--locate=")){
+			if(dascmd_getArgVal(argv, argc, "-L", "--locate=", &i, aOpBuf, 64)){
 				if(pCtx->nXReq >= MAX_XFORMS)
 					return das_error(PERR, 
 						"Recompile if you want to preform more than %d spice operations", MAX_XFORMS
@@ -539,7 +539,7 @@ int parseArgs(int argc, char** argv, Context* pCtx)
 				pCtx->bWantsLocs = true;
 				continue;
 			}
-			if(dascmd_getArgVal(aOpBuf, 64, argv, argc, &i, "-R", "--rotate=")){
+			if(dascmd_getArgVal(argv, argc, "-R", "--rotate=", &i, aOpBuf, 64)){
 				if(pCtx->nXReq >= MAX_XFORMS)
 					return das_error(PERR, 
 						"Recompile if you want to preform more than %d spice operations", MAX_XFORMS
@@ -553,7 +553,7 @@ int parseArgs(int argc, char** argv, Context* pCtx)
 				++(pCtx->nXReq);
 				continue;
 			}
-			if(dascmd_getArgVal(aOpBuf, 64, argv, argc, &i, "-s", "--shift-et=")){
+			if(dascmd_getArgVal(argv, argc, "-s", "--shift-et=", &i, aOpBuf, 64)){
 				if(sscanf(aOpBuf, "%lf", &(pCtx->rEphemShift)) != 1){
 					return das_error(PERR, 
 						"Error converting %s to a floating point seconds time.", aOpBuf
@@ -1631,11 +1631,11 @@ double _dm2et(const das_datum* pInput, double rTimeShift)
 {
 	double rEt = 0.0;
 	if(pInput->vt == vtTime){
-		rEt = Units_convertFromDt(UNIT_ET2000, (const das_time*)pInput);
+		rEt = Units_convertFromDt((const das_time*)pInput, UNIT_ET2000);
 #ifndef NDEBUG
 		/* Check utc conversions */
 		char sBuf[32] = {'\0'};
-		dt_isoc((const das_time*)pInput, sBuf, 31, 9);
+		dt_isoc((const das_time*)pInput, 9, sBuf, 31);
 		double rCheck;
 		utc2et_c(sBuf, &rCheck);
 		if(fabs(rCheck - rEt) > 0.001){
@@ -1650,7 +1650,7 @@ double _dm2et(const das_datum* pInput, double rTimeShift)
 			das_error(PERR, "Time coordinate could not be read as a double");
 			return -1*60*60*24*50.0;
 		}
-		rEt = Units_convertTo(UNIT_ET2000, rVal, pInput->units);
+		rEt = Units_convertTo(rVal, pInput->units, UNIT_ET2000);
 	}
 
 	return rEt;

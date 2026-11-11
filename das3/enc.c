@@ -582,7 +582,7 @@ DasErrCode DasEnc_read(
 		if(! dt_parsetime(&dt, sBuf)){
 			return das_error(14, "Error in parsetime for ACSII time type.\n" );
 		}
-		*pOut = Units_convertFromDt(units, &dt);
+		*pOut = Units_convertFromDt(&dt, units);
 		return 0;
 	}
 	

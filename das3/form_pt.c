@@ -350,7 +350,7 @@ static das_binop_stat _DasFormPt_binOpLeft(
 			              "convertible) on the right, have %s",
 			              Units_toStr(pL->units), Units_toStr(uNeed),
 			              Units_toStr(pR->units));
-		rScale = Units_convertTo(uNeed, 1.0, pR->units);
+		rScale = Units_convertTo(1.0, pR->units, uNeed);
 	}
 
 	*ppOut = &(_new_DasBinOpAffine(
@@ -390,7 +390,7 @@ static das_binop_stat _DasFormPt_binOpRight(
 			              "convertible) on the left, have %s",
 			              Units_toStr(pR->units), Units_toStr(uNeed),
 			              Units_toStr(pL->units));
-		rScale = Units_convertTo(uNeed, 1.0, pL->units);
+		rScale = Units_convertTo(1.0, pL->units, uNeed);
 	}
 
 	*ppOut = &(_new_DasBinOpAffine(

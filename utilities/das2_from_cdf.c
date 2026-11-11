@@ -343,19 +343,19 @@ int parseArgs(int argc, char** argv, popts_t* pOpts)
 				continue;
 			}
 			if(dascmd_getArgVal(
-				pOpts->aCoordMap, DAS_FIELD_SZ(popts_t, aCoordMap), argv, argc, &i, "-c", "--coord="
+				argv, argc, "-c", "--coord=", &i, pOpts->aCoordMap, DAS_FIELD_SZ(popts_t, aCoordMap)
 			))
 				continue;
 			if(dascmd_getArgVal(
-				pOpts->aLevel, DAS_FIELD_SZ(popts_t, aLevel), argv, argc, &i, "-l", "--log="
+				argv, argc, "-l", "--log=", &i, pOpts->aLevel, DAS_FIELD_SZ(popts_t, aLevel)
 			))
 				continue;
 			if(dascmd_getArgVal(
-				pOpts->aDefVars, DAS_FIELD_SZ(popts_t, aDefVars), argv, argc, &i, "-d", "--def-vars="
+				argv, argc, "-d", "--def-vars=", &i, pOpts->aDefVars, DAS_FIELD_SZ(popts_t, aDefVars)
 			))
 				continue;
 			if(dascmd_getArgVal(
-				pOpts->aPropMap, DAS_FIELD_SZ(popts_t, aPropMap), argv, argc, &i, "-p", "--prop-map="
+				argv, argc, "-p", "--prop-map=", &i, pOpts->aPropMap, DAS_FIELD_SZ(popts_t, aPropMap)
 			))
 				continue;
 			snprintf(sMsg, sizeof(sMsg) - 1, "Unknown command line argument %s", argv[i]);
@@ -589,7 +589,7 @@ static double _tt2kToUs2k(int64_t nTt)
 {
 	das_time dt;
 	dt_from_tt2k(&dt, nTt);
-	return Units_convertFromDt(UNIT_US2000, &dt);
+	return Units_convertFromDt(&dt, UNIT_US2000);
 }
 
 /* Data values go out as little endian reals of the source width */
@@ -769,9 +769,9 @@ static int _planLayout(cdf_file_t* pFile, pkt_layout_t* pL)
 			return das_error(PERR, "%s is an OFFSET_OF time table but its units, %s, are not a "
 				"time interval", pC->sName, Units_toStr(unitsC));
 		}
-		for(long i = 0; i < pL->nItems; ++i) pTable[i] = Units_convertTo(UNIT_SECONDS, pTable[i], unitsC);
-		rMin  = Units_convertTo(UNIT_SECONDS, rMin, unitsC);
-		rStep = Units_convertTo(UNIT_SECONDS, rStep, unitsC);
+		for(long i = 0; i < pL->nItems; ++i) pTable[i] = Units_convertTo(pTable[i], unitsC, UNIT_SECONDS);
+		rMin  = Units_convertTo(rMin, unitsC, UNIT_SECONDS);
+		rStep = Units_convertTo(rStep, unitsC, UNIT_SECONDS);
 		unitsC = UNIT_SECONDS;
 	}
 
@@ -1067,8 +1067,8 @@ int main(int argc, char** argv)
 		if(bBounded){
 			char sBeg[64] = {'\0'};
 			char sEnd[64] = {'\0'};
-			das_datum_toStr(&(opts.range.dmBeg), sBeg, sizeof(sBeg), 6);
-			das_datum_toStr(&(opts.range.dmEnd), sEnd, sizeof(sEnd), 6);
+			das_datum_toStr(&(opts.range.dmBeg), 6, sBeg, sizeof(sBeg));
+			das_datum_toStr(&(opts.range.dmEnd), 6, sEnd, sizeof(sEnd));
 			printf("Range: time from %s to %s\n", sBeg, sEnd);
 		}
 		else
@@ -1166,8 +1166,8 @@ int main(int argc, char** argv)
 			DAS_EXIT( DasIO_writeStreamDesc(g_pIoOut, g_pSd) );
 		char sMsg[256] = {'\0'};
 		char sBeg[64], sEnd[64];
-		das_datum_toStr(&(opts.range.dmBeg), sBeg, sizeof(sBeg), 3);
-		das_datum_toStr(&(opts.range.dmEnd), sEnd, sizeof(sEnd), 3);
+		das_datum_toStr(&(opts.range.dmBeg), 3, sBeg, sizeof(sBeg));
+		das_datum_toStr(&(opts.range.dmEnd), 3, sEnd, sizeof(sEnd));
 		snprintf(sMsg, sizeof(sMsg) - 1, "No data in range %s to %s", sBeg, sEnd);
 		DAS_EXIT( DasIO_exception_v(g_pIoOut, DAS_EX_NO_DATA, "%s", sMsg) );
 	}

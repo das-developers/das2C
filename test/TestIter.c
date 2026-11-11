@@ -81,7 +81,7 @@ int main(int argc, char** argv)
 	char* pWrite = sTest;
 	for(init_DasDsUniqIter(&iterU, pDs, pCent); !iterU.done; DasDsUniqIter_next(&iterU)){
 		DasVar_get(pCent, iterU.index, (das_byte_seq){0}, &dm);
-		das_datum_toStrValOnly(&dm, pWrite, 32, 4);
+		das_datum_toStrValOnly(&dm, 4, pWrite, 32);
 		pWrite += strlen(pWrite);
 		*pWrite = ' '; ++pWrite;
 	}

@@ -504,7 +504,7 @@ static const char* _g_sReplace[5] = {
 /* ************************************************************************* */
 /* translate unsafe characters for XML string data  */
 	
-const char* das_xml_escape(char* dest, const char* src, size_t uOutLen)
+const char* das_xml_escape(const char* src, char* dest, size_t uOutLen)
 {
 	if(uOutLen < 1) return NULL;
 
@@ -886,8 +886,8 @@ bool dascmd_isArg(
  * either the short or long form */
 
 bool dascmd_getArgVal(
-	char* sDest, size_t uDest, char** argv, int argc, int* pArgIdx, 
-	const char* sShort, const char* sLong
+	char** argv, int argc, const char* sShort, const char* sLong, int* pArgIdx, 
+	char* sDest, size_t uDest
 ){
 	bool bIsLong = false;
 
@@ -1133,7 +1133,7 @@ static void _url_set(das_url_parts* pParts, das_url_part_e ePart, size_t uOff, s
 /* Hand rolled on purpose: uriparser does not take UTF-8 natively and curl is
  * a large dependency to carry for a handful of fields.  Only the split is
  * done here, decoding and scheme rules belong to the caller. */
-bool das_url_parse(const char* sUrl, das_url_parts* pParts)
+bool das_url_parse(das_url_parts* pParts, const char* sUrl)
 {
 	for(int i = 0; i < 12; ++i){
 		pParts->aOff[i] = _URL_ABSENT;
@@ -1231,7 +1231,7 @@ bool das_url_parse(const char* sUrl, das_url_parts* pParts)
 }
 
 const char* das_url_part(
-	const char* sUrl, const das_url_parts* pParts, das_url_part_e ePart, size_t* pLen
+	const das_url_parts* pParts, const char* sUrl, das_url_part_e ePart, size_t* pLen
 ){
 	*pLen = 0;
 	if((sUrl == NULL)||(pParts == NULL)||(ePart < DASURL_SCHEME)||(ePart > DASURL_DATASET))

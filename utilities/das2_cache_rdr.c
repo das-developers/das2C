@@ -194,7 +194,7 @@ int readStoreMeth(
 		
 		/* Convert units to seconds */
 		if(pCurTree->binUnits != NULL){
-			pCurTree->rBinSec = Units_convertTo(UNIT_SECONDS, pCurTree->nBinSize, pCurTree->binUnits);
+			pCurTree->rBinSec = Units_convertTo(pCurTree->nBinSize, pCurTree->binUnits, UNIT_SECONDS);
 		}
 		else{
 			pCurTree->rBinSec = pCurTree->nBinSize;
@@ -284,7 +284,7 @@ void sendNoData(handler_data_t* pHDat){
 	if(pHDat->bXIsTime){
 		snprintf(
 			sMsg, 1023, "No data in the interval %s to %s at %s", 
-			dt_isoc(&dtBeg, sBeg, 63, 6), dt_isoc(&dtEnd, sEnd, 63, 6), sLevel
+			dt_isoc(&dtBeg, 6, sBeg, 63), dt_isoc(&dtEnd, 6, sEnd, 63), sLevel
 		);
 	}
 	else{
@@ -572,7 +572,7 @@ DasErrCode onPktData(DasPkt* pPktIn, int nPktId, void* vpHDat){
 	double rX = DasPlane_getValue(pPlane, 0);
 	if(pHDat->bXIsTime){
 		if( strcmp(DasPlane_getUnits(pPlane), UNIT_US2000) != 0)
-			rX = Units_convertTo(UNIT_US2000, rX, DasPlane_getUnits(pPlane));
+			rX = Units_convertTo(rX, DasPlane_getUnits(pPlane), UNIT_US2000);
 	}
 	if(rX < pHDat->rBeg) return 0;
 	if(rX >= pHDat->rEnd) return 0;
@@ -895,10 +895,10 @@ int main(int argc, char* argv[]){
 	das_time dtBeg = {0}, dtEnd = {0};
 	if(bXisTime){
 		dt_parsetime(&dtBeg, sBeg);
-		rBeg = Units_convertFromDt(UNIT_US2000, &dtBeg);
+		rBeg = Units_convertFromDt(&dtBeg, UNIT_US2000);
 		if(das_isfill(rBeg)) return P_ERR;
 		dt_parsetime(&dtEnd, sEnd);
-		rEnd = Units_convertFromDt(UNIT_US2000, &dtEnd);
+		rEnd = Units_convertFromDt(&dtEnd, UNIT_US2000);
 		if(das_isfill(rEnd)) return P_ERR;
 		rBeg -= rPad * 1.0e+6;
 		rEnd += rPad * 1.0e+6;

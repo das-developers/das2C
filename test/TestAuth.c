@@ -68,8 +68,8 @@ void sim_plot_1d(DasDs* pDs)
 		DasVar_get(pVarX, iter.index, (das_byte_seq){0}, pair);
 		DasVar_get(pVarY, iter.index, (das_byte_seq){0}, pair + 1);
 		
-		das_datum_toStr(pair, sBufX, 128, 3);
-		das_datum_toStr(pair + 1, sBufY, 128, 3);
+		das_datum_toStr(pair, 3, sBufX, 128);
+		das_datum_toStr(pair + 1, 3, sBufY, 128);
 		
 		printf( "index: ");
 		for(int i = 0; i < iter.rank; ++i) printf(" %zd", iter.index[i]);
@@ -117,9 +117,9 @@ void sim_plot_2d(DasDs* pDs)
 		DasVar_get(pVarY, iter.index, (das_byte_seq){0}, set + 1);
 		DasVar_get(pVarZ, iter.index, (das_byte_seq){0}, set + 2);
 
-		das_datum_toStr(set, sBufX, 128, 3);
-		das_datum_toStr(set + 1, sBufY, 128, 3);
-		das_datum_toStr(set + 2, sBufZ, 128, 3);
+		das_datum_toStr(set, 3, sBufX, 128);
+		das_datum_toStr(set + 1, 3, sBufY, 128);
+		das_datum_toStr(set + 2, 3, sBufZ, 128);
 		
 		printf( "index: ");
 		for(int i = 0; i < iter.rank; ++i) printf(" %zd", iter.index[i]);

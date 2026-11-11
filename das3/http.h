@@ -412,11 +412,6 @@ DAS_API DasXport* DasHttpResp_takeBody(DasHttpResp* pThis);
  * @param pMgr   A credentials manager to consult if the server asks for a
  *               login.  NULL means only public resources can be read.
  *
- * @param ppRes  If not NULL, receives the response for the request, with the
- *               code, final URL and headers.  Due to redirects the URL in the
- *               response may not be the same as sUrl.  The caller frees it
- *               with del_DasHttpResp().  Failures are logged either way.
- *
  * @param nLimit An upper limit on the number of bytes to download, if less than
  *               1 then limit checks are disabled and download will continue
  *               until complete, a socket error occurs, or no additional
@@ -429,6 +424,11 @@ DAS_API DasXport* DasHttpResp_takeBody(DasHttpResp* pThis);
  *             five minutes.  This value only affects the initial connection
  *             timeout and not the wait time for data to appear.
  *
+ * @param ppRes  If not NULL, receives the response for the request, with the
+ *               code, final URL and headers.  Due to redirects the URL in the
+ *               response may not be the same as sUrl.  The caller frees it
+ *               with del_DasHttpResp().  Failures are logged either way.
+ *
  * @return       A 1-dimensional DasAry with element type vtUByte allocated on
  *               the heap, or NULL if the download failed.
  *
@@ -438,8 +438,8 @@ DAS_API DasXport* DasHttpResp_takeBody(DasHttpResp* pThis);
  *               be used.
  */
 DAS_API DasAry* das_http_readUrl(
-	const char* sUrl, const char* sAgent, DasCredMngr* pMgr, DasHttpResp** ppRes,
-	int64_t nLimit, float rConSec
+	const char* sUrl, const char* sAgent, DasCredMngr* pMgr, int64_t nLimit,
+	float rConSec, DasHttpResp** ppRes
 );
 
 /** das_http_readUrl() with full control over the request, see das_http_opts

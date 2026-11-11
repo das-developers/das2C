@@ -39,8 +39,8 @@
 /* own policy (exact rank, whether a flag token is legal here, item counts).  */
 
 DasErrCode das_shape_fromStr(
-	const char* sShape, int nMaxRank, bool bAllowFlags, ptrdiff_t* pShape,
-	int* pnRank, const char* sWhere
+	const char* sShape, int nMaxRank, bool bAllowFlags, const char* sWhere,
+	ptrdiff_t* pShape, int* pnRank
 ){
 	const char* sBeg = sShape;
 	int nRank = 0;
@@ -223,7 +223,7 @@ static char* _DasGen_prnElem(das_elem_type et, const ubyte* p, char* sBuf, size_
 	case etTime: {
 		const das_time* pDt = (const das_time*)p;
 		int nFrac = (pDt->second == (double)((int)pDt->second)) ? 0 : 6;
-		return dt_isoc(pDt, sBuf, uLen, nFrac);
+		return dt_isoc(pDt, nFrac, sBuf, uLen);
 	}
 	case etLong:
 		snprintf(sBuf, uLen, "%lld", (long long)*((const int64_t*)p));

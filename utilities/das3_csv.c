@@ -456,7 +456,7 @@ static const char* _csv_datumStr(
 		dmT.units = UNIT_UTC;
 		pDm = &dmT;
 	}
-	return das_datum_toStrValOnlySep(pDm, sBuf, uLen, nFracDigits, sSep);
+	return das_datum_toStrValOnlySep(pDm, nFracDigits, sSep, sBuf, uLen);
 }
 
 /* One datum as the cells it occupies.  A composite is one cell per element in

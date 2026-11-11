@@ -180,15 +180,15 @@ DAS_API int64_t dt_nano_1970(const das_time* dt);
 /** Test for time within a time range
  * The the standard exclusive upper bound test.
  *
+ * @param test The test time
  * @param begin The beginning time point for the range
  * @param end  The ending time point for the range
- * @param test The test time
  *
  * @returns true if begin <= test and test < end, false otherwise
  * @memberof das_time
  */
 DAS_API bool dt_in_range(
-	const das_time* begin, const das_time* end, const das_time* test
+	const das_time* test, const das_time* begin, const das_time* end
 );
 
 /** Simple helper to set values in a das time. 
@@ -244,15 +244,15 @@ DAS_API double dt_diff(const das_time* pA, const das_time* pB);
  * may be set to 0
  *
  * @param pDt the dastime to print
- * @param sBuf the buffer to hold the output
- * @param uLen the length of the output buffer, including the NUL
  * @param nFracSec the number of fractional seconds digits in the output,
  *        0 to 9, larger values are treated as 9
+ * @param sBuf the buffer to hold the output
+ * @param uLen the length of the output buffer, including the NUL
  * @returns sBuf, or NULL if the whole string did not fit.  sBuf is always
  *        NUL terminated when uLen > 0.
  * @memberof das_time
  */
-DAS_API char* dt_isoc(const das_time* pDt, char* sBuf, size_t uLen, int nFracSec);
+DAS_API char* dt_isoc(const das_time* pDt, int nFracSec, char* sBuf, size_t uLen);
 
 /** Print an ISOD standard time string given a das_time structure
  * 
@@ -264,15 +264,15 @@ DAS_API char* dt_isoc(const das_time* pDt, char* sBuf, size_t uLen, int nFracSec
  * may be set to 0
  *
  * @param pDt the dastime to print
- * @param sBuf the buffer to hold the output
- * @param uLen the length of the output buffer, including the NUL
  * @param nFracSec the number of fractional seconds digits in the output,
  *        0 to 9, larger values are treated as 9
+ * @param sBuf the buffer to hold the output
+ * @param uLen the length of the output buffer, including the NUL
  * @returns sBuf, or NULL if the whole string did not fit.  sBuf is always
  *        NUL terminated when uLen > 0.
  * @memberof das_time
  */
-DAS_API char* dt_isod(const das_time* pDt, char* sBuf, size_t uLen, int nFracSec);
+DAS_API char* dt_isod(const das_time* pDt, int nFracSec, char* sBuf, size_t uLen);
 
 
 /** Print time a string that provides both day of month and day of year given a
@@ -286,15 +286,15 @@ DAS_API char* dt_isod(const das_time* pDt, char* sBuf, size_t uLen, int nFracSec
  * may be set to 0
  *
  * @param pDt the dastime to print
- * @param sBuf the buffer to hold the output
- * @param uLen the length of the output buffer, including the NUL
  * @param nFracSec the number of fractional seconds digits in the output,
  *        0 to 9, larger values are treated as 9
+ * @param sBuf the buffer to hold the output
+ * @param uLen the length of the output buffer, including the NUL
  * @returns sBuf, or NULL if the whole string did not fit.  sBuf is always
  *        NUL terminated when uLen > 0.
  * @memberof das_time
  */
-DAS_API char* dt_dual_str(const das_time* pDt, char* sBuf, size_t uLen, int nFracSec);
+DAS_API char* dt_dual_str(const das_time* pDt, int nFracSec, char* sBuf, size_t uLen);
 
 				  
 /** Convert time components to double seconds since January 1st 1958

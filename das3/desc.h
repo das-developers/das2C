@@ -128,6 +128,8 @@ DAS_API void* DasDesc_getUser(const DasDesc* pThis);
  *
  * @param pThis The descriptor whose properties are printed.
  *
+ * @param sIndent Prefix for each line, for nesting under a container.
+ *
  * @param sBuf The output buffer, may be NULL if uLen is 0.
  *
  * @param uLen The size of sBuf in bytes, including room for the terminating
@@ -139,12 +141,10 @@ DAS_API void* DasDesc_getUser(const DasDesc* pThis);
  *        To size a buffer, call once with (NULL, 0) and allocate the
  *        return value plus one.
  *
- * @param sIndent Prefix for each line, for nesting under a container.
- *
  * @memberof DasDesc
  */
 DAS_API int DasDesc_info(
-	const DasDesc* pThis, char* sBuf, size_t uLen, const char* sIndent
+	const DasDesc* pThis, const char* sIndent, char* sBuf, size_t uLen
 );
 
 

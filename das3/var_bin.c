@@ -227,7 +227,7 @@ DasVar* DasVarBin_right(const DasVar* pThis)
    itself an operation carves its own share out of what is left.  That
    recursion is why _DasVar_runScratch() adds the operands' needs to its own. */
 const ubyte* _DasVarBin_runAt(
-	const DasVar* pBase, ptrdiff_t* pLoc, ubyte* pScratch, size_t uScratch,
+	const DasVar* pBase, const ptrdiff_t* pLoc, ubyte* pScratch, size_t uScratch,
 	size_t* pBytes, size_t* pNeed
 ){
 	const DasVarBin* pThis = (const DasVarBin*)pBase;
@@ -270,7 +270,7 @@ const ubyte* _DasVarBin_runAt(
 }
 
 static int DasVarBin_get(
-	const DasVar* pBase, ptrdiff_t* pLoc, das_byte_seq work, das_datum* pOut
+	const DasVar* pBase, const ptrdiff_t* pLoc, das_byte_seq work, das_datum* pOut
 ){
 	const DasVarBin* pThis = (const DasVarBin*)pBase;
 	const DasBinOp* pOp = pThis->pRecipe;

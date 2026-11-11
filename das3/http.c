@@ -180,7 +180,7 @@ static bool _http_partCopy(
 	char* sOut, size_t uOut
 ){
 	size_t uLen = 0;
-	const char* p = das_url_part(sUrl, pParts, ePart, &uLen);
+	const char* p = das_url_part(pParts, sUrl, ePart, &uLen);
 	sOut[0] = '\0';
 	if(p == NULL) return true;
 	if(uLen >= uOut) return false;
@@ -201,13 +201,13 @@ static bool _http_setUrl(DasHttpResp* pRes, const char* sUrl)
 	free(pRes->sUrl);
 	pRes->sUrl = sCopy;
 
-	if(!das_url_parse(pRes->sUrl, &(pRes->parts))){
+	if(!das_url_parse(&(pRes->parts), pRes->sUrl)){
 		_http_err(pRes, "Malformed URL %s", sUrl);
 		return false;
 	}
 
 	size_t uLen = 0;
-	const char* pScheme = das_url_part(pRes->sUrl, &(pRes->parts), DASURL_SCHEME, &uLen);
+	const char* pScheme = das_url_part(&(pRes->parts), pRes->sUrl, DASURL_SCHEME, &uLen);
 	if((uLen == 5) && (strncasecmp(pScheme, "https", 5) == 0))     pRes->bHttps = true;
 	else if((uLen == 4) && (strncasecmp(pScheme, "http", 4) == 0)) pRes->bHttps = false;
 	else{
@@ -240,7 +240,7 @@ static bool _http_setUrl(DasHttpResp* pRes, const char* sUrl)
 static void _http_server(const DasHttpResp* pRes, char* sBuf, size_t uLen)
 {
 	size_t uPath = 0;
-	const char* pPath = das_url_part(pRes->sUrl, &(pRes->parts), DASURL_PATH, &uPath);
+	const char* pPath = das_url_part(&(pRes->parts), pRes->sUrl, DASURL_PATH, &uPath);
 	snprintf(sBuf, uLen, "%s://%s%s%s%s%s%.*s", pRes->bHttps ? "https" : "http",
 		pRes->bIp6 ? "[" : "", pRes->sHost, pRes->bIp6 ? "]" : "",
 		pRes->bDefPort ? "" : ":", pRes->bDefPort ? "" : pRes->sPort,
@@ -1019,8 +1019,8 @@ static bool _das_http_sendRequest(
 	const char* sReqHdrs
 ){
 	size_t uPath = 0, uQuery = 0;
-	const char* pPath  = das_url_part(pRes->sUrl, &(pRes->parts), DASURL_PATH, &uPath);
-	const char* pQuery = das_url_part(pRes->sUrl, &(pRes->parts), DASURL_QUERY, &uQuery);
+	const char* pPath  = das_url_part(&(pRes->parts), pRes->sUrl, DASURL_PATH, &uPath);
+	const char* pQuery = das_url_part(&(pRes->parts), pRes->sUrl, DASURL_QUERY, &uQuery);
 
 	/* Sized to fit, the request line carries the whole query */
 	size_t uSz = uPath + uQuery + strlen(pRes->sHost) + 512 + DASCRED_AUTH_SZ +
@@ -1385,7 +1385,7 @@ DasHttpResp* new_DasHttpResp_getEx(
 
 		case HTTP_NotFound:{
 			size_t uPath = 0;
-			const char* pPath = das_url_part(pRes->sUrl, &(pRes->parts), DASURL_PATH, &uPath);
+			const char* pPath = das_url_part(&(pRes->parts), pRes->sUrl, DASURL_PATH, &uPath);
 			del_DasXport(pX);
 			_http_err(pRes, "Error in request path '%.*s' for host '%s'",
 				(int)uPath, pPath ? pPath : "", pRes->sHost
@@ -1395,7 +1395,7 @@ DasHttpResp* new_DasHttpResp_getEx(
 
 		case HTTP_BadReq:{
 			size_t uQuery = 0;
-			const char* pQuery = das_url_part(pRes->sUrl, &(pRes->parts), DASURL_QUERY, &uQuery);
+			const char* pQuery = das_url_part(&(pRes->parts), pRes->sUrl, DASURL_QUERY, &uQuery);
 			del_DasXport(pX);
 			_http_err(pRes, "Error in query parameters '%.*s'", (int)uQuery,
 				pQuery ? pQuery : ""
@@ -1421,8 +1421,8 @@ DONE:
 /* A just-give-me-a-bag-of-bytes convenience function */
 
 DasAry* das_http_readUrl(
-	const char* sUrl, const char* sAgent, DasCredMngr* pMgr, DasHttpResp** ppRes,
-	int64_t nLimit, float rConSec
+	const char* sUrl, const char* sAgent, DasCredMngr* pMgr, int64_t nLimit,
+	float rConSec, DasHttpResp** ppRes
 ){
 	das_http_opts opts;
 	das_http_opts_init(&opts);

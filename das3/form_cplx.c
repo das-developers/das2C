@@ -540,7 +540,7 @@ static das_binop_stat _cplx_resolve(
 				return REFUSE("Can not %s %s and %s, the units do not convert",
 					(nOp == D2BOP_ADD) ? "add" : "subtract",
 					Units_toStr(pL->units), Units_toStr(pR->units));
-			rRightScale = Units_convertTo(pL->units, 1.0, pR->units);
+			rRightScale = Units_convertTo(1.0, pR->units, pL->units);
 		}
 		unitsOut = pL->units;
 		break;

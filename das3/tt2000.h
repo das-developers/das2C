@@ -35,7 +35,7 @@ bool das_tt2k_reinit(const char* sProgName);
  *   use the safer alternative:
  *     
  *     das_time dt;
- *     tt = Units_convertFromDt(&dt, UNIT_TT2000);
+ *     tt = Units_convertFromDt(UNIT_TT2000, &dt);
  *
  *   instead. You have been warned.
  *

@@ -721,7 +721,7 @@ int DasDs_info(const DasDs* pThis, char* sBuf, size_t uLen)
 	n = _prn_catf(sBuf, uLen, n, "\n");
 	
 	n += DasDesc_info(
-		(DasDesc*)pThis, _prn_at(sBuf, uLen, n), _prn_rem(uLen, n), "   "
+		(DasDesc*)pThis, "   ", _prn_at(sBuf, uLen, n), _prn_rem(uLen, n)
 	);
 
 	n = _prn_catf(sBuf, uLen, n, "\n   ");

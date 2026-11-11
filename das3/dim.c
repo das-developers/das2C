@@ -212,7 +212,7 @@ int DasDim_info(const DasDim* pThis, char* sBuf, size_t uLen)
 	
 	/* Larry wanted the properties printed as well */
 	int nProps = DasDesc_info(
-		(DasDesc*)pThis, _prn_at(sBuf, uLen, n), _prn_rem(uLen, n), "   "
+		(DasDesc*)pThis, "   ", _prn_at(sBuf, uLen, n), _prn_rem(uLen, n)
 	);
 	n += nProps;
 	if(nProps > 0) n = _prn_catf(sBuf, uLen, n, "\n");

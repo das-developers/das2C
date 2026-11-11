@@ -567,7 +567,7 @@ static int test_cplx_stream(void)
 	MUST(das_datum_toDoubles(&dm, aComp, 2) == 2);
 	/* the pinned digits are the fixture's printed eight, so compare to those */
 	CHECK((fabs(aComp[0] + 0.05220497) < 1e-8) && (fabs(aComp[1] + 0.81409886) < 1e-8));
-	CHECK(das_datum_toStrValOnly(&dm, sBuf, 64, 6) != NULL);
+	CHECK(das_datum_toStrValOnly(&dm, 6, sBuf, 64) != NULL);
 	CHECK(strcmp(sBuf, "-0.052205-0.814099i") == 0);
 
 	pDim = DasDs_getDimByName(pDs, "cal_polar");
@@ -581,7 +581,7 @@ static int test_cplx_stream(void)
 	CHECK(das_datum_elemType(&dm) == vtFloat);
 	MUST(das_datum_toDoubles(&dm, aComp, 2) == 2);
 	CHECK((fabs(aComp[0] - 0.815771) < 1e-6) && (fabs(aComp[1] + 93.66913) < 1e-4));
-	CHECK(das_datum_toStrValOnly(&dm, sBuf, 64, 6) != NULL);
+	CHECK(das_datum_toStrValOnly(&dm, 6, sBuf, 64) != NULL);
 	CHECK(strcmp(sBuf, "0.815771@-93.6691deg") == 0);
 
 	/* the two representations agree with each other */

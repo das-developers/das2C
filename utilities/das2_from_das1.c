@@ -679,7 +679,7 @@ int main(int argc, char** argv)
 	if(!dt_parsetime(&dt, pBeg))
 		return das_error(112, "[%s] ERROR: Couldn't parse %s as a date time", g_sMyName, pBeg);
 	
-   g_xBaseUs2000 = Units_convertFromDt(UNIT_US2000, &dt);
+   g_xBaseUs2000 = Units_convertFromDt(&dt, UNIT_US2000);
 
    if( (pPdOut = createPktDesc((DasDesc*)pSdOut, pDsdf, sDsdfFile)) == NULL)
 		return 112;

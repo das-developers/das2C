@@ -148,7 +148,7 @@ typedef struct DasVar_VTbl {
 	 * Returns 0 on success, the bytes of scratch needed if work is too small,
 	 * and a negative error code otherwise.  See DasVar_get(). */
 	int (*get)(
-		const DasVar* pThis, ptrdiff_t* pLoc, das_byte_seq work, das_datum* pOut
+		const DasVar* pThis, const ptrdiff_t* pLoc, das_byte_seq work, das_datum* pOut
 	);
 
 	/* The XML element name this class serializes as: "scalar", "composite",
@@ -278,7 +278,7 @@ size_t _DasVar_runScratch(const DasVar* pThis);
  * and pScratch otherwise.  Returns NULL having set *pNeed when the scratch is
  * too small, or NULL with *pNeed 0 on a loud error. */
 const ubyte* _DasVar_runAt(
-	const DasVar* pThis, ptrdiff_t* pLoc, ubyte* pScratch, size_t uScratch,
+	const DasVar* pThis, const ptrdiff_t* pLoc, ubyte* pScratch, size_t uScratch,
 	size_t* pBytes, size_t* pNeed
 );
 
@@ -286,7 +286,7 @@ const ubyte* _DasVar_runAt(
  * from.  _DasVar_runAt() dispatches here so a nested operation reads its
  * operands through the same call. */
 const ubyte* _DasVarBin_runAt(
-	const DasVar* pBase, ptrdiff_t* pLoc, ubyte* pScratch, size_t uScratch,
+	const DasVar* pBase, const ptrdiff_t* pLoc, ubyte* pScratch, size_t uScratch,
 	size_t* pBytes, size_t* pNeed
 );
 

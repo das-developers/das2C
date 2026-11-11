@@ -181,7 +181,7 @@ size_t _DasVar_runScratch(const DasVar* pThis)
 }
 
 const ubyte* _DasVar_runAt(
-	const DasVar* pThis, ptrdiff_t* pLoc, ubyte* pScratch, size_t uScratch,
+	const DasVar* pThis, const ptrdiff_t* pLoc, ubyte* pScratch, size_t uScratch,
 	size_t* pBytes, size_t* pNeed
 ){
 	*pNeed = 0;
@@ -216,7 +216,7 @@ const ubyte* _DasVar_runAt(
 }
 
 int DasVar_get(
-	const DasVar* pThis, ptrdiff_t* pLoc, das_byte_seq work, das_datum* pOut
+	const DasVar* pThis, const ptrdiff_t* pLoc, das_byte_seq work, das_datum* pOut
 ){
 	if((pThis == NULL)||(pOut == NULL))
 		return -1 * das_error(DASERR_VAR, "Null pointer reading a value");
@@ -1105,7 +1105,7 @@ das_val_type DasVar_valType(const DasVar* pThis)
 /* A scalar never needs the caller's scratch: one value fits the datum's own
    bytes, which is what DATUM_BUF_SZ is sized for (a das_time is the largest). */
 static int DasVarScalar_get(
-	const DasVar* pThis, ptrdiff_t* pLoc, das_byte_seq work, das_datum* pOut
+	const DasVar* pThis, const ptrdiff_t* pLoc, das_byte_seq work, das_datum* pOut
 ){
 	(void)work;
 
@@ -1242,7 +1242,7 @@ static char* _var_seqValToStr(
 ){
 	switch(et){
 	case etTime:
-		dt_isoc((const das_time*)pVal, sBuf, uLen, 6);
+		dt_isoc((const das_time*)pVal, 6, sBuf, uLen);
 		return sBuf;
 	case etFloat:
 		snprintf(sBuf, uLen, "%.7g", (double)(*(const float*)pVal));
@@ -1253,7 +1253,7 @@ static char* _var_seqValToStr(
 	default: {
 		das_datum dm;
 		das_datum_init(&dm, pVal, (das_val_type)et, 0, NULL);
-		das_datum_toStrValOnly(&dm, sBuf, uLen, 6);
+		das_datum_toStrValOnly(&dm, 6, sBuf, uLen);
 		return sBuf;
 	}
 	}
@@ -1449,7 +1449,7 @@ DasErrCode DasVar_encode(DasVar* pThis, const char* sRole, DasBuf* pBuf)
 			else if(!bByteRun){
 				das_datum dmFill;
 				das_datum_init(&dmFill, DasAry_getFill(pAry), vtAry, das_vt_size(vtAry), units);
-				das_datum_toStrValOnly(&dmFill, sFill, 63, 6);
+				das_datum_toStrValOnly(&dmFill, 6, sFill, 63);
 			}
 
 			char sItemBytes[16] = {'\0'};
@@ -1623,7 +1623,7 @@ DasVar* new_DasVarConst(
    copies.  So the run must be memory that outlives this call -- the variable's
    own storage when it has any, the caller's scratch when it does not. */
 static int DasVarComp_get(
-	const DasVar* pBase, ptrdiff_t* pLoc, das_byte_seq work, das_datum* pOut
+	const DasVar* pBase, const ptrdiff_t* pLoc, das_byte_seq work, das_datum* pOut
 ){
 	/* the formalism interprets the run */
 	if((pBase->pForm == NULL)||(pBase->pForm->pVTbl->pack == NULL)){
@@ -1827,7 +1827,7 @@ DasVar* new_DasVarCompSeq(
    _new_DasVarBytes_gen accepts array-backed generators only, precisely so
    that a text or blob datum always has real memory to point at. */
 static int DasVarBytes_get(
-	const DasVar* pBase, ptrdiff_t* pLoc, das_byte_seq work, das_datum* pOut
+	const DasVar* pBase, const ptrdiff_t* pLoc, das_byte_seq work, das_datum* pOut
 ){
 	const DasVarBytes* pThis = (const DasVarBytes*)pBase;
 	(void)work;

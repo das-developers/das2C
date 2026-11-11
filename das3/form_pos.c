@@ -620,7 +620,7 @@ static das_binop_stat _DasFormPos_binOpLeft(
 		if(!Units_canConvert(pR->units, pL->units))
 			return REFUSE("Can not move a position in %s by a displacement in "
 			              "%s", Units_toStr(pL->units), Units_toStr(pR->units));
-		rScale = Units_convertTo(pL->units, 1.0, pR->units);
+		rScale = Units_convertTo(1.0, pR->units, pL->units);
 	}
 
 	DasBinOpPos* pRes = _new_DasBinOpPos(
@@ -674,7 +674,7 @@ static das_binop_stat _DasFormPos_binOpRight(
 		if(!Units_canConvert(pL->units, pR->units))
 			return REFUSE("Can not move a position in %s by a displacement in "
 			              "%s", Units_toStr(pR->units), Units_toStr(pL->units));
-		rScale = Units_convertTo(pR->units, 1.0, pL->units);
+		rScale = Units_convertTo(1.0, pL->units, pR->units);
 	}
 
 	DasBinOpPos* pRes = _new_DasBinOpPos(

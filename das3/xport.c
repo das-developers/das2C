@@ -727,8 +727,8 @@ DasXport* new_DasXport_sock(intptr_t nSock, const char* sMode)
 #define _XP_COPY_CHUNK 16384
 
 DasErrCode DasXport_copyTo(
-	DasXport* pThis, DasXport* pDest, int64_t* pCopied, das_progress_f onProgress,
-	void* pUser
+	DasXport* pThis, DasXport* pDest, das_progress_f onProgress, void* pUser,
+	int64_t* pCopied
 ){
 	DasErrCode nRet = DAS_OKAY;
 	int64_t nTotal = 0;

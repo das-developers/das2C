@@ -541,7 +541,7 @@ DasPlane* mkYscanPdFromYscanPd(
 	das_datum_fromDbl(&(pAux->dmTau), ySampleInterval,yOrigUnits);
 
 	if(Units_canConvert(yUnits, UNIT_HERTZ)){
-		pAux->rYOutScale = Units_convertTo(UNIT_HERTZ, 1.0, yUnits);
+		pAux->rYOutScale = Units_convertTo(1.0, yUnits, UNIT_HERTZ);
 		yUnits = UNIT_HERTZ;
 		pAux->rZOutScale = (g_uDftLen * ySampleInterval) / pAux->rYOutScale;
 		/* Now change the interval */
@@ -823,7 +823,7 @@ DasErrCode _finalizeXTransformHdrs(DasPkt* pPdIn, DasPkt* pPdOut, DasIO* pIoOut)
 
 	das_units yTagUnits = Units_invert(pXAux->dmTau.units);
 	if(Units_canConvert(yTagUnits, UNIT_HERTZ)){
-		pXAux->rYOutScale = Units_convertTo(UNIT_HERTZ, 1.0, yTagUnits);
+		pXAux->rYOutScale = Units_convertTo(1.0, yTagUnits, UNIT_HERTZ);
 		yTagUnits = UNIT_HERTZ;
 		pXAux->rZOutScale = (g_uDftLen * tau) / pXAux->rYOutScale;
 
@@ -947,7 +947,7 @@ DasErrCode onXTransformPktData(DasPkt* pPdIn, DasPkt* pPdOut, DasIO* pIoOut)
 		
 		daslog_info_v("%.2f%% cadence change at %s, skipping %d points.",
 			rJitter * 100, das_datum_toStr(
-				DasPlane_getDatum(DasPkt_getXPlane(pPdIn), 0, &datum), sBuf, 63, 6
+				DasPlane_getDatum(DasPkt_getXPlane(pPdIn), 0, &datum), 6, sBuf, 63
 			), pAccum->iNext - 2
 		);
 		
@@ -1166,7 +1166,7 @@ DasErrCode onYTransformPktData(DasPkt* pPdIn, DasPkt* pPdOut, DasIO* pIoOut)
 				utXInter = Units_interval(DasPlane_getUnits(pPlaneOut));
 				double rTau;
 				if(!das_datum_toDbl(pTau, &rTau)) return DASERR_DATUM;
-				rDeltaT = Units_convertTo(utXInter, rTau, pTau->units);
+				rDeltaT = Units_convertTo(rTau, pTau->units, utXInter);
 				rVal +=  (uReadPt + g_uDftLen/2) * rDeltaT;
 				DasPlane_setValue(pPlaneOut, 0, rVal);
 			}
