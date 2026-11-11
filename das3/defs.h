@@ -166,17 +166,6 @@ extern "C" {
    framing-only tool (packet tag reader) dosen't need to pull in the full 
    data model. */
 
-/** In-memory object model a reader builds, or a writer emits.
- *
- * The model is separate from the stream version.  A das 2.2 stream can be read
- * into das3 datasets (V3) for tools that only speak the newer model.
- */
-typedef enum das_stream_model {
-	STREAM_MODEL_MIXED = -1, /* Readers only: build whatever each header says */
-	STREAM_MODEL_V2    =  2, /* DasPkt / DasPlane, fail on das3 headers */
-	STREAM_MODEL_V3    =  3  /* DasDs / DasDim / DasVar, up-convert das2 headers */
-} das_stream_model;
-
 /** The version="" attribute of a stream header: schema generation.
  *
  * For packetized output this also fixes the packet tag style.  Values are
@@ -200,12 +189,6 @@ typedef enum das_stream_type {
 	STREAM_TYPE_BASIC,       /* "das-basic-stream": header then tagged packets */
 	STREAM_TYPE_DOC          /* "das-basic-doc": one self-contained XML document */
 } das_stream_type;
-
-/** The stream header text for a version, "2.2", "3.0" etc. */
-DAS_API const char* das_stream_ver_toStr(das_stream_ver ver);
-
-/** The stream header text for a container type, "das-basic-stream" etc. */
-DAS_API const char* das_stream_type_toStr(das_stream_type type);
 
 /* On Solaris systems NAME_MAX is not defined because pathconf() is supposed
  * to be used to get the exact limit by filesystem.  Since all the filesystems

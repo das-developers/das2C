@@ -25,6 +25,7 @@
 #include <expat.h>
 
 #include "oob.h"
+#include "str.h"
 #include "oob_p.h"
 #include "util_p.h"
 

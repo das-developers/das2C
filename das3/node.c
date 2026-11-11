@@ -34,6 +34,7 @@
 #endif
 
 #include "util.h"
+#include "str.h"
 #include "log.h"
 #include "array.h"
 #include "node.h"

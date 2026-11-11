@@ -28,6 +28,8 @@
 #include <assert.h>
 
 #include "util.h"
+#include "time.h"
+#include "str.h"
 #include "value.h"
 #include "prop.h"
 #include "prop_p.h"

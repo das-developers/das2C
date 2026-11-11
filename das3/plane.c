@@ -25,6 +25,7 @@
 #include <stddef.h>
 
 #include "util.h"
+#include "str.h"
 #include "log.h"
 #include "buffer_p.h"
 #include "enc_p.h"

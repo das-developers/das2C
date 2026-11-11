@@ -26,6 +26,8 @@
 #include <ctype.h>
 
 #include "stream.h"
+#include "time.h"
+#include "str.h"
 #include "stream_p.h"
 #include "datset_p.h"
 #include "log.h"

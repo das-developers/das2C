@@ -49,6 +49,7 @@
 #endif
 
 #include "util.h"
+#include "str.h"
 #include "log.h"
 #include "xport_p.h"
 

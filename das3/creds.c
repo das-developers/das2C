@@ -35,6 +35,7 @@
 #endif
 
 #include "util.h"
+#include "str.h"
 #include "array.h"
 #include "log.h"
 #include "time.h"

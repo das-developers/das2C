@@ -38,6 +38,7 @@
 #include "das3/util.h"
 #include "das3/time.h"
 #include "das3/value.h"
+#include <das3/str.h>
 
 /*#ifndef _WIN32
 #define INLINE inline

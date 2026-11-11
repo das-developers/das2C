@@ -496,15 +496,6 @@ DAS_API DasErrCode das_value_fmt(
 	das_val_type vt, const char* sSemantic, int nFitTo, char* sBuf, size_t uBufLen
 );
 
-/** Small helper for printing reals in less space 
- * 
- * Since we don't know how precise a double precision value is, it's common
- * to want to print these to 14 digits (or similar).  Many times all those 
- * extra digits are just zeros.  Use this function to shorten real values 
- * that after they have been written to a buffer.
- */
-DAS_API void das_value_trimReal(char* sVal);
-
 /** Get a das value from a null terminated string 
  * 
  * This function should not exit, instead erroneous parsing triggers log messages
@@ -515,127 +506,9 @@ DAS_API DasErrCode das_value_fromStr(
 	const char* sStr, das_val_type vt, ubyte* pBuf, int uBufLen
 );
 
-
-/** Convert a string value to a 8-byte float, similar to strtod(3).
- *
- * @param str the string to convert.  Conversion stops at the first improper
- *        character.  Whitespace and leading 0's are ignored in the input.
- *
- * @param pRes The location to store the resulting 8-byte float.
- *
- * @returns @c true if the conversion succeeded, @c false otherwise.  Among
- *        other reason, conversion will fail if the resulting value won't fit
- *        in a 8 byte float.
- */
-DAS_API bool das_str2double(const char* str, double* pRes);
-
-
-/** Convert the initial portion of a string to an integer with explicit 
- * over/underflow checks
- *
- * @param str the string to convert.  Conversion stops at the first improper
- *        character.  Whitespace and leading 0's are ignored in the input.
- *        The number is assumed to be in base 10, unless the first non-whitespace
- *        characters after the optional '+' or '-' sign are '0x'.
- *
- * @param pRes The location to store the resulting integer.
- *
- * @returns @c true if the conversion succeeded, @c false otherwise.
- */
-DAS_API bool das_str2int(const char* str, int* pRes);
-
-/** Convert a string value to a boolean value.
- *
- * @param str the string to convert.  The following values are accepted as
- *        representing true:  'true' (any case), 'yes' (any case), 'T', 'Y',
- *        '1'.  The following values are accepted as representing false:
- *        'false' (any case), 'no', (any case), 'F', 'N', '0'.  Anything else
- *        results in no conversion.
- * @param pRes the location to store the resulting boolean value
- * @return true if the string could be converted to a boolean, false otherwise.
- */
-DAS_API bool das_str2bool(const char* str, bool* pRes);
-
-/** Convert a string to an integer with explicit base and overflow
- * checking.
- *
- * @param str the string to convert.  Conversion stops at the first improper
- *        character.  Whitespace and leading 0's are ignored in the input.
- *        No assumptions are made about the base of the string.  So anything
- *        that is not a proper character is the given base is causes an
- *        error return.
- *
- * @param base an integer from 1 to 60 inclusive.
- *
- * @param pRes The location to store the resulting integer.
- *
- * @returns @c true if the conversion succeeded, @c false otherwise.
- */
-DAS_API bool das_str2baseint(const char* str, int base, int* pRes);
-
-/** Convert an explicit length string to an integer with explicit base with
- * over/underflow checks.
- *
- * @param str the string to convert.  Conversion stops at the first improper
- *        character.  Whitespace and leading 0's are ignored in the input.
- *        No assumptions are made about the base of the string.  So anything
- *        that is not a proper character is the given base is causes an
- *        error return.
- *
- * @param base an integer from 1 to 60 inclusive.
- *
- * @param nLen only look at up to this many characters of input.  Encountering
- *        whitespace or a '\\0' character will still halt character
- *        accumulation.
- *
- * @param pRes The location to store the resulting integer.
- *
- * @returns @c true if the conversion succeeded, @c false otherwise.
- *
- * Will only inspect up to 64 non-whitespace characters when converting a
- * value.
- */
-DAS_API bool das_strn2baseint(const char* str, int nLen, int base, int* pRes);
-
-/** Parse a comma separated list of ASCII values into a double array.
- *
- * Fields are read in the C locale, '.' is the decimal point whatever the
- * program's locale.  White space around a field is fine; an empty field or
- * one that is not a number is an error.
- *
- * @param[in] sCsv The string of comma separated values
- * @param[out] pNumItems a pointer to an integer which will be set to the
- *             length of the newly allocated array.
- *
- * @returns a new double array allocated on the heap  
- *          Not NULL on success: blank text is an empty list, a zero count
- *          and a one slot array.  
- *          NULL, with *pNumItems = 0, after das_error() for NULL
- *          text or a field that is not a number.
- */
-DAS_API double* das_csv2doubles(const char* sCsv, int* pNumItems);
-
-
-/** Print an array of doubles into a string buffer.
- * Prints an array of doubles into a string buffer with commas and spaces
- * between each entry.  Note there is no precision limit for the printing
- * so the space needed to hold the array may 24 bytes times the number
- * number of values, or more.  Nothing is written past pBuf[uBufSz - 1].
- *
- * @param[in] pValues an array of doubles
- * @param[in] nValues the number of items to print to the array
- * @param[out] pBuf a pointer to the buffer to receive the printed values
- * @param[in]  uBufSz The length of the buffer to received the converted values
- *
- * @returns A pointer to the supplied buffer, or NULL after das_error() if
- *          the values do not all fit.
- */
-DAS_API char* das_doubles2csv(const double* pValues, int nValues, char* pBuf, size_t uBufSz);
-
-
-/** Similar to das_doubles2csv, but for 32-bit floats */
-DAS_API char* das_floats2csv(const float* pValues, int nValues, char* pBuf, size_t uBufSz);
-
+/** Check to see if two floating point values are within an epsilon of each 
+ * other. */
+#define das_within(A, B, E) (fabs((A) - (B)) < (E) ? true : false)
 
 #ifdef __cplusplus
 }

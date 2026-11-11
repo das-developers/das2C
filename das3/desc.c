@@ -33,6 +33,8 @@
 
 
 #include "util.h"
+#include "time.h"
+#include "str.h"
 #include "enc.h"
 #include "value.h"
 #include "desc.h"

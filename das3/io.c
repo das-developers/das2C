@@ -38,6 +38,7 @@
 
 #include "defs.h"
 #include "util.h"  /* <-- Make sure endianness macros are present */
+#include "str.h"
 #include "log.h"
 #include "io.h"
 #include "xport_p.h"   /* files, pipes, sockets, TLS and zlib all live there */

@@ -28,6 +28,7 @@
 #include "array.h"
 #include "array_p.h"
 #include "util.h"
+#include "str.h"
 #include "log.h"
 #include "info_p.h"
 

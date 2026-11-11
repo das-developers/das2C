@@ -26,6 +26,7 @@
 #include <ctype.h>
 
 #include "util.h"
+#include "str.h"
 #include "log.h"
 #include "req_p.h"
 

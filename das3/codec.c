@@ -25,6 +25,8 @@
 #include "value.h"
 #include "log.h"
 #include "util.h"     /* das_b64_encode for base64 value armoring */
+#include "time.h"
+#include "str.h"
 #include "iter.h"
 
 #define _das_codec_c_

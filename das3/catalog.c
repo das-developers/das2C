@@ -34,6 +34,7 @@
 #include <sys/stat.h>
 
 #include "util.h"
+#include "str.h"
 #include "log.h"
 #include "http.h"
 #include "node_p.h"
@@ -987,4 +988,23 @@ DasSrc* DasCat_newSrc(DasCat* pThis, const char* sPath)
 {
 	DasNode* pNode = DasCat_resolve(pThis, sPath);
 	return (pNode == NULL) ? NULL : new_DasSrc_node(pNode);
+}
+
+/* ************************************************************************* */
+/* Telling a URL or file from a catalog URI */
+
+static bool _cat_hasPfx(const char* s, const char* sPrefix)
+{
+	return strncmp(s, sPrefix, strlen(sPrefix)) == 0;
+}
+
+bool das_isUrlOrFile(const char* sPath)
+{
+	if(sPath == NULL) return false;
+	if(_cat_hasPfx(sPath, "http://")||_cat_hasPfx(sPath, "https://")||_cat_hasPfx(sPath, "file://")) return true;
+	if((sPath[0] == '.')||(sPath[0] == '/')||(sPath[0] == '\\')) return true;
+	if(isalpha((unsigned char)sPath[0]) && (sPath[1] == ':') && ((sPath[2] == '\\')||(sPath[2] == '/')))
+		return true;   /* a Windows drive, catalog URIs never have their first colon at index 1 */
+	size_t u = strlen(sPath);
+	return (u > 5) && (strcmp(sPath + u - 5, ".json") == 0);
 }

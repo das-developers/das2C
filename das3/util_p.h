@@ -94,6 +94,11 @@ uint8_t* das_memset(
 );
 
 
+#ifdef _WIN32
+/* das_init() calls this so das_strtod_c() makes its C locale anew, str.c */
+void _dasstr_resetCLocale(void);
+#endif
+
 /* Julian Day at January 1, 1958, 12:00:00 UT */
 #define DAS_MJ1958_EPOCH 2436205   /* the integer julian day for the MJ1958 scale */
 

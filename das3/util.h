@@ -320,104 +320,12 @@ DAS_API das_errdis_e daserr_disp(void);
 DAS_API void daserr_setdisp(das_errdis_e nDisp);
 
 
-/** Check to see if two floating point values are within an epsilon of each 
- * other. */
-#define das_within(A, B, E) (fabs((A) - (B)) < (E) ? true : false)
-
 /** The limit on xml packet length, in bytes.  (ascii encoding.) */
 #define DAS_XML_BUF_LEN 1000000
 
 /** The limit of xml element name length, in bytes. */
 #define DAS_XML_NODE_NAME_LEN 256
 
-/** The size of an char buffer large enough to hold valid object IDs */
-#define DAS_MAX_ID_BUFSZ 64
-
-/** Check that a string is suitable for use as an object ID
- * 
- * Object ID strings are ascii strings using only characters from the set
- * a-z, A-Z, 0-9, and _.  They do not start with a number.  They are no more
- * than 63 bytes long.  Basically they can be used as variable names in most
- * programming languages.
- * 
- * If the library exits on errors, see das_init(), this function never returns.
- *  
- * @param sId
- * @return True if the string can be used as an ID, false otherwise.
- */
-DAS_API bool das_assert_valid_id(const char* sId);
-
-
-/** Allocate a new string on the heap and format it
- *
- * Except for using das_error on a failure, this is a copy of the
- * code out of man 3 printf on Linux.
- *
- * @returns A pointer to the newly allocated and formatted string on
- *          the heap, or NULL if the function failed and the das2 error
- *          disposition allows for continuation after a failure
- */
-DAS_API char* das_string(const char* fmt, ...);
-
-/** Strip whitespace from a string
- * 
- * @param sLine - Pointer to a writable null terminated string, or a
- *          NULL pointer.
- * 
- * @param cComment - Treat the character if it was a null character
- *          terminating the string.  Replace it with an actual null if
- *          found. Use '\0' to avoid stripping "comments".
- * 
- * @returns NULL if the string consisted only of whitespace, or was empty
- *          or was a NULL pointer. 
- *          Otherwise a pointer to the first non-whitespace portion is 
- *          returned.  A null character will be written to the string
- *          at the start of trailing whitespace.
- */
-DAS_API char* das_strip(char* sLine, char cComment);
-
-
-/** Translate unsafe characters for XML string output 
- *
- * The characters [ " ' < > & ] are translated to entities, everything else,
- * white space included, is copied as is.  So long as dest is at least one
- * byte long the result is null terminated.  Output that doesn't fit is
- * dropped from the first source character that won't fit whole, so neither
- * an entity nor a multi-byte UTF-8 character is ever cut in half.
- *
- * @param src  The data source
- * @param dest The buffer to receive the output
- * @param uOutLen the size of the dest buffer.  
- *
- * @returns the parameter dest cast to a constant pointer.
- */
-DAS_API const char* das_xml_escape(const char* src, char* dest, size_t uOutLen);
-
-/** Copy a string into a new buffer allocated on the heap
- *
- * @param sIn the string to copy
- * @return a pointer to the newly allocated buffer containing the same
- *          characters as the input string or NULL if the input length was
- *          zero
- */
-DAS_API char* das_strdup(const char* sIn);
-
-/** Percent encode a string for use in a URL query.
- *
- * Everything but the RFC 3986 unreserved characters, letters, digits and
- * "-._~", is encoded, including the ':' in time strings.  Servers decode
- * before use so over-encoding is harmless, and it is what most encoders
- * do.  Works like snprintf: the output is always NUL terminated when uOut
- * is at least 1, and the return value says how much room was needed.
- *
- * @param sIn The text to encode.
- * @param sOut Receives the encoding.  Three times the input length plus
- *        one always suffices.
- * @param uOut The size of sOut.
- * @returns The length of the full encoding, not counting the terminator.
- *        If this is uOut or more the output was cut short.
- */
-DAS_API size_t das_url_encode(const char* sIn, char* sOut, size_t uOut);
 
 /** The parts of a URL, see das_url_parse() */
 typedef enum das_url_part {
@@ -492,16 +400,6 @@ DAS_API const char* das_url_part(
 	const das_url_parts* pParts, const char* sUrl, das_url_part_e ePart, size_t* pLen
 );
 
-/** Is this string a node location rather than a catalog path?
- *
- * True for http://, https:// and file:// URLs, for anything starting with
- * '.', '/', '\' or a drive letter, and for anything ending in ".json".  All else
- * is taken to be a catalog path or URI.  This is the rule DasCat_resolve()
- * uses, published so command line parsers can agree with it.
- *
- */
-DAS_API bool das_isUrlOrFile(const char* sPath);
-
 /** Is this string a full URI rather than a relative catalog path?
  *
  * True when it starts with a URI scheme, a letter followed by letters,
@@ -512,23 +410,6 @@ DAS_API bool das_isUrlOrFile(const char* sPath);
  *
  */
 DAS_API bool das_isUri(const char* sPath);
-
-
-/** Store a formatted string in a newly allocated buffer
- *
- * This version is suitable for calling from variable argument functions.
- *
- * Except for using das_error on a failure, this is a copy of the
- * code out of man 3 printf on Linux.
- *
- * @param fmt - a printf format string
- * @param ap A va_list list, see vfprintf or stdarg.h for details
- *
- * @returns A pointer to the newly allocated and formatted string on
- *          the heap, or NULL if the function failed and the das2 error
- *          disposition allows for continuation after a failure
- */
-DAS_API char* das_vstring(const char* fmt, va_list ap);
 
 
 /** Is the path a directory.
@@ -659,63 +540,6 @@ DAS_API void das_stdio_binary(FILE* pFile);
  */
 DAS_API int das_dirlist(
 	const char* sPath, char ppDirList[][256], size_t uMaxDirs, char cType
-);
-
-/** A C locale string to double converter 
- * 
- * This is essentially the same as the C-lib function strtod, except it always
- * evaluates strings in the "C" locale no matter the current locale of the 
- * program.  It does not alter the current program's locale.
- * 
- * @param nptr    The starting point of the string to convert
- * @param endptr  Where to store a pointer to the last item converted
- * @return        The converted value 
- * 
- * Notes: Errno is set as normal for the underlying strtod implementation.
- */
-DAS_API double das_strtod_c(const char *nptr, char **endptr);
-
-/** Encode binary data as base64 (RFC 4648) characters in a new buffer.
- *
- * (Credit: stackoverflow user ryyst)
- * @param data A pointer to the data to encode
- * @param input_length The number of input bytes to encode
- * @param output_length a pointer to location to receive the encoded length
- *        (4 * ceil(input_length/3), '=' padded), not counting the terminator
- *
- * @returns A pointer to a newly allocated, NUL terminated string, or NULL
- *          if calloc failed.  Caller frees.
- */
-DAS_API char* das_b64_encode(
-   const unsigned char* data, size_t input_length, size_t* output_length
-);
-
-/** Decode base64 (RFC 4648) into a caller-provided buffer, no allocation.
- *
- * @param data The base64 characters (length a multiple of 4, '=' padded)
- * @param input_length The number of base64 characters
- * @param out The caller's output buffer
- * @param out_cap The capacity of out
- * @param output_length receives the number of decoded bytes written. Decoded
- *        output is at most 3/4 of input_length, so:
- *           out_cap >= 3*input_length/4
- *        always suffices.
- * @returns DAS_OKAY, or a negative das error code on malformed input or
- *          a short output buffer.
- */
-DAS_API int das_b64_decode_buf(
-   const char* data, size_t input_length, unsigned char* out, size_t out_cap,
-   size_t* output_length
-);
-
-/** Decode base64 (RFC 4648) into a newly allocated buffer, symmetric with
- * das_b64_encode.  Caller frees.  Returns NULL on malformed input or alloc
- * failure (with *output_length set to 0).  
- *
- * @note For repeated decoding, use the no-alloc function das_b64_decode_buf().
- */
-DAS_API unsigned char* das_b64_decode(
-   const char* data, size_t input_length, size_t* output_length
 );
 
 /** See a given string matches the short or long form of an option

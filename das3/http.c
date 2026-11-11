@@ -47,6 +47,7 @@
 #include <openssl/err.h>
 
 #include "util.h"
+#include "str.h"
 #include "http_p.h"
 #include "creds_p.h"
 #include "buffer.h"

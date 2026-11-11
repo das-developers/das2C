@@ -38,6 +38,7 @@
 #include <math.h>
 
 #include "util.h"
+#include "str.h"
 #include "log.h"
 #include "value.h"
 #include "units.h"

@@ -207,6 +207,7 @@
 
 #include <das3/defs.h>
 #include <das3/util.h>
+#include <das3/str.h>
 #include <das3/log.h>
 #include <das3/enc.h>
 #include <das3/buffer.h>

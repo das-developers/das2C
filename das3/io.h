@@ -27,6 +27,17 @@
 #include <das3/oob.h>
 #include <das3/xport.h>
 
+/** In-memory object model a reader builds, or a writer emits.
+ *
+ * The model is separate from the stream version.  A das 2.2 stream can be read
+ * into das3 datasets (V3) for tools that only speak the newer model.
+ */
+typedef enum das_stream_model {
+	STREAM_MODEL_MIXED = -1, /* Readers only: build whatever each header says */
+	STREAM_MODEL_V2    =  2, /* DasPkt / DasPlane, fail on das3 headers */
+	STREAM_MODEL_V3    =  3  /* DasDs / DasDim / DasVar, up-convert das2 headers */
+} das_stream_model;
+
 #ifdef __cplusplus
 extern "C" {
 #endif

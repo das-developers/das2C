@@ -940,6 +940,32 @@ DAS_API int das_shape_info(
  */
 DAS_API void das_varindex_prndir(bool bFastLast);
 
+/** Calculate a strided array shape from a min/max range.
+ * 
+ * Used to calculate the memory requirements for a subset of a strided array
+ * range.   The output range will often have fewer axes than the the input
+ * shape.  This is common when slicing.
+ * 
+ * @param nRngRank The length of the min an max location arrays
+ * 
+ * @param pMin The inclusive lower bound for the range in each array dimension.
+ * 
+ * @param pMax The *exclusive* upper bound for the range in each array dimension.
+ *          For each element of pMax that is just 1 value larger than pMin the
+ *          output shape is collapsed by one dimension.
+ * 
+ * @param[out] pShape The output range.  Not that if the return rank is 0 then
+ *          this has no usable elements.  At most nRngRank elements will be
+ *          written into pShape.  
+ * 
+ * @returns The rank of the shape.  This can be 0 if the given range collapses
+ *          to a single value.  Returns -1 if pMin or pMax are invalid (also
+ *          calls das_error, so the function may not return at all).
+ */
+DAS_API int das_rng2shape(
+	int nRngRank, const ptrdiff_t* pMin, const ptrdiff_t* pMax, size_t* pShape
+);
+
 /** @} */
 
 #ifdef __cplusplus

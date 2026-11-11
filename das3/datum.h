@@ -22,6 +22,7 @@
 
 #include <das3/value.h>
 #include <das3/units.h>
+#include <das3/time.h>
 
 #ifdef __cplusplus
 extern "C" {

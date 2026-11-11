@@ -124,41 +124,30 @@ extern "C" {
 #define DIM6 6
 #define DIM7 7
 
-/** @addtogroup datamodel 
- * @{
- */
-
-/** Calculate a strided array shape from a min/max range.
- * 
- * Used to calculate the memory requirements for a subset of a strided array
- * range.   The output range will often have fewer axes than the the input
- * shape.  This is common when slicing.
- * 
- * @param nRngRank The length of the min an max location arrays
- * 
- * @param pMin The inclusive lower bound for the range in each array dimension.
- * 
- * @param pMax The *exclusive* upper bound for the range in each array dimension.
- *          For each element of pMax that is just 1 value larger than pMin the
- *          output shape is collapsed by one dimension.
- * 
- * @param[out] pShape The output range.  Not that if the return rank is 0 then
- *          this has no usable elements.  At most nRngRank elements will be
- *          written into pShape.  
- * 
- * @returns The rank of the shape.  This can be 0 if the given range collapses
- *          to a single value.  Returns -1 if pMin or pMax are invalid (also
- *          calls das_error, so the function may not return at all).
- */
-DAS_API int das_rng2shape(
-	int nRngRank, const ptrdiff_t* pMin, const ptrdiff_t* pMax, size_t* pShape
-);
-
-/** @} */
-
 /** @addtogroup datamodel
  * @{
  */
+
+/* ************************************************************************* */
+/* Object identifiers, the names arrays, datasets and dimensions carry */
+
+/** The size of an char buffer large enough to hold valid object IDs */
+#define DAS_MAX_ID_BUFSZ 64
+
+/** Check that a string is suitable for use as an object ID
+ * 
+ * Object ID strings are ascii strings using only characters from the set
+ * a-z, A-Z, 0-9, and _.  They do not start with a number.  They are no more
+ * than 63 bytes long.  Basically they can be used as variable names in most
+ * programming languages.
+ * 
+ * If the library exits on errors, see das_init(), this function never returns.
+ *  
+ * @param sId
+ * @return True if the string can be used as an ID, false otherwise.
+ */
+DAS_API bool das_assert_valid_id(const char* sId);
+
 
 /** @class DasAry array.h <das3/array.h>
  *

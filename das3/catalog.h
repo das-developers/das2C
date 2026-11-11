@@ -437,6 +437,16 @@ DAS_API DasNode* DasCat_subNode(DasCat* pThis, DasNode* pNode, const char* sRelP
  */
 DAS_API DasSrc* DasCat_newSrc(DasCat* pThis, const char* sPath);
 
+/** Is this string a node location rather than a catalog path?
+ *
+ * True for http://, https:// and file:// URLs, for anything starting with
+ * '.', '/', '\' or a drive letter, and for anything ending in ".json".  All else
+ * is taken to be a catalog path or URI.  This is the rule DasCat_resolve()
+ * uses, published so command line parsers can agree with it.
+ *
+ */
+DAS_API bool das_isUrlOrFile(const char* sPath);
+
 /** @} */
 
 #ifdef __cplusplus

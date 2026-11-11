@@ -85,6 +85,51 @@ static das_idx_info* _debug_idx_off(das_idx_info* pIdx){
 
 
 /* ************************************************************************* */
+/* Object identifiers */
+
+bool das_assert_valid_id(const char* sId){
+	if((sId == NULL) || (sId[0] == '\0')){
+		das_error(DASERR_UTIL, "Dataset Identifiers can't be empty");
+		return false;
+	}
+	
+	if(strlen(sId) > 63){
+		das_error(DASERR_UTIL, "Dataset Identifers can't be more that 63 "
+			       "characters long");
+		return false;
+	}
+
+	bool bGood = true;
+	char c;
+	size_t u = 0; 
+	size_t uLen = strlen(sId);
+	for(u = 0; u < uLen; ++u){
+		c = sId[u];
+		/* Range of 0 to z */
+		if((c < 48)||(c > 122)){  bGood = false; break;}
+		
+		/* Range of : to @ */
+		if((c > 57) && (c < 65)){ bGood = false; break;}
+		
+		/* Range of [ to ^ */
+		if((c > 90) && (c < 95)){ bGood = false; break;}
+		
+		/* the ` character */
+		if(c == 96){              bGood = false; break;}
+		
+		/* Can't start with a digit */
+		if((u == 0) && ( (c > 47)&&(c < 58) )){ bGood = false; break; }
+	}
+	
+	if(!bGood){
+		das_error(DASERR_UTIL, "Illegal character '%c' in identifier '%s'", sId[u], sId);
+		return false;
+	}
+
+	return true;
+}
+
+/* ************************************************************************* */
 /* Global index initialization memory */
 
 const char g_sIdxLower[ARYIDX_MAX] = {
@@ -106,36 +151,6 @@ char* das_idx_prn(int nRank, const ptrdiff_t* pLoc, size_t uLen, char* sBuf)
 		n = _prn_catf(sBuf, uLen, n, (d > 0) ? ",%td" : "%td", pLoc[d]);
 	_prn_catf(sBuf, uLen, n, ")");
 	return sBuf;
-}
-
-int das_rng2shape(
-	int nRngRank, const ptrdiff_t* pMin, const ptrdiff_t* pMax, size_t* pShape
-){
-	int nShapeRank = 0;
-	
-	if((pMin == NULL)||(pMax == NULL)||(pShape==NULL)||(nRngRank < 1)||
-		(nRngRank > ARYIDX_MAX)){
-		das_error(DASERR_ARRAY, "Invalid stride range arguments");
-		return -1;
-	}
-	
-	ptrdiff_t nSz = 0;
-	for(int d = 0; d < nRngRank; ++d){
-		nSz = pMax[d] - pMin[d];
-		if((nSz <= 0)||(pMin[d] < 0)||(pMax[d] < 1)){
-			das_error(
-				DASERR_ARRAY, "Invalid %c slice range %zd to %zd", g_sIdxLower[d],
-				pMin[d], pMax[d]
-			);
-			return -1;
-		}
-		if(nSz > 1){
-			pShape[nShapeRank] = nSz;
-			++nShapeRank;
-		}
-	}
-	
-	return nShapeRank;
 }
 
 /* ************************************************************************* */

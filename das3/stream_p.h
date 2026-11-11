@@ -25,6 +25,7 @@
 
 #include <das3/stream.h>
 #include <das3/desc_p.h>
+#include <das3/io.h>      /* das_stream_model */
 
 #ifdef __cplusplus
 extern "C" {

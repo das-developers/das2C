@@ -38,6 +38,7 @@
 #include <stdarg.h>
 
 #include "util.h"
+#include "str.h"
 #include "log.h"
 #include "time.h"
 #include "node.h"

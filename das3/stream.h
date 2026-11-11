@@ -499,6 +499,11 @@ DAS_API DasDs* new_DasDs_packet(
 	DasStream* pSd, DasPkt* pPd, int nPktId, const char* sGroup, bool bCodecs
 );
 
+/** The stream header text for a version, "2.2", "3.0" etc. */
+DAS_API const char* das_stream_ver_toStr(das_stream_ver ver);
+
+/** The stream header text for a container type, "das-basic-stream" etc. */
+DAS_API const char* das_stream_type_toStr(das_stream_type type);
 
 #ifdef __cplusplus
 }

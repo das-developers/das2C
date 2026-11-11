@@ -25,7 +25,7 @@
 #define _das_units_h_
 
 #include <stdbool.h>
-#include <das3/time.h>
+#include <das3/defs.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -379,38 +379,6 @@ DAS_API double Units_convertTo( double rVal, das_units fromUnits, das_units toUn
  */
 DAS_API bool Units_haveCalRep(das_units unit);
 
-
-/** Convert a value in time offset units to a calendar representation
- *
- * @param[out] pDt a pointer to a das_time structure to receive the broken 
- *            down time.
- * 
- * @param[in] value the double value representing time from the epoch in some
- *            scale.
- *
- * @param[in] epoch_units Unit string
- */
-DAS_API DasErrCode Units_convertToDt(das_time* pDt, double value, das_units epoch_units);
-
-/** Convert a calendar representation of a time to value in time offset units
- * 
- * @param pDt the calendar time object from which to derive the value
- * @param epoch_units The units associated with the return value
- * @return the value as a floating point offset from the epoch associated with 
- *         epoch_units, or DAS_FILL_VALUE on an error
- */
-DAS_API double Units_convertFromDt(const das_time* pDt, das_units epoch_units);
-
-/** Get seconds since midnight for some value of an epoch time unit
- * @param rVal the value of the epoch time
- * @param epoch_units so type of epoch time unit.
- * @returns the number of floating point second since midnight
- */
-DAS_API double Units_secondsSinceMidnight( double rVal, das_units epoch_units );
-
-
-/* Get the Julian day for the Datum (double,unit) */
-DAS_API int Units_getJulianDay( double timeDouble, das_units epoch_units );
 
 /** Determine if the units of values in a binary expression are compatible
  * 

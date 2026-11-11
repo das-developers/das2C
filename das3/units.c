@@ -44,12 +44,14 @@
 #include <assert.h>
 
 #include "util.h"
+#include "str.h"
 #include "log.h"
 #include "value.h"
 #include "oper.h"
 
 #include "tt2000.h"
 #include "units.h"
+#include "time.h"
 #include "info_p.h"
 #include "util_p.h"
 

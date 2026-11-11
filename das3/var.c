@@ -2109,3 +2109,36 @@ int DasVar_compLabels(
 	}
 	return nComp;
 }
+
+/* ************************************************************************* */
+/* Shape of a strided range */
+
+int das_rng2shape(
+	int nRngRank, const ptrdiff_t* pMin, const ptrdiff_t* pMax, size_t* pShape
+){
+	int nShapeRank = 0;
+	
+	if((pMin == NULL)||(pMax == NULL)||(pShape==NULL)||(nRngRank < 1)||
+		(nRngRank > ARYIDX_MAX)){
+		das_error(DASERR_ARRAY, "Invalid stride range arguments");
+		return -1;
+	}
+	
+	ptrdiff_t nSz = 0;
+	for(int d = 0; d < nRngRank; ++d){
+		nSz = pMax[d] - pMin[d];
+		if((nSz <= 0)||(pMin[d] < 0)||(pMax[d] < 1)){
+			das_error(
+				DASERR_ARRAY, "Invalid %c slice range %zd to %zd", g_sIdxLower[d],
+				pMin[d], pMax[d]
+			);
+			return -1;
+		}
+		if(nSz > 1){
+			pShape[nShapeRank] = nSz;
+			++nShapeRank;
+		}
+	}
+	
+	return nShapeRank;
+}
