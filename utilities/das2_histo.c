@@ -224,16 +224,16 @@ DasErrCode onPktHdr(DasStream* pSdIn, DasPkt* pPdIn, int nPktId, void* vpOut)
 		/* Copy over the labels, use data label for X axis label */
 		if(DasPlane_getType(pPlaneIn) == DASPLANE_YSCAN){
 			/* Y goes straight through for these */
-			sProp = DasDesc_get((DasDesc*)pPlaneIn, "yLabel");
+			sProp = DasDesc_getStr((DasDesc*)pPlaneIn, "yLabel");
 			if(sProp) DasDesc_setStr((DasDesc*)pPlOut, "yLabel", sProp);
 			DasDesc_setStr((DasDesc*)pPlOut, "zLabel", sLabel);
 			
-			sProp = DasDesc_get((DasDesc*)pPlaneIn, "zLabel");	
+			sProp = DasDesc_getStr((DasDesc*)pPlaneIn, "zLabel");	
 		}
 		else{
 			DasDesc_setStr((DasDesc*)pPlOut, "yLabel", sLabel);
 			
-			sProp = DasDesc_get((DasDesc*)pPlaneIn, "yLabel");
+			sProp = DasDesc_getStr((DasDesc*)pPlaneIn, "yLabel");
 		}
 		if(sProp) DasDesc_setStr((DasDesc*)pXOut, "xLabel", sProp);
 		

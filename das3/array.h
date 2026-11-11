@@ -87,10 +87,6 @@ extern "C" {
 #define VARIDX_INIT_UNUSED {-3,-3,-3,-3,-3,-3,-3,-3}
 #define VARIDX_INIT_BEGIN  { 0, 0, 0, 0, 0, 0, 0, 0}
 
-/** Index letters i,j,k,... for printing external index positions, and
- *  I,J,K,... for internal (item) index positions */
-DAS_API extern const char g_sIdxLower[ARYIDX_MAX];
-DAS_API extern const char g_sIdxUpper[ARYIDX_MAX];
 	
 #define RANK_1(I) 1, (size_t[1]){I}
 #define RANK_2(I, J) 2, (size_t[2]){I, J}
@@ -126,14 +122,6 @@ DAS_API extern const char g_sIdxUpper[ARYIDX_MAX];
 #define DIM5 5
 #define DIM6 6
 #define DIM7 7
-
-#define RNG_1(i,I) 1, (ptrdiff_t[1]){i}, (ptrdiff_t[1]){I}
-#define RNG_2(i,I,j,J) 2, (ptrdiff_t[2]){i,j}, (ptrdiff_t[2]){I,J}
-#define RNG_3(i,I,j,J,k,K) 3, (ptrdiff_t[3]){i,j,k}, (ptrdiff_t[3]){I,J,K}
-#define RNG_4(i,I,j,J,k,K,l,L) 4, (ptrdiff_t[4]){i,j,k,l}, (ptrdiff_t[4]){I,J,K,L}
-#define RNG_5(i,I,j,J,k,K,l,L,m,M) 5, (ptrdiff_t[5]){i,j,k,l,m}, (ptrdiff_t[5]){I,J,K,L,M}
-#define RNG_6(i,I,j,J,k,K,l,L,m,M,n,N) 6, (ptrdiff_t[6]){i,j,k,l,m,n}, (ptrdiff_t[6]){I,J,K,L,M,N}
-#define RNG_7(i,I,j,J,k,K,l,L,m,M,n,N,o,O) 7, (ptrdiff_t[7]){i,j,k,l,m,n,o}, (ptrdiff_t[7]){I,J,K,L,M,N,O}
 
 /** @addtogroup datamodel 
  * @{

@@ -117,12 +117,6 @@
 #define DAS_API
 #endif
 
-#if defined(_WIN32)
-#define DAS_DEPRECATED __declspec(deprecated)
-#else
-#define DAS_DEPRECATED __attribute__((__deprecated__))
-#endif
-
 /* Ask the compiler to check printf-style calls the way it checks printf
    itself if the compiler provides this feature, ignored otherwise. 
 

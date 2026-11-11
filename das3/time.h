@@ -191,12 +191,6 @@ DAS_API bool dt_in_range(
 	const das_time* begin, const das_time* end, const das_time* test
 );
 
-/** Simple helper to copy values from one das time to another 
- *
- * @memberof das_time
- */
-DAS_API void dt_copy(das_time* pDest, const das_time* pSrc);
-
 /** Simple helper to set values in a das time. 
  * 
  * Warning: This function does not cal tnorm, so you *can* use it to set
@@ -420,7 +414,21 @@ DAS_API void tt2k_to_parts(
  */
 DAS_API void dt_tnorm(das_time* dt);
 
-/* return Julian Day number given year, month, and day, not exported no purpose */
+/** Get the Julian Day Number of a calendar date
+ *
+ * The Julian Day Number is the integer count of days used in astronomy,
+ * so 2000-01-01 gives 2451545.  Dates use the Gregorian calendar, extended
+ * backwards before its adoption in 1582, for years 1 and later.  Historical
+ * dates recorded in the Julian calendar need converting first.
+ *
+ * The day is counted straight through, so month 1 with a day of year works
+ * the same way it does for das_time.
+ *
+ * @param year  The full year, such as 2026
+ * @param month 1 to 12
+ * @param day   Day of month, or day of year when month is 1
+ * @returns The Julian Day Number
+ */
 DAS_API int das_julian_day (int year, int month, int day);
 
 #ifdef __cplusplus

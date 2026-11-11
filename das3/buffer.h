@@ -324,26 +324,6 @@ DAS_API ubyte* DasBuf_prepare(DasBuf* pThis, size_t uWant, size_t* pSpace);
  */
 DAS_API DasErrCode DasBuf_commit(DasBuf* pThis, size_t uLen);
 
-/**  Write wrapped utf-8 text to the buffer 
- * 
- * With the exception of explicit newline characters, this function uses white
- * space only to separate words.  Words are not split thus new-lines start at
- * word boundaries. 
- * 
- * The mentality of the function is to produce horizontal "paragraphs" of 
- * text that are space indented.
- * 
- * @param pThis the buffer to receive the text
- * @param nIndent1 the start column for the first line of text
- * @param nIndent the start column for subsequent lines
- * @param nWrap the wrap column, using 80 is recommended
- * @param fmt A printf style format string, may contain utf-8 characters.
- * @returns 0 if the operation succeeded, a positive error code otherwise.  
- */
-DAS_API DasErrCode DasBuf_paragraph(
-	DasBuf* pThis, int nIndent1, int nIndent, int nWrap, const char* fmt, ...
-);
-
 /** Get the size of the data in the buffer.
  * @returns the number of bytes written to the buffer
  * @memberof DasBuf

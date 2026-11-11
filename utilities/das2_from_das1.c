@@ -72,7 +72,7 @@ const char* g_sIdlBin = NULL;           /* Location of IDL binary, if needed */
 bool requiresInterval(DasDesc* pDsdf)
 {
 	if( ! DasDesc_has(pDsdf, "form") ) return false;
-	if( strcmp(DasDesc_get(pDsdf, "form" ), "x_multi_y") != 0 ) return false;
+	if( strcmp(DasDesc_getStr(pDsdf, "form" ), "x_multi_y") != 0 ) return false;
 	if( ! DasDesc_has(pDsdf, "items") ) return false;
 	
 	return true;
@@ -89,7 +89,7 @@ bool requiresInterval(DasDesc* pDsdf)
 static das_units _dsdfUnits(
 	const DasDesc* pDsdf, const char* sKey, const char* sDefault
 ){
-	const char* sText = DasDesc_get(pDsdf, sKey);
+	const char* sText = DasDesc_getStr(pDsdf, sKey);
 	if(sText == NULL) sText = sDefault;
 	if(sText == NULL) return UNIT_DIMENSIONLESS;
 
@@ -110,8 +110,8 @@ DasPlane* _mkXPlane(DasDesc* pSd, DasDesc* pDsdf, const char* sDsdfFile)
 	char sXLabel[128] = {'u','n','l','a','b','e','l','e','d','\0'};
 	DasPlane* pX = NULL;
 	
-	if( (pXName = DasDesc_get(pDsdf, "x_parameter")) == NULL) pXName = "time";
-	if( (pXUnit = DasDesc_get(pDsdf, "x_unit")) == NULL) pXUnit = "s";
+	if( (pXName = DasDesc_getStr(pDsdf, "x_parameter")) == NULL) pXName = "time";
+	if( (pXUnit = DasDesc_getStr(pDsdf, "x_unit")) == NULL) pXUnit = "s";
 	
 	if(strcasecmp(pXName, "time") == 0){
 		pEnc = new_DasEnc(DAS2DT_HOST_REAL, 8, NULL);
@@ -121,8 +121,8 @@ DasPlane* _mkXPlane(DasDesc* pSd, DasDesc* pDsdf, const char* sDsdfFile)
 	else{
 		pEnc = new_DasEnc(DAS2DT_HOST_REAL, 4, NULL);
 		xUnits = _dsdfUnits(pDsdf, "x_unit", pXUnit);
-		if(DasDesc_get(pDsdf, "x_unit") != NULL)
-			snprintf(sXLabel, 128, "%s (%s)",  pXName, DasDesc_get(pDsdf, "x_unit"));
+		if(DasDesc_getStr(pDsdf, "x_unit") != NULL)
+			snprintf(sXLabel, 128, "%s (%s)",  pXName, DasDesc_getStr(pDsdf, "x_unit"));
 		else
 			strcpy(sXLabel, pXName);
 	}
@@ -203,14 +203,14 @@ DasPkt* createPktDesc(
 		das_error(112, "ERROR: form parameter not specified in %s", sDsdfFile);
 		return NULL;
 	}
-	sForm = DasDesc_get(pDsdf, "form" );
+	sForm = DasDesc_getStr(pDsdf, "form" );
 	
 	
 	/* Generic Y Stuff */
 	yUnits = _dsdfUnits(pDsdf, "y_unit", NULL);
-	if((pYName = DasDesc_get(pDsdf, "y_parameter")) == NULL) pYName = "y";
-	if(DasDesc_get(pDsdf, "y_unit") != NULL)
-		snprintf(sYLabel, 128, "%s (%s)", pYName, DasDesc_get(pDsdf, "y_unit"));
+	if((pYName = DasDesc_getStr(pDsdf, "y_parameter")) == NULL) pYName = "y";
+	if(DasDesc_getStr(pDsdf, "y_unit") != NULL)
+		snprintf(sYLabel, 128, "%s (%s)", pYName, DasDesc_getStr(pDsdf, "y_unit"));
 	else
 		strncpy(sYLabel, pYName, 128);
 	sYLabel[0] = toupper(sYLabel[0]);  /* Bill likes initial caps on labels */
@@ -239,7 +239,7 @@ DasPkt* createPktDesc(
 		else{
 			for(int i = 0; i < nItems; i++){
 				sprintf(sKey, "label(%d)", i);
-				pLabel = DasDesc_get(pDsdf, sKey);
+				pLabel = DasDesc_getStr(pDsdf, sKey);
 				
 				if(_nameFromLbl(pLabel, sYName, 64) == NULL)
 					snprintf(sYName, 63, "plane_%d", i );
@@ -258,9 +258,9 @@ DasPkt* createPktDesc(
 	
 	/* Generic Z Stuff */
 	zUnits = _dsdfUnits(pDsdf, "z_unit", NULL);
-	if((pZName = DasDesc_get(pDsdf, "z_parameter")) == NULL) pZName = "z";
-	if(DasDesc_get(pDsdf, "z_unit") != NULL)
-		snprintf(sZLabel, 128, "%s (%s)", pYName, DasDesc_get(pDsdf, "z_unit"));
+	if((pZName = DasDesc_getStr(pDsdf, "z_parameter")) == NULL) pZName = "z";
+	if(DasDesc_getStr(pDsdf, "z_unit") != NULL)
+		snprintf(sZLabel, 128, "%s (%s)", pYName, DasDesc_getStr(pDsdf, "z_unit"));
 	else
 		strncpy(sZLabel, pZName, 128);
 	sZLabel[0] = toupper(sZLabel[0]);  /* Bill likes initial caps on labels */
@@ -272,7 +272,7 @@ DasPkt* createPktDesc(
 			das_error(112, "y_coordinate missing in dsdf file %s", sDsdfFile);
 			return NULL;
 		}
-		pYTags = dsdf_valToArray(DasDesc_get(pDsdf, "y_coordinate"), &uYTags);
+		pYTags = dsdf_valToArray(DasDesc_getStr(pDsdf, "y_coordinate"), &uYTags);
 		pPlane = new_DasPlane_yscan(pZName, DasEnc_copy(pEnc4), zUnits, uYTags, 
 		                             NULL, pYTags, yUnits);
 		DasDesc_set((DasDesc*)pPlane, "String", "yLabel", sYLabel);
@@ -349,7 +349,7 @@ void addStreamProps(const DasDesc* pDsdf, DasStream* pSdOut)
 			continue;
 		}
 		if(strcmp(sName, "y_sample_width") == 0){
-			if( DasDesc_get(pDsdf, "y_unit") != NULL){
+			if( DasDesc_getStr(pDsdf, "y_unit") != NULL){
 				unit = _dsdfUnits(pDsdf, "y_unit", NULL);
 				DasDesc_setDatum(pSh, "yTagWidth", atof(sVal), unit);
 			}
@@ -694,7 +694,7 @@ int main(int argc, char** argv)
 	DasIO_writeStreamDesc(pOut, pSdOut);
 	DasIO_writeDesc(pOut, (DasDesc*)pPdOut, 1);
 	
-	if( (sRdr = DasDesc_get(pDsdf,"reader")) == NULL)
+	if( (sRdr = DasDesc_getStr(pDsdf,"reader")) == NULL)
 		return das_error(112, "Error in %s, 'reader' value not defined", sDsdfFile);
 	
    pPipe = openReader(sRdr, pBeg, pEnd, pParams, bReqInterval);

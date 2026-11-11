@@ -71,6 +71,18 @@ static das_idx_info* _debug_idx_off(das_idx_info* pIdx){
 
 /* DAS_API DasAry* new_DasAry_ptr(const char* sType, int rank, size_t* shape); */
 
+/* Never used, keep the idea here: a (min, max) range pair for each index,
+   in the (count, pMin, pMax) argument shape the subset calls take.
+
+   #define RNG_1(i,I) 1, (ptrdiff_t[1]){i}, (ptrdiff_t[1]){I}
+   #define RNG_2(i,I,j,J) 2, (ptrdiff_t[2]){i,j}, (ptrdiff_t[2]){I,J}
+   #define RNG_3(i,I,j,J,k,K) 3, (ptrdiff_t[3]){i,j,k}, (ptrdiff_t[3]){I,J,K}
+   #define RNG_4(i,I,j,J,k,K,l,L) 4, (ptrdiff_t[4]){i,j,k,l}, (ptrdiff_t[4]){I,J,K,L}
+   #define RNG_5(i,I,j,J,k,K,l,L,m,M) 5, (ptrdiff_t[5]){i,j,k,l,m}, (ptrdiff_t[5]){I,J,K,L,M}
+   #define RNG_6(i,I,j,J,k,K,l,L,m,M,n,N) 6, (ptrdiff_t[6]){i,j,k,l,m,n}, (ptrdiff_t[6]){I,J,K,L,M,N}
+   #define RNG_7(i,I,j,J,k,K,l,L,m,M,n,N,o,O) 7, (ptrdiff_t[7]){i,j,k,l,m,n,o}, (ptrdiff_t[7]){I,J,K,L,M,N,O}
+*/
+
 
 /* ************************************************************************* */
 /* Global index initialization memory */

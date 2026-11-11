@@ -140,6 +140,9 @@ typedef ubyte byte;
 
 #define dt_cmp                  dt_compare
 
+/* dt_copy() is gone: das_time is a plain value, copy it with = */
+#define dt_copy(D, S)           ((void)(*(D) = *(S)))
+
 /* ************************************************************************* */
 /* Code to name lookups, 2026-10: _toStr / _fromStr pairs */
 
@@ -390,6 +393,9 @@ static inline DasErrCode _das2_compat_freePktDesc(DasStream* pSd, int nPktId)
 #define DAS_XML_MAXPROPS  DAS_XML_MAXPROPS_removed__use_DasDesc_length
 #define DasDesc_hasAnyProps(...) DasDesc_hasAnyProps_removed__use_DasDesc_length
 
+/* DasDesc_get() was the same call as DasDesc_getStr() */
+#define DasDesc_get             DasDesc_getStr
+
 /* ************************************************************************* */
 /* Datasets, dimensions and the builder */
 
@@ -470,6 +476,7 @@ static inline DasErrCode _das2_compat_freePktDesc(DasStream* pSd, int nPktId)
 
 /* Declared in v2.3.0, never implemented, any use was already a link error */
 #define DasAry_cmp(...)     DasAry_cmp_never_existed
+#define DasBuf_paragraph(...) DasBuf_paragraph_never_existed
 
 /* DasAry_setSrc() only fed the builder's das2 packet matching */
 #define DasAry_setSrc(...)  DasAry_setSrc_removed__no_replacement
@@ -506,6 +513,11 @@ static inline double _das2_compat_datum_toDbl(const das_datum* pDm)
 	return das_datum_toDbl(pDm, &rVal) ? rVal : DAS_FILL_VALUE;
 }
 #define das_datum_toDbl(P) _das2_compat_datum_toDbl(P)
+
+#define das_vt_cmpAny  das_value_cmpAny
+
+/* A placeholder operator token, never produced by any parser */
+#define D2OP_PLUS      D2OP_PLUS_removed__no_replacement
 
 /* ************************************************************************* */
 /* Variables, 2026-08 (the generator / formalism rewrite)

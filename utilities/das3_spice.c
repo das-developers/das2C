@@ -876,9 +876,9 @@ DasErrCode onStream(DasStream* pSdIn, void* pUser){
 	/* Pick up the name of the instrument host while we are here */
 	SpiceInt nBodyId = 0;
 	SpiceBoolean bFound = SPICEFALSE;
-	const char* sHost = DasDesc_get((DasDesc*)pSdIn, "naifHostId");
+	const char* sHost = DasDesc_getStr((DasDesc*)pSdIn, "naifHostId");
 	if(sHost == NULL)
-		sHost = DasDesc_get((DasDesc*)pSdIn, "instrumentHost");
+		sHost = DasDesc_getStr((DasDesc*)pSdIn, "instrumentHost");
 	
 	if(sHost != NULL)
 		bods2c_c(sHost, &nBodyId, &bFound);
@@ -1690,7 +1690,7 @@ DasErrCode _writeLocation(DasDs* pDsIn, XCalc* pCalc, double rTimeShift)
 	das_datum dm;
 	for(; !iter.done; DasDsUniqIter_next(&iter)){
 
-		DasVar_get(pCalc->pTime, iter.index, DAS_BS_NULL, &dm);
+		DasVar_get(pCalc->pTime, iter.index, (das_byte_seq){0}, &dm);
 		rEt = _dm2et(&dm, rTimeShift);
 
 		spkezp_c(
@@ -1809,7 +1809,7 @@ DasErrCode _writeRotation(DasDs* pDsIn, XCalc* pCalc, double rTimeShift)
 	das_datum dm;
 	for(; !iter.done; DasDsUniqIter_next(&iter)){
 
-		DasVar_get(pCalc->pTime, iter.index, DAS_BS_NULL, &dm);
+		DasVar_get(pCalc->pTime, iter.index, (das_byte_seq){0}, &dm);
 		
 		rEt = _dm2et(&dm, rTimeShift);
 
@@ -1831,7 +1831,7 @@ DasErrCode _writeRotation(DasDs* pDsIn, XCalc* pCalc, double rTimeShift)
 			continue;
 		}
 
-		DasVar_get(pVarIn, iter.index, DAS_BS_NULL, &dm);
+		DasVar_get(pVarIn, iter.index, (das_byte_seq){0}, &dm);
 
 		const DasForm* pFormIn = das_datum_form(&dm);
 		ubyte uSysIn = DasFormVec_sysType(pFormIn);

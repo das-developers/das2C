@@ -65,8 +65,8 @@ void sim_plot_1d(DasDs* pDs)
 	
 	for(init_DasDsIter(&iter, pDs); !iter.done; DasDsIter_next(&iter))
 	{
-		DasVar_get(pVarX, iter.index, DAS_BS_NULL, pair);
-		DasVar_get(pVarY, iter.index, DAS_BS_NULL, pair + 1);
+		DasVar_get(pVarX, iter.index, (das_byte_seq){0}, pair);
+		DasVar_get(pVarY, iter.index, (das_byte_seq){0}, pair + 1);
 		
 		das_datum_toStr(pair, sBufX, 128, 3);
 		das_datum_toStr(pair + 1, sBufY, 128, 3);
@@ -113,9 +113,9 @@ void sim_plot_2d(DasDs* pDs)
 	
 	for(init_DasDsIter(&iter, pDs); !iter.done; DasDsIter_next(&iter))
 	{	
-		DasVar_get(pVarX, iter.index, DAS_BS_NULL, set);
-		DasVar_get(pVarY, iter.index, DAS_BS_NULL, set + 1);
-		DasVar_get(pVarZ, iter.index, DAS_BS_NULL, set + 2);
+		DasVar_get(pVarX, iter.index, (das_byte_seq){0}, set);
+		DasVar_get(pVarY, iter.index, (das_byte_seq){0}, set + 1);
+		DasVar_get(pVarZ, iter.index, (das_byte_seq){0}, set + 2);
 
 		das_datum_toStr(set, sBufX, 128, 3);
 		das_datum_toStr(set + 1, sBufY, 128, 3);

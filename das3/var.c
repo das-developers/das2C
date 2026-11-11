@@ -33,12 +33,14 @@
 #include "stream.h"
 #include "var.h"
 #include "var_p.h"
+#include "array_p.h"
 #include "codec_p.h"
 #include "dim_p.h"
 #include "form_lin.h"   /* new_DasVarSeq: NULL form means linear */
 #include "info_p.h"
 #include "gen_p.h"
 #include "util_p.h"
+#include "value_p.h"
 
 /* ************************************************************************* */
 /* Index print direction, a global the old variable layer owned.  Nothing inside

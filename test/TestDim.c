@@ -140,8 +140,8 @@ static int test_dim_copyin_props(void)
 
 	DasDesc_copyIn((DasDesc*)pDst, (DasDesc*)pSrc);
 
-	const char* sTitle = DasDesc_get((DasDesc*)pDst, "title");
-	const char* sLabel = DasDesc_get((DasDesc*)pDst, "label");
+	const char* sTitle = DasDesc_getStr((DasDesc*)pDst, "title");
+	const char* sLabel = DasDesc_getStr((DasDesc*)pDst, "label");
 	CHECK((sTitle != NULL) && (strcmp(sTitle, "a much longer title than before") == 0));
 	CHECK((sLabel != NULL) && (strcmp(sLabel, "short") == 0));
 

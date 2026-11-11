@@ -76,11 +76,10 @@ extern "C" {
  * das_datum dm;
  * das_datum_fromStr(&dm, "2017-01-02T12:14");
  * 
- * int year = ((*das_time)(&dm))->year;
+ * int year = ((das_time*)&dm)->year;
  * 
- * // This works
- * das_datum_Double(&dm, "2.145 meters");
- * double length = *((*double)dm);
+ * das_datum_fromStr(&dm, "2.145 meters");
+ * double length = *((double*)&dm);
  * 
  * @endcode
  * 
@@ -220,8 +219,8 @@ DAS_API size_t das_datum_nElems(const das_datum* pThis);
  * coming, or do I need to allocate?  Answered from a datum a caller already
  * has, so it costs no second call into the variable layer.
  *
- * @returns the byte count, 0 for a value that needs no caller storage (a
- *          scalar, or a composite viewing an array).  @memberof das_datum */
+ * @returns the byte count, 0 for a value that needs no caller storage (any
+ *          datum that is not a composite).  @memberof das_datum */
 DAS_API size_t das_datum_runBytes(const das_datum* pThis);
 
 /** Check to see if a datum has been initialized.  
@@ -255,7 +254,7 @@ DAS_API size_t das_datum_runBytes(const das_datum* pThis);
  *
  * Note that this function will not initialize text datums.  This is because
  * text datums only carry a const char* pointer, but not the string itself.
- * Call Datum_wrapStr() to make text datums.
+ * Call das_datum_wrapStr() to make text datums.
  *
  * An empty string, or one of only whitespace, makes the null datum and
  * counts as parseable.
@@ -282,20 +281,17 @@ DAS_API bool das_datum_fromDbl(das_datum* pThis, double value, das_units units);
 /** Wrap an external string as a datum.
  *
  * This is useful for events lists as well as non-numeric coordinate points.
- * For example:
+ * The string is not copied, so it must outlive the datum.  For example, a
+ * datum array of a few cities in Eastern Iowa with units of "city":
  * @code
- *
- * static const char** cites[] = {
+ * static const char* cities[] = {
  *    "Iowa City", "Coralville", "North Liberty", "Cedar Rapids"
  * };
  *
- * Make a datum array representing a few cities in Eastern Iowa with units
- * of "city".
- *
- * datum locations[4];
+ * das_units city = Units_fromStr("city");
+ * das_datum locations[4];
  * for(int i = 0; i < 4; ++i)
- *     das_datum_initStr(locations + i, "city", cities[i]);
- *
+ *     das_datum_wrapStr(locations + i, cities[i], city);
  * @endcode
  * @memberof das_datum
  */
@@ -441,12 +437,6 @@ DAS_API bool das_datum_toTime(const das_datum* pThis, das_time* pDt);
  */
 DAS_API bool das_datum_fromTime(das_datum* pThis, const das_time* pDt);
 
-
-/** Get the value form a string datum
- * 
- * @relates das_datum
- */
-#define das_datum_asStr(dm) *((char**)&dm)
 
 
 /* ************************************************************************* */

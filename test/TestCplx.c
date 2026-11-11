@@ -561,7 +561,7 @@ static int test_cplx_stream(void)
 	das_datum dm = {{0},vtNull,0,NULL};
 	double aComp[2] = {0.0, 0.0};
 	char sBuf[64] = {'\0'};
-	MUST(DasVar_get(pRect, aLoc, DAS_BS_NULL, &dm) == 0);
+	MUST(DasVar_get(pRect, aLoc, (das_byte_seq){0}, &dm) == 0);
 	CHECK(dm.vt == vtComposite);
 	CHECK(das_datum_elemType(&dm) == vtDouble);
 	MUST(das_datum_toDoubles(&dm, aComp, 2) == 2);
@@ -577,7 +577,7 @@ static int test_cplx_stream(void)
 	CHECK(DasVar_formIs(pPolar, DAS_FORM_CPLX));
 	CHECK(DasFormCplx_sysType(DasVar_form(pPolar)) == DAS_VSYS_POLAR);
 	memset(&dm, 0, sizeof(dm));
-	MUST(DasVar_get(pPolar, aLoc, DAS_BS_NULL, &dm) == 0);
+	MUST(DasVar_get(pPolar, aLoc, (das_byte_seq){0}, &dm) == 0);
 	CHECK(das_datum_elemType(&dm) == vtFloat);
 	MUST(das_datum_toDoubles(&dm, aComp, 2) == 2);
 	CHECK((fabs(aComp[0] - 0.815771) < 1e-6) && (fabs(aComp[1] + 93.66913) < 1e-4));

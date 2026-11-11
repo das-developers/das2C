@@ -267,5 +267,5 @@ of the code in the files json.h and json.c in the das3 subdirectory is from
 parser with the rest of the world, it's an example of classic C programming at
 it's best.
 
-In addition the code in toml.h and toml.c is from [CK Tan's](https://github.com/cktan) C99 comptabile [tomlc17](https://github.com/cktan/tomlc17) library.  Thanks CK Tan for supporting C99 software!
+In addition the code in toml_p.h and toml.c is from [CK Tan's](https://github.com/cktan) C99 comptabile [tomlc17](https://github.com/cktan/tomlc17) library.  Thanks CK Tan for supporting C99 software!
 

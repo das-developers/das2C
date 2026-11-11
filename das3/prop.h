@@ -111,6 +111,17 @@ DAS_API bool DasProp_equal(const DasProp* pOne, const DasProp* pTwo);
  */
 DAS_API const char* DasProp_typeStr3(const DasProp* pProp);
 
+/** Get a das2 type string for this property
+ *
+ * The das2.2 header names: "String", "boolean", "int", "double",
+ * "doubleArray", "Datum", "DatumRange", "Time" or "TimeRange".
+ *
+ * @returns a static string, or NULL for a property with no value count
+ *          (an empty slot)
+ * @memberof DasProp
+ */
+DAS_API const char* DasProp_typeStr2(const DasProp* pProp);
+
 /** Convert integer property values to 64-bit ints
  * 
  * Returns the number of conversions, or a negative error value

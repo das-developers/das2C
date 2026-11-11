@@ -252,15 +252,6 @@ const DasProp* DasDesc_getPropByIdx(const DasDesc* pThis, size_t uIdx)
 
 /* property isn't present in this descriptor                                 */
 
-const char* DasDesc_get(const DasDesc* pThis, const char* sName)
-{
-	const DasProp* pProp = DasDesc_getProp(pThis, sName);
-	if(pProp != NULL)
-		return DasProp_value(pProp);
-
-	return NULL;
-}
-
 size_t DasDesc_getArray(
 	DasDesc* pThis, const char* sName, char cSep,
 	char* pBuf, size_t uBufSz, char** psVals, size_t uMaxVals
@@ -273,7 +264,7 @@ size_t DasDesc_getArray(
 		return 0;
 	}
 	
-	const char* sVal = DasDesc_get(pThis, sName);
+	const char* sVal = DasDesc_getStr(pThis, sName);
 	if(sVal == NULL)
 		return 0;
 
@@ -392,7 +383,11 @@ const char* DasDesc_getTypeByIdx3(const DasDesc* pThis, size_t uIdx)
 
 const char* DasDesc_getStr(const DasDesc* pThis, const char* sName)
 {
-	return DasDesc_get(pThis, sName);
+	const DasProp* pProp = DasDesc_getProp(pThis, sName);
+	if(pProp != NULL)
+		return DasProp_value(pProp);
+
+	return NULL;
 }
 
 size_t DasDesc_getStrAry(
@@ -413,7 +408,7 @@ size_t DasDesc_getStrAry(
 
 bool DasDesc_getBool(DasDesc* pThis, const char* sName)
 {
-	const char* sVal = DasDesc_get(pThis, sName);
+	const char* sVal = DasDesc_getStr(pThis, sName);
 	if(sVal == NULL) return false;
 	if(strlen(sVal) == 0) return false;
 	if(isdigit(sVal[0]) && sVal[0] != '0') return true;
@@ -424,7 +419,7 @@ bool DasDesc_getBool(DasDesc* pThis, const char* sName)
 double DasDesc_getDouble(const DasDesc* pThis, const char* sName)
 {
 	double rVal;
-	const char* sVal = DasDesc_get( pThis, sName );
+	const char* sVal = DasDesc_getStr( pThis, sName );
 	if(sVal == NULL) 
 		return DAS_FILL_VALUE;
    
@@ -438,7 +433,7 @@ double DasDesc_getDouble(const DasDesc* pThis, const char* sName)
 int DasDesc_getInt(const DasDesc* pThis, const char* sName ) 
 {
 	int nVal;
-	const char* sVal = DasDesc_get( pThis, sName );
+	const char* sVal = DasDesc_getStr( pThis, sName );
 	if(sVal == NULL)
 		return INT_MIN;
 
@@ -498,7 +493,7 @@ double DasDesc_getDatum(DasDesc* pThis, const char* sName, das_units units)
 
 double* DasDesc_getDoubleAry(DasDesc* pThis, const char* sName, int* pNumItems)
 {
-	const char* sAry = DasDesc_get( pThis, sName);
+	const char* sAry = DasDesc_getStr( pThis, sName);
 	return das_csv2doubles(sAry, pNumItems);
 }
 

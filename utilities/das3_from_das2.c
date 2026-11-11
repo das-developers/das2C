@@ -29,7 +29,7 @@
 #include <string.h>
 
 #include <das3/core.h>
-#include <das3/toml.h>
+#include <das3/toml_p.h>
 
 #define PROG "das3_from_das2"
 #define PERR (DASERR_MAX + 1)
@@ -840,7 +840,7 @@ static DasErrCode _addComposite(
 	char sLabels[PROP_VAL_SZ] = {'\0'};
 	size_t uLen = 0;
 	for(int i = 0; (i < nComps) && bLabels; ++i){
-		const char* sLbl = DasDesc_get((DasDesc*)pSrc[i].pDim, "label");
+		const char* sLbl = DasDesc_getStr((DasDesc*)pSrc[i].pDim, "label");
 		if((sLbl == NULL)||(uLen + strlen(sLbl) + 2 > PROP_VAL_SZ)){ bLabels = false; break; }
 		if(i > 0) sLabels[uLen++] = ';';
 		strcpy(sLabels + uLen, sLbl);

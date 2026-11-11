@@ -80,7 +80,7 @@ int main(int argc, char** argv)
 	char sTest[20*100] = {'\0'};
 	char* pWrite = sTest;
 	for(init_DasDsUniqIter(&iterU, pDs, pCent); !iterU.done; DasDsUniqIter_next(&iterU)){
-		DasVar_get(pCent, iterU.index, DAS_BS_NULL, &dm);
+		DasVar_get(pCent, iterU.index, (das_byte_seq){0}, &dm);
 		das_datum_toStrValOnly(&dm, pWrite, 32, 4);
 		pWrite += strlen(pWrite);
 		*pWrite = ' '; ++pWrite;

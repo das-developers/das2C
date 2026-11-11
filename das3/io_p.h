@@ -48,7 +48,4 @@
 /* das2 length fields are six digits */
 #define DAS2_LEN_MAX 999999
 
-/* Largest das3 packet ID; the 0xFF00 to 0xFFFF block is reserved */
-#define DAS3_PKTID_MAX (DAS3_MAX_PKTIDS - 1)
-
 #endif /* _das_io_p_h_ */

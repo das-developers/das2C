@@ -31,6 +31,11 @@
 extern "C" {
 #endif
 
+/* Index letters i,j,k,... for printing external index positions, and
+   I,J,K,... for internal (item) index positions */
+extern const char g_sIdxLower[ARYIDX_MAX];
+extern const char g_sIdxUpper[ARYIDX_MAX];
+
 /* Higher dimensions are handled by index buffers.  These are the elements for
  * the index buffers, and the storage behind vtIndex. */
 typedef struct child_info_t{

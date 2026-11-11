@@ -87,6 +87,10 @@ const char* das_enc_fromStr(const char* sEncType);
 const char* das_sem_fromStr(const char* sSemantic);
 
 
+/* The codec marker for a variable length blob.  Not a schema semantic in
+   v3.0 (blobs moved to the <bytes> element), so not public. */
+extern const char* DAS_SEM_BLOB;
+
 /* Also, I don't think these are used anywhere
 typedef struct das_real_array{
 	double* values;

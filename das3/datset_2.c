@@ -55,7 +55,7 @@
 
 static const char* _serial_role(DasPlane* pPlane)
 {
-	const char* sRole = DasDesc_get((DasDesc*)pPlane, "operation");
+	const char* sRole = DasDesc_getStr((DasDesc*)pPlane, "operation");
 	if(sRole == NULL) return DASVAR_CENTER;
 	
 	/* Interpret  Autoplot style strings */
@@ -136,7 +136,7 @@ static DasDim* _serial_getDim(
 	char sNewDimId[64] = {'\0'};
 	DasDim* pDim = NULL;
 	
-	const char* sSource = DasDesc_get((DasDesc*)pPlane, "source");
+	const char* sSource = DasDesc_getStr((DasDesc*)pPlane, "source");
 	if(sSource != NULL){
 		/* See if this plane source appears in an existing dim */
 		for(size_t u = 0; u < *puDims; u++){

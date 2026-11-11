@@ -193,13 +193,19 @@ typedef struct das_uri_field_t {
 /** The DasUriSegDef and DasUriField layout described by this header */
 #define DAS_URISEG_VER DAS_URISEG_V3_0
 
+/** Start a DasUriSegDef designated initializer with this, so a definition
+ * records its layout version without naming the field:
+ *   DasUriSegDef def = { DASURISEGDEF_INIT, .sCoord = "sclk", ... };
+ */
+#define DASURISEGDEF_INIT .uVersion = DAS_URISEG_VER
+
 /** Definition of one coordinate type for use by the URI template parser.
  *
  * DasUriTplt_register() copies the definition and its field array, so both
  * may be on the stack and go out of scope afterwards.  sCoord must be lower
  * case to be reachable from a das_dim_range.
  *
- * Start each definition with DAS_URISEG_VER.  It records the layout of this
+ * Start each definition with DASURISEGDEF_INIT.  It records the layout of this
  * structure and of its DasUriField rows as this program was compiled, so a
  * later library that adds members can still read an older program's tables.
  * A zero or unknown version is refused.
@@ -212,7 +218,7 @@ typedef struct das_uri_field_t {
  *     { .cShort = 'L', .sLong = "line",      .nWidth = 3, .nMin = 1, .nMax =   800 },
  *   };
  *   DasUriSegDef sclkDef = {
- *       .uVersion = DAS_URISEG_VER, .sCoord = "sclk",
+ *       DASURISEGDEF_INIT, .sCoord = "sclk",
  *       .nFields = 4, .pFields = aSclkFlds
  *   };
  *   DasUriTplt_register(pTplt, &sclkDef);

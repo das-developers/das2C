@@ -27,6 +27,7 @@
 #include "time.h"
 #include "array.h"
 #include "gen_p.h"
+#include "array_p.h"
 #include "info_p.h"
 
 /* ************************************************************************* */

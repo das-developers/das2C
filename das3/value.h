@@ -62,10 +62,6 @@ typedef struct das_const_byte_seq_t{
 	size_t sz;
 } das_cbyte_seq;
 
-/** Convenience macros for an empty byte sequence fat pointer */
-#define DAS_BS_NULL  ((das_byte_seq){NULL, 0})
-#define DAS_CBS_NULL ((das_cbyte_seq){NULL, 0})
-
 
 #define VT_MIN_SIMPLE vtUByte
 #define VT_MAX_SIMPLE vtTime
@@ -237,7 +233,6 @@ DAS_API extern const char* DAS_ENC_BASE64;
  *
  * Using singleton pointers here again for speed.
  */
-DAS_API extern const char* DAS_SEM_BLOB;
 DAS_API extern const char* DAS_SEM_BOOL;
 DAS_API extern const char* DAS_SEM_DATE;
 DAS_API extern const char* DAS_SEM_INT;
@@ -344,12 +339,6 @@ DAS_API int das_value_cmpAny(
 	const ubyte* pA, das_val_type vtA, const ubyte* pB, das_val_type vtB
 );
 
-
-#define das_vt_cmpAny das_value_cmpAny
-
-/* In the future the token ID will come from the lexer, for now just make
- * something up*/
-#define D2OP_PLUS 100
 
 /** What would be the resulting type given an operation on the given value
  * type.

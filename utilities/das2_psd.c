@@ -201,7 +201,7 @@ DasErrCode onStreamHdr(DasStream* pSdIn, void* vpIoOut)
 	 * change */
 	char sTitle[256] = {'\0'};
 	const char* sProp = NULL;
-	if( (sProp = DasDesc_get((DasDesc*)g_pSdOut, "title")) != NULL){
+	if( (sProp = DasDesc_getStr((DasDesc*)g_pSdOut, "title")) != NULL){
 		strncpy(sTitle, sProp, 255);
 		DasDesc_vSetStr((DasDesc*)g_pSdOut, "title",
 		"%s!c%%{DFT_length} point DFT, %%{xDftOverlapInfo}", sTitle);
@@ -290,7 +290,7 @@ void _getOutFreqDef(
 
 	int nRealDftLen = (g_uDftLen/2) + 1;
 
-	if((sMinFreq = DasDesc_get((DasDesc*)pPlane, "DFT_freqTagMin")) == NULL){
+	if((sMinFreq = DasDesc_getStr((DasDesc*)pPlane, "DFT_freqTagMin")) == NULL){
 		rMinFreq = 0;
 	}
 	else{
@@ -308,8 +308,8 @@ void _getOutFreqDef(
 	const char* sMaxY = NULL;
 	double rMaxY = NAN;
 
-	sMinY = DasDesc_get((DasDesc*)pPlane, "DFT_freqTrimMin");
-	sMaxY = DasDesc_get((DasDesc*)pPlane, "DFT_freqTrimMax");
+	sMinY = DasDesc_getStr((DasDesc*)pPlane, "DFT_freqTrimMin");
+	sMaxY = DasDesc_getStr((DasDesc*)pPlane, "DFT_freqTrimMax");
 
 	if((sMinY == NULL)&&(sMaxY == NULL)){
 		*pLen = nRealDftLen;

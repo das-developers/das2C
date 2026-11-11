@@ -211,7 +211,7 @@ DAS_API char* Units_toLabel(das_units unit, char* sBuf, size_t uLen);
  * <b>not</b> product the same output as calling:
  * @code
  *   
- *   Units_exponentiate(unit, -1, 1);
+ *   Units_power(unit, -1);
  * 
  * @endcode
  * 
@@ -219,7 +219,7 @@ DAS_API char* Units_toLabel(das_units unit, char* sBuf, size_t uLen);
  * values to Hertz.
  * 
  * For all other unit types, calling this function is equivalent to calling
- * Units_exponentiate(unit, -1, 1)
+ * Units_power(unit, -1)
  *
  * @b Warning This function is not multi-thread safe.  It alters global 
  *       library state data

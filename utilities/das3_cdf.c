@@ -2948,7 +2948,7 @@ DasErrCode writeVarProps(
 	/* VAR_TYPE: coordinates are support by construction; a data dimension
 	   may say varType=support (a common das property, descriptive only) */
 	const char* sVarType = "data";
-	const char* sWant = DasDesc_get((DasDesc*)pDim, "varType");
+	const char* sWant = DasDesc_getStr((DasDesc*)pDim, "varType");
 	if(DasDim_type(pDim) == DASDIM_COORD){
 		sVarType = "support_data";
 		if(sWant != NULL)

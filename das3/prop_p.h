@@ -174,11 +174,6 @@ size_t DasProp_escapeSize(const DasProp* pProp);
  */
 const char* DasProp_xmlValue(const DasProp* pProp, char* sBuf, size_t uLen);
 
-/** Get a das2 type string for this property  
- * @memberof DasProp
- */
-const char* DasProp_typeStr2(const DasProp* pProp);
-
 /* Decode an |Hx| property-value separator (possibly a backslash escape: \n \t
  * \r \\) to a single byte.  Empty/NULL -> '\0' so callers fall back to guessing.
  * 0x00 is not representable here -- property values are string-typed, so the

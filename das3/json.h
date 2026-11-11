@@ -358,9 +358,11 @@ DAS_API const char* das_json_parse_error_info(
  * @param result (if not NULL) will explain the type of error, and the
  *           location in the input it occurred.
  
- * @return  A pointer to the entire malloc'ed memory.  Use free() on the 
- *          return value when it's no longer needed.  Returns NULL if an 
- *          error occurred (malformed JSON input, or malloc failed)
+ * @return  A pointer to the entire malloc'ed memory.  Use del_DasJdo() on
+ *          the return value when it's no longer needed, unless
+ *          alloc_func_ptr supplied the memory, in which case release it the
+ *          way that allocator expects.  Returns NULL if an error occurred
+ *          (malformed JSON input, or malloc failed)
  */
 DAS_API DasJdo* das_json_parse_ex(
 	const void *src, size_t src_size, size_t flags_bitset,
@@ -375,6 +377,17 @@ DAS_API DasJdo* das_json_parse_ex(
  * This is just shorthand for das_json_parse_ex(src, size, 0, NULL, NULL, NULL);
  */
 DAS_API DasJdo* das_json_parse(const void *src, size_t src_size);
+
+/** Free a parsed JSON document
+ *
+ * The whole tree is one allocation, so this frees every node at once.  Call
+ * it only on the root that das_json_parse() or das_json_parse_ex() returned
+ * with the default allocator, never on a node found inside it.
+ *
+ * @param pThis the root, NULL is ignored
+ * @memberof DasJdo
+ */
+DAS_API void del_DasJdo(DasJdo* pThis);
 
 
 /** Given a DOM path retrieve a JSON element

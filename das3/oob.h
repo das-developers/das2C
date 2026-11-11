@@ -144,11 +144,18 @@ DAS_API das_except_e DasExcept_type(const DasExcept* pThis);
 
 /** The das3.0 stream name of the exception type, e.g. "ServerError"
  *
- * A static string.  For the das2.2 name use
- * das_except_toStr(DasExcept_type(pThis), 2).
+ * A static string.  For the das2.2 name use DasExcept_typeStr2().
  * @memberof DasExcept
  */
 DAS_API const char* DasExcept_typeStr(const DasExcept* pThis);
+
+/** The das2.2 stream name of the exception type, e.g. "NoDataInInterval"
+ *
+ * A static string, never NULL: a type outside the table reads "Unknown",
+ * as DasExcept_typeStr() does.
+ * @memberof DasExcept
+ */
+DAS_API const char* DasExcept_typeStr2(const DasExcept* pThis);
 
 /** The exception message, never NULL
  *

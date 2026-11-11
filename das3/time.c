@@ -492,8 +492,7 @@ bool dt_parsespan(const char* sTime, das_time* pBeg, das_time* pEnd)
 	}
 	dt_tnorm(&dt);
 
-	das_time dtEnd;
-	dt_copy(&dtEnd, &dt);
+	das_time dtEnd = dt;
 	switch(nUnit){
 	case 0: dtEnd.year += 1;   break;
 	case 1: dtEnd.month += 1;  break;
@@ -504,8 +503,8 @@ bool dt_parsespan(const char* sTime, das_time* pBeg, das_time* pEnd)
 	}
 	dt_tnorm(&dtEnd);
 
-	if(pBeg) dt_copy(pBeg, &dt);
-	if(pEnd) dt_copy(pEnd, &dtEnd);
+	if(pBeg) *pBeg = dt;
+	if(pEnd) *pEnd = dtEnd;
 	return true;
 }
 
@@ -565,17 +564,6 @@ void dt_set(
 	pDt->hour = hour;
 	pDt->minute = minute;
 	pDt->second = second;
-}
-
-void dt_copy(das_time* pDest, const das_time* pSrc)
-{
-	pDest->year = pSrc->year;
-	pDest->month = pSrc->month;
-	pDest->mday = pSrc->mday;
-	pDest->yday = pSrc->yday;
-	pDest->hour = pSrc->hour;
-	pDest->minute = pSrc->minute;
-	pDest->second = pSrc->second;
 }
 
 int dt_compare(const das_time* pA, const das_time* pB)
@@ -775,8 +763,7 @@ static double _ttime (
 
 double dt_ttime(const das_time* dt){
 	
-	das_time _dt;
-	dt_copy(&_dt, dt);
+	das_time _dt = *dt;
 	
 	return _ttime(&(_dt.year), &(_dt.month), &(_dt.mday), &(_dt.yday),
 			       &(_dt.hour), &(_dt.minute), &(_dt.second) );

@@ -78,6 +78,12 @@ struct das_stream {
 
 /* Moved from stream.h: library plumbing, not API */
 
+/* True if embedded formats with no registered codec are kept as opaque
+   bytes instead of failing.  May change the shape of the variables it
+   applies to.  The option is set on DasIO (DasIO_embedAsBytes), copied in
+   when the stream is created. */
+bool DasStream_getEmbedAsBytes(const DasStream* pThis);
+
 /** Packetized Stream Descriptor Factory Function
  * 
  * @param pBuf A buffer containing string data to decode.

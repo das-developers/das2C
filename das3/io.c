@@ -838,7 +838,7 @@ static int _DasIO_finishD3Tag(
 
 	/* A later stream header was refused above, so 'S' here is the first
 	   packet.  IDs: the stream header has 0 or none, headers, data and
-	   extension packets 1 to DAS3_PKTID_MAX, comments and exceptions none
+	   extension packets 1 to DAS3_MAX_PKTIDS - 1, comments and exceptions none
 	   at all, they are outside the ID space (like das2's [xx]). */
 	switch(sTag[1]){
 		case 'S':
@@ -857,12 +857,12 @@ static int _DasIO_finishD3Tag(
 		if((!bHasId)||(uId == 0))
 			return -1 * das_error(DASERR_IO,
 				"|%c%c| packet at offset %ld needs a packet ID from 1 to %d",
-				sTag[1], sTag[2], pThis->offset, DAS3_PKTID_MAX
+				sTag[1], sTag[2], pThis->offset, DAS3_MAX_PKTIDS - 1
 			);
-		if(uId > DAS3_PKTID_MAX)
+		if(uId >= DAS3_MAX_PKTIDS)
 			return -1 * das_error(DASERR_IO,
 				"Packet ID %llu at offset %ld is past the largest das2C reads, %d",
-				(unsigned long long)uId, pThis->offset, DAS3_PKTID_MAX
+				(unsigned long long)uId, pThis->offset, DAS3_MAX_PKTIDS - 1
 			);
 		*pPktId = (int)uId;
 		nContent |= IO_USAGE_CNT;
@@ -1964,9 +1964,9 @@ static DasErrCode _DasIO_idChk(const DasIO* pThis, int iPktId)
 			);
 	}
 	else{
-		if((iPktId < 1)||(iPktId > DAS3_PKTID_MAX))
+		if((iPktId < 1)||(iPktId >= DAS3_MAX_PKTIDS))
 			return das_error(DASERR_IO,
-				"Packet ID %d is outside the das3 range of 1 to %d", iPktId, DAS3_PKTID_MAX
+				"Packet ID %d is outside the das3 range of 1 to %d", iPktId, DAS3_MAX_PKTIDS - 1
 			);
 	}
 	return DAS_OKAY;

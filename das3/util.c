@@ -91,7 +91,7 @@ static const das_limit g_aLimits[] = {
 	{"max_packet_bytes",      DASIO_MAX_PKT_SZ},
 	{"das2_max_header_bytes", DAS2_LEN_MAX},
 	{"das2_max_packet_id",    DAS2_MAX_PKTIDS - 1},
-	{"das3_max_packet_id",    DAS3_PKTID_MAX},
+	{"das3_max_packet_id",    DAS3_MAX_PKTIDS - 1},
 	{"max_prop_name_bytes",   DASPROP_NMAX_SZ},
 	{"max_prop_value_bytes",  DASPROP_VMAX_SZ},
 	{"max_dataset_rank",      VARIDX_MAX},

@@ -1636,7 +1636,7 @@ int test_open_ranges(const char* sBase)
 		{ .cShort = '\0', .sLong = "number", .nWidth = 4, .nMin = 0, .nMax = 99999 },
 	};
 	DasUriSegDef orbDef = {
-		.uVersion = DAS_URISEG_VER, .sCoord = "orbit", .nFields = 1, .pFields = aOrbFlds
+		DASURISEGDEF_INIT, .sCoord = "orbit", .nFields = 1, .pFields = aOrbFlds
 	};
 	snprintf(sTplt, sizeof(sTplt),
 	         "%s/juno/orb$(orbit.number)/juno_orbit$(orbit.number)_fgm.cdf", sBase);

@@ -407,7 +407,7 @@ static void test_composite_read(void)
 
 	ptrdiff_t aLoc[1] = { 1 };
 	das_datum dm;
-	if(DasVar_get(pVec, aLoc, DAS_BS_NULL, &dm) != 0){ FAIL("get refused"); return; }
+	if(DasVar_get(pVec, aLoc, (das_byte_seq){0}, &dm) != 0){ FAIL("get refused"); return; }
 
 	/* The run must be the ARRAY's memory, not a dead stack frame: a composite
 	   datum is a view, so a run that does not outlive the call is a dangling

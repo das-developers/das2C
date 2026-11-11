@@ -112,6 +112,11 @@ const char* DasExcept_typeStr(const DasExcept* pThis)
 	return _except_wireType(pThis, 3);
 }
 
+const char* DasExcept_typeStr2(const DasExcept* pThis)
+{
+	return _except_wireType(pThis, 2);
+}
+
 const char* DasExcept_msg(const DasExcept* pThis)
 {
 	return (pThis->sMsg == NULL) ? "" : pThis->sMsg;

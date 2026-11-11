@@ -381,14 +381,6 @@ DAS_API const char* DasDesc_getType(const DasDesc* pThis, const char* sName);
  */
 DAS_API das_units DasDesc_getUnits(const DasDesc* pThis, const char* sName);
 
-/** Get a raw property string
- * 
- * This function performs no transforms from the backing store.
- * @see DasDesc_getProp() for how long the returned pointer stays valid
- * @memberof DasDesc
- */
-DAS_API const char* DasDesc_get(const DasDesc* pThis, const char* sName);
-
 /** Determine if a property is present in a Descriptor or it's ancestors.
  *
  * @param pThis the descriptor object to query
@@ -446,6 +438,8 @@ DAS_API const DasProp* DasDesc_getLocal(const DasDesc* pThis, const char* sName)
 DAS_API bool DasDesc_remove(DasDesc* pThis, const char* sName);
 
 /** read the property of type String named sName.
+ *
+ * The raw property string, no transforms from the backing store.
  * @see DasDesc_getProp() for how long the returned pointer stays valid
  * @memberof DasDesc
  */

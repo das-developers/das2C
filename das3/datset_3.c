@@ -26,12 +26,14 @@
 #include <ctype.h>
 
 #include "stream.h"
+#include "stream_p.h"
 #include "datset_p.h"
 #include "log.h"
 #include "form_lin.h"
 #include "form_pt.h"
 #include "codex.h"
 #include "gen_p.h"
+#include "array_p.h"
 #include "var_p.h"
 #include "dim_p.h"
 #include "value_p.h"

@@ -510,10 +510,10 @@ DasErrCode onStreamHdr(DasStream* pSdIn, void* vpHDat)
 				);
 			}
 			else{
-				strncpy(sRng, DasDesc_get(pSdOut, "xCacheRange"), 127);
+				strncpy(sRng, DasDesc_getStr(pSdOut, "xCacheRange"), 127);
 			}
 		}
-		if( (pRes = DasDesc_get(pSdOut, "xCacheResolution")) != NULL)
+		if( (pRes = DasDesc_getStr(pSdOut, "xCacheResolution")) != NULL)
 			strncpy(sRes, pRes, 127);
 		
 		/* Copy everything */

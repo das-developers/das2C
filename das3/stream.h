@@ -103,15 +103,6 @@ typedef struct das_stream DasStream;
 
 /** @} */
 
-/** True if embedded formats with no registered codec should be preserved
- * as opaque bytes rather than erroring out.
- *
- * Note that this may cause the shape of any applicable variables 
- * to change.
- * 
- * @memberof DasStream */
-DAS_API bool DasStream_getEmbedAsBytes(const DasStream* pThis);
-
 /** Creates a new blank DasStream.
  * The returned structure has no packet descriptors, no properties are defined.
  * The compression attribute is set to 'none' and the version is set to 2.2

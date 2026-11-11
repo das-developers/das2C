@@ -1625,6 +1625,11 @@ struct das_json_obj_s *das_json_parse(const void *src, size_t src_size) {
   return das_json_parse_ex(src, src_size, das_jparse_flags_default, 0, 0, 0);
 }
 
+void del_DasJdo(DasJdo* pThis)
+{
+	free(pThis);  /* The tree is one allocation, see das_json_parse_ex() */
+}
+
 static int json_write_minified_get_value_size(const struct das_json_obj_s *value,
                                               size_t *size);
 

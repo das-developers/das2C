@@ -112,7 +112,7 @@ static int test_scalar_set(void)
 
 	ptrdiff_t aLoc[1] = { 2 };
 	das_datum dm = {{0},vtNull,0,NULL};
-	MUST(DasVar_get(pTime, aLoc, DAS_BS_NULL, &dm) == 0);   /* dm is garbage if this fails */
+	MUST(DasVar_get(pTime, aLoc, (das_byte_seq){0}, &dm) == 0);   /* dm is garbage if this fails */
 	CHECK(dm.vt == vtLong);
 	CHECK(dm.units == UNIT_TT2000);
 	CHECK(*((int64_t*)&dm) == 15625000LL);
@@ -285,7 +285,7 @@ static int test_byte_runs(void)
 
 	ptrdiff_t aLoc[1] = { 1 };
 	das_datum dm = {{0},vtNull,0,NULL};
-	MUST(DasVar_get(pStr, aLoc, DAS_BS_NULL, &dm) == 0);   /* sVal is read below */
+	MUST(DasVar_get(pStr, aLoc, (das_byte_seq){0}, &dm) == 0);   /* sVal is read below */
 	CHECK(dm.vt == vtText);
 	const char* sVal = NULL;
 	memcpy((void*)&sVal, &dm, sizeof(const char*));  /* quiet msvc */
@@ -297,7 +297,7 @@ static int test_byte_runs(void)
 	MUST(pBlob != NULL);
 	CHECK(DasVar_valType(pBlob) == vtByteSeq);   /* no sentinel */
 	aLoc[0] = 0;
-	MUST(DasVar_get(pBlob, aLoc, DAS_BS_NULL, &dm) == 0);   /* bs.ptr is read below */
+	MUST(DasVar_get(pBlob, aLoc, (das_byte_seq){0}, &dm) == 0);   /* bs.ptr is read below */
 	CHECK(dm.vt == vtByteSeq);
 	das_byte_seq bs;
 	memcpy(&bs, &dm, sizeof(das_byte_seq));
@@ -357,7 +357,7 @@ static int test_composite(void)
 
 	ptrdiff_t aLoc[1] = { 1 };
 	das_datum dm = {{0},vtNull,0,NULL};
-	MUST(DasVar_get(pVec, aLoc, DAS_BS_NULL, &dm) == 0);   /* aComp is read below */
+	MUST(DasVar_get(pVec, aLoc, (das_byte_seq){0}, &dm) == 0);   /* aComp is read below */
 	CHECK(dm.vt == vtComposite);
 	CHECK(dm.units == UNIT_NT);
 	double aComp[3];
@@ -377,7 +377,7 @@ static int test_composite(void)
 	CHECK(DasVar_formIs(pPlain, DAS_FORM_LIN));
 	CHECK(DasVar_valType(pPlain) == vtComposite);
 	memset(&dm, 0, sizeof(dm));
-	MUST(DasVar_get(pPlain, aLoc, DAS_BS_NULL, &dm) == 0);
+	MUST(DasVar_get(pPlain, aLoc, (das_byte_seq){0}, &dm) == 0);
 	CHECK(dm.vt == vtComposite);
 	CHECK(das_datum_elemType(&dm) == vtFloat);
 	aComp[0] = aComp[1] = aComp[2] = 0.0;
@@ -395,7 +395,7 @@ static int test_composite(void)
 	CHECK(DasVar_formIs(pOdd, DAS_FORM_EXT));
 	CHECK(DasVar_valType(pOdd) == vtComposite);
 	memset(&dm, 0, sizeof(dm));
-	MUST(DasVar_get(pOdd, aLoc, DAS_BS_NULL, &dm) == 0);
+	MUST(DasVar_get(pOdd, aLoc, (das_byte_seq){0}, &dm) == 0);
 	CHECK(dm.vt == vtComposite);
 	CHECK(strcmp(DasForm_getParam(das_datum_form(&dm), "flavor", NULL), "strange") == 0);
 	aComp[0] = aComp[1] = aComp[2] = 0.0;
@@ -445,7 +445,7 @@ static int test_datum_cplx_rot(void)
 	CHECK(DasVar_valType(pCplx) == vtComposite);
 
 	ptrdiff_t aLoc[1] = { 0 };
-	MUST(DasVar_get(pCplx, aLoc, DAS_BS_NULL, &dm) == 0);
+	MUST(DasVar_get(pCplx, aLoc, (das_byte_seq){0}, &dm) == 0);
 	CHECK(dm.vt == vtComposite);
 	CHECK(dm.units == UNIT_DIMENSIONLESS);
 	CHECK(DasForm_isKind(das_datum_form(&dm), DAS_FORM_CPLX));
@@ -457,7 +457,7 @@ static int test_datum_cplx_rot(void)
 	CHECK(strcmp(sBuf, "-0.052205-0.814099i") == 0);
 
 	aLoc[0] = 1;
-	MUST(DasVar_get(pCplx, aLoc, DAS_BS_NULL, &dm) == 0);
+	MUST(DasVar_get(pCplx, aLoc, (das_byte_seq){0}, &dm) == 0);
 	MUST(das_datum_toDoubles(&dm, aComp, 2) == 2);
 	CHECK((aComp[0] == -0.7591)&&(aComp[1] == -0.5840));
 
@@ -482,7 +482,7 @@ static int test_datum_cplx_rot(void)
 
 	aLoc[0] = 0;
 	memset(&dm, 0, sizeof(dm));
-	MUST(DasVar_get(pPol, aLoc, DAS_BS_NULL, &dm) == 0);
+	MUST(DasVar_get(pPol, aLoc, (das_byte_seq){0}, &dm) == 0);
 	CHECK(dm.vt == vtComposite);
 	CHECK(das_datum_elemType(&dm) == vtFloat);
 	CHECK(DasFormCplx_sysType(das_datum_form(&dm)) == DAS_VSYS_POLAR);
@@ -523,7 +523,7 @@ static int test_datum_cplx_rot(void)
 	CHECK(DasVar_formIs(pRotVar, DAS_FORM_ROT));
 
 	memset(&dm, 0, sizeof(dm));
-	MUST(DasVar_get(pRotVar, aLoc, DAS_BS_NULL, &dm) == 0);
+	MUST(DasVar_get(pRotVar, aLoc, (das_byte_seq){0}, &dm) == 0);
 	CHECK(dm.vt == vtComposite);
 	CHECK(DasForm_isKind(das_datum_form(&dm), DAS_FORM_ROT));
 	ptrdiff_t aShape[ARYIDX_MAX] = {0};
@@ -1255,7 +1255,7 @@ static int test_subset_composite(void)
 	/* a datum is still the assembled vector... */
 	ptrdiff_t aLoc[1] = { 1 };
 	das_datum dm = {{0},vtNull,0,NULL};
-	CHECK(DasVar_get(pVec, aLoc, DAS_BS_NULL, &dm) == 0);
+	CHECK(DasVar_get(pVec, aLoc, (das_byte_seq){0}, &dm) == 0);
 	CHECK(dm.vt == vtComposite);
 
 	/* ...but a subset is plain components, the component index trailing */
@@ -1371,13 +1371,13 @@ static int test_seq_declared_extent(void)
 
 	das_datum dm = {{0},vtNull,0,NULL};
 	ptrdiff_t aLoc[3] = {0, 255, 0};
-	CHECK(DasVar_get(pSet, aLoc, DAS_BS_NULL, &dm) == 0);           /* last legal index */
+	CHECK(DasVar_get(pSet, aLoc, (das_byte_seq){0}, &dm) == 0);           /* last legal index */
 	CHECK(*((double*)&dm) == -128.0 + 255.0);
 
 	aLoc[1] = 256;                                 /* one past the end */
-	CHECK(DasVar_get(pSet, aLoc, DAS_BS_NULL, &dm) != 0);
+	CHECK(DasVar_get(pSet, aLoc, (das_byte_seq){0}, &dm) != 0);
 	aLoc[1] = 1000;
-	CHECK(DasVar_get(pSet, aLoc, DAS_BS_NULL, &dm) != 0);
+	CHECK(DasVar_get(pSet, aLoc, (das_byte_seq){0}, &dm) != 0);
 
 	/* and a subset cannot smuggle past it either */
 	ptrdiff_t aMin[3] = {0, 0, 0};
@@ -1407,7 +1407,7 @@ static int test_seq_declared_extent(void)
 	DasGen_decRef(pGen);
 
 	aLoc[1] = 100000;
-	CHECK(DasVar_get(pSet, aLoc, DAS_BS_NULL, &dm) == 0);
+	CHECK(DasVar_get(pSet, aLoc, (das_byte_seq){0}, &dm) == 0);
 	CHECK(*((double*)&dm) == -128.0 + 100000.0);
 
 	aMax[1] = 300;
@@ -1576,7 +1576,7 @@ static int test_seq_vttime(void)
 		/* skip rather than MUST: a failed get leaves dm uninitialized and the
 		   format below would read it, but the remaining rows still have
 		   something to say */
-		if(DasVar_get(pSet, aLoc, DAS_BS_NULL, &dm) != 0){
+		if(DasVar_get(pSet, aLoc, (das_byte_seq){0}, &dm) != 0){
 			printf("ERROR: time [%td]: DasVar_get failed\n", aIdx[k]);
 			++nErrs;
 			continue;
@@ -1640,7 +1640,7 @@ static int test_seq_multi_index(void)
 	for(int c = 0; c < 5; ++c){
 		ptrdiff_t aLoc[VARIDX_MAX] = {aChk[c].i, aChk[c].j, aChk[c].k, 0,0,0,0,0};
 		das_datum dm = {{0},vtNull,0,NULL};
-		if(DasVar_get(pSet, aLoc, DAS_BS_NULL, &dm) != 0){
+		if(DasVar_get(pSet, aLoc, (das_byte_seq){0}, &dm) != 0){
 			printf("ERROR: offset[%td][%td][%td]: DasVar_get failed\n",
 				aChk[c].i, aChk[c].j, aChk[c].k);
 			++nErrs;
@@ -1804,7 +1804,7 @@ static int test_seq_vector(void)
 	{
 		ptrdiff_t aProbe[VARIDX_MAX] = {0,0,0,0,0,0,0,0};
 		das_datum dmProbe = {{0},vtNull,0,NULL};
-		int nWant = DasVar_get(pVec, aProbe, DAS_BS_NULL, &dmProbe);
+		int nWant = DasVar_get(pVec, aProbe, (das_byte_seq){0}, &dmProbe);
 		CHECK(nWant == (int)(2 * sizeof(double)));
 	}
 
@@ -1869,7 +1869,7 @@ static int test_front_doors(void)
 
 	ptrdiff_t aLoc[1] = { 1 };
 	const char* sVal = NULL;
-	MUST(DasVar_get(pStr, aLoc, DAS_BS_NULL, &dm) == 0);
+	MUST(DasVar_get(pStr, aLoc, (das_byte_seq){0}, &dm) == 0);
 	memcpy((void*)&sVal, &dm, sizeof(const char*));
 	CHECK((sVal != NULL) && (strcmp(sVal, "BURST") == 0));
 
@@ -1882,7 +1882,7 @@ static int test_front_doors(void)
 	DasVar* pStr2 = new_DasVarFrom(pStr, NULL, NULL);
 	MUST(pStr2 != NULL);
 	CHECK(DasVar_valType(pStr2) == vtText);
-	MUST(DasVar_get(pStr2, aLoc, DAS_BS_NULL, &dm) == 0);
+	MUST(DasVar_get(pStr2, aLoc, (das_byte_seq){0}, &dm) == 0);
 	memcpy((void*)&sVal, &dm, sizeof(const char*));
 	CHECK((sVal != NULL) && (strcmp(sVal, "BURST") == 0));
 
@@ -1925,7 +1925,7 @@ static int test_front_doors(void)
 	CHECK(aShape[0] == 3);
 
 	double aComp[3] = {0.0};
-	MUST(DasVar_get(pVecB, aLoc, DAS_BS_NULL, &dm) == 0);
+	MUST(DasVar_get(pVecB, aLoc, (das_byte_seq){0}, &dm) == 0);
 	MUST(das_datum_toDoubles(&dm, aComp, 3) == 3);
 	CHECK((aComp[0] == 4.0)&&(aComp[1] == 5.0)&&(aComp[2] == 6.0));
 
