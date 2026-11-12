@@ -684,6 +684,85 @@ static void test_juno(void)
 	del_DasSrc(pSrc);
 }
 
+/* Enum controls feeding a FlagSet parameter.  An enum whose set block
+   names a flag fills that flag's slot: the choice follows the prefix
+   ("anode=8").  A boolean's flag stays a switch that sends the flag's own
+   value.  Shaped like the TRACERS EPD anode source, whose anode chooser
+   (data section) and AppID filter (options) share one parameter.  The
+   example is 2018 style, raw http_params, so it also tests reading the
+   packed value back into controls. */
+#define SB "http://127.0.0.1:8765/data/slot"
+static const char* g_sSlotSrc =
+"{\"type\":\"HttpStreamSrc\",\"version\":\"0.7\",\"name\":\"slot\",\"title\":\"Flag slots\","
+ "\"protocol\":{\"method\":\"GET\",\"baseUrls\":[\"" SB "\"],"
+  "\"httpParams\":{"
+   "\"read.time.min\":{\"required\":true,\"type\":\"isotime\"},"
+   "\"read.time.max\":{\"required\":true,\"type\":\"isotime\"},"
+   "\"read.params\":{\"type\":\"FlagSet\",\"flagSep\":\" \",\"flags\":{"
+    "\"anode\":{\"prefix\":\"anode=\"},\"apid\":{\"prefix\":\"apid=\"},\"quiet\":{\"value\":\"Quiet\"}}}},"
+  "\"examples\":{"
+   "\"one\":{\"title\":\"Anode 8\",\"http_params\":{\"read.time.min\":\"2023-11-03T19:20\","
+    "\"read.time.max\":\"2023-11-03T20:20\",\"read.params\":\"anode=8 apid=x2a2 Quiet\"}},"
+   "\"two\":{\"title\":\"By pval\",\"http_params\":{\"read.time.min\":\"2023-11-03\","
+    "\"read.time.max\":\"2023-11-04\",\"read.params\":\"apid=x2a3 bogus=1\"}}}},"
+ "\"interface\":{"
+  "\"coords\":{\"time\":{\"props\":{"
+   "\"min\":{\"set\":{\"param\":\"read.time.min\",\"required\":true}},"
+   "\"max\":{\"set\":{\"param\":\"read.time.max\",\"required\":true}}}}},"
+  "\"data\":{\"flux\":{\"props\":{\"anode\":{\"type\":\"enum\",\"value\":\"0\","
+   "\"set\":{\"param\":\"read.params\",\"flag\":\"anode\",\"enum\":["
+    "{\"value\":\"0\",\"label\":\"0 (-10 deg)\"},{\"value\":\"8\",\"label\":\"8 (70 deg)\"}]}}}}},"
+  "\"options\":{\"props\":{"
+   "\"filter\":{\"type\":\"enum\",\"value\":null,\"set\":{\"param\":\"read.params\",\"flag\":\"apid\","
+    "\"enum\":[{\"value\":\"x2a2\"},{\"value\":\"science\",\"pval\":\"x2a3\"}]}},"
+   "\"quiet\":{\"type\":\"boolean\",\"value\":false,"
+    "\"set\":{\"param\":\"read.params\",\"flag\":\"quiet\",\"value\":true}}}}}}";
+
+static void test_flagslot(void)
+{
+	printf("Enum controls in a FlagSet:\n");
+	DasSrc* pSrc = new_DasSrc_json(g_sSlotSrc, strlen(g_sSlotSrc), "site:/test/slot", NULL);
+	CHECK(pSrc != NULL, "load");
+	if(pSrc == NULL) return;
+
+	/* forward: the choice fills the slot, the item's pval when it has one */
+	URL_IS(pSrc, -1, K("time=2023-11-03T19:20,2023-11-03T20:20", "anode=8", "filter=x2a2", "quiet"), NONE,
+		SB "?read.time.min=2023-11-03T19%3A20&read.time.max=2023-11-03T20%3A20"
+		"&read.params=anode%3D8%20apid%3Dx2a2%20Quiet");
+	URL_IS(pSrc, -1, K("time=2023-11-03,2023-11-04", "filter=science"), NONE,
+		SB "?read.time.min=2023-11-03&read.time.max=2023-11-04&read.params=apid%3Dx2a3");
+	/* the default choice sends nothing, as for any other control */
+	URL_IS(pSrc, -1, K("time=2023-11-03,2023-11-04", "anode=0"), NONE,
+		SB "?read.time.min=2023-11-03&read.time.max=2023-11-04");
+
+	/* reverse: packed tokens map back onto their controls */
+	DasReq* pReq = new_DasReq_src(pSrc, 0);
+	CHECK(pReq != NULL, "example 0 req");
+	if(pReq){
+		CHECK(streq(DasReq_val(pReq, "data.flux.anode"), "8"), "anode=8 -> '%s'",
+		      DasReq_val(pReq, "data.flux.anode") ? DasReq_val(pReq, "data.flux.anode") : "(unset)");
+		CHECK(streq(DasReq_val(pReq, "options.filter"), "x2a2"), "apid=x2a2 -> filter");
+		CHECK(streq(DasReq_val(pReq, "options.quiet"), "true"), "Quiet -> quiet switch");
+		CHECK(DasReq_numRaw(pReq) == 0, "nothing left raw, %zu", DasReq_numRaw(pReq));
+		del_DasReq(pReq);
+	}
+	URL_IS(pSrc, 0, NONE, NONE,
+		SB "?read.time.min=2023-11-03T19%3A20&read.time.max=2023-11-03T20%3A20"
+		"&read.params=anode%3D8%20apid%3Dx2a2%20Quiet");
+
+	pReq = new_DasReq_src(pSrc, 1);
+	CHECK(pReq != NULL, "example 1 req");
+	if(pReq){
+		CHECK(streq(DasReq_val(pReq, "options.filter"), "science"), "pval x2a3 back to its item");
+		CHECK(DasReq_val(pReq, "data.flux.anode") == NULL, "anode untouched");
+		const char* sVal = NULL;
+		CHECK((DasReq_numRaw(pReq) == 1) && streq(DasReq_rawAt(pReq, 0, &sVal), "read.params")
+		      && streq(sVal, "bogus=1"), "an unknown token stays raw");
+		del_DasReq(pReq);
+	}
+	del_DasSrc(pSrc);
+}
+
 static void test_req(void)
 {
 	printf("Requisitions without a source:\n");
@@ -859,6 +938,7 @@ int main(int argc, char** argv)
 	test_geomag();
 	test_hsk();
 	test_juno();
+	test_flagslot();
 	test_req();
 	test_node();
 	test_pick();

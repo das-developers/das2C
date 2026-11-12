@@ -505,6 +505,48 @@ static const char* _DasSrcCtrl_flagVal(const DasSrcCtrl* pC, const char* sFlag, 
 	return sBuf;
 }
 
+/* A flag named by a control's set block works one of two ways.  On a
+ * boolean it is a switch: when on, the flag sends its own value, see
+ * _DasSrcCtrl_flagVal().  On anything else it is a slot: the control's
+ * value follows the flag's prefix, so an anode chooser set to 8 sends
+ * "anode=8".  A flag named by an enum item instead is always a switch,
+ * the item picks which flag goes out. */
+static bool _DasSrcCtrl_flagIsSlot(const DasSrcCtrl* pC)
+{
+	return (_dassrc_jstr(pC->pSet, "flag") != NULL) &&
+	       (pC->pProp->type != DASSRCPROPTYPE_BOOL);
+}
+
+/* The prefix of a control's set block flag, "" when none */
+static const char* _DasSrcCtrl_flagPrefix(const DasSrcCtrl* pC)
+{
+	const char* sFlag = _dassrc_jstr(pC->pSet, "flag");
+	if(sFlag == NULL) return "";
+	char sPath[DASID_SZ + 8];
+	snprintf(sPath, sizeof(sPath), "flags/%s", sFlag);
+	const char* sPre = _dassrc_jstr(_dassrc_jget(pC->pParam, sPath), "prefix");
+	return sPre ? sPre : "";
+}
+
+/* The interface value whose protocol value is sPVal: an enum item with
+ * that pval, else an item spelled sPVal, else sPVal as is.  The inverse of
+ * the enum step in _DasSrcCtrl_translate(). */
+static const char* _DasSrcCtrl_fromPVal(const DasSrcCtrl* pC, const char* sPVal, char* sBuf, size_t uLen)
+{
+	_dassrc_strcpyz(sBuf, sPVal, uLen);
+	const DasJdo* pEnum = _dassrc_jget(pC->pSet, "enum");
+	if(!_dassrc_jisary(pEnum)) return sBuf;
+	char sItem[SCALAR_SZ], sP[SCALAR_SZ];
+	for(const DasJsonAryEl* pEl = DasJdo_aryFirst(pEnum); pEl; pEl = pEl->next){
+		const DasJdo* pItem = _dassrc_jisdict(pEl->value) ? _dassrc_jget(pEl->value, "value") : pEl->value;
+		if(!_das_json_scalar(pItem, sItem, sizeof(sItem))) continue;
+		bool bHit = _das_json_scalar(_dassrc_jget(pEl->value, "pval"), sP, sizeof(sP)) ?
+		            _dassrc_strieq(sP, sPVal) : _dassrc_strieq(sItem, sPVal);
+		if(bHit){ _dassrc_strcpyz(sBuf, sItem, uLen); break; }
+	}
+	return sBuf;
+}
+
 /* A 2018 example is raw protocol parameters.  Each is mapped back onto
  * the control that would have produced it, so the requisition looks the
  * same as one from a current node.  Parameters no control explains are
@@ -545,6 +587,22 @@ static bool _DasSrc_exampleFromParams(DasSrc* pThis, DasReq* pReq, const DasJdo*
 					if((pC == NULL)||(strcmp(pC->sParam, sName) != 0)) continue;
 					const char* sFlag = _dassrc_jstr(pC->pSet, "flag");
 					if(sFlag == NULL) continue;
+
+					/* A slot is recognized by its prefix alone; without one,
+					   a token could belong to any slot and is left raw */
+					if(_DasSrcCtrl_flagIsSlot(pC)){
+						const char* sPre = _DasSrcCtrl_flagPrefix(pC);
+						size_t uPre = strlen(sPre);
+						if((uPre == 0)||(strlen(pTok) <= uPre)) continue;
+						char sHead[SCALAR_SZ];
+						_dassrc_strcpyz(sHead, pTok, (uPre + 1 < sizeof(sHead)) ? uPre + 1 : sizeof(sHead));
+						if(!_dassrc_strieq(sHead, sPre)) continue;
+						_DasSrcCtrl_fromPVal(pC, pTok + uPre, sFlagVal, sizeof(sFlagVal));
+						if(DasReq_set(pReq, pThis->aProp[u].sKey, sFlagVal) != DAS_OKAY) return false;
+						bFound = true;
+						continue;
+					}
+
 					_DasSrcCtrl_flagVal(pC, sFlag, sFlagVal, sizeof(sFlagVal));
 					if(_dassrc_strieq(sFlagVal, pTok)){
 						if(DasReq_set(pReq, pThis->aProp[u].sKey, "true") != DAS_OKAY) return false;
@@ -1514,9 +1572,10 @@ static void _dassrc_outClear(_out_t* pO)
  *   - boolean: the block fires for one state only, "value" (true unless
  *     said otherwise); the other state is the default and sends nothing.
  *     With neither pval nor flag the state itself is sent as true/false.
- *   - flag: the flag's value (its entry under the parameter's flags, else
- *     the flag name), with the flag's prefix, appended to the parameter
- *     with the parameter's flagSep
+ *   - flag: with the flag's prefix, appended to the parameter with the
+ *     parameter's flagSep.  A switch sends the flag's value (its entry
+ *     under the parameter's flags, else the flag name), a slot sends the
+ *     control's value, see _DasSrcCtrl_flagIsSlot()
  *   - otherwise the value as given, or the block's pval
  */
 static bool _DasSrcCtrl_translate(const DasSrcCtrl* pC, const char* sVal, _out_t* pO, char* sWhy, size_t uWhy)
@@ -1524,6 +1583,7 @@ static bool _DasSrcCtrl_translate(const DasSrcCtrl* pC, const char* sVal, _out_t
 	const DasSrcProp* p = pC->pProp;
 	char sFlag[DASID_SZ] = {'\0'};
 	char sPVal[SCALAR_SZ] = {'\0'};
+	bool bSlot = _DasSrcCtrl_flagIsSlot(pC);
 	_dassrc_strcpyz(sFlag, _dassrc_jstr(pC->pSet, "flag"), sizeof(sFlag));
 	bool bHavePVal = _das_json_scalar(_dassrc_jget(pC->pSet, "pval"), sPVal, sizeof(sPVal));
 
@@ -1536,7 +1596,10 @@ static bool _DasSrcCtrl_translate(const DasSrcCtrl* pC, const char* sVal, _out_t
 			if(!_dassrc_strieq(sItem, sVal)) continue;
 			if(_das_json_scalar(_dassrc_jget(pEl->value, "pval"), sPVal, sizeof(sPVal))) bHavePVal = true;
 			else if(!bHavePVal){ _dassrc_strcpyz(sPVal, sItem, sizeof(sPVal)); bHavePVal = true; }
-			if(_dassrc_jstr(pEl->value, "flag")) _dassrc_strcpyz(sFlag, _dassrc_jstr(pEl->value, "flag"), sizeof(sFlag));
+			if(_dassrc_jstr(pEl->value, "flag")){
+				_dassrc_strcpyz(sFlag, _dassrc_jstr(pEl->value, "flag"), sizeof(sFlag));
+				bSlot = false;   /* the item picked a flag, it's a switch */
+			}
 			break;
 		}
 	}
@@ -1561,7 +1624,10 @@ static bool _DasSrcCtrl_translate(const DasSrcCtrl* pC, const char* sVal, _out_t
 			return false;
 		}
 		char sFVal[SCALAR_SZ], sFull[SCALAR_SZ];
-		if(!_das_json_scalar(_dassrc_jget(pF, "value"), sFVal, sizeof(sFVal))) _dassrc_strcpyz(sFVal, sFlag, sizeof(sFVal));
+		if(bSlot)
+			_dassrc_strcpyz(sFVal, bHavePVal ? sPVal : sVal, sizeof(sFVal));
+		else if(!_das_json_scalar(_dassrc_jget(pF, "value"), sFVal, sizeof(sFVal)))
+			_dassrc_strcpyz(sFVal, sFlag, sizeof(sFVal));
 		const char* sPrefix = _dassrc_jstr(pF, "prefix");
 		snprintf(sFull, sizeof(sFull), "%s%s", sPrefix ? sPrefix : "", sFVal);
 		const char* sSep = _dassrc_jstr(pC->pParam, "flagSep");
