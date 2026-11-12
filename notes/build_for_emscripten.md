@@ -7,7 +7,7 @@ with the [emscripten](https://emscripten.org) toolchain.  Like
 the command line utilities are not, since a wasm module runs inside some
 other program (a browser page, a node script) that supplies its own I/O.
 The first consumer is
-[das2js](https://github.com/das-developers/das2js), which wraps the archive
+[das3js](https://github.com/das-developers/das3js), which wraps the archive
 in a flat C glue layer and an ES module.  Nothing in das2C knows about that
 layer: no export markup, no emscripten headers beyond the byte-order probe
 in `das3/defs.h`.
@@ -120,7 +120,7 @@ wasm32 is ILP32: `long` and `ptrdiff_t` are 4 bytes and `DASHOST_64BIT`
 is undefined, so this is the first platform in years to exercise das2C's
 32-bit paths.  `long double` is a 128-bit software float, which makes
 libc's text-to-double conversion several times slower than on x86_64 (see
-das2js `notes/performance.md`); binary streams are unaffected.  The libc is
+das3js `notes/performance.md`); binary streams are unaffected.  The libc is
 musl, not glibc, and the compiler is clang with `-Werror`, so gcc-only
 warning flags cannot go in `emscripten.mak`.  Four long-standing bugs
 turned up on the first build, none of them wasm-specific: a `false`
@@ -143,7 +143,7 @@ static library, followed by the dependency archives,
 ```
 
 A browser module instead wants `-sMODULARIZE`, an `EXPORTED_FUNCTIONS`
-list naming the C entry points it calls, and no filesystem; das2js is the
+list naming the C entry points it calls, and no filesystem; das3js is the
 worked example.  The default emscripten stack is 64 KiB, and das2C keeps
 some large automatics (packet buffers, `DasDatum` arrays), hence the
 1 MiB stack above.
