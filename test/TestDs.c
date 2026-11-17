@@ -40,7 +40,10 @@
 
 #define _POSIX_C_SOURCE 200112L
 
+#include <string.h>
+
 #include <das3/core.h>
+#include <das3/datset_p.h>  /* DASDS_LOC_ENC_SZ, the small vector size */
 
 const char* g_sProg = "TestDs";
 
@@ -96,6 +99,60 @@ static int test_addary_refs(int nErr)
 	return 0;
 }
 
+/* Codecs live in a small vector inside the dataset until one more than
+   DASDS_LOC_ENC_SZ is added, then move to the heap and double from there.
+   Teardown once keyed off the count and freed the small vector at exactly
+   DASDS_LOC_ENC_SZ codecs.  Each count is built and torn down whole: the
+   ones either side of each move to a new block are the cases. */
+static int test_codec_counts(int nErr)
+{
+	const size_t aCounts[] = {
+		DASDS_LOC_ENC_SZ - 1, DASDS_LOC_ENC_SZ, DASDS_LOC_ENC_SZ + 1,
+		DASDS_LOC_ENC_SZ*2,   DASDS_LOC_ENC_SZ*2 + 1
+	};
+	float rFill = -1.0f;
+	char sId[32];
+
+	for(size_t c = 0; c < sizeof(aCounts)/sizeof(size_t); ++c){
+		DasDs* pDs = new_DasDs("codec_ds", "codec_grp", 1);
+		if(pDs == NULL) return daserrf(nErr, "no dataset");
+
+		for(size_t u = 0; u < aCounts[c]; ++u){
+			snprintf(sId, sizeof(sId), "ary_%zu", u);
+			DasAry* pAry = new_DasAry(
+				sId, DASVT_FLOAT, 0, (const uint8_t*)&rFill, DAS_SHAPE1(0),
+				DASUNITS_DIMENSIONLESS
+			);
+			if(pAry == NULL) return daserrf(nErr, "no array");
+			if(DasDs_addAry(pDs, pAry) != DAS_OKAY)
+				return daserrf(nErr, "addAry refused %s", sId);
+			dec_DasAry(pAry);
+
+			if(DasDs_makeFixedCodec(
+				pDs, sId, "real", "LEreal", 4, 1, DASCODEC_WRITE
+			) == NULL)
+				return daserrf(nErr, "codec %zu of %zu refused", u + 1, aCounts[c]);
+		}
+		if(DasDs_numCodecs(pDs) != aCounts[c])
+			return daserrf(nErr, "%zu codecs, expected %zu", DasDs_numCodecs(pDs),
+				aCounts[c]);
+
+		/* Every codec still names its own array after the moves */
+		for(size_t u = 0; u < aCounts[c]; ++u){
+			snprintf(sId, sizeof(sId), "ary_%zu", u);
+			const DasCodec* pCd = DasDs_codecAt(pDs, u);
+			if((pCd == NULL)||(strcmp(DasAry_id(DasCodec_ary(pCd)), sId) != 0))
+				return daserrf(nErr, "codec %zu lost its array at count %zu", u,
+					aCounts[c]);
+		}
+
+		del_DasDesc((DasDesc*)pDs);
+	}
+
+	daslog_info("Test 0b success. Codec storage grows and frees at every boundary.");
+	return 0;
+}
+
 int main(int argc, char** argv)
 {
 	daslib_init(argv[0], DASERRDISP_EXIT, DASLOG_INFO, NULL);
@@ -104,6 +161,7 @@ int main(int argc, char** argv)
 	int nErr  = DASERR_MAX;
 
 	if(test_addary_refs(nErr) != 0) return nErr;
+	if(test_codec_counts(nErr) != 0) return nErr;
 	DasStream* pSd = NULL;
 	ptrdiff_t aShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
 	ptrdiff_t aAddr[DASIDX_MAX]   = DASIDX_INIT_BEGIN;

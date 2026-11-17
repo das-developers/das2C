@@ -1681,6 +1681,13 @@ das_errcode _writeLocation(DasDs* pDsIn, XCalc* pCalc, double rTimeShift)
 		   the POLAR entry.  Taking it over aTmp[0] gives zero, which quietly
 		   turns both ellipsoidal systems into centric ones. */
 		bodvcd_c(pReq->nOutCenter, "RADII", 3, &nTmp, aTmp);
+		/* In RETURN mode a missing RADII leaves aTmp unwritten, and if left
+		   set, the error would later pass for a -g coverage gap. */
+		CHECK_SPICE
+		if((nTmp != 3)||(aTmp[0] <= 0.0))
+			return daserrf(PERR, "Center body %s (%d) has no usable RADII for "
+				"ellipsoidal output", pReq->aOutCenter, (int)pReq->nOutCenter
+			);
 		radOut = aTmp[0];
 		flatOut = (aTmp[0] - aTmp[2]) / aTmp[0];
 	}
@@ -1690,7 +1697,8 @@ das_errcode _writeLocation(DasDs* pDsIn, XCalc* pCalc, double rTimeShift)
 	DasDatum dm;
 	for(; !iter.done; DasDsUniqIter_next(&iter)){
 
-		DasVar_datumAt(pCalc->pTime, iter.addr, (DasByteSeq){0}, &dm);
+		if(DasVar_datumAt(pCalc->pTime, iter.addr, (DasByteSeq){0}, &dm) != 0)
+			return daserrf(PERR, "Could not read the time value");
 		rEt = _dm2et(&dm, rTimeShift);
 
 		spkezp_c(
@@ -1809,8 +1817,9 @@ das_errcode _writeRotation(DasDs* pDsIn, XCalc* pCalc, double rTimeShift)
 	DasDatum dm;
 	for(; !iter.done; DasDsUniqIter_next(&iter)){
 
-		DasVar_datumAt(pCalc->pTime, iter.addr, (DasByteSeq){0}, &dm);
-		
+		if(DasVar_datumAt(pCalc->pTime, iter.addr, (DasByteSeq){0}, &dm) != 0)
+			return daserrf(PERR, "Could not read the time value");
+
 		rEt = _dm2et(&dm, rTimeShift);
 
 		pxform_c(pReq->aInFrame, pReq->aOutFrame, rEt, mRot);   /* Get rot matrix */
@@ -1831,7 +1840,10 @@ das_errcode _writeRotation(DasDs* pDsIn, XCalc* pCalc, double rTimeShift)
 			continue;
 		}
 
-		DasVar_datumAt(pVarIn, iter.addr, (DasByteSeq){0}, &dm);
+		/* An empty work buffer is enough only for array backed vectors; a
+		   computed input asks for scratch (> 0) and is refused here. */
+		if(DasVar_datumAt(pVarIn, iter.addr, (DasByteSeq){0}, &dm) != 0)
+			return daserrf(PERR, "Could not read the input vector value");
 
 		const DasForm* pFormIn = DasDatum_form(&dm);
 		uint8_t uSysIn = DasFormVec_sysId(pFormIn);

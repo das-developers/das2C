@@ -51,12 +51,12 @@ main (int argc, char *argv[])
   long bin, thebin;
   
   if (argc < 3) return -1;
-  if (!sscanf (argv[1], "%d", &items)) return -1;
-  if (!sscanf (argv[2], "%lg", &period)) return -1;
+  if (sscanf (argv[1], "%d", &items) != 1) return -1;  /* EOF is -1, not 0 */
+  if (sscanf (argv[2], "%lg", &period) != 1) return -1;
   if ((items < 2) || (period <= 0.0)) return -1;
 
   if (argc > 3) {
-    if (!sscanf (argv[3], "%g", &fill)) return -1;
+    if (sscanf (argv[3], "%g", &fill) != 1) return -1;
   } else fill = 0.0;
 
   fprintf (stderr, "items %d period %lf fill %f\n", items, period, fill);

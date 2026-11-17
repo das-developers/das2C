@@ -472,17 +472,15 @@ static das_errcode _DasDs_codecsGoLarger(DasDs* pThis)
    shouldn't have to. */
 static das_errcode _DasDs_codecsMakeRoom(DasDs* pThis)
 {
-	das_errcode nRet = DAS_OKAY;
+	if(pThis->uCodecs < pThis->uSzCodecs)
+		return DAS_OKAY;
 
-	/* Go dynamic? */
-	if(pThis->uCodecs == DASDS_LOC_ENC_SZ)
-		nRet = _DasDs_codecsGoLarge(pThis);
+	/* Full.  Where the codecs live now, not how many there are, picks the
+	   path; _del_DasDs() decides what to free the same way. */
+	if(pThis->lCodecs == pThis->aCodecs)
+		return _DasDs_codecsGoLarge(pThis);
 
-	/* Go even bigger? */
-	if((nRet == DAS_OKAY)&&(pThis->uCodecs == pThis->uSzCodecs))
-		nRet = _DasDs_codecsGoLarger(pThis);
-
-	return nRet;
+	return _DasDs_codecsGoLarger(pThis);
 }
 
 /* TODO: Got some copy-pasta in the next three functions, DRY the code out. 
@@ -633,6 +631,7 @@ das_errcode DasDs_recBytes(const DasDs* pThis, int* pBytes)
 DasCodec* DasDs_codecFor(
 	const DasDs* pThis, const char* sAryId, int* pItems
 ){
+	*pItems = 0;  /* Header-only arrays return NULL without it being an error */
 	size_t u;
 	const DasAry* pFind = NULL;
 	for(u = 0; u < pThis->uArrays; ++u){
@@ -765,15 +764,13 @@ static void _del_DasDs(DasDesc* pDesc){
 	for(u = 0; u < pThis->uCodecs; ++u)
 		fini_DasCodec(pThis->lCodecs + u);
 
-	/* If I had to go large on codecs, free those */
-	if(pThis->uCodecs >= DASDS_LOC_ENC_SZ){
-		assert(pThis->lCodecs != pThis->aCodecs);
-		assert(pThis->lItems != pThis->aItems);
-		assert(pThis->lCodecs != NULL);
-		assert(pThis->lItems != NULL);
+	/* If I had to go large on codecs, free those.  Tested by pointer, as for
+	   dims and arrays: at exactly DASDS_LOC_ENC_SZ codecs they still live in
+	   the small vector, the move to the heap comes with the next one. */
+	if(pThis->lCodecs != pThis->aCodecs)
 		free(pThis->lCodecs);
+	if(pThis->lItems != pThis->aItems)
 		free(pThis->lItems);
-	}
 	
 	/* Now drop the reference count on our arrays */
 	for(u = 0; u < pThis->uArrays; ++u)

@@ -69,7 +69,7 @@ void init_DasAryIter(
 
 	/* End at all zeros, or at the end of the array. end is an exclusive upper index */
 	if(pAddrEnd != NULL)
-		memcpy(pThis->addr, pAddrEnd, (pThis->iIdxLast+1)*sizeof(ptrdiff_t));
+		memcpy(pThis->aAddrEnd, pAddrEnd, (pThis->iIdxLast+1)*sizeof(ptrdiff_t));
 	else
 		pThis->bNaturalEnd = true;
 

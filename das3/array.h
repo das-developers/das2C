@@ -849,12 +849,14 @@ DAS_API bool DasAry_setValsAt(
  *             DAS_ADDR0, DAS_ADDR1, DAS_ADDR2, etc. for cleaner code.
  *
  * @param pCount A pointer to a variable to hold the number of elements under
- *        the given index.  If nIndices is equal to the array rank the returned
- *        value will be at most 1.
+ *        the given index, required.  If nAddr is equal to the array rank the
+ *        returned value will be at most 1.  Always written: it is set to 0
+ *        whenever NULL is returned, so it's safe to test before the pointer.
  *
  * @return A pointer a continuous subset of elements, or NULL if no elements are
- *         located at the given index set.  You will have to cast this pointer
- *         to the element type.
+ *         located at the given index set or on an error.  
+ *         An empty subset is not an error. 
+ *         Cast this pointer to the element type.
  *
  * @code
  * // Print all the events in a rank 1 array of strings

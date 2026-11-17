@@ -178,7 +178,8 @@ int bDiff=0;
 
   if(sFormat!=NULL){  /* raj */
   char sTime[512];
-  struct tm x;
+  struct tm x = {0};  /* only 6 fields are set, a failed mktime() leaves the
+                        rest for strftime() to read */
 
     x.tm_year=t.nYear-1900;   /* since 1900 */
     x.tm_mon=t.nMonth-1;      /* 0 - 11 */
@@ -273,7 +274,7 @@ return d;
 double time_difference(rajTime t1,rajTime t2)
 {
 time_t d1,d2;
-struct tm x1,x2;
+struct tm x1 = {0}, x2 = {0};  /* see the note in main() */
 
     x1.tm_year=t1.nYear-1900;   /* since 1900 */
     x1.tm_mon=t1.nMonth-1;      /* 0 - 11 */
@@ -542,7 +543,9 @@ int rajParseIsoTFormat(char *s,rajTime *t)
 char *pBeg,*pEnd;
 
 
-  t->dDoy=t->dMonth=t->dDom=0.0;
+  /* Time of day too: a bare year returns before those fields are parsed,
+     and rajNormalize() reads them regardless. */
+  t->dDoy=t->dMonth=t->dDom=t->dHour=t->dMinute=t->dSecond=0.0;
 
   /* decode year */
   pBeg=s;

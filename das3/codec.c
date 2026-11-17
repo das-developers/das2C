@@ -2147,7 +2147,7 @@ int DasCodec_encode(
 	DasAry* pAry       = pThis->pAry;
 	das_vt vtAry = DasAry_vt(pAry);
 	
-	size_t uAvailable;  /* Total items, but for strings this is total bytes + nulls! */
+	size_t uAvailable = 0;  /* Total items, but for strings this is total bytes + nulls! */
 
 	const uint8_t* pItem0 = DasAry_valsIn(pThis->pAry, vtAry, nDim, pAddr, &uAvailable);
 	

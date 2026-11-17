@@ -922,6 +922,15 @@ static bool _DasStream_hasDsKey(
 	return false;
 }
 
+/* One character of header text, or '\0' once the buffer is used up.  The
+   tag scan below stops on '\0', a bare DasBuf_read() at the end would just
+   leave the last character in place for it to look at again. */
+static char _DasDesc_getc(DasBuf* pBuf){
+	char c = '\0';
+	if(DasBuf_read(pBuf, &c, 1) != 1) return '\0';
+	return c;
+}
+
 /* Factory function */
 DasDesc* DasDesc_decode(
 	DasBuf* pBuf, DasStream* pSd, int nPktId, int nModel
@@ -937,8 +946,7 @@ DasDesc* DasDesc_decode(
 	}
 	
 	size_t uPos = DasBuf_readOffset(pBuf);
-	char b; 
-	DasBuf_read(pBuf, &b, 1);
+	char b = _DasDesc_getc(pBuf);
 
 	if(b != '<'){
 		daserrf(DASERR_STREAM, "found \"%c\", expected \"<\"", b);
@@ -946,12 +954,12 @@ DasDesc* DasDesc_decode(
 	}
 	
 	int i = 0;
-	DasBuf_read(pBuf, &b, 1);
+	b = _DasDesc_getc(pBuf);
 	
 	/* Skip past the "I'm XML" header, if present */
 	if(b == '?'){
 		while( i < 256 /*safety check*/ && b != '\0' && b != '>' ){
-			DasBuf_read(pBuf, &b, 1);
+			b = _DasDesc_getc(pBuf);
 			i++;
 		}
 		if(b == '\0' || i == 256){
@@ -961,17 +969,17 @@ DasDesc* DasDesc_decode(
 		}
 				
 		uPos = DasBuf_readOffset(pBuf);
-		DasBuf_read(pBuf, &b, 1);
+		b = _DasDesc_getc(pBuf);
 		
 		/* Eat any whitespace after the prolog */
 		while(isspace(b)){ 
-			DasBuf_read(pBuf, &b, 1);
+			b = _DasDesc_getc(pBuf);
 			uPos++;
 		}
 		
 		/* If the current character is <, eat that too, but don't bump the */
 		/* read position of the whole buffer */
-		if(b == '<') DasBuf_read(pBuf, &b, 1);
+		if(b == '<') b = _DasDesc_getc(pBuf);
 		
 		i = 0; /* Get ready for using i below */
 	}
@@ -979,7 +987,7 @@ DasDesc* DasDesc_decode(
 	while(i < (DASXML_NAME_LEN - 1) && 
 			!isspace(b) && b != '\0' && b != '>' && b != '/'){
 		sName[i] = b;
-		DasBuf_read(pBuf, &b, 1);
+		b = _DasDesc_getc(pBuf);
 		i++;
 	}
 	

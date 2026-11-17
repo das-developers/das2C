@@ -154,10 +154,17 @@ bool DasDatum_fromStr(DasDatum* pDatum, const char* sStr)
 		break;
 	}
 	
+	/* Both parses below work from a copy of the value prefix.  Refuse one too
+	   long for sBuf instead of cutting it, a cut prefix can still parse, just
+	   to a different value.  The datum is already null for this return. */
+	size_t uCopy = pRead - sStr;
+	if(uCopy >= sizeof(sBuf))
+		return false;
+
 	/* All time strings are UTC in das, ignore units */
 	if(bTryTime){
-		strncpy(sBuf, sStr, 127);
-		sBuf[ pRead - sStr] = '\0';
+		memcpy(sBuf, sStr, uCopy);
+		sBuf[uCopy] = '\0';
 		if(DasTime_fromStr(&dt, sBuf) ){ 
 			pDatum->units = DASUNITS_UTC;
 			memcpy(pDatum->bytes, &dt, sizeof(DasTime));
@@ -167,9 +174,8 @@ bool DasDatum_fromStr(DasDatum* pDatum, const char* sStr)
 	}
 	
 	/* Try classic datum, double value plus units */
-	size_t uCopy = pRead - sStr < 127 ? pRead - sStr : 127;
-	
-	strncpy(sBuf, sStr, uCopy);
+	memcpy(sBuf, sStr, uCopy);
+	sBuf[uCopy] = '\0';
 	if( ! dasstr_toDouble(sBuf, (double*)pDatum->bytes )){
 		DasDatum_setNull(pDatum);   /* the attempt may have left bytes behind */
 		return false;
@@ -551,6 +557,8 @@ bool DasDatum_toPoint(
 
 bool DasDatum_toTime(const DasDatum* pThis, DasTime* pDt)
 {
+	DasTime_clear(pDt);  /* several false returns below don't otherwise set it */
+
 	if(pThis->vt == DASVT_NULL)
 		return daserr_falsef(DASERR_DATUM, "A null datum has no time value");
 

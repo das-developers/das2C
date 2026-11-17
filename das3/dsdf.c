@@ -291,6 +291,7 @@ static double* dsdf_valToArrayIDL(const char* sArrayDef, size_t* pLen)
 
 double* dasdsdf_newDoubles(const char* sArray, size_t* pLen) 
 {
+	*pLen = 0;  /* Documented as out-only, but the count below increments it */
 	size_t uStrLen = strlen(sArray);
 	bool bIsArray = false; 
 	size_t u = 0;

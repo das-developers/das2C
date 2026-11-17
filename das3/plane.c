@@ -769,9 +769,13 @@ double DasPlane_valAt(const DasPlane* pThis, size_t uIdx)
 const DasDatum* DasPlane_datumAt(
 	const DasPlane* pThis, size_t uIdx, DasDatum* pD
 ){
-	if(uIdx >= pThis->uItems)
+	/* pD is returned either way, so callers that chain the call can't see a
+	   failure in the pointer; a null datum is what tells them. */
+	if(uIdx >= pThis->uItems){
+		DasDatum_setNull(pD);
 		daserrf(17, "%s: Index %zu is out of range for %s plane", __func__,
 				            uIdx, dasplanetype_name(pThis->planeType));
+	}
 	else
 		DasDatum_fromDouble(pD, pThis->pData[uIdx], pThis->units);
 	

@@ -232,6 +232,78 @@ static void test_from_time(void)
 }
 
 /* ************************************************************************* */
+/* Failed reads leave defined outputs, and over-long text is refused.
+
+   These are the memory safety cases: before, an over-long time string ran
+   _parsetime() past its 80 byte scratch copy, a long DasDatum_fromStr()
+   prefix overran its 128 byte buffer, and several functions returned
+   failure with their out-params never written.  Run under valgrind to see
+   the reads; the checks here pin the defined results. */
+
+static void test_failed_reads(void)
+{
+	DasTime dt;
+	char sLong[256];
+
+	/* 80 chars has no room for the terminator in _parsetime's copy */
+	memset(sLong, ' ', sizeof(sLong));
+	memcpy(sLong, "2024-01-01T00:00:00", 19);
+	sLong[80] = '\0';
+	memset(&dt, 0x55, sizeof(dt));
+	if(DasTime_fromStr(&dt, sLong)) FAIL("80 char time string accepted");
+	if((dt.year != 0)||(dt.month != 0)||(dt.second != 0.0))
+		FAIL("failed parse did not clear the time");
+
+	if(!DasTime_fromStr(&dt, "2024-01-01T00:00:00")) FAIL("plain time refused");
+	if(dt.year != 2024) FAIL("plain time year %d", dt.year);
+
+	/* Fails after the year is written, must still come back cleared */
+	memset(&dt, 0x55, sizeof(dt));
+	if(DasTime_fromStr(&dt, "2024-02-30")) FAIL("Feb 30 accepted");
+	if(dt.year != 0) FAIL("partial parse left year %d", dt.year);
+
+	/* A leading T has no date before it, used to read s[-1] */
+	DasTime_fromStr(&dt, "T12:00:00");
+
+	/* Value prefixes too long for DasDatum_fromStr's buffer are refused */
+	DasDatum dm;
+	memset(sLong, '1', 200);
+	sLong[200] = '\0';
+	if(DasDatum_fromStr(&dm, sLong))  FAIL("200 digit number accepted");
+	if(!DasDatum_isNull(&dm))         FAIL("refused number left a non-null");
+
+	memset(sLong, '1', 200);
+	memcpy(sLong, "2024-001T", 9);
+	sLong[200] = '\0';
+	if(DasDatum_fromStr(&dm, sLong))  FAIL("200 char time accepted");
+
+	/* toTime of a value that isn't a time clears the output */
+	DasDatum_fromDouble(&dm, 1.0, DASUNITS_DIMENSIONLESS);
+	memset(&dt, 0x55, sizeof(dt));
+	if(DasDatum_toTime(&dm, &dt)) FAIL("dimensionless converted to a time");
+	if(dt.year != 0) FAIL("refused toTime left year %d", dt.year);
+
+	/* An empty subset is not an error, the zero count is how you know */
+	DasAry* pAry = new_DasAry(
+		"empty", DASVT_DOUBLE, 0, NULL, DAS_SHAPE1(0), DASUNITS_DIMENSIONLESS
+	);
+	if(pAry == NULL){ FAIL("no array"); return; }
+	size_t uCount = 99, uSz = 99;
+	if(DasAry_valsIn(pAry, DASVT_DOUBLE, DAS_ADDR0, &uCount) != NULL)
+		FAIL("empty array gave values");
+	if(uCount != 0) FAIL("empty valsIn count %zu", uCount);
+	uCount = 99;
+	if(DasAry_valsIn(pAry, DASVT_FLOAT, DAS_ADDR0, &uCount) != NULL)
+		FAIL("wrong type gave values");
+	if(uCount != 0) FAIL("wrong type valsIn count %zu", uCount);
+	uCount = 99;
+	if(DasAry_data(pAry, &uSz, &uCount) != NULL) FAIL("empty array gave data");
+	if((uCount != 0)||(uSz != sizeof(double)))
+		FAIL("empty data count %zu, size %zu", uCount, uSz);
+	dec_DasAry(pAry);
+}
+
+/* ************************************************************************* */
 /* DasRng open ends: a null end is no bound on that side */
 
 static void test_range_open(void)
@@ -455,6 +527,7 @@ int main(int argc, char** argv)
 	test_islocal();
 	test_null();
 	test_from_time();
+	test_failed_reads();
 	test_range_open();
 	test_dim_range();
 	test_composite_box();

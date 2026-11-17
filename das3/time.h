@@ -120,7 +120,8 @@ DAS_API void DasTime_clear(DasTime* pDt);
 
 /** Convert most human-parseable time strings to numeric components 
  *
- * @param pDt   The DasTime structure to initialize
+ * @param pDt   The DasTime structure to initialize.  On failure it is
+ *        cleared, see DasTime_clear().
  * @param sTime The string to convert to a numeric time
  * @returns true on success and false on failure 
  *

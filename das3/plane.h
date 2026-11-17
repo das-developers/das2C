@@ -313,8 +313,8 @@ DAS_API double DasPlane_valAt(const DasPlane* pThis, size_t uIdx);
  * @param uIdx The the index of the value to retrieve, this is always 0 for 
  *        X, Y, and Z planes.
  *
- * @returns a pointer to the given datum, which will not be initialized if
- *        uIdx is out of range.
+ * @returns a pointer to the given datum, which is set to the null datum
+ *        (vt DASVT_NULL) if uIdx is out of range.
  * @memberof DasPlane
  */
 DAS_API const DasDatum* DasPlane_datumAt(

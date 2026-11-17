@@ -611,6 +611,11 @@ const uint8_t* DasAry_data(
    const DasAry* pThis, size_t* pElSize, size_t* pElements
 ){
 
+	/* Written before the empty-array return below, which is not an error, so
+	   a NULL return always comes with counts the caller can test. */
+	*pElements = 0;
+	*pElSize = DasAry_valSize(pThis);
+
 	size_t uFirstOff, uLastOff;
 	if(!_Array_elemOffsets(pThis, 0, pThis->pIdx0, &uFirstOff, &uLastOff))
 		return NULL;
@@ -820,11 +825,14 @@ const uint8_t* DasAry_valsIn(
 	const DasAry* pThis, das_vt et, int nAddr, ptrdiff_t* pAddr,
 	size_t* pCount
 ){
+	/* Zero up front so every NULL return, including the non-error empty
+	 * subset case below, leaves callers with a count they can trust. */
+	*pCount = 0;
+
 	das_vt etype = pThis->pBufs[pThis->nRank-1]->etype;
 	if(etype != et){
 		daserrf(DASERR_ARRAY, "Elements for array '%s' are '%s' not '%s'",
 				     pThis->sId, dasvt_name(etype), dasvt_name(et));
-		*pCount = 0;
 		return NULL;
 	}
 	if((nAddr > pThis->nRank)||(nAddr < 0)){
@@ -844,9 +852,9 @@ const uint8_t* DasAry_valsIn(
 		daserrf(DASERR_ARRAY, "Invalid subset index %s in array %s",
 				     das_idx_prn(nAddr, pAddr, 64, sLoc),
 		           DasAry_toStr(pThis, sInfo, 128));
-		return 0;
+		return NULL;
 	}
-	
+
 	if(pItem != NULL){
 		*pCount = 1;
 		return pItem;
@@ -1382,6 +1390,7 @@ bool init_DasAry(
 uint8_t* DasAry_disownData(DasAry* pThis, size_t* pLen, size_t* pOffset)
 {
 	*pLen = 0;
+	*pOffset = 0;  /* Neither NULL return below sets it */
 	int iLast = pThis->nRank - 1;
 	DynaBuf* pDb = pThis->pBufs[iLast];
 	*pLen = pDb->uValid;

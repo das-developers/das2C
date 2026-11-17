@@ -221,6 +221,12 @@ int DasVar_datumAt(
 	if((pThis == NULL)||(pOut == NULL))
 		return -1 * daserrf(DASERR_VAR, "Null pointer reading a value");
 
+	/* The class get functions return errors without touching pOut, so a
+	   caller that skips the return code would read stale stack.  A null datum
+	   fails loudly in every accessor instead.  Done here once rather than in
+	   each class; this call is documented as the slow path anyway. */
+	DasDatum_setNull(pOut);
+
 	return pThis->pVTbl->get(pThis, pAddr, work, pOut);
 }
 
@@ -1424,14 +1430,16 @@ das_errcode DasVar_encode(DasVar* pThis, const char* sRole, DasBuf* pBuf)
 					DasDs_name(pDs), DasDim_typeName(pDim), DasDim_name(pDim), sRole
 				);
 			}
-			init_DasCodec(
+			das_errcode nErr = init_DasCodec(
 				DASCODEC_WRITE, &codecHdr, pAry, sSemC, "utf8", DASCODEC_ITEM_TERM, ' ',
 				units, NULL
 			);
+			if(nErr != DAS_OKAY) return nErr;  /* half built, don't encode with it */
 			DasBuf_puts(pBuf, "      <values>\n");
 			int nWrite = (int)DasAry_size(pAry);
 			int nVals = DasCodec_encode(&codecHdr, pBuf, DAS_ADDR0, nWrite, DASENC_IN_HDR|DASENC_PKT_LAST);
 			if(nVals < 0){
+				fini_DasCodec(&codecHdr);  /* drops the array ref init took */
 				return daserrf(DASERR_VAR, "Error encoding data for %s/%s/%s/%s",
 					DasDs_name(pDs), DasDim_typeName(pDim), DasDim_name(pDim), sRole
 				);

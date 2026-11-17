@@ -132,7 +132,12 @@ static int _parsetime (
   int hold;
   int leap;
 
-  (void)strncpy (s, string, 80);
+  /* s is a scratch copy that strtok and the radix fix-up write into, so it
+     must be terminated.  Over-long input is refused rather than truncated: a
+     truncated copy can still parse, just to the wrong time.  memchr instead of
+     strlen so the check never scans past the buffer size. */
+  if (memchr (string, '\0', sizeof(s)) == NULL) return -1;
+  (void)strcpy (s, string);
 
   /* Handle fractional seconds specified via a decimal point or common even
      if the current locale has a different single character for the radix.
@@ -159,8 +164,9 @@ static int _parsetime (
   if ((c = strchr (s, 'Z'))) *c = (char)0;
   end_of_date = strchr (s, 'T');
   if (end_of_date) {
-    c = end_of_date - 1;
-    if (isdigit ((int)(*c))) delimiters = PDSDELIMITERS;
+    /* A leading 'T' has no date digit before it to look at */
+    if ((end_of_date > s) && isdigit ((int)(end_of_date[-1])))
+      delimiters = PDSDELIMITERS;
     else end_of_date = (char *)0;
   }
 
@@ -406,7 +412,12 @@ bool DasTime_fromStr(DasTime* dt, const char* sTime)
 			               &(dt->yday), &(dt->hour), &(dt->minute),
 	                     &(dt->second) );
 	if(nRet == 0) return true;
-	else return false;
+
+	/* _parsetime() can fail part way through with some fields written.  Hand
+	   back the cleared (invalid) time instead, callers that skip the return
+	   code test for that. */
+	DasTime_clear(dt);
+	return false;
 }
 
 /* The span rule needs to know which field was the last one written, and

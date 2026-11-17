@@ -1893,8 +1893,9 @@ das_errcode DasIO_setProgress( DasIO* pThis, int progress ) {
 		DasBuf_reset(pThis->pDb);
 		
 		if( (nRet = OobComment_encode(&cmt, pBuf)) != 0) return nRet;
-		_DasIO_printf(pThis, "[xx]%06zu%.*s", DasBuf_written(pBuf),
-		              (int)DasBuf_written(pBuf), _DasIO_bufText(pBuf));
+		if(_DasIO_printf(pThis, "[xx]%06zu%.*s", DasBuf_written(pBuf),
+		              (int)DasBuf_written(pBuf), _DasIO_bufText(pBuf)) < 0)
+			return daserrf(DASERR_IO, "Short write of a progress comment");
     } 
 	 
 	return 0;
@@ -1928,13 +1929,15 @@ das_errcode DasIO_writeStreamDesc(DasIO* pThis, DasStream* pSd)
 		if( (nRet = DasStream_encode2(pSd, pBuf)) != 0) return nRet;
 		if( (nRet = _DasIO_d2LenChk(pThis, DasBuf_written(pBuf), "stream header")) != 0)
 			return nRet;
-		_DasIO_printf(pThis, "[00]%06zu%.*s", DasBuf_written(pBuf),
-		              (int)DasBuf_written(pBuf), _DasIO_bufText(pBuf));
+		if(_DasIO_printf(pThis, "[00]%06zu%.*s", DasBuf_written(pBuf),
+		              (int)DasBuf_written(pBuf), _DasIO_bufText(pBuf)) < 0)
+			return daserrf(DASERR_IO, "Short write of the stream header");
 	}
 	else{
 		if( (nRet = DasStream_encode3(pSd, pBuf)) != 0) return nRet;
-		_DasIO_printf(pThis, "|Sx||%zu|%.*s", DasBuf_written(pBuf),
-		              (int)DasBuf_written(pBuf), _DasIO_bufText(pBuf));
+		if(_DasIO_printf(pThis, "|Sx||%zu|%.*s", DasBuf_written(pBuf),
+		              (int)DasBuf_written(pBuf), _DasIO_bufText(pBuf)) < 0)
+			return daserrf(DASERR_IO, "Short write of the stream header");
 	}
 	
 	/* The header itself goes out plain, everything after it compressed */
@@ -2069,6 +2072,9 @@ das_errcode DasIO_writeDesc(DasIO* pThis, DasDesc* pDesc, int iPktId)
 	DasBuf* pBuf = pThis->pDb;
 	das_errcode nRet = DAS_OKAY;
 	size_t uToWrite;
+	int nWrote;  /* _DasIO_printf() is -1 on a failed write; test that before
+	                any compare with the size_t length, which would turn -1
+	                into SIZE_MAX */
 
 	if(type == DASDESCTYPE_STREAM){
 		if(iPktId != 0)
@@ -2092,18 +2098,20 @@ das_errcode DasIO_writeDesc(DasIO* pThis, DasDesc* pDesc, int iPktId)
 			if((nRet = _DasIO_d2LenChk(pThis, DasBuf_unread(pBuf), "packet header")) != 0)
 				return nRet;
 			uToWrite = DasBuf_unread(pBuf) + 10;
-			if( _DasIO_printf(
+			nWrote = _DasIO_printf(
 				pThis, "[%02d]%06zu%.*s", iPktId, DasBuf_unread(pBuf),
 				(int)DasBuf_unread(pBuf), _DasIO_bufText(pBuf)
-			) != uToWrite)
+			);
+			if((nWrote < 0)||((size_t)nWrote != uToWrite))
 				return daserrf(DASERR_IO, "Partial packet descriptor written");
 		}
 		else{
 			uToWrite = DasBuf_unread(pBuf) + 8;
-			if( _DasIO_printf(
+			nWrote = _DasIO_printf(
 				pThis, "|Hx|%02d|%zu|%.*s", iPktId, DasBuf_unread(pBuf),
 				(int)DasBuf_unread(pBuf), _DasIO_bufText(pBuf)
-			) < uToWrite)
+			);
+			if((nWrote < 0)||((size_t)nWrote < uToWrite))
 				return daserrf(DASERR_IO, "Partial packet descriptor written");
 		}
 		return _DasIO_sentSet(pThis, iPktId, pDesc, pPkt->uHdrRev);
@@ -2114,10 +2122,11 @@ das_errcode DasIO_writeDesc(DasIO* pThis, DasDesc* pDesc, int iPktId)
 		if( (nRet = DasDs_encodeHdr((DasDs*)pDesc, pBuf)) != DAS_OKAY)
 			return nRet;
 		uToWrite = DasBuf_unread(pBuf) + 8;
-		if( _DasIO_printf(
+		nWrote = _DasIO_printf(
 			pThis, "|Hx|%02d|%zu|%.*s", iPktId, DasBuf_unread(pBuf),
 				(int)DasBuf_unread(pBuf), _DasIO_bufText(pBuf)
-		) < uToWrite)
+		);
+		if((nWrote < 0)||((size_t)nWrote < uToWrite))
 			return daserrf(DASERR_IO, "Partial header written");
 
 		return _DasIO_sentSet(pThis, iPktId, pDesc, 0);

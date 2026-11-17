@@ -1479,6 +1479,7 @@ static double _Units_reduce(struct base_unit* pComp, int* pLen, char* sErr)
 }
 
 DasUnits DasUnits_reduce(DasUnits orig, double* pFactor){
+	*pFactor = 1.0;  /* The header's promise, the early return below needs it */
 	struct base_unit aComp[_MAX_NUM_COMP];
 	memset(aComp, 0, sizeof(struct base_unit)*_MAX_NUM_COMP);
 	
