@@ -225,7 +225,7 @@ $(DESTDIR)$(INST_NAT_BIN)/%:$(BD)/%
 # archive.  Listing those too would let a missing one, say the object for a
 # newly added source, go unbuilt while the archive looks up to date.
 .SECONDARY: $(UTIL_OBJS)
-.PHONY: test test_more test_legacy build
+.PHONY: test test_more test_net test_legacy build
 
 ## Explicit Rules  ###########################################################
 
@@ -491,9 +491,7 @@ test_main: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BUILD_UTIL_PROGS)
 	@echo "INFO: ==============================================="
 	@echo "INFO: All core test programs completed without errors"
 	@echo "INFO: ==============================================="
-#	@echo "INFO: Running unit test for catalog reader, $(BD)/TestCatalog..."
-#	@echo "INFO: (network-dependent, runs last; a failure here does not affect core tests)"
-#	@$(BD)/TestCatalog
+	@echo "INFO: Network tests not run here, see make test_net"
 
 # The legacy directory's copy-out files, built against the current library
 test_legacy: $(LEGACY_PROGS)
@@ -504,10 +502,15 @@ test_legacy: $(LEGACY_PROGS)
 	$(BD)/legacy/TestSend send 2 > $(BD)/oob_send.d2s && $(BD)/legacy/TestSend read $(BD)/oob_send.d2s
 	$(BD)/legacy/TestSend send 3 > $(BD)/oob_send.d3t && $(BD)/legacy/TestSend read $(BD)/oob_send.d3t
 
-# Stretch fixtures: valid v3.0 streams that hit a read path we haven't built yet, so we
-# expect them to fail today.  Kept out of 'test' (which must stay green) and parked here
-# so you can watch for one starting to pass -- that's the cue to promote it out of the
-# notimp_ prefix into the regular suite.  This target never fails the build on its own.
+# Tests that reach real das servers over the internet.  Kept out of
+# 'make test' so a server outage can't turn it red; run before a release.
+#
+#   TestCatalog  walks the das2.org catalog from the compiled in seed and
+#                loads nodes by location.  Writes no files.
+test_net: $(BD) $(BD)/TestCatalog
+	@echo "INFO: Running unit test for the catalog over the network, $(BD)/TestCatalog..."
+	@$(BD)/TestCatalog
+
 # Tests that need more than a C toolchain and bash.  Not in 'make test', so
 # the base suite runs anywhere the library builds; run these by hand or in
 # a job that has the extras.
@@ -520,6 +523,10 @@ test_legacy: $(LEGACY_PROGS)
 test_more: $(BD)/das_fetch
 	test/das_cache_test.sh $(BD)
 
+# Stretch fixtures: valid v3.0 streams that hit a read path we haven't built yet, so we
+# expect them to fail today.  Kept out of 'test' (which must stay green) and parked here
+# so you can watch for one starting to pass -- that's the cue to promote it out of the
+# notimp_ prefix into the regular suite.  This target does not fail the build on its own.
 .PHONY: future
 future: $(BD) $(BD)/TestV3Read
 	@echo "INFO: Stretch fixtures we don't expect to read yet (test/streams/notimp_*):"

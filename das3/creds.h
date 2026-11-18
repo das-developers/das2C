@@ -178,13 +178,17 @@ DAS_API bool DasCredMgr_termPrompt(
  *
  * das servers mostly serve open data.  Their logins are a light gate that
  * keeps the curious from picking up pre-release data before it is
- * published, not protection for anything of value.  Never use an
+ * published, not protection for anything of value.  Do not use an
  * institutional password here.  Logins that do carry institutional weight
- * will come through OAuth 2.0, so that das2C never sees the password.
+ * will come through OAuth 2.0, so that das2C does not see the password.
  *
  * The HTTP functions hand a login only to a server that asks for one with
  * a 401, and only over https.  A redirect to another scheme, host or port
  * drops it; a server there that wants a login asks for its own.
+ *
+ * https here means encrypted, not verified: server certificates are not
+ * checked, by design, so an expired or self-signed certificate does
+ * not stop a data request.  That suits a light gate and nothing heavier.
  *
  * Most programs only need four calls: make a manager, point it at a key
  * file, choose how to ask the user for a login, and hand it to the HTTP

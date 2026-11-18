@@ -190,7 +190,7 @@ static void test_seed(void)
 {
 	printf("TEST: a node file as the seed\n");
 	DasCat* pCat = new_DasCat(NULL, "TestCat");
-	DasCat_setCache(pCat, NULL, 0);    /* explicitly off, file nodes never cache anyway */
+	DasCat_setCaching(pCat, false);    /* explicitly off, file nodes are not cached anyway */
 	CHECK(DasCat_setSeed(pCat, SITE, NULL) == DAS_OKAY, "set seed");
 
 	DasNode* pRoot = DasCat_resolve(pCat, NULL);
@@ -383,7 +383,7 @@ static void test_mounts(void)
 }
 
 /* ************************************************************************* */
-/* The user directory and the cache default built on it */
+/* The user directory and the opt-in cache built on it */
 
 static bool endsWith(const char* s, const char* sTail)
 {
@@ -393,7 +393,7 @@ static bool endsWith(const char* s, const char* sTail)
 
 static void test_userdir(void)
 {
-	printf("TEST: user directory and the session cache default\n");
+	printf("TEST: user directory and the opt-in node cache\n");
 
 	/* The default, unless this test's environment set DAS_USERDIR */
 	const char* sEnv = getenv("DAS_USERDIR");
@@ -405,33 +405,73 @@ static void test_userdir(void)
 	dasfs_setUserDir(TEST_USERDIR);
 	CHECK(streq(dasfs_userDir(), TEST_USERDIR), "setter is honored, got %s", dasfs_userDir());
 
+#define DEF_DIR TEST_USERDIR DASFS_SEPS "cache" DASFS_SEPS "nodes"
 	DasCat* pCat = new_DasCat(NULL, NULL);
-	CHECK(streq(DasCat_cacheDir(pCat), TEST_USERDIR DASFS_SEPS "cache" DASFS_SEPS "nodes"),
-	      "new session caches under the user directory, got %s",
-	      DasCat_cacheDir(pCat) ? DasCat_cacheDir(pCat) : "(off)");
-	CHECK(DasCat_cacheAge(pCat) == DASCAT_NODE_TTL_SEC, "default cache age");
+	CHECK(!DasCat_caching(pCat), "new session writes no files");
+	CHECK(DasCat_cacheDir(pCat) == NULL, "and has no directory chosen, got %s",
+	      DasCat_cacheDir(pCat) ? DasCat_cacheDir(pCat) : "(none)");
+	CHECK(DasCat_cacheAge(pCat) == DASCAT_NODE_TTL_SEC, "default age before anything is set");
+	CHECK(DasCat_setCaching(pCat, false) == DAS_OKAY, "turning off what is off is fine");
 
-	DasCat_setCache(pCat, DasCat_cacheDir(pCat), 0);   /* aliasing is allowed */
-	CHECK(streq(DasCat_cacheDir(pCat), TEST_USERDIR DASFS_SEPS "cache" DASFS_SEPS "nodes"),
-	      "age change keeps the directory");
-	CHECK(DasCat_cacheAge(pCat) == 0, "age changed to always fetch");
+	CHECK(DasCat_setCaching(pCat, true) == DAS_OKAY, "one call turns caching on");
+	CHECK(DasCat_caching(pCat), "and it reads back on");
+	CHECK(streq(DasCat_cacheDir(pCat), DEF_DIR), "default directory under the user directory, got %s",
+	      DasCat_cacheDir(pCat) ? DasCat_cacheDir(pCat) : "(none)");
 
-	DasCat_setCache(pCat, "elsewhere", 5);
-	CHECK(streq(DasCat_cacheDir(pCat), "elsewhere"), "directory moved");
-	CHECK(DasCat_cacheAge(pCat) == 5, "age set with the move");
+	DasCat_setCacheAge(pCat, 0);
+	CHECK((DasCat_cacheAge(pCat) == 0) && streq(DasCat_cacheDir(pCat), DEF_DIR),
+	      "age changes alone");
 
-	DasCat_setCache(pCat, NULL, 0);
-	CHECK(DasCat_cacheDir(pCat) == NULL, "NULL turns the cache off");
-	DasCat_setCache(pCat, "", 0);
-	CHECK(DasCat_cacheDir(pCat) == NULL, "empty string turns the cache off");
+	CHECK(DasCat_setCacheDir(pCat, "elsewhere") == DAS_OKAY, "directory moved while on");
+	CHECK(streq(DasCat_cacheDir(pCat), "elsewhere") && DasCat_caching(pCat) &&
+	      (DasCat_cacheAge(pCat) == 0), "move keeps caching on and the age");
+	CHECK(DasCat_setCacheDir(pCat, DasCat_cacheDir(pCat)) == DAS_OKAY, "own buffer back is fine");
+
+	DasCat_setCaching(pCat, false);
+	CHECK(!DasCat_caching(pCat) && streq(DasCat_cacheDir(pCat), "elsewhere"),
+	      "off keeps the directory, it is not the off signal");
+	DasCat_setCaching(pCat, true);
+	CHECK(streq(DasCat_cacheDir(pCat), "elsewhere"), "back on where it left off");
+
+	CHECK(DasCat_setCacheDir(pCat, NULL) == DAS_OKAY, "NULL goes back to the default");
+	CHECK(streq(DasCat_cacheDir(pCat), DEF_DIR), "default picked now, got %s", DasCat_cacheDir(pCat));
+
+	/* Logged and returned, not raised: this test runs in DASERRDISP_EXIT */
+	char sLong[400];
+	memset(sLong, 'd', sizeof(sLong) - 1);
+	sLong[sizeof(sLong) - 1] = '\0';
+	daslog_setLevel(DASLOG_CRITICAL);
+	CHECK(DasCat_setCacheDir(pCat, sLong) == DASERR_CAT, "too long a directory is refused");
+	CHECK(DasCat_setCacheDir(pCat, "") == DASERR_CAT, "an empty directory is refused");
+	daslog_setLevel(DASLOG_WARN);
+	CHECK(streq(DasCat_cacheDir(pCat), DEF_DIR) && DasCat_caching(pCat),
+	      "a refused directory leaves the setting as it was");
 	del_DasCat(pCat);
 
-	/* A later change does not move a session already made */
+	/* Directory chosen first, then turned on: the default is not picked */
 	pCat = new_DasCat(NULL, NULL);
-	dasfs_setUserDir("moved_after_the_fact");
-	CHECK(streq(DasCat_cacheDir(pCat), TEST_USERDIR DASFS_SEPS "cache" DASFS_SEPS "nodes"),
-	      "session keeps the directory it was made with");
+	DasCat_setCacheDir(pCat, "mine");
+	DasCat_setCaching(pCat, true);
+	CHECK(streq(DasCat_cacheDir(pCat), "mine"), "a chosen directory wins at turn on");
 	del_DasCat(pCat);
+
+	/* A user directory too long for the default: caching stays off */
+	dasfs_setUserDir(sLong);
+	pCat = new_DasCat(NULL, NULL);
+	daslog_setLevel(DASLOG_CRITICAL);
+	CHECK(DasCat_setCaching(pCat, true) == DASERR_CAT, "default too long is refused");
+	daslog_setLevel(DASLOG_WARN);
+	CHECK(!DasCat_caching(pCat) && (DasCat_cacheDir(pCat) == NULL), "and caching stays off");
+	del_DasCat(pCat);
+	dasfs_setUserDir(TEST_USERDIR);
+
+	/* A later change does not move a session already turned on */
+	pCat = new_DasCat(NULL, NULL);
+	DasCat_setCaching(pCat, true);
+	dasfs_setUserDir("moved_after_the_fact");
+	CHECK(streq(DasCat_cacheDir(pCat), DEF_DIR), "session keeps the directory it chose");
+	del_DasCat(pCat);
+#undef DEF_DIR
 
 	dasfs_setUserDir(NULL);
 	CHECK(!streq(dasfs_userDir(), "moved_after_the_fact"), "NULL restores the default");

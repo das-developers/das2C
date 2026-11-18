@@ -55,6 +55,9 @@ bool _DasHttpResp_hop(
 	DasHttpResp* pThis, const char* sUrl, char* sAuth, size_t uAuth, int16_t* pnCred
 );
 
+/* True if the reply's Cache-Control has the no-store directive */
+bool _DasHttpResp_noStore(const DasHttpResp* pThis);
+
 /* Write the request for the current URL to pX.  A non-empty sAuth on a
    plain http URL is refused before anything is written. */
 bool _das_http_sendRequest(

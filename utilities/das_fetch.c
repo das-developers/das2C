@@ -1358,15 +1358,16 @@ int main(int argc, char** argv)
 	if(bNode && (uKeyVals > 0))
 		daslog_warn("KEY=VALUE arguments are ignored by the node command");
 
-	/* Node cache: the session's default unless told otherwise.  -f refreshes
-	   rather than disables so that the run after a catalog change leaves the
-	   cache current. */
-	if((sCacheArg != NULL) && strieq(sCacheArg, "none"))
-		DasCat_setCache(pCat, NULL, 0);
-	else if(sCacheArg != NULL)
-		DasCat_setCache(pCat, sCacheArg, bFresh ? 0 : DASCAT_NODE_TTL_SEC);
-	else if(bFresh)
-		DasCat_setCache(pCat, DasCat_cacheDir(pCat), 0);
+	/* Node cache: the library writes none unless asked, das_fetch asks for
+	   the shared one unless told otherwise.  -f refreshes rather than
+	   disables so that the run after a catalog change leaves the cache
+	   current.  A user directory too long for the cache only costs speed. */
+	if((sCacheArg == NULL) || !strieq(sCacheArg, "none")){
+		if((sCacheArg != NULL) && (DasCat_setCacheDir(pCat, sCacheArg) != DAS_OKAY))
+			return finish(pCat, RET_USAGE);
+		if(bFresh) DasCat_setCacheAge(pCat, 0);
+		DasCat_setCaching(pCat, true);
+	}
 
 	/* A fragment on the path is only meaningful for the json command */
 	char sPathBuf[1024] = {'\0'};

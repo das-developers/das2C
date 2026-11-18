@@ -127,7 +127,7 @@ extern "C" {
 /** The catalog URI prefix relative paths start from unless told otherwise */
 #define DASCAT_SITE_PREFIX "tag:das2.org,2012:site:/"
 
-/** How long, in seconds, DasCat_useUserCache() trusts a cached catalog node */
+/** Default for DasCat_setCacheAge(), in seconds */
 #define DASCAT_NODE_TTL_SEC 3600
 
 /** @class DasCat catalog.h <das3/catalog.h>
@@ -183,8 +183,7 @@ typedef struct das_cat_t DasCat;
 /** Create a catalog session
  * 
  * The session keeps the nodes it loads in memory until del_DasCat() and
- * writes no files.  To keep copies between runs, call DasCat_useUserCache()
- * or DasCat_setCache() before the first resolve.
+ * writes no files.  To keep copies between runs see DasCat_setCaching().
  *
  * @param pMgr Credentials manager consulted when a node or data source asks
  *        for a login.  May be NULL for public access only.  Ownership
@@ -213,51 +212,83 @@ DAS_API DasCredMgr* DasCat_credMgr(const DasCat* pThis);
  */
 DAS_API const char* DasCat_agent(const DasCat* pThis);
 
-/** Keep copies of catalog nodes fetched over HTTP on disk, between runs
+/** Turn this session's disk cache of catalog nodes on or off
  *
- * A new session writes no files.  Walking a catalog costs one request per
- * level, so a disk cache is what makes the second run of a program fast.
- * A copy older than nMaxAgeSec is not thrown away: the server is asked
+ * Off in a new session, which writes no files.  Walking a catalog costs
+ * one request per level, so a disk cache is what makes the second run of
+ * a program fast.  On, nodes fetched over HTTP are kept in the
+ * DasCat_setCacheDir() directory and used for DasCat_setCacheAge()
+ * seconds without asking the server.  If no directory has been chosen
+ * when caching is turned on, the default is: dasfs_userDir() followed by
+ * cache/nodes, the spot the das tools share.  The age defaults to
+ * DASCAT_NODE_TTL_SEC.  Settings can be made before or after, and survive
+ * turning caching off and on again.
+ *
+ * A copy older than the age is not thrown away: the server is asked
  * whether it changed, using the ETag or Last-Modified it came with, and
  * only a changed node is downloaded again.  A server that cannot be
  * reached leaves the old copy in use, with a warning.
  *
- * Some nodes are never written: those read from local files, those built
+ * Some nodes are not written: those read from local files, those built
  * from bytes a program fetched itself (see new_DasNode_json()), and those
  * the server marked "Cache-Control: no-store".
  *
+ * @code
+ DasCat* pCat = new_DasCat(NULL, "my_program");
+ DasCat_setCaching(pCat, true);                // the shared spot
+ // or first: DasCat_setCacheDir(pCat, "/data/nodes");
+ @endcode
+ *
  * @param pThis The catalog session
- * @param sDir Directory for the copies, created on first use.  NULL or an
- *        empty string turns the disk cache off.  Passing DasCat_cacheDir()
- *        is allowed, to change only the age.
- * @param nMaxAgeSec Copies older than this many seconds are checked with
- *        the server before use.  Zero or less means check every time,
- *        which costs one round trip per level and no body bytes when the
- *        server supports validators, and a full fetch when it does not.
- * @returns DAS_OKAY, or DASERR_CAT if sDir is too long or memory ran out,
- *        in which case the disk cache is off
+ * @param bOn true to keep copies, false to stop
+ * @returns DAS_OKAY, or DASERR_CAT, logged not raised, if the default
+ *        directory name is too long.  Caching then stays off.
  * @memberof DasCat
  */
-DAS_API das_errcode DasCat_setCache(DasCat* pThis, const char* sDir, int nMaxAgeSec);
+DAS_API das_errcode DasCat_setCaching(DasCat* pThis, bool bOn);
 
-/** Keep node copies in the usual per user directory
- *
- * The same as DasCat_setCache() with dasfs_userDir() followed by
- * cache/nodes, and DASCAT_NODE_TTL_SEC.  This is the opt in for programs
- * that want the cache shared by the das tools, as das_fetch does.
- *
- * @returns DAS_OKAY, or DASERR_CAT if the directory name is too long,
- *        in which case the disk cache is off
+/** Is the disk cache on?  See DasCat_setCaching()
  * @memberof DasCat
  */
-DAS_API das_errcode DasCat_useUserCache(DasCat* pThis);
+DAS_API bool DasCat_caching(const DasCat* pThis);
 
-/** The directory this session caches nodes in, or NULL if caching is off
+/** Choose where the disk cache keeps node copies; does not turn it on
+ *
+ * Changing it while caching is on applies from the next fetch; nodes
+ * already loaded stay in memory and copies in the old directory are left
+ * where they are.
+ *
+ * @param pThis The catalog session
+ * @param sDir The directory, used as given and created on first write.
+ *        NULL picks the default now, from the current dasfs_userDir(), see
+ *        DasCat_setCaching().
+ * @returns DAS_OKAY, or DASERR_CAT if sDir is empty or too long (or the
+ *        default is), logged not raised so a program can pick its exit
+ *        code for a bad argument.  The setting is then unchanged.
+ * @memberof DasCat
+ */
+DAS_API das_errcode DasCat_setCacheDir(DasCat* pThis, const char* sDir);
+
+/** The directory node copies go in
+ *
+ * @returns the directory, or NULL until one is chosen, by
+ *        DasCat_setCacheDir() or by turning caching on.  Not NULL just
+ *        because caching is off, see DasCat_caching().
  * @memberof DasCat
  */
 DAS_API const char* DasCat_cacheDir(const DasCat* pThis);
 
-/** How many seconds this session trusts a cached node, see DasCat_setCache()
+/** How long a cached node is used before the server is asked about it
+ *
+ * @param pThis The catalog session
+ * @param nMaxAgeSec Seconds.  Zero or less means check every time, which
+ *        costs one round trip per level and no body bytes when the server
+ *        supports validators, and a full fetch when it does not.
+ * @memberof DasCat
+ */
+DAS_API void DasCat_setCacheAge(DasCat* pThis, int nMaxAgeSec);
+
+/** The age setting, see DasCat_setCacheAge()
  * @memberof DasCat
  */
 DAS_API int DasCat_cacheAge(const DasCat* pThis);
@@ -395,7 +426,8 @@ DAS_API bool DasCat_covers(const DasCat* pThis, const char* sUri);
  *
  * The walk that failed remembers the deepest container it searched and
  * the part of the path below it.  This loads that container again, which
- * costs nothing when it is still in memory and one cache read otherwise.
+ * costs nothing when it is still in memory, and otherwise one disk cache
+ * read or, without a disk cache, one fetch.
  * DasCat_lastUri() afterwards names the node returned, so a caller can
  * say "no child X under URI Y" and list what Y does have with
  * DasNode_subNameAt().

@@ -5,7 +5,9 @@ Serves the files in one directory the way a well behaved static server
 does: ETag and Last-Modified on every 200, and 304 Not Modified when the
 request's If-None-Match matches or its If-Modified-Since is not older than
 the file.  With --no-validators it behaves like a server that knows nothing
-of caching, which is what dasflex does today.  Every request is appended
+of caching, which is what dasflex does today.  While a file named NO_STORE
+is in the served directory every reply carries Cache-Control: no-cache,
+no-store; a file, so the shell test can flip it without a new port.  Every request is appended
 to the log file as one line, so the shell test can see what the client
 sent and what it got back.
 
@@ -21,6 +23,9 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 g_dir = "."
 g_log = None
 g_validators = True
+
+def _noStore():
+	return os.path.isfile(os.path.join(g_dir, "NO_STORE"))
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -63,6 +68,7 @@ class Handler(BaseHTTPRequestHandler):
 				self.send_response(304)
 				self.send_header("ETag", sETag)
 				self.send_header("Last-Modified", sLastMod)
+				if _noStore(): self.send_header("Cache-Control", "no-cache, no-store")
 				self.end_headers()
 				self._log(304, inm, ims)
 				return
@@ -75,6 +81,8 @@ class Handler(BaseHTTPRequestHandler):
 		if g_validators:
 			self.send_header("ETag", sETag)
 			self.send_header("Last-Modified", sLastMod)
+		if _noStore():
+			self.send_header("Cache-Control", "no-cache, no-store")
 		self.end_headers()
 		self.wfile.write(xBody)
 		self._log(200, inm, ims)

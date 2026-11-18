@@ -30,6 +30,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <string.h>
 
 #include <das3/core.h>
 #include <das3/json.h>
@@ -43,21 +44,27 @@
    Kind of cool eh?
 */
 
+/* bWantUri: a node found by catalog path has a URI, one loaded by
+   location is a root of its own and has none */
 int info_or_exit(
-	const char* sSrc, const DasNode* pNode, const char* sWhich, int nTest
+	const char* sSrc, const DasNode* pNode, const char* sWhich, bool bWantUri,
+	int nTest
 ){
-	
+
 	printf("TEST %d: ", nTest);
 	const char* sName = pNode ? DasNode_name(pNode) : NULL ;
 	const char* sUri  = pNode ? DasNode_pathUri(pNode) : NULL;
 	const char* sUrl  = pNode ? DasNode_srcUrl(pNode) : NULL;
-	
-	if(pNode == NULL || sName == NULL || sUri == NULL || sUrl == NULL){
+
+	if(pNode == NULL || sName == NULL || sUrl == NULL || (bWantUri != (sUri != NULL))){
 		printf("Load %s from %s    [FAILED]\n", sSrc, sWhich);
+		if(pNode != NULL)
+			printf("   name %s, URI %s, URL %s\n", sName ? sName : "(NULL)",
+			       sUri ? sUri : "(NULL)", sUrl ? sUrl : "(NULL)");
 		exit(nTest + 1);
 	}
-	
-	printf("Loaded Node %s (%s) from %s   [OKAY]\n", sName, sUri, sUrl);
+
+	printf("Loaded Node %s (%s) from %s   [OKAY]\n", sName, sUri ? sUri : "no URI", sUrl);
 	return 1;
 }
 
@@ -81,21 +88,27 @@ int main(int argc, char** argv) {
 	
 	/* In the global catalog this node is named:
 	 *
-	 *   tag:das2.org,2012:site:/uiowa/ephemeris/saturn
+	 *   tag:das2.org,2012:site:/uiowa/cassini/ephemeris/saturn
 	 *
 	 * But we are loading it by location, as an isolated item, so it is a
 	 * root of its own with no URI.  The session owns
 	 * every node it loads; del_DasCat() at the end frees them all.
 	 */
 	DasNode* pCasEphem = DasCat_resolve(pCat, sUrl);
-	nTest += info_or_exit(sUrl, pCasEphem, "Cassini Saturn Ephemeris", nTest);
-	
+	nTest += info_or_exit(sUrl, pCasEphem, "Cassini Saturn Ephemeris", false, nTest);
+
 	sUrl = "https://das2.org/catalog/das/site/uiowa/juno/wav.json";
 	DasNode* pWavCat = DasCat_resolve(pCat, sUrl);
-	nTest += info_or_exit(sUrl, pWavCat, "Juno Waves Catalog", nTest);
-	
+	nTest += info_or_exit(sUrl, pWavCat, "Juno Waves Catalog", false, nTest);
+
+	/* Children of a root are named from it, so this one is just "survey" */
 	const DasNode* pSurvey = DasCat_subNode(pCat, pWavCat, "survey");
-	nTest += info_or_exit(sUrl, pSurvey, "Juno Waves Survey Data Source", nTest);
+	nTest += info_or_exit(sUrl, pSurvey, "Juno Waves Survey Data Source", true, nTest);
+	if(strcmp(DasNode_pathUri(pSurvey), "survey") != 0){
+		printf("TEST %d: child of a root is named from it, got %s   [FAILED]\n", nTest,
+		       DasNode_pathUri(pSurvey));
+		return nTest;
+	}
 	
 	printf("TEST %d: (Not) Deleting a non-root ", nTest);
 	del_DasNode((DasNode*)pSurvey);  /* Erasing const for testing purposes */
@@ -117,35 +130,35 @@ int main(int argc, char** argv) {
 	nTest += 1;
 	
 	/* Extra cassini check */
-	sUrl = "tag:das2.org,2012:site:/uiowa/cassini/rpws/survey";
-	const DasNode* pCasSur = DasCat_subNode(pCat, pRoot, sUrl);
-	nTest += info_or_exit(sUri, pCasSur, "Cassini/survey", nTest);
+	sUri = "tag:das2.org,2012:site:/uiowa/cassini/rpws/survey";
+	const DasNode* pCasSur = DasCat_subNode(pCat, pRoot, sUri);
+	nTest += info_or_exit(sUri, pCasSur, "Cassini/survey", true, nTest);
 
 		
 	/*das root */
 	sUri = "tag:das2.org,2012:";
 	const DasNode* pDas2 = DasCat_subNode(pCat, pRoot, sUri);
-	nTest += info_or_exit(sUri, pDas2, "Root", nTest);
+	nTest += info_or_exit(sUri, pDas2, "Root", true, nTest);
 	
 	/* spase root */
 	sUri = "tag:spase-group.org,2018:spase://";
 	const DasNode* pSpase = DasCat_subNode(pCat, pRoot, sUri);
-	nTest += info_or_exit(sUri, pSpase, "Root", nTest);
+	nTest += info_or_exit(sUri, pSpase, "Root", true, nTest);
 	
 	/* cdaweb root */
 	sUri = "tag:cdaweb.sci.gsfc.nasa.gov,2018:";
 	const DasNode* pCdaWeb = DasCat_subNode(pCat, pRoot, sUri);
-	nTest += info_or_exit(sUri, pCdaWeb, "Root", nTest);
+	nTest += info_or_exit(sUri, pCdaWeb, "Root", true, nTest);
 	
 	/* Deep dig from existing root */
 	sUri = "tag:das2.org,2012:site:/uiowa/juno/wav/uncalibrated/hrs";
 	const DasNode* pWavUcalHrs = DasCat_subNode(pCat, pRoot, sUri);
-	nTest += info_or_exit(sUri, pWavUcalHrs, "Juno Waves Uncalibrated HFWBR", nTest);
+	nTest += info_or_exit(sUri, pWavUcalHrs, "Juno Waves Uncalibrated HFWBR", true, nTest);
 	
 	/* A deep path through the session: the levels walked above stay loaded */
 	sUri = "tag:das2.org,2012:site:/uiowa/juno/wav/survey/das2";
 	DasNode* pSurvey2 = DasCat_resolve(pCat, sUri);
-	nTest += info_or_exit(sUri, pSurvey2, "Waves Survey Deep Read", nTest);
+	nTest += info_or_exit(sUri, pSurvey2, "Waves Survey Deep Read", true, nTest);
 	
 	/* Get a Query definition */
 	printf("TEST %d: Getting partial query interface ", nTest);

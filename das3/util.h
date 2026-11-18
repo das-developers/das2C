@@ -442,9 +442,9 @@ DAS_API const char* dasfs_userHome(void);
  * This is ".das" under the home directory on every platform, the way ssh
  * and git keep their files, or the value of the DAS_USERDIR environment
  * variable if it was set when daslib_init() ran, or whatever the program gave
- * das_setUserDir().  The catalog node cache and saved credentials live
- * under it.  Only the path is returned, nothing is created; whatever
- * writes under it makes the directories it needs.
+ * dasfs_setUserDir().  The catalog node cache, when a program turns it on,
+ * and saved credentials live under it.  Only the path is returned, nothing
+ * is created; whatever writes under it makes the directories it needs.
  *
  * @return A pointer to a global string, never NULL or empty.
  */
@@ -454,9 +454,9 @@ DAS_API const char* dasfs_userDir(void);
  *
  * For programs that embed the library and want to set the location
  * themselves instead of relying on the environment.  Call it right after
- * daslib_init() and before any DasCat or other object that reads the
- * directory is made: those take their copy when constructed and are not
- * moved by a later call.
+ * daslib_init(), before anything reads the directory: a DasCat takes its
+ * copy when DasCat_setCaching() first turns caching on, and is not moved
+ * by a later call.
  *
  * @param sDir The directory to use, copied.  NULL or an empty string goes
  *        back to the default, the DAS_USERDIR environment variable if set,

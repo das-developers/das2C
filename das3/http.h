@@ -38,10 +38,14 @@ extern "C" {
  *
  * Most das data is open and needs no login.  Where a server does ask for
  * one, it is a light gate that keeps pre-release data from being picked up
- * before publication, never an institutional password, see DasCredMgr.  A
+ * before publication, not an institutional password, see DasCredMgr.  A
  * login is sent only over https, only to the server that asked for it
  * with a 401, and is dropped when a redirect leads to another scheme, host
  * or port.  Plain http works for everything that needs no login.
+ *
+ * Server certificates are not checked, by design: an expired or
+ * self-signed certificate does not stop a data request.  https keeps the
+ * traffic private from onlookers but does not prove who the server is.
  */
 
 /** @addtogroup network

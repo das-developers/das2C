@@ -5,6 +5,7 @@
 #
 #   nmake /f buildfiles\windows.mak               DLL, static library and programs
 #   nmake /f buildfiles\windows.mak test          Build, then run the tests
+#   nmake /f buildfiles\windows.mak test_net      Tests that need the internet
 #   nmake /f buildfiles\windows.mak dll           das3.dll and import lib das3.lib
 #   nmake /f buildfiles\windows.mak PREFIX=C:\opt install      Programs, DLL, schemas
 #   nmake /f buildfiles\windows.mak PREFIX=C:\opt dev_install  Adds static lib, headers
@@ -188,6 +189,13 @@ TEST_SETS=$(TEST_SETS) test_cdf
 
 test: build
 	$(MAKE) /f $(THIS) $(TEST_SETS)
+
+# Tests that reach real das servers over the internet.  Kept out of 'test'
+# so a server outage can't fail it; run before a release.  TestCatalog
+# walks the das2.org catalog and loads nodes by location, writing no files.
+test_net: build
+	@echo INFO: Running unit test for the catalog over the network, $(BD)\TestCatalog...
+	@$(BD)\TestCatalog.exe
 
 ##############################################################################
 # Dependencies
@@ -436,6 +444,7 @@ test_main:
 	@echo INFO: ===============================================
 	@echo INFO: All core test programs completed without errors
 	@echo INFO: ===============================================
+	@echo INFO: Network tests not run here, see the test_net target
 
 test_spice:
 	@echo INFO: Running unit test for spice error redirect, $(BD)\TestSpice...

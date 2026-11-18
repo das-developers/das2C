@@ -124,6 +124,25 @@ check "forced check is unconditional"         grep -q "200 inm=- ims=-" <(tail -
 check "two full fetches in all"               [ "$(grep -c " 200 " "$LOG")" -eq 2 ]
 stop_server
 
+# 7. A server that says no-store: nothing is kept, and an older copy goes
+rm -rf "$DAS_USERDIR"; : > "$LOG"
+start_server
+U="http://127.0.0.1:$PORT/geomag_flex_0.7.json"
+$FETCH url $U 0 > /dev/null 2>&1
+BODY=$(ls "$CACHE"/*.json 2>/dev/null | head -1)
+check "a copy kept before the server said no-store"  [ -n "$BODY" ] && [ -e "$BODY.hdr" ]
+touch "$SRV/NO_STORE"   # same server and port, so the same cache file
+sOut=$($FETCH -f url $U 0 2>/dev/null)
+check "no-store node still resolves"          [ "$sOut" == "$EXPECT" ]
+check "the old copy was removed"              [ ! -e "$BODY" ]
+check "and its validators with it"            [ ! -e "$BODY.hdr" ]
+rm -rf "$DAS_USERDIR"
+sOut=$($FETCH url $U 0 2>/dev/null)
+check "cold no-store run resolves"            [ "$sOut" == "$EXPECT" ]
+check "and writes no node file"               [ -z "$(ls "$CACHE" 2>/dev/null)" ]
+stop_server
+rm -f "$SRV/NO_STORE"
+
 echo
 if [ $nFail -eq 0 ]; then
 	echo " Result: PASSED ($nPass checks)"

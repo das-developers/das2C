@@ -36,17 +36,19 @@
 #include "util.h"
 #include "str.h"
 #include "log.h"
-#include "http.h"
+#include "http_p.h"
 #include "node_p.h"
 #include "source.h"
 #include "catalog.h"
 
 /* Where this session keeps copies of nodes fetched over HTTP and how long
- * it trusts them.  Empty sDir means no caching; nMaxAgeSec of zero or less
- * means always ask the server, see _dascat_fetch(). */
+ * it trusts them.  nMaxAgeSec of zero or less means always ask the server,
+ * see _dascat_fetch().  The walk code takes a pointer to this, NULL when
+ * caching is off, see _DasCat_cache(). */
 typedef struct das_node_cache {
-	char sDir[256];
+	char sDir[256];         /* "" until chosen */
 	int  nMaxAgeSec;
+	bool bOn;
 } DasNodeCache;
 
 struct das_cat_mount {
@@ -57,7 +59,7 @@ struct das_cat_mount {
 struct das_cat_t {
 	DasCredMgr* pMgr;      /* owned */
 	char* sAgent;           /* owned copy, or NULL for the library default */
-	DasNodeCache* pCache;   /* owned, NULL until DasCat_setCache() */
+	DasNodeCache cache;     /* settings kept while off, see DasCat_setCaching() */
 
 	/* Where paths start.  Relative paths get sPrefix in front, or with a
 	 * seed set, the seed's prefix and separator; the two are one knob
@@ -90,6 +92,12 @@ struct das_cat_t {
 	DasNode* pNearNode;     /* that container when it is a root and so has no URI to
 	                           resolve again: the walk's start node, borrowed */
 };
+
+/* The settings the walk code reads, or NULL when caching is off */
+static const DasNodeCache* _DasCat_cache(const DasCat* pThis)
+{
+	return pThis->cache.bOn ? &(pThis->cache) : NULL;
+}
 
 /* Defined further down, used throughout */
 static char* _dascat_strdupz(const char* s);
@@ -375,6 +383,19 @@ static void _dascat_fetch(
 static void _dascat_keep(const struct dascat_fetch* pF, const char* pBytes, size_t uBytes)
 {
 	if((pF->sCache[0] == '\0') || pF->bFromCache) return;
+
+	/* A server that says not to keep it is obeyed, and an older copy goes
+	 * too: it was kept before the server said so and would be served
+	 * offline as if current.  "private" does not stop this cache, it
+	 * belongs to one user. */
+	if((pF->pRes != NULL) && _DasHttpResp_noStore(pF->pRes)){
+		daslog_debugf("Node %s is marked no-store, not cached", pF->sFinal);
+		char sHdr[600];
+		_dascat_hdrPath(pF->sCache, sHdr, sizeof(sHdr));
+		remove(pF->sCache);
+		remove(sHdr);
+		return;
+	}
 	_dascat_writeCache(pF->sCache, pBytes, uBytes);
 	if(!pF->bRenewed && (pF->pRes != NULL)) _dascat_writeValidators(pF->sCache, pF->pRes);
 }
@@ -449,7 +470,7 @@ static DasNode* _DasCat_walkFrom(DasCat* pThis, DasNode* pFrom, const char* sRel
 	DasNodeWalk* pWalk = new_DasNodeWalk(pFrom, sRel);
 	if(pWalk == NULL) return NULL;
 	DasNode* pNode = _dascat_drive(
-		pWalk, pThis->pMgr, pThis->sAgent, pThis->pCache, DASHTTP_TIMEOUT_MIN * DASHTTP_TIMEOUT_MULTI, NULL
+		pWalk, pThis->pMgr, pThis->sAgent, _DasCat_cache(pThis), DASHTTP_TIMEOUT_MIN * DASHTTP_TIMEOUT_MULTI, NULL
 	);
 	_DasCat_setNear(pThis, pWalk, pFrom);
 	del_DasNodeWalk(pWalk);
@@ -485,7 +506,7 @@ static DasNode* _DasCat_seedNode(DasCat* pThis)
 {
 	if(pThis->pSeed == NULL)
 		pThis->pSeed = _DasCat_keep(pThis, _dascat_loadUrl(
-			pThis->sSeedUrl, pThis->sSeedUri, pThis->pMgr, pThis->sAgent, pThis->pCache
+			pThis->sSeedUrl, pThis->sSeedUri, pThis->pMgr, pThis->sAgent, _DasCat_cache(pThis)
 		));
 	return pThis->pSeed;
 }
@@ -496,7 +517,7 @@ static DasNode* _DasCat_seedNode(DasCat* pThis)
 static DasNode* _DasCat_das2(DasCat* pThis)
 {
 	if(pThis->pDas2 == NULL)
-		pThis->pDas2 = _DasCat_keep(pThis, _dascat_loadSeed(pThis->pMgr, pThis->sAgent, pThis->pCache));
+		pThis->pDas2 = _DasCat_keep(pThis, _dascat_loadSeed(pThis->pMgr, pThis->sAgent, _DasCat_cache(pThis)));
 	return pThis->pDas2;
 }
 
@@ -575,16 +596,9 @@ DasCat* new_DasCat(DasCredMgr* pMgr, const char* sAgent)
 	if((sAgent != NULL) && (sAgent[0] != '\0')) pThis->sAgent = dasstr_new(sAgent);
 	pThis->sPrefix = dasstr_new(DASCAT_SITE_PREFIX);
 
-	/* Caching is on from the start.  A session that does not want it says
-	 * so; one that forgets gets fast catalog walks and at worst an hour old
-	 * node, which is the better default for the GUIs and scripts built on
-	 * this. */
-	char sDir[sizeof(((DasNodeCache*)0)->sDir)];
-	int nLen = snprintf(sDir, sizeof(sDir), "%s" DASFS_SEPS "cache" DASFS_SEPS "nodes", dasfs_userDir());
-	if((nLen > 0) && (nLen < (int)sizeof(sDir)))
-		DasCat_setCache(pThis, sDir, DASCAT_NODE_TTL_SEC);
-	else
-		daslog_warnf("User directory %s too long for the node cache, caching is off", dasfs_userDir());
+	/* No disk cache until the program asks, library code writes no files
+	 * by default.  Nodes still stay in memory for the session's life. */
+	pThis->cache.nMaxAgeSec = DASCAT_NODE_TTL_SEC;
 	return pThis;
 }
 
@@ -597,7 +611,6 @@ void del_DasCat(DasCat* pThis)
 	for(size_t u = 0; u < pThis->uOwned; ++u) del_DasNode(pThis->aOwned[u]);
 	free(pThis->aOwned);
 	if(pThis->pMgr != NULL) del_DasCredMgr(pThis->pMgr);
-	free(pThis->pCache);
 
 	free(pThis->sAgent);
 	free(pThis->sPrefix);
@@ -619,50 +632,65 @@ DasCredMgr* DasCat_credMgr(const DasCat* pThis){ return pThis->pMgr; }
 
 const char* DasCat_agent(const DasCat* pThis){ return pThis->sAgent; }
 
-das_errcode DasCat_setCache(DasCat* pThis, const char* sDir, int nMaxAgeSec)
+/* The spot the das tools share, from dasfs_userDir() as it is now */
+static das_errcode _dascat_defaultDir(DasNodeCache* pCache)
 {
-	if(pThis->pCache == NULL)
-		pThis->pCache = (DasNodeCache*)calloc(1, sizeof(DasNodeCache));
-	if(pThis->pCache == NULL)
-		return daserrf(DASERR_CAT, "Couldn't allocate the node cache settings");
+	int nLen = snprintf(pCache->sDir, sizeof(pCache->sDir),
+		"%s" DASFS_SEPS "cache" DASFS_SEPS "nodes", dasfs_userDir()
+	);
+	if((nLen > 0) && (nLen < (int)sizeof(pCache->sDir))) return DAS_OKAY;
 
-	if((sDir == NULL)||(sDir[0] == '\0')){
-		pThis->pCache->sDir[0] = '\0';
-		return DAS_OKAY;
+	/* Usually DAS_USERDIR or a command line, see the top of this file */
+	pCache->sDir[0] = '\0';
+	daslog_errorf("User directory %s too long for the node cache", dasfs_userDir());
+	return DASERR_CAT;
+}
+
+das_errcode DasCat_setCaching(DasCat* pThis, bool bOn)
+{
+	if(bOn && (pThis->cache.sDir[0] == '\0')){
+		if(_dascat_defaultDir(&(pThis->cache)) != DAS_OKAY){
+			daslog_error("Node caching stays off");
+			pThis->cache.bOn = false;
+			return DASERR_CAT;
+		}
 	}
-	if(strlen(sDir) >= sizeof(pThis->pCache->sDir)){
-		pThis->pCache->sDir[0] = '\0';
-		return daserrf(DASERR_CAT, "Node cache directory name too long, caching is off: %s", sDir);
-	}
-	/* sDir may be our buffer, from DasCat_cacheDir(), to change the age */
-	if(sDir != pThis->pCache->sDir) strcpy(pThis->pCache->sDir, sDir);
-	pThis->pCache->nMaxAgeSec = nMaxAgeSec;
+	pThis->cache.bOn = bOn;
 	return DAS_OKAY;
 }
 
-das_errcode DasCat_useUserCache(DasCat* pThis)
+bool DasCat_caching(const DasCat* pThis){ return pThis->cache.bOn; }
+
+das_errcode DasCat_setCacheDir(DasCat* pThis, const char* sDir)
 {
-	char sDir[sizeof(((DasNodeCache*)0)->sDir)];
-	int nLen = snprintf(sDir, sizeof(sDir), "%s" DASFS_SEPS "cache" DASFS_SEPS "nodes", dasfs_userDir());
-	if((nLen < 0) || (nLen >= (int)sizeof(sDir))){
-		DasCat_setCache(pThis, NULL, 0);
-		return daserrf(DASERR_CAT, "User directory %s too long for the node cache, caching is off",
-			dasfs_userDir()
-		);
+	if(sDir == NULL){
+		/* Picked now rather than flagged for later, so the setting does
+		 * not depend on when caching is turned on.  On failure the old one
+		 * stays, as for a long sDir below. */
+		DasNodeCache tmp = pThis->cache;
+		if(_dascat_defaultDir(&tmp) != DAS_OKAY) return DASERR_CAT;
+		strcpy(pThis->cache.sDir, tmp.sDir);
+		return DAS_OKAY;
 	}
-	return DasCat_setCache(pThis, sDir, DASCAT_NODE_TTL_SEC);
+	if((sDir[0] == '\0') || (strlen(sDir) >= sizeof(pThis->cache.sDir))){
+		daslog_errorf("Node cache directory name is %s: '%s'",
+			(sDir[0] == '\0') ? "empty" : "too long", sDir
+		);
+		return DASERR_CAT;
+	}
+	/* sDir may be our own buffer, from DasCat_cacheDir() */
+	if(sDir != pThis->cache.sDir) strcpy(pThis->cache.sDir, sDir);
+	return DAS_OKAY;
 }
 
 const char* DasCat_cacheDir(const DasCat* pThis)
 {
-	if((pThis->pCache == NULL)||(pThis->pCache->sDir[0] == '\0')) return NULL;
-	return pThis->pCache->sDir;
+	return (pThis->cache.sDir[0] == '\0') ? NULL : pThis->cache.sDir;
 }
 
-int DasCat_cacheAge(const DasCat* pThis)
-{
-	return (pThis->pCache == NULL) ? 0 : pThis->pCache->nMaxAgeSec;
-}
+void DasCat_setCacheAge(DasCat* pThis, int nMaxAgeSec){ pThis->cache.nMaxAgeSec = nMaxAgeSec; }
+
+int DasCat_cacheAge(const DasCat* pThis){ return pThis->cache.nMaxAgeSec; }
 
 /* ************************************************************************* */
 /* Root policy */
@@ -876,7 +904,7 @@ DasNode* DasCat_resolve(DasCat* pThis, const char* sPath)
 	if(!bNoPath && DasCat_isNodeUrl(sPath)){
 		pThis->sLastUri = dasstr_new(sPath);
 		return _DasCat_keep(pThis, _dascat_loadUrl(
-			sPath, NULL, pThis->pMgr, pThis->sAgent, pThis->pCache
+			sPath, NULL, pThis->pMgr, pThis->sAgent, _DasCat_cache(pThis)
 		));
 	}
 

@@ -1134,6 +1134,41 @@ bool DasHttpResp_header(
 	return false;
 }
 
+/* Every Cache-Control line counts, a server may split the directives over
+   several (RFC 9110 5.3).  Directives are comma separated, case
+   insensitive, and may have "=value" (RFC 9111 5.2).  A quoted value that
+   happens to hold ", no-store" reads as a match, which only costs a copy
+   not kept. */
+bool _DasHttpResp_noStore(const DasHttpResp* pRes)
+{
+	if((pRes == NULL)||(pRes->sHeaders == NULL)) return false;
+
+	static const char sField[] = "Cache-Control:";
+	static const char sWant[] = "no-store";
+	const size_t uField = sizeof(sField) - 1;
+	const size_t uWant = sizeof(sWant) - 1;
+
+	const char* pLine = pRes->sHeaders;
+	while(*pLine != '\0'){
+		const char* pEnd = strstr(pLine, "\r\n");
+		const char* pLineEnd = pEnd ? pEnd : pLine + strlen(pLine);
+		if(((size_t)(pLineEnd - pLine) > uField) && (strncasecmp(pLine, sField, uField) == 0)){
+			const char* p = pLine + uField;
+			while(p < pLineEnd){
+				while((p < pLineEnd) && ((*p == ',')||isspace((unsigned char)*p))) ++p;
+				const char* pTok = p;
+				while((p < pLineEnd) && (*p != ',') && (*p != '=') && !isspace((unsigned char)*p)) ++p;
+				if(((size_t)(p - pTok) == uWant) && (strncasecmp(pTok, sWant, uWant) == 0))
+					return true;
+				while((p < pLineEnd) && (*p != ',')) ++p;
+			}
+		}
+		if(pEnd == NULL) break;
+		pLine = pEnd + 2;
+	}
+	return false;
+}
+
 /* filename=x or filename="x", from a Content-Disposition value */
 static void _http_setFilename(DasHttpResp* pRes)
 {

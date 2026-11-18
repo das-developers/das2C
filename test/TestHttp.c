@@ -251,6 +251,36 @@ static void testHeaders(void)
 }
 
 /* ************************************************************************* */
+/* Cache-Control: no-store, which the node cache obeys */
+
+static bool noStoreIn(const char* sHdrLines)
+{
+	char sReply[512];
+	snprintf(sReply, sizeof(sReply), "HTTP/1.1 200 OK\r\n%s\r\n", sHdrLines);
+	DasHttpResp* pRes = _new_DasHttpResp();
+	DasXport* pX = new_DasXport_mem(sReply, strlen(sReply), "r");
+	bool bRet = _DasHttpResp_readHdrs(pRes, pX) && _DasHttpResp_noStore(pRes);
+	del_DasXport(pX);
+	del_DasHttpResp(pRes);
+	return bRet;
+}
+
+static void testNoStore(void)
+{
+	printf("INFO: Finding Cache-Control: no-store\n");
+
+	CHECK(noStoreIn("Cache-Control: no-store\r\n"), "alone");
+	CHECK(noStoreIn("cache-control: No-Cache, NO-STORE, must-revalidate\r\n"), "in a list, any case");
+	CHECK(noStoreIn("Cache-Control: max-age=0,no-store\r\n"), "after a valued directive, no space");
+	CHECK(noStoreIn("Cache-Control: public\r\nServer: x\r\nCache-Control: no-store\r\n"),
+	      "on a second Cache-Control line");
+	CHECK(!noStoreIn("Cache-Control: private, max-age=3600\r\n"), "private is not no-store");
+	CHECK(!noStoreIn("Cache-Control: no-storefront\r\n"), "a longer token is not a match");
+	CHECK(!noStoreIn("X-Note: no-store\r\n"), "other fields are not read");
+	CHECK(!noStoreIn("Server: x\r\n"), "no Cache-Control at all");
+}
+
+/* ************************************************************************* */
 /* Where a login may go: only over https, and only to the origin that asked */
 
 static void setLogin(char* sAuth, size_t uAuth, int16_t* pnCred)
@@ -321,6 +351,7 @@ int main(int argc, char** argv)
 
 	testParse();
 	testHeaders();
+	testNoStore();
 	testLogins();
 
 	printf("INFO: %d checks passed, %d failed\n", g_nPass, g_nFail);

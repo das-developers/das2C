@@ -235,7 +235,7 @@ $(DESTDIR)$(INST_NAT_BIN)/%:$(BD)/%
 # archive.  Listing those too would let a missing one, say the object for a
 # newly added source, go unbuilt while the archive looks up to date.
 .SECONDARY: $(UTIL_OBJS)
-.PHONY: test test_more build
+.PHONY: test test_more test_net build
 
 ## Explicit Rules  ###########################################################
 
@@ -466,8 +466,18 @@ test_main: $(BD) $(BD)/$(TARG).a $(BUILD_TEST_PROGS) $(BULID_UTIL_PROGS)
 	@echo "INFO: ==============================================="
 	@echo "INFO: All core test programs completed without errors"
 	@echo "INFO: ==============================================="
+	@echo "INFO: Network tests not run here, see make test_net"
 
-# Stretch fixtures, see Linux.mak.  This target never fails the build on its own.
+# Tests that reach real das servers over the internet.  Kept out of
+# 'make test' so a server outage can't turn it red; run before a release.
+#
+#   TestCatalog  walks the das2.org catalog from the compiled in seed and
+#                loads nodes by location.  Writes no files.
+test_net: $(BD) $(BD)/TestCatalog
+	@echo "INFO: Running unit test for the catalog over the network, $(BD)/TestCatalog..."
+	@$(BD)/TestCatalog
+
+# Stretch fixtures, see Linux.mak.  This target does not fail the build on its own.
 # Tests that need more than a C toolchain and bash.  Not in 'make test', so
 # the base suite runs anywhere the library builds; run these by hand or in
 # a job that has the extras.
