@@ -57,6 +57,7 @@
 
 #ifdef _WIN32
 #define strncasecmp _strnicmp
+#define strcasecmp _stricmp
 #else
 #include <strings.h>
 #endif
@@ -235,6 +236,31 @@ static bool _http_setUrl(DasHttpResp* pRes, const char* sUrl)
 	_http_partCopy(pRes->sUrl, &(pRes->parts), DASURLPART_PORT, pRes->sPort, sizeof(pRes->sPort));
 	pRes->bDefPort = (strcmp(pRes->sPort, pRes->bHttps ? "443" : "80") == 0);
 	return true;
+}
+
+/* A login belongs to the origin that asked for it with a 401.  Without
+   this a server that authenticates and then redirects (to a mirror, a
+   storage host, a signed URL) would have the login replayed to wherever it
+   pointed, and if that host answered 401 the good login would be marked
+   refused.  Host names compare without case, ports as written. */
+bool _DasHttpResp_hop(
+	DasHttpResp* pRes, const char* sUrl, char* sAuth, size_t uAuth, int16_t* pnCred
+){
+	bool bWasHttps = pRes->bHttps;
+	char sWasHost[sizeof(pRes->sHost)];
+	char sWasPort[sizeof(pRes->sPort)];
+	strcpy(sWasHost, pRes->sHost);
+	strcpy(sWasPort, pRes->sPort);
+
+	bool bOk = _http_setUrl(pRes, sUrl);
+
+	if((sAuth[0] != '\0') && (!bOk || (bWasHttps != pRes->bHttps) ||
+	   (strcasecmp(sWasHost, pRes->sHost) != 0) || (strcmp(sWasPort, pRes->sPort) != 0))){
+		daslog_debugf("Redirect left %s, its login is not sent on", sWasHost);
+		_dascred_wipe(sAuth, uAuth);
+		*pnCred = 0;
+	}
+	return bOk;
 }
 
 /* scheme://host[:port]path, the key logins are stored under */
@@ -1017,10 +1043,17 @@ static DasXport* _das_http_connect(DasHttpResp* pRes, const DasHttpOpts* pOpts)
 /* ************************************************************************* */
 /* The request */
 
-static bool _das_http_sendRequest(
+bool _das_http_sendRequest(
 	DasHttpResp* pRes, DasXport* pX, const char* sAgent, const char* sAuth,
 	const char* sReqHdrs
 ){
+	/* The 401 handler already refuses plain http; this keeps any later
+	   path from putting a login on the wire in the clear */
+	if((sAuth != NULL) && (sAuth[0] != '\0') && !pRes->bHttps){
+		_http_err(pRes, "Refusing to send a login to %s over plain http", pRes->sHost);
+		return false;
+	}
+
 	size_t uPath = 0, uQuery = 0;
 	const char* pPath  = DasUrlParts_get(&(pRes->parts), pRes->sUrl, DASURLPART_PATH, &uPath);
 	const char* pQuery = DasUrlParts_get(&(pRes->parts), pRes->sUrl, DASURLPART_QUERY, &uQuery);
@@ -1335,7 +1368,7 @@ DasHttpResp* new_DasHttpResp_getEx(
 				goto DONE;
 			}
 			daslog_debugf("Redirected to: %s", sNext);
-			if(!_http_setUrl(pRes, sNext)) goto DONE;
+			if(!_DasHttpResp_hop(pRes, sNext, sAuth, sizeof(sAuth), &nCred)) goto DONE;
 			break;
 
 		case HTTP_AuthReq:
@@ -1346,6 +1379,15 @@ DasHttpResp* new_DasHttpResp_getEx(
 			if((nCred > 0)&&(pMgr != NULL)){
 				_DasCredMngr_authFailed(pMgr, nCred,
 					"Credentials not accepted by remote server");
+			}
+
+			/* Checked before the manager so no one is prompted for a login
+			   that would not be sent */
+			if(!pRes->bHttps){
+				_http_err(pRes, "Server %s asks for a login over plain http, "
+					"das2C sends logins only over https", sServer
+				);
+				goto DONE;
 			}
 
 			if(pMgr == NULL){

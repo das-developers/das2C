@@ -251,6 +251,67 @@ static void testHeaders(void)
 }
 
 /* ************************************************************************* */
+/* Where a login may go: only over https, and only to the origin that asked */
+
+static void setLogin(char* sAuth, size_t uAuth, int16_t* pnCred)
+{
+	snprintf(sAuth, uAuth, "Basic dXNlcjpwYXNz");
+	*pnCred = 3;
+}
+
+static void testLogins(void)
+{
+	printf("INFO: Login handling on redirects and plain http\n");
+
+	char sAuth[64] = {'\0'};
+	int16_t nCred = 0;
+	DasHttpResp* pRes = _new_DasHttpResp();
+
+	CHECK(_DasHttpResp_hop(pRes, "https://a.example/das/server?dataset=X", sAuth, sizeof(sAuth), &nCred),
+	      "first URL set");
+
+	setLogin(sAuth, sizeof(sAuth), &nCred);
+	CHECK(_DasHttpResp_hop(pRes, "https://A.Example/das/other", sAuth, sizeof(sAuth), &nCred) &&
+	      (sAuth[0] != '\0') && (nCred == 3), "same origin, host case aside, keeps the login");
+
+	CHECK(_DasHttpResp_hop(pRes, "https://b.example/store/x", sAuth, sizeof(sAuth), &nCred) &&
+	      (sAuth[0] == '\0') && (nCred == 0), "another host drops the login");
+
+	setLogin(sAuth, sizeof(sAuth), &nCred);
+	CHECK(_DasHttpResp_hop(pRes, "https://b.example:8443/x", sAuth, sizeof(sAuth), &nCred) &&
+	      (sAuth[0] == '\0') && (nCred == 0), "another port drops the login");
+
+	setLogin(sAuth, sizeof(sAuth), &nCred);
+	CHECK(_DasHttpResp_hop(pRes, "http://b.example:8443/x", sAuth, sizeof(sAuth), &nCred) &&
+	      (sAuth[0] == '\0') && (nCred == 0), "https to http drops the login");
+
+	/* The request writer is the last stop.  The URL is now plain http. */
+	char sReq[2048];
+	memset(sReq, 0, sizeof(sReq));
+	DasXport* pX = new_DasXport_mem(sReq, sizeof(sReq) - 1, "w");
+	setLogin(sAuth, sizeof(sAuth), &nCred);
+	CHECK(!_das_http_sendRequest(pRes, pX, "TestHttp", sAuth, NULL) &&
+	      (strstr(sReq, "Authorization") == NULL) && (DasHttpResp_error(pRes) != NULL),
+	      "login refused over plain http, nothing written");
+	CHECK(_das_http_sendRequest(pRes, pX, "TestHttp", NULL, NULL) &&
+	      (strncmp(sReq, "GET /x HTTP/1.0\r\n", 17) == 0),
+	      "plain http without a login still sends, got '%.20s'", sReq);
+	del_DasXport(pX);
+
+	memset(sReq, 0, sizeof(sReq));
+	pX = new_DasXport_mem(sReq, sizeof(sReq) - 1, "w");
+	CHECK(_DasHttpResp_hop(pRes, "https://a.example/das/x", sAuth, sizeof(sAuth), &nCred),
+	      "back to https");
+	setLogin(sAuth, sizeof(sAuth), &nCred);
+	CHECK(_das_http_sendRequest(pRes, pX, "TestHttp", sAuth, NULL) &&
+	      (strstr(sReq, "\r\nAuthorization: Basic dXNlcjpwYXNz\r\n") != NULL),
+	      "login sent over https");
+	del_DasXport(pX);
+
+	del_DasHttpResp(pRes);
+}
+
+/* ************************************************************************* */
 
 int main(int argc, char** argv)
 {
@@ -260,6 +321,7 @@ int main(int argc, char** argv)
 
 	testParse();
 	testHeaders();
+	testLogins();
 
 	printf("INFO: %d checks passed, %d failed\n", g_nPass, g_nFail);
 	return (g_nFail == 0) ? 0 : 13;

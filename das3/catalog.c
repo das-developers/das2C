@@ -619,26 +619,38 @@ DasCredMgr* DasCat_credMgr(const DasCat* pThis){ return pThis->pMgr; }
 
 const char* DasCat_agent(const DasCat* pThis){ return pThis->sAgent; }
 
-void DasCat_setCache(DasCat* pThis, const char* sDir, int nMaxAgeSec)
+das_errcode DasCat_setCache(DasCat* pThis, const char* sDir, int nMaxAgeSec)
 {
 	if(pThis->pCache == NULL)
 		pThis->pCache = (DasNodeCache*)calloc(1, sizeof(DasNodeCache));
-	if(pThis->pCache == NULL){
-		daserrf(DASERR_CAT, "Couldn't allocate the node cache settings");
-		return;
-	}
+	if(pThis->pCache == NULL)
+		return daserrf(DASERR_CAT, "Couldn't allocate the node cache settings");
+
 	if((sDir == NULL)||(sDir[0] == '\0')){
 		pThis->pCache->sDir[0] = '\0';
-		return;
+		return DAS_OKAY;
 	}
 	if(strlen(sDir) >= sizeof(pThis->pCache->sDir)){
-		daslog_warnf("Node cache directory name too long, caching is off: %s", sDir);
 		pThis->pCache->sDir[0] = '\0';
-		return;
+		return daserrf(DASERR_CAT, "Node cache directory name too long, caching is off: %s", sDir);
 	}
 	/* sDir may be our buffer, from DasCat_cacheDir(), to change the age */
 	if(sDir != pThis->pCache->sDir) strcpy(pThis->pCache->sDir, sDir);
 	pThis->pCache->nMaxAgeSec = nMaxAgeSec;
+	return DAS_OKAY;
+}
+
+das_errcode DasCat_useUserCache(DasCat* pThis)
+{
+	char sDir[sizeof(((DasNodeCache*)0)->sDir)];
+	int nLen = snprintf(sDir, sizeof(sDir), "%s" DASFS_SEPS "cache" DASFS_SEPS "nodes", dasfs_userDir());
+	if((nLen < 0) || (nLen >= (int)sizeof(sDir))){
+		DasCat_setCache(pThis, NULL, 0);
+		return daserrf(DASERR_CAT, "User directory %s too long for the node cache, caching is off",
+			dasfs_userDir()
+		);
+	}
+	return DasCat_setCache(pThis, sDir, DASCAT_NODE_TTL_SEC);
 }
 
 const char* DasCat_cacheDir(const DasCat* pThis)

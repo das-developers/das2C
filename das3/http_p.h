@@ -48,6 +48,20 @@ DasHttpResp* _new_DasHttpResp(void);
  * through a memory transport. */
 bool _DasHttpResp_readHdrs(DasHttpResp* pThis, DasXport* pX);
 
+/* Move to a redirect target.  A login in sAuth is wiped, and *pnCred
+   zeroed, unless the target has the same scheme, host and port.  False,
+   with the error set, if sUrl can't be used. */
+bool _DasHttpResp_hop(
+	DasHttpResp* pThis, const char* sUrl, char* sAuth, size_t uAuth, int16_t* pnCred
+);
+
+/* Write the request for the current URL to pX.  A non-empty sAuth on a
+   plain http URL is refused before anything is written. */
+bool _das_http_sendRequest(
+	DasHttpResp* pThis, DasXport* pX, const char* sAgent, const char* sAuth,
+	const char* sReqHdrs
+);
+
 #ifdef __cplusplus
 }
 #endif

@@ -127,7 +127,7 @@ extern "C" {
 /** The catalog URI prefix relative paths start from unless told otherwise */
 #define DASCAT_SITE_PREFIX "tag:das2.org,2012:site:/"
 
-/** How long, in seconds, a new session trusts a cached catalog node */
+/** How long, in seconds, DasCat_useUserCache() trusts a cached catalog node */
 #define DASCAT_NODE_TTL_SEC 3600
 
 /** @class DasCat catalog.h <das3/catalog.h>
@@ -182,8 +182,9 @@ typedef struct das_cat_t DasCat;
 
 /** Create a catalog session
  * 
- * The returned session has its node cache enabled right out of the gate,
- * to turn it off see DasCat_setCache()
+ * The session keeps the nodes it loads in memory until del_DasCat() and
+ * writes no files.  To keep copies between runs, call DasCat_useUserCache()
+ * or DasCat_setCache() before the first resolve.
  *
  * @param pMgr Credentials manager consulted when a node or data source asks
  *        for a login.  May be NULL for public access only.  Ownership
@@ -212,31 +213,44 @@ DAS_API DasCredMgr* DasCat_credMgr(const DasCat* pThis);
  */
 DAS_API const char* DasCat_agent(const DasCat* pThis);
 
-/** Change where, and for how long, this session keeps copies of catalog
- * nodes fetched over HTTP
+/** Keep copies of catalog nodes fetched over HTTP on disk, between runs
  *
- * A new session already caches: copies go under dasfs_userDir() in
- * cache/nodes and are trusted for DASCAT_NODE_TTL_SEC.  Walking a catalog
- * costs one request per level, so this is what makes the second run of a
- * program fast.  A copy older than that is not thrown away: the server is
- * asked whether it changed, using the ETag or Last-Modified it came with,
- * and only a changed node is downloaded again.  A server that cannot be
- * reached leaves the old copy in use, with a warning.  Nodes read from
- * local files are not cached, and neither are nodes built from bytes a
- * program fetched itself, see new_DasNode_json().
+ * A new session writes no files.  Walking a catalog costs one request per
+ * level, so a disk cache is what makes the second run of a program fast.
+ * A copy older than nMaxAgeSec is not thrown away: the server is asked
+ * whether it changed, using the ETag or Last-Modified it came with, and
+ * only a changed node is downloaded again.  A server that cannot be
+ * reached leaves the old copy in use, with a warning.
+ *
+ * Some nodes are never written: those read from local files, those built
+ * from bytes a program fetched itself (see new_DasNode_json()), and those
+ * the server marked "Cache-Control: no-store".
  *
  * @param pThis The catalog session
  * @param sDir Directory for the copies, created on first use.  NULL or an
- *        empty string turns caching off for this session.  Passing
- *        DasCat_cacheDir() is allowed, and can be used to change the 
- *        default node expiration time.
+ *        empty string turns the disk cache off.  Passing DasCat_cacheDir()
+ *        is allowed, to change only the age.
  * @param nMaxAgeSec Copies older than this many seconds are checked with
  *        the server before use.  Zero or less means check every time,
  *        which costs one round trip per level and no body bytes when the
  *        server supports validators, and a full fetch when it does not.
+ * @returns DAS_OKAY, or DASERR_CAT if sDir is too long or memory ran out,
+ *        in which case the disk cache is off
  * @memberof DasCat
  */
-DAS_API void DasCat_setCache(DasCat* pThis, const char* sDir, int nMaxAgeSec);
+DAS_API das_errcode DasCat_setCache(DasCat* pThis, const char* sDir, int nMaxAgeSec);
+
+/** Keep node copies in the usual per user directory
+ *
+ * The same as DasCat_setCache() with dasfs_userDir() followed by
+ * cache/nodes, and DASCAT_NODE_TTL_SEC.  This is the opt in for programs
+ * that want the cache shared by the das tools, as das_fetch does.
+ *
+ * @returns DAS_OKAY, or DASERR_CAT if the directory name is too long,
+ *        in which case the disk cache is off
+ * @memberof DasCat
+ */
+DAS_API das_errcode DasCat_useUserCache(DasCat* pThis);
 
 /** The directory this session caches nodes in, or NULL if caching is off
  * @memberof DasCat

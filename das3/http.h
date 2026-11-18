@@ -35,6 +35,13 @@ extern "C" {
 
 /** @defgroup network Networking
  * Fetching resources from remote servers, and the logins they ask for
+ *
+ * Most das data is open and needs no login.  Where a server does ask for
+ * one, it is a light gate that keeps pre-release data from being picked up
+ * before publication, never an institutional password, see DasCredMgr.  A
+ * login is sent only over https, only to the server that asked for it
+ * with a 401, and is dropped when a redirect leads to another scheme, host
+ * or port.  Plain http works for everything that needs no login.
  */
 
 /** @addtogroup network
@@ -226,8 +233,8 @@ typedef struct das_httpresp_t DasHttpResp;
  * <b>das2.2 Note:</b> The das2.2 protocol lets a server require a different
  * login for each dataset it serves (das2.2 ICD, https://zenodo.org/records/3588535).
  * So when the query string carries a dataset= value, credentials are looked
- * up and saved under http://SERVER/path?dataset=DATASET rather than
- * http://SERVER/path.  This is part of the das2.2 interface, which das2C
+ * up and saved under https://SERVER/path?dataset=DATASET rather than
+ * https://SERVER/path.  This is part of the das2.2 interface, which das2C
  * supports alongside das3.
  *
  * @param sUrl The location to connect to, sent as given.  No encoding is
@@ -238,7 +245,9 @@ typedef struct das_httpresp_t DasHttpResp;
  *        then the string "libdas/3" is sent.
  *
  * @param pMgr A credentials manager to consult if the server asks for a
- *             login.  NULL means only public resources can be read.
+ *             login.  It is consulted only for https URLs; a login asked
+ *             for over plain http fails without a prompt.  NULL means only
+ *             public resources can be read.
  *
  * @param rConSec If > 0.0 this is the floating point number of seconds to
  *             wait on a connection before giving up.  If 0.0 or less then
