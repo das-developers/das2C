@@ -745,8 +745,10 @@ static das_errcode _checkGroup(DasDs* pDsIn, DasPkt* pPd, MfVar* pVar, CompSrc* 
 		if(pSrc[i].pAry == NULL)
 			return daserrf(PERR, "Logic error, no array for plane '%s'", sPlane);
 		int nItems = 0;
-		pSrc[i].pCodec = DasDs_codecFor(pDsIn, sId, &nItems);
-		if(pSrc[i].pCodec == NULL) return PERR;
+		int nHas = DasDs_codecFor(pDsIn, sId, &(pSrc[i].pCodec), &nItems);
+		if(nHas < 0) return PERR;
+		if(nHas == 0)
+			return daserrf(PERR, "Logic error, plane '%s' has no codec", sPlane);
 		pSrc[i].iCodec = -1;
 		for(size_t c = 0; c < DasDs_numCodecs(pDsIn); ++c)
 			if(DasDs_codecAt(pDsIn, c) == pSrc[i].pCodec){ pSrc[i].iCodec = (int)c; break; }

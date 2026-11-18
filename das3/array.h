@@ -192,10 +192,11 @@ DAS_API bool dasid_check(const char* sId);
  * // Print the values in the array, loop below works with ragged arrays and
  * // reduces function call overhead by accessing a full record at a time
  * const float* pVals;
- * size_t uVals;
+ * ptrdiff_t nVals;
  * for(size_t i = 0; i < DasAry_lengthIn(pAry, DAS_ADDR0); ++i){
- *    pVals = DasAry_floatsIn(pAry, DAS_ADDR1(i), &uVals);
- *    for(size_t j = 0; j < uVals; ++j){
+ *    pVals = DasAry_floatsIn(pAry, DAS_ADDR1(i), &nVals);
+ *    if(nVals < 0) break;
+ *    for(ptrdiff_t j = 0; j < nVals; ++j){
  *      if( j > 0) printf(", ");
  *      printf("%.4e", pVals[j]);
  *    }
@@ -593,7 +594,11 @@ DAS_API size_t DasAry_memIndexed(const DasAry* pThis);
  *              example below.
  *
  * @return The current maximum valid value for the <i>i<sup>th</sup></i>
- *         index at current location in the previous indices.
+ *         index at current location in the previous indices.  A location
+ *         the array doesn't hold, such as one not filled in yet while data
+ *         are arriving, has a length of 0 and is not an error.  An nAddr
+ *         outside 0 to the array rank is an error, it's logged and 0 is
+ *         returned.
  *
  * @code
  *
@@ -603,12 +608,12 @@ DAS_API size_t DasAry_memIndexed(const DasAry* pThis);
  *
  * // Print the number of samples in each waveform.
  * size_t uWaveforms = DasAry_lengthIn(pWBR, DAS_ADDR0);
- * for(size_t u = 0; u &lt; uWaveforms; ++u)
+ * for(size_t u = 0; u < uWaveforms; ++u)
  *	   printf("Capture %zu has %zu samples\n", u, DasAry_lengthIn(pWBR, DAS_ADDR1(u)));
  * @endcode
  *
- * @see DasAry_valAt to obtain both the length and a pointer to a continuous
- *      range of data values an once.
+ * @see DasAry_valsIn to obtain both the length and a pointer to a continuous
+ *      range of data values at once.
  * @memberof DasAry
  */
 DAS_API size_t DasAry_lengthIn(const DasAry* pThis, int nAddr, ptrdiff_t* pAddr);
@@ -737,14 +742,11 @@ DAS_API bool DasAry_isValidAt(const DasAry* pThis, int nAddr, const ptrdiff_t* p
 
 /** Get a pointer to an element at a complete index
  *
- * For type safety the macros DasAry_floatAt, DasAry_doubleAt, etc. have
- * been provided and should be used instead of the base function here.
- *
  * @param pThis A pointer to the array
  *
- * @param et    The element type pointer expected at the given location, this
- *              is used by the type checking macros DasAry_floatAt and
- *              friends.
+ * @param et    The element type expected at the given location.  The call
+ *              fails if the array holds some other type, so casting the
+ *              returned pointer to match et is safe.
  *
  * @param nAddr  The number of indices in pAddr, which must equal the array's
  *              rank: a rank 2 array takes two indices to reach an element, a
@@ -754,16 +756,25 @@ DAS_API bool DasAry_isValidAt(const DasAry* pThis, int nAddr, const ptrdiff_t* p
  * @param pAddr  The indices, nAddr of them.  Negative values count back from
  *              the end of their index.
  *
- * @returns a pointer to value at the given indices, or NULL if that location
- *          is not valid, or nAddr is not the rank, and the library returns on
- *          errors, see daslib_init().
+ * @returns a pointer to the value at the given indices, or NULL.  NULL with
+ *          nothing logged means there's no value at that location, which is
+ *          not an error.  An nAddr that isn't the rank, or an element type
+ *          that doesn't match the array, is an error: it's logged and NULL
+ *          is returned when the library returns on errors, see daslib_init().
+ *
+ * Check the pointer before using it.  There is no value at a location the
+ * array doesn't hold, which includes one not filled in yet.
  *
  * @code
- * // Uses type checking macro's
- * DasTime dt = DasAry_timeAt(pAry, DAS_ADDR1(uRec));
+ * // One time value
+ * const DasTime* pDt = (const DasTime*)DasAry_valAt(pAry, DASVT_TIME, DAS_ADDR1(uRec));
+ * if(pDt != NULL) ...
  *
  * // Get last event, wherever it is
- * const char* sEvent = DasAry_textAt(pAry, DAS_ADDR1(-1));
+ * const char* const* psEvent = (const char* const*)DasAry_valAt(
+ *    pAry, DASVT_TEXT, DAS_ADDR1(-1)
+ * );
+ * if(psEvent != NULL) printf("Last event: %s\n", *psEvent);
  * @endcode
  *
  * @see DasAry_valsIn to access multiple values at once avoiding function call
@@ -773,42 +784,6 @@ DAS_API bool DasAry_isValidAt(const DasAry* pThis, int nAddr, const ptrdiff_t* p
 DAS_API const uint8_t* DasAry_valAt(
 	const DasAry* pThis, das_vt et, int nAddr, const ptrdiff_t* pAddr
 );
-
-/* The typed wrappers below take the address as "..." so that one DIMn_AT()
-   argument can expand into the nAddr and pAddr pair: a macro counts its
-   arguments before it expands them. */
-
-/** Wrapper around DasAry_valAt for IEEE-754 binary32 (float)
- * @relates DasAry */
-#define DasAry_floatAt(pThis, ...)  *((float*)(DasAry_valAt(pThis, DASVT_FLOAT, __VA_ARGS__)))
-/** Wrapper around DasAry_valAt for IEEE-754 binary64 (double)
- * @relates DasAry */
-#define DasAry_doubleAt(pThis, ...)  *((double*)(DasAry_valAt(pThis, DASVT_DOUBLE, __VA_ARGS__)))
-/** Wrapper around DasAry_valAt for unsigned bytes
- * @relates DasAry */
-#define DasAry_byteAt(pThis, ...)  *((uint8_t*)(DasAry_valAt(pThis, DASVT_UBYTE, __VA_ARGS__)))
-/** Wrapper around DasAry_valAt for unsigned 16-bit integers
- * @relates DasAry */
-#define DasAry_ushortAt(pThis, ...)  *((uint16_t*)(DasAry_valAt(pThis, etUint16, __VA_ARGS__)))
-/** Wrapper around DasAry_valAt for signed 16-bit integers
- * @relates DasAry */
-#define DasAry_shortAt(pThis, ...)  *((int16_t*)(DasAry_valAt(pThis, etInt16, __VA_ARGS__)))
-/** Wrapper around DasAry_valAt for 32-bit integers
- * @relates DasAry */
-#define DasAry_intAt(pThis, ...)  *((int32_t*)(DasAry_valAt(pThis, etInt32, __VA_ARGS__)))
-/** Wrapper around DasAry_valAt for signed 64-bit integers
- * @relates DasAry */
-#define DasAry_longAt(pThis, ...)  *((int64_t*)(DasAry_valAt(pThis, etInt64, __VA_ARGS__)))
-/** Wrapper around DasAry_valAt for DasTime structures
- * @relates DasAry */
-#define DasAry_timeAt(pThis, ...)  *((DasTime*)(DasAry_valAt(pThis, DASVT_TIME, __VA_ARGS__)))
-/** Wrapper around DasAry_valAt for pointers to null-terminated strings
- * @relates DasAry */
-#define DasAry_textAt(pThis, ...)  *((char**)(DasAry_valAt(pThis, DASVT_TEXT, __VA_ARGS__)))
-
-/** Wrapper around DasAry_valAt for DASVT_UNK pointers. */
-#define DasAry_ptrAt(pThis, ...)  *((void**)(DasAry_valAt(pThis, DASVT_UNK, __VA_ARGS__)))
-
 
 /** Set values starting at a complete index
  *
@@ -837,7 +812,7 @@ DAS_API bool DasAry_setValsAt(
  * @param pThis A Array containing the data of interest
  *
  * @param et The expected type of element to be returned.  This is used by the
- *        type safe macros DasAry_doubleAt, DasAry_textAt, etc.
+ *        type safe macros DasAry_doublesIn, DasAry_textIn, etc.
  *
  * @param nAddr The number of location indices, should be less than the rank
  *             in order to get the length of a range of values. The macros
@@ -849,9 +824,15 @@ DAS_API bool DasAry_setValsAt(
  *             DAS_ADDR0, DAS_ADDR1, DAS_ADDR2, etc. for cleaner code.
  *
  * @param pCount A pointer to a variable to hold the number of elements under
- *        the given index, required.  If nAddr is equal to the array rank the
- *        returned value will be at most 1.  Always written: it is set to 0
- *        whenever NULL is returned, so it's safe to test before the pointer.
+ *        the given index, required, and always written.  If nAddr is equal
+ *        to the array rank the count is at most 1.  A count of 0 with a
+ *        NULL return means nothing is at that location, such as a ragged
+ *        row with no values, or a location not filled in yet while data are
+ *        arriving.  That is not an error, the caller decides if it matters.
+ *        On an error NULL is returned and the count is set to the negative
+ *        of the das_errcode, so one test (count < 0) separates errors from
+ *        empties.  The errors are an nAddr outside 0 to the array rank, and
+ *        an element type that doesn't match the array.
  *
  * @return A pointer a continuous subset of elements, or NULL if no elements are
  *         located at the given index set or on an error.  
@@ -860,35 +841,37 @@ DAS_API bool DasAry_setValsAt(
  *
  * @code
  * // Print all the events in a rank 1 array of strings
- * size_t uVals;
- * const char** events = DasAry_textIn(pAry, DAS_ADDR0, &uVals);
- * for(size_t u = 0; u < uVals; ++u)
- *    printf("Event %06zu: %s\n", u, events[u]);
+ * ptrdiff_t nVals;
+ * const char** events = DasAry_textIn(pAry, DAS_ADDR0, &nVals);
+ * if(nVals < 0) return -nVals;  // An error, the message is already logged
+ * for(ptrdiff_t i = 0; i < nVals; ++i)
+ *    printf("Event %06td: %s\n", i, events[i]);
  * @endcode
  *
  * @code
  * // Print all the magnetic amplitudes for a single time slice at index 117
- * size_t uVals;
- * const float* pAmp = DasAry_floatsIn(pAry, DAS_ADDR1(117), &uVals);
- * for(size_t u = 0; u < uVals; ++u)
- *    printf("Amp at freq %03zu: %.3e nT**2/Hz \n", u, pAmp[u]);
+ * ptrdiff_t nVals;
+ * const float* pAmp = DasAry_floatsIn(pAry, DAS_ADDR1(117), &nVals);
+ * if(nVals < 0) return -nVals;
+ * for(ptrdiff_t i = 0; i < nVals; ++i)
+ *    printf("Amp at freq %03td: %.3e nT**2/Hz \n", i, pAmp[i]);
  *
  * @endcode
  * @memberof DasAry
  */
 DAS_API const uint8_t* DasAry_valsIn(
-	const DasAry* pThis, das_vt et, int nAddr, ptrdiff_t* pAddr, size_t* pCount
+	const DasAry* pThis, das_vt et, int nAddr, ptrdiff_t* pAddr, ptrdiff_t* pCount
 );
 
 /** This is the writable pointer version of DasAry_valsIn
- * 
- * See the argument list form DasAry_valsIn()
+ *
+ * See the argument list form DasAry_valsIn(), pCount follows the same rules.
  * @return A raw byte pointer suitable for direct value insertion.  Not that
- *         the amount of space for writing is *pCount times the element size 
+ *         the amount of space for writing is *pCount times the element size
  *         from DasAry_valSize().
  */
 DAS_API uint8_t* DasAry_dataIn(
-	DasAry* pThis, das_vt et, int nAddr, ptrdiff_t* pAddr, size_t* pCount
+	DasAry* pThis, das_vt et, int nAddr, ptrdiff_t* pAddr, ptrdiff_t* pCount
 );
 
 /** A wrapper around DasAry_valsIn that casts the output and preforms type checking
@@ -1001,7 +984,10 @@ DAS_API DasAry* new_DasAry_slice(
  *        DAS_IDX2, etc. to make the code more readable.  Dimension 0 can't be
  *        marked as ended and the macro DAS_ADDR0 will not work here.
  *
- * @returns the number of fill values added to the array
+ * @returns The number of fill values added to the array, 0 if nothing
+ *          needed filling, or the negative of a das_errcode on an error.
+ *          Asking to qube dimension 0, or one past the rank, is an error.
+ *          A ragged dimension that can't be qubed is just a 0.
  *
  * @code
  * DasAry* pAry = new_DasAry(
@@ -1025,7 +1011,7 @@ DAS_API DasAry* new_DasAry_slice(
  * @see DasAry_append
  * @memberof DasAry
  */
-DAS_API size_t DasAry_qubeIn(DasAry* pThis, int iRecDim);
+DAS_API ptrdiff_t DasAry_qubeIn(DasAry* pThis, int iRecDim);
 
 /** Append some number of items to the end of the array.
  * This works as you would expect for all arrays that are only ragged in the
@@ -1044,7 +1030,15 @@ DAS_API size_t DasAry_qubeIn(DasAry* pThis, int iRecDim);
  *          add.  Total content appended to the array will be of length
  *          uCount * element_size
  * 
- * @returns A pointer to the first value written or NULL if an error occurred
+ * @returns A pointer to the first value written, or NULL if uCount is 0 or
+ *          an error occurred.  The caller knows uCount, so the two cases are
+ *          told apart without consulting the log.
+ *
+ * @code
+ * // Copy a buffer of unknown, possibly zero, length into a byte array
+ * if((uLen > 0) && (DasAry_append(pAry, pBuf, uLen) == NULL))
+ *    return DASERR_ARRAY;  // An error, the message is already logged
+ * @endcode
  *
  * @memberof DasAry
  */

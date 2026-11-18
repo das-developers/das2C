@@ -180,11 +180,15 @@ size_t _DasVar_runScratch(const DasVar* pThis)
 	             + _DasVar_runScratch(pBin->pRight);
 }
 
+/* Something non-NULL to point at for an empty run, never read */
+const uint8_t _DasVar_emptyRun[1] = {0};
+
 const uint8_t* _DasVar_runAt(
 	const DasVar* pThis, const ptrdiff_t* pAddr, uint8_t* pScratch, size_t uScratch,
 	size_t* pBytes, size_t* pNeed
 ){
 	*pNeed = 0;
+	*pBytes = 0;
 
 	/* An operation has no leaf values; it walks its operands. */
 	if(pThis->pGen == NULL)
@@ -200,6 +204,10 @@ const uint8_t* _DasVar_runAt(
 		return pRun;
 	}
 
+	/* A backing array with nothing here has an empty run, not a computed one */
+	if(DasGen_type(pThis->pGen) == gtArray)
+		return _DasVar_emptyRun;
+
 	/* Computed: it has to land somewhere, and that somewhere is the caller's. */
 	size_t uWant = _DasVar_itemBytes(pThis);
 	if(uWant == 0){
@@ -210,7 +218,9 @@ const uint8_t* _DasVar_runAt(
 	}
 	if((pScratch == NULL)||(uScratch < uWant)){ *pNeed = uWant; return NULL; }
 
-	if(DasGen_eval(pThis->pGen, pAddr, pScratch, uScratch) < 1) return NULL;
+	int nEval = DasGen_eval(pThis->pGen, pAddr, pScratch, uScratch);
+	if(nEval < 0) return NULL;
+	if(nEval == 0) return _DasVar_emptyRun;   /* an operand array has nothing here */
 	*pBytes = uWant;
 	return pScratch;
 }
@@ -277,11 +287,9 @@ const char* DasVar_role(const DasVar* pThis)
 
 	/* Having a dimension for a parent but no role in it cannot happen through
 	   the public API: DasDim_addVar() stamps the parent pointer and the role
-	   name together.  Reaching here means the two halves have come apart */
-	daserrf(DASERR_VAR,
-		"Dimension '%s' is the parent of a variable it has no role for",
-		DasDim_name(pDim)
-	);
+	   name together.  Reaching here means the two halves have come apart, a
+	   library bug, so debug builds stop here instead of reporting an error. */
+	assert(false);
 	return NULL;
 }
 
@@ -463,7 +471,8 @@ static int _DasVar_appendRuns(
 				"Could not read the run at this location while copying a subset"
 			);
 
-		if(DasAry_append(pOut, pRun, uBytes / uElemSz) == NULL) return -1;
+		size_t uAdd = uBytes / uElemSz;
+		if((uAdd > 0) && (DasAry_append(pOut, pRun, uAdd) == NULL)) return -1;
 
 		/* Only a variable width item needs telling where it stopped. */
 		if((pMap->iItemDim > 0)&&(pMap->aRagged[pMap->iItemDim]))
@@ -878,11 +887,11 @@ static DasAry* _DasVar_subset(
 		if(pOut == NULL) return NULL;
 		DasAry_setUsage(pOut, DasAry_usage(pAry));
 
-		size_t uBufElems = 0;
-		uint8_t* pBuf = DasAry_dataIn(pOut, vtEl, DAS_ADDR0, &uBufElems);
+		ptrdiff_t nBufElems = 0;
+		uint8_t* pBuf = DasAry_dataIn(pOut, vtEl, DAS_ADDR0, &nBufElems);
 		if(pBuf == NULL){ dec_DasAry(pOut); return NULL; }
 
-		size_t uRemain = uBufElems * uElemSz;
+		size_t uRemain = (size_t)nBufElems * uElemSz;
 		uint8_t* pWrite  = pBuf;
 		for(int d = 0; d < nRank; ++d) aAddr[d] = pMin[d];
 
@@ -915,10 +924,10 @@ static DasAry* _DasVar_subset(
 	if(pOut == NULL) return NULL;
 
 	/* getBuf counts ELEMENTS; the class writes bytes. */
-	size_t uBufElems = 0;
-	uint8_t* pBuf = DasAry_dataIn(pOut, vtEl, DAS_ADDR0, &uBufElems);
+	ptrdiff_t nBufElems = 0;
+	uint8_t* pBuf = DasAry_dataIn(pOut, vtEl, DAS_ADDR0, &nBufElems);
 	if(pBuf == NULL){ dec_DasAry(pOut); return NULL; }
-	size_t uBufLen = uBufElems * uElemSz;
+	size_t uBufLen = (size_t)nBufElems * uElemSz;
 
 	if(pThis->pVTbl->subsetInto(pThis, nRank, pMin, pMax, pBuf, uBufLen) < 0){
 		dec_DasAry(pOut);
@@ -985,15 +994,31 @@ bool DasVar_isNumeric(const DasVar* pThis)
 	return pThis->pVTbl->isNumeric(pThis);
 }
 
+/* Each section of a DasVar_toStr() line has a fixed share of DASVAR_STR_SZ,
+   so the whole line always fits.  The worst cases, counting the separators:
+
+     generator          255   (an array id is 63, plus [x] for 8 indices)
+     " " element type    11   (dasvt_name() is at most 10)
+     " " units          128   (DasUnits strings are held under 128 bytes)
+     " | " shape        371   (16 entries of "x:<19 digits>, ")
+     " | " formalism    242
+
+   1007 in all, the terminator makes 1008.  Only an operation tree or an odd
+   formalism can reach its limit, and those are shortened visibly. */
+#define _TOSTR_GEN_SZ  256
+#define _TOSTR_FORM_SZ 240
+
 char* DasVar_toStr(const DasVar* pThis, char* sBuf, size_t uLen)
 {
 	if(uLen > 0) sBuf[0] = '\0';
 
-	/* Section 1: the generator, then the element type and units.  prnGen and
-	   DasForm_toStr() clip to their buffers, a full one means cut off. */
-	char sSub[512] = {'\0'};
+	/* Section 1: the generator, then the element type and units.  prnGen
+	   clips to its buffer, so a full one means a deep expression was cut, and
+	   the whole expression is shown as elided rather than as a wrong one. */
+	char sSub[_TOSTR_GEN_SZ] = {'\0'};
 	pThis->pVTbl->prnGen(pThis, sSub, sizeof(sSub));
-	bool bCut = (strlen(sSub) + 1 >= sizeof(sSub));
+	if(strlen(sSub) + 1 >= sizeof(sSub))
+		strcpy(sSub, "(...)");
 	int n = _prn_catf(sBuf, uLen, 0, "%s", sSub);
 
 	das_et et = DasVar_et(pThis);
@@ -1014,17 +1039,20 @@ char* DasVar_toStr(const DasVar* pThis, char* sBuf, size_t uLen)
 	);
 
 	/* Section 3: the formalism.  Only a byte run has none, and its class
-	   already says what the run is. */
+	   already says what the run is.  A formalism whose parameters don't fit
+	   its share keeps its kind, the part that says what the values mean. */
 	n = _prn_catf(sBuf, uLen, n, " | ");
 	if(pThis->pForm != NULL){
-		if(DasForm_toStr(pThis->pForm, sSub, sizeof(sSub)) == NULL) bCut = true;
-		n = _prn_catf(sBuf, uLen, n, "%s", sSub);
+		char sForm[_TOSTR_FORM_SZ] = {'\0'};
+		if(DasForm_toStr(pThis->pForm, sForm, sizeof(sForm)) == NULL)
+			snprintf(sForm, sizeof(sForm), "%.64s ...", DasForm_kind(pThis->pForm));
+		n = _prn_catf(sBuf, uLen, n, "%s", sForm);
 	}
 	else
 		n = _prn_catf(sBuf, uLen, n, "%s",
 			((const DasVarBytes*)pThis)->bSentinel ? "string" : "blob");
 
-	return bCut ? NULL : _prn_fit(sBuf, uLen, n);
+	return _prn_fit(sBuf, uLen, n);
 }
 
 DasVar* new_DasVar_copy(const DasVar* pThis)
@@ -1117,7 +1145,10 @@ static int DasVarScalar_get(
 
 	uint8_t aBuf[DASDATUM_BUF_SZ];
 	int nRet = DasGen_eval(pThis->pGen, pAddr, aBuf, sizeof(aBuf));
-	if(nRet != 1) return -1 * DASERR_VAR;
+	if(nRet < 0) return nRet;
+	if(nRet == 0) return 0;   /* nothing here, pOut stays the null datum */
+	if(nRet != 1)
+		return -1 * daserrf(DASERR_VAR, "A scalar read %d values at one location", nRet);
 
 	/* The form packs, because it is the only thing that knows what the bits
 	   mean.  A form with no pack slot has no single-datum representation,
@@ -1340,7 +1371,9 @@ das_errcode DasVar_encode(DasVar* pThis, const char* sRole, DasBuf* pBuf)
 		DasAry* pAry = DasGen_getArray(pThis->pGen);
 		das_vt vtAry = DasAry_vt(pAry);
 		int nCkItems = 0;
-		const DasCodec* pCkCodec = DasDs_codecFor(pDs, DasAry_id(pAry), &nCkItems);
+		DasCodec* pCkCodec = NULL;
+		int nHas = DasDs_codecFor(pDs, DasAry_id(pAry), &pCkCodec, &nCkItems);
+		if(nHas < 0) return -nHas;
 		bool bHdrVals = (aExtShape[0] == DASIDX_UNUSED);
 		bool bText = (pCkCodec != NULL)&&(pCkCodec->vtBuf == DASVT_TEXT);
 		if((bHdrVals || bText) && !bByteRun &&
@@ -1415,7 +1448,9 @@ das_errcode DasVar_encode(DasVar* pThis, const char* sRole, DasBuf* pBuf)
 		DasAry* pAry = DasGen_getArray(pThis->pGen);
 		das_vt vtAry = DasAry_vt(pAry);
 		int nItemsPerWrite = 0;
-		const DasCodec* pCodec = DasDs_codecFor(pDs, DasAry_id(pAry), &nItemsPerWrite);
+		DasCodec* pCodec = NULL;
+		int nHas = DasDs_codecFor(pDs, DasAry_id(pAry), &pCodec, &nItemsPerWrite);
+		if(nHas < 0) return -nHas;
 
 		const char* sSemC = dassem_default((das_vt)et, units);
 		if(bByteRun)   /* the sentinel is what tells a string from a blob */
@@ -1649,6 +1684,7 @@ static int DasVarComp_get(
 	);
 	if(pRun == NULL)
 		return (uNeed > 0) ? (int)uNeed : -1 * DASERR_VAR;
+	if(uBytes == 0) return 0;   /* nothing here, pOut stays the null datum */
 
 	das_operand op;
 	if(!_DasVar_operand(pBase, &op)) return -1 * DASERR_VAR;
@@ -1840,9 +1876,11 @@ static int DasVarBytes_get(
 	const DasVarBytes* pThis = (const DasVarBytes*)pBase;
 	(void)work;
 
+	/* Byte runs are always array backed, so no run is nothing at this
+	   location: pOut stays the null datum */
 	size_t uCount = 0;
 	const uint8_t* ptr = DasGen_at(pBase->pGen, pAddr, &uCount);
-	if(ptr == NULL) return -1 * DASERR_VAR;
+	if(ptr == NULL) return 0;
 
 	if(pThis->bSentinel){
 		/* the datum is a VIEW: a pointer into backing storage.  The trailing

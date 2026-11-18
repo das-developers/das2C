@@ -153,6 +153,54 @@ static int test_codec_counts(int nErr)
 	return 0;
 }
 
+/* DasDs_codecFor() tells three answers apart: a codec, a header only array
+   with none, and no such array.  The last is an error, so this test runs
+   with errors returned rather than exiting. */
+static int test_codec_for(int nErr)
+{
+	das_errdisp nWasDisp = daserr_disp();
+	daserr_setDisp(DASERRDISP_RET);
+
+	float rFill = -1.0f;
+	DasDs* pDs = new_DasDs("codec_for", "codec_grp", 1);
+	if(pDs == NULL) return daserrf(nErr, "no dataset");
+
+	const char* aIds[2] = {"in_pkts", "in_hdr"};
+	for(int i = 0; i < 2; ++i){
+		DasAry* pAry = new_DasAry(
+			aIds[i], DASVT_FLOAT, 0, (const uint8_t*)&rFill, DAS_SHAPE1(0),
+			DASUNITS_DIMENSIONLESS
+		);
+		if((pAry == NULL)||(DasDs_addAry(pDs, pAry) != DAS_OKAY))
+			return daserrf(nErr, "couldn't add array %s", aIds[i]);
+		dec_DasAry(pAry);
+	}
+	if(DasDs_makeFixedCodec(pDs, "in_pkts", "real", "LEreal", 4, 3, DASCODEC_WRITE) == NULL)
+		return daserrf(nErr, "codec refused");
+
+	DasCodec* pCodec = NULL;
+	int nItems = -9;
+	int nRet = DasDs_codecFor(pDs, "in_pkts", &pCodec, &nItems);
+	if((nRet != 1)||(pCodec != DasDs_codecAt(pDs, 0))||(nItems != 3))
+		return daserrf(nErr, "codecFor packet array gave %d, items %d", nRet, nItems);
+
+	pCodec = (DasCodec*)&rFill;  /* anything but NULL, it must be overwritten */
+	nItems = -9;
+	nRet = DasDs_codecFor(pDs, "in_hdr", &pCodec, &nItems);
+	if((nRet != 0)||(pCodec != NULL)||(nItems != 0))
+		return daserrf(nErr, "codecFor header array gave %d, items %d", nRet, nItems);
+
+	daslog_info("======== The ERROR line below is intentional ========");
+	nRet = DasDs_codecFor(pDs, "nope", &pCodec, &nItems);
+	if((nRet != -DASERR_DS)||(pCodec != NULL)||(nItems != 0))
+		return daserrf(nErr, "codecFor missing array gave %d", nRet);
+
+	del_DasDesc((DasDesc*)pDs);
+	daserr_setDisp(nWasDisp);
+	daslog_info("Test 0c success. codecFor separates codec, header only and missing.");
+	return 0;
+}
+
 int main(int argc, char** argv)
 {
 	daslib_init(argv[0], DASERRDISP_EXIT, DASLOG_INFO, NULL);
@@ -162,6 +210,7 @@ int main(int argc, char** argv)
 
 	if(test_addary_refs(nErr) != 0) return nErr;
 	if(test_codec_counts(nErr) != 0) return nErr;
+	if(test_codec_for(nErr) != 0) return nErr;
 	DasStream* pSd = NULL;
 	ptrdiff_t aShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
 	ptrdiff_t aAddr[DASIDX_MAX]   = DASIDX_INIT_BEGIN;

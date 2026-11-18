@@ -294,8 +294,7 @@ void _getOutFreqDef(
 		rMinFreq = 0;
 	}
 	else{
-		rMinFreq = DasDesc_valDatum((DasDesc*)pPlane, "DFT_freqTagMin", utFreq);
-		if(rMinFreq == DASVAL_FILL){
+		if(DasDesc_valDatum((DasDesc*)pPlane, "DFT_freqTagMin", utFreq, &rMinFreq) < 1){
 			daserrf(P_ERR, "Couldn't convert shift frequency datum '%s' to "
 					"units of %s", sMinFreq, utFreq);
 			exit(P_ERR);
@@ -320,16 +319,14 @@ void _getOutFreqDef(
 
 	/* Some trim is requested, need to calculate yTags */
 	if(sMinY != NULL){
-		rMinY = DasDesc_valDatum((DasDesc*)pPlane, "DFT_freqTrimMin", utFreq);
-		if(rMinY == DASVAL_FILL){
+		if(DasDesc_valDatum((DasDesc*)pPlane, "DFT_freqTrimMin", utFreq, &rMinY) < 1){
 			daserrf(P_ERR, "Couldn't convert minimum frequency trim datum '%s' to "
 			           "units of %s", sMinY, utFreq);
 			exit(P_ERR);
 		}
 	}
 	if(sMaxY != NULL){
-		rMaxY = DasDesc_valDatum((DasDesc*)pPlane, "DFT_freqTrimMax", utFreq);
-		if(rMaxY == DASVAL_FILL){
+		if(DasDesc_valDatum((DasDesc*)pPlane, "DFT_freqTrimMax", utFreq, &rMaxY) < 1){
 			daserrf(P_ERR, "Couldn't convert maximum frequency trim datum '%s' to "
 			           "units of %s", sMaxY, utFreq);
 			exit(P_ERR);

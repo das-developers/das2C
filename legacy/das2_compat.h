@@ -1098,16 +1098,6 @@ static inline void _das2_compat_tt2K_to_utc(
 #define DasAry_getIn             DasAry_valsIn
 #define DasAry_getBuf            DasAry_dataIn
 #define DasAry_subSetIn          new_DasAry_slice
-#define DasAry_getFloatAt        DasAry_floatAt
-#define DasAry_getDoubleAt       DasAry_doubleAt
-#define DasAry_getByteAt         DasAry_byteAt
-#define DasAry_getUShortAt       DasAry_ushortAt
-#define DasAry_getShortAt        DasAry_shortAt
-#define DasAry_getIntAt          DasAry_intAt
-#define DasAry_getLongAt         DasAry_longAt
-#define DasAry_getTimeAt         DasAry_timeAt
-#define DasAry_getTextAt         DasAry_textAt
-#define DasAry_getPtrAt          DasAry_ptrAt
 #define DasAry_getFloatsIn       DasAry_floatsIn
 #define DasAry_getDoublesIn      DasAry_doublesIn
 #define DasAry_getCharsIn        DasAry_charsIn
@@ -1271,7 +1261,6 @@ static inline void _das2_compat_tt2K_to_utc(
 #define DasDesc_setDoubleArray   DasDesc_setValDoubles
 #define DasDesc_setFloatAry      DasDesc_setValFloats
 #define DasDesc_getStrAry        DasDesc_valStrs
-#define DasDesc_getArray         DasDesc_valStrsSep
 #define DasDesc_setDatumRng      DasDesc_setValDatumRng
 #define DasDesc_getStrRng        DasDesc_valRng
 

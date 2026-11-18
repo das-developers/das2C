@@ -340,10 +340,21 @@ DAS_API int ref_DasVar(const DasVar* pThis);
  *        indices the variable ignores are not read.
  * @param work scratch space, used only when the value has no storage to
  *        point at.  Pass @c {NULL,0} when you know you do not need it.
- * @param pOut receives the value
+ * @param pOut receives the value.  Always written: it's set to the null
+ *        datum (see DasDatum_isNull()) whenever no value is produced.
  *
  * @returns 0 on success, the number of scratch BYTES needed when @a work is
  *          too small, or a negative das error code after logging why not.
+ *          Check the return first.  A 0 with a null datum in @a pOut means
+ *          there is nothing at this location, such as one the backing arrays
+ *          haven't filled in yet.  That is not an error, the caller decides
+ *          if it matters:
+ * @code
+ * DasDatum dm;
+ * int nRet = DasVar_datumAt(pVar, aAddr, (DasByteSeq){NULL, 0}, &dm);
+ * if(nRet < 0) return -nRet;     // An error, the message is already logged
+ * if(DasDatum_isNull(&dm)) ...   // Nothing here, skip it or write a blank
+ * @endcode
  * @memberof DasVar */
 DAS_API int DasVar_datumAt(
 	const DasVar* pThis, const ptrdiff_t* pAddr, DasByteSeq work, DasDatum* pOut
@@ -421,7 +432,8 @@ DAS_API bool DasVar_isDegenerate(const DasVar* pThis, int iIndex);
  * The DASVAR_* constants name the roles the library knows.
  *
  * @returns the role name, owned by the dimension, or NULL for a variable
- *          that is not in a dimension
+ *          that is not in a dimension.  NULL is never an error, a variable
+ *          built on its own just has no role yet.
  * @memberof DasVar */
 DAS_API const char* DasVar_role(const DasVar* pThis);
 
@@ -553,24 +565,48 @@ DAS_API DasAry* new_DasAry_materializeQube(
  * @memberof DasVar */
 DAS_API bool DasVar_isNumeric(const DasVar* pThis);
 
-/** A one line description of this variable, for people
+/** A buffer this size always holds a DasVar_toStr() line
+ * @relates DasVar */
+#define DASVAR_STR_SZ 1024
+
+/** A one line description of this variable
  *
- * Three '|' separated sections: where the values come from, the index
- * ranges, and the formalism.  For example:
+ * The layout is stable and may be parsed.  Three sections, separated by
+ * " | ":
  *
- *    b_gse[i][I] float nT | i:2442, I:3 | vector frame=GSE
- *    (2018-01-01T00:00:00 + 0.001*i s) time UTC | i:2442 | point
- *    msg[i][I] ubyte | i:99, I:* | string
+ * @verbatim
+   <values> <type>[ <units>] | <idx>:<count>[, <idx>:<count> ...] | <formalism>
+   @endverbatim
  *
- * A bare word up front is the id of a backing array, with one [x] per
- * array index, lowercase for external and uppercase for internal.  A
- * parenthesized expression is a computed value.  The format may change and
- * nothing parses it.
+ * - @b values: an array id followed by one [x] per array index, or a
+ *   parenthesized expression for a computed value.  An expression may hold
+ *   spaces and nested parentheses.  "(...)" stands in for one too deep to
+ *   show.
+ * - @b type: one word, dasvt_name() of the element type, or "time".
+ * - @b units: left out when the variable has none.  May hold spaces, it runs
+ *   to the first " | ".
+ * - @b idx: one letter per index in use, i j k l m n p q for external
+ *   indices and I J K L M N P Q for internal ones.  @b count is a number,
+ *   or a "*" for a ragged index.  dasshape_setPrnDir() sets which external
+ *   index gets i.
+ * - @b formalism: the kind, then any parameters as name=value, space
+ *   separated.  Read parameters by name, more may be added.  A kind followed
+ *   by " ..." means the parameters were too long to show.  A byte run has
+ *   no formalism and shows "string" or "blob" instead.
+ *
+ * For example:
+ *
+ * @verbatim
+   b_gse[i][I] float nT | i:2442, I:3 | vector frame=GSE
+   (2018-01-01T00:00:00 + 0.001*i s) time UTC | i:2442 | point
+   msg[i][I] ubyte | i:99, I:* | string
+   @endverbatim
  *
  * @param pThis the variable
- * @param sBuf the output buffer, 256 bytes is plenty
+ * @param sBuf the output buffer, DASVAR_STR_SZ bytes is always enough
  * @param uLen its size
- * @returns sBuf, or NULL if the whole line did not fit
+ * @returns sBuf, or NULL if the line did not fit a buffer smaller than
+ *          DASVAR_STR_SZ
  * @memberof DasVar */
 DAS_API char* DasVar_toStr(const DasVar* pThis, char* sBuf, size_t uLen);
 

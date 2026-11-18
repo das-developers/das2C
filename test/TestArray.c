@@ -47,6 +47,20 @@ const char* lTime[] = {
 	"1997-05-07T15:03:04.207"
 };
 
+/* One value at a complete address, NAN if there is nothing there so the
+   comparison that follows fails instead of the test crashing */
+static float _floatAt(const DasAry* pAry, int nAddr, const ptrdiff_t* pAddr)
+{
+	const float* p = (const float*)DasAry_valAt(pAry, DASVT_FLOAT, nAddr, pAddr);
+	return (p != NULL) ? *p : NAN;
+}
+
+static double _doubleAt(const DasAry* pAry, int nAddr, const ptrdiff_t* pAddr)
+{
+	const double* p = (const double*)DasAry_valAt(pAry, DASVT_DOUBLE, nAddr, pAddr);
+	return (p != NULL) ? *p : NAN;
+}
+
 double lFreq[] = {
 	5.620e+00, 1.000e+01, 1.780e+01, 3.110e+01, 4.213e+01, 4.538e+01, 4.888e+01,
    5.265e+01, 5.671e+01, 6.109e+01, 6.580e+01, 7.087e+01, 7.634e+01, 8.223e+01,
@@ -339,7 +353,7 @@ int main(int argc, char** argv)
 	float fill = -1.0;
 	float value = 0.0;
 	const float* pVals; 
-	size_t uVals;
+	ptrdiff_t nVals;
 	int rank;
 	DasAry* pAmp = new_DasAry(
 		"amplitudes", DASVT_FLOAT, 0, (const uint8_t*)&fill, DAS_SHAPE2(10, 152),
@@ -362,7 +376,7 @@ int main(int argc, char** argv)
 		return 102;
 	}
 	/* Getting any value should produce fill at this point */
-	value = DasAry_floatAt(pAmp, DAS_ADDR2(9, 151));
+	value = _floatAt(pAmp, DAS_ADDR2(9, 151));
 	if(value != fill){
 		printf("ERROR: Test 3 (static fill value retrival) failed\n");
 		return 103;
@@ -389,30 +403,30 @@ int main(int argc, char** argv)
 		return 107;
 	}
 	/* Test natural boundary version of get */
-	pVals = DasAry_floatsIn(pAmp, DAS_ADDR1(1), &uVals);
-	/*pVals = (float*) Array_getIn(pAmp, DASET_FLOAT, DAS_ADDR1(1), &uVals);*/
-	if((pVals == NULL)||(uVals != 152)){
+	pVals = DasAry_floatsIn(pAmp, DAS_ADDR1(1), &nVals);
+	/*pVals = (float*) Array_getIn(pAmp, DASET_FLOAT, DAS_ADDR1(1), &nVals);*/
+	if((pVals == NULL)||(nVals != 152)){
 		printf("ERROR: Test 8 (get many from static array) failed\n");
 		return 108;
 	}
-	if(!DasAry_setValsAt(pAmp, DAS_ADDR2(0,0), (const uint8_t*)pVals, uVals)){
+	if(!DasAry_setValsAt(pAmp, DAS_ADDR2(0,0), (const uint8_t*)pVals, nVals)){
 		printf("ERROR: Test 9 (static array record duplication) failed\n");
 		return 109;
 	}
 	/* More subset testing */
-	pVals = DasAry_floatsIn(pAmp, DAS_ADDR0, &uVals);
-	if((pVals == NULL)||(uVals != 1520)||(pVals[152] <  7.272e-09)){
+	pVals = DasAry_floatsIn(pAmp, DAS_ADDR0, &nVals);
+	if((pVals == NULL)||(nVals != 1520)||(pVals[152] <  7.272e-09)){
 		printf("ERROR: Test 10 (static array get all flat) failed\n");
 		return 110;
 	}
-	pVals = DasAry_floatsIn(pAmp, DAS_ADDR2(0,0), &uVals);
-	if((pVals == NULL)||(uVals != 1)||(*pVals < 7.272e-09)){
+	pVals = DasAry_floatsIn(pAmp, DAS_ADDR2(0,0), &nVals);
+	if((pVals == NULL)||(nVals != 1)||(*pVals < 7.272e-09)){
 		printf("ERROR: Test 11 (static array get all flat - single value) failed\n");
 		return 111;
 	}
 	
 	/* Get the last value in the array */
-	value = DasAry_floatAt(pAmp, DAS_ADDR2(-1,-1));
+	value = _floatAt(pAmp, DAS_ADDR2(-1,-1));
 	if(value != fill){
 		printf("ERROR: Test 12 (negative index usage) failed\n");
 		return 112;
@@ -424,7 +438,12 @@ int main(int argc, char** argv)
 		printf("ERROR: Test 13 (partial record append) failed\n");
 		return 113;
 	}
-	DasAry_qubeIn(pAmp, DAS_IDX1);
+	ptrdiff_t nFill = DasAry_qubeIn(pAmp, DAS_IDX1);
+	if(nFill != 12){
+		printf("ERROR: Test 14 (qube record) failed, %td fill values added, "
+		       "expected 12\n", nFill);
+		return 114;
+	}
 	if( 152 != DasAry_lengthIn(pAmp, DAS_ADDR1(10)) ){
 		printf("ERROR: Test 14 (qube record) failed\n");
 		return 114;
@@ -449,7 +468,7 @@ int main(int argc, char** argv)
 		return 116;
 	}
 	
-	value = DasAry_floatAt(pAmp, DAS_ADDR6(-1,-1,-1,-1,-1,-2));
+	value = _floatAt(pAmp, DAS_ADDR6(-1,-1,-1,-1,-1,-2));
 	if((value < 1.160e-14)||(value > 1.162e-14)){
 		printf("ERROR: Test 17 (high-dimensional read) failed\n");
 		return 117;
@@ -500,10 +519,10 @@ int main(int argc, char** argv)
 	 * alive for the first.  When this is broken the dec below frees the view,
 	 * so the checks that follow are reading free'd memory: expect a value
 	 * mismatch here and hard evidence from the leak_test target. */
-	value = DasAry_floatAt(pTmp, DAS_ADDR3(0,0,0));
+	value = _floatAt(pTmp, DAS_ADDR3(0,0,0));
 	inc_DasAry(pTmp);
 	dec_DasAry(pTmp);
-	if((ref_DasAry(pTmp) != 1) || (DasAry_floatAt(pTmp, DAS_ADDR3(0,0,0)) != value)){
+	if((ref_DasAry(pTmp) != 1) || (_floatAt(pTmp, DAS_ADDR3(0,0,0)) != value)){
 		printf("ERROR: Test 27 (subset view survives balanced inc/dec) failed\n");
 		return 127;
 	}
@@ -520,7 +539,7 @@ int main(int argc, char** argv)
 	for(int i = 0; i < 152; i++) 
 		DasAry_setValsAt(pFreq, DAS_ADDR1(i), (const uint8_t*) (lFreq +i), 1);
 		
-	if(! dasval_within( DasAry_doubleAt(pFreq, DAS_ADDR1(150)), 5.231e+06, 1e-4) ){
+	if(! dasval_within( _doubleAt(pFreq, DAS_ADDR1(150)), 5.231e+06, 1e-4) ){
 		printf("ERROR: Test 21 (rank 1 double array get) failed\n");
 		return 121;
 	}
@@ -535,7 +554,12 @@ int main(int argc, char** argv)
 		DasTime_fromStr(&dt, lTime[i]);
 		DasAry_append(pTime, (const uint8_t*)&dt, 1);
 	}
-	dt = DasAry_timeAt(pTime, DAS_ADDR1(5));
+	const DasTime* pDt = (const DasTime*)DasAry_valAt(pTime, DASVT_TIME, DAS_ADDR1(5));
+	if(pDt == NULL){
+		printf("ERROR: Test 22 (time array get) failed, no value at index 5\n");
+		return 122;
+	}
+	dt = *pDt;
 	DasTime_toIsoC(&dt, 3, sInfo, 127);
 	if(strcmp("1997-05-07T15:01:49.541", sInfo) != 0){
 		printf("ERROR: Test 22 (time array retrieval) failed\n");
@@ -569,8 +593,8 @@ int main(int argc, char** argv)
 			                              /* Must start new line */
 		}
 	}
-	size_t uStrLen;
-	const uint8_t* pLine = DasAry_bytesIn(pBytes, DAS_ADDR2(-1,-2), &uStrLen);
+	ptrdiff_t nStrLen;
+	const uint8_t* pLine = DasAry_bytesIn(pBytes, DAS_ADDR2(-1,-2), &nStrLen);
 	if(strcmp("	/* Make sure the shape is what I think it is */\n", 
 			    (const char*)pLine) != 0){
 		printf("ERROR: Test 23 (Ragged read) failed\n");
@@ -614,15 +638,15 @@ int main(int argc, char** argv)
 
 		const char* sRefill = "after clear";
 		const char* sRow = NULL;
-		size_t uBytes = 0;
+		ptrdiff_t nBytes = 0;
 		for(int i = 0; i < 3; ++i){
 			DasAry_clear(pLines);
 			DasAry_append(pLines, (const uint8_t*)sRefill, strlen(sRefill) + 1);
 
 			/* Readable before the row is closed, and after */
 			for(int j = 0; j < 2; ++j){
-				sRow = (const char*)DasAry_bytesIn(pLines, DAS_ADDR1(0), &uBytes);
-				if((sRow == NULL) || (uBytes != strlen(sRefill) + 1)
+				sRow = (const char*)DasAry_bytesIn(pLines, DAS_ADDR1(0), &nBytes);
+				if((sRow == NULL) || (nBytes != (ptrdiff_t)strlen(sRefill) + 1)
 				   || (strcmp(sRow, sRefill) != 0) || (DasAry_lengthIn(pLines, DAS_ADDR0) != 1)
 				){
 					printf("ERROR: Test 30 (refill after clear) failed, row 0 is %s%s "
@@ -659,8 +683,8 @@ int main(int argc, char** argv)
 
 			DasAry_append(pSec, (const uint8_t*)sSecret, uLen + 1);
 			DasAry_markEnd(pSec, DAS_IDX1);
-			size_t uBytes = 0;
-			const uint8_t* pRow = DasAry_bytesIn(pSec, DAS_ADDR1(0), &uBytes);
+			ptrdiff_t nBytes = 0;
+			const uint8_t* pRow = DasAry_bytesIn(pSec, DAS_ADDR1(0), &nBytes);
 			DasAry_clear(pSec);
 
 			size_t uLeft = 0;  /* bytes of the secret still in memory */
@@ -691,7 +715,7 @@ int main(int argc, char** argv)
 			DASUNITS_DIMENSIONLESS
 		);
 		if(!DasAry_setValsAt(pAt, DAS_ADDR2(1, 2), (const uint8_t*)&aVal, 1) ||
-		   (DasAry_floatAt(pAt, DAS_ADDR2(1, 2)) != aVal) ||
+		   (_floatAt(pAt, DAS_ADDR2(1, 2)) != aVal) ||
 		   !DasAry_isValidAt(pAt, DAS_ADDR2(-1, -1))){
 			printf("ERROR: Test 32 (complete address) failed\n");
 			return 132;
@@ -715,7 +739,7 @@ int main(int argc, char** argv)
 			DAS_SHAPE8(1, 1, 1, 1, 1, 1, 2, 2), DASUNITS_DIMENSIONLESS
 		);
 		if(!DasAry_setValsAt(pAt8, DAS_ADDR8(0,0,0,0,0,0,1,1), (const uint8_t*)&aVal, 1) ||
-		   (DasAry_floatAt(pAt8, DAS_ADDR8(0,0,0,0,0,0,-1,-1)) != aVal)){
+		   (_floatAt(pAt8, DAS_ADDR8(0,0,0,0,0,0,-1,-1)) != aVal)){
 			printf("ERROR: Test 32 (rank 8 address) failed\n");
 			return 132;
 		}

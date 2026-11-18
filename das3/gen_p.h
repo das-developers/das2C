@@ -198,14 +198,18 @@ int DasGen_decRef(DasGen* pThis);
 /** Read the item run produced at one external location.
  *
  * The run is one element for a scalar source and the component count for a
- * composite one.  A bounded source refuses a location outside its extent
- * rather than inventing a value there.
+ * composite one.  An array backed source writes nothing for a location its
+ * array doesn't hold and returns 0.  That is not an error, the array may
+ * still be filling in, and an operation over such a source returns 0 too.
+ * A computed source with a fixed extent, such as a bounded sequence, refuses
+ * a location outside it with an error rather than inventing a value there.
  *
  * @param pThis the generator to read
  * @param pExtAddr the external location, one index per external rank
  * @param pRun receives the elements
  * @param uRunMax the size of pRun in BYTES
- * @returns the element count written, or a negative das error code.
+ * @returns the element count written, 0 if there's nothing at this location,
+ *          or a negative das error code.
  * @memberof DasGen
  */
 int DasGen_eval(

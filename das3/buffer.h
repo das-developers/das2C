@@ -278,12 +278,14 @@ DAS_API das_errcode DasBuf_write(DasBuf* pThis, const void* pData, size_t uLen);
  * Uncommitted bytes are not readable:
  *
  * @code
- *   size_t uSpace;
- *   uint8_t* pSpace = DasBuf_prepare(pBuf, 4096, &uSpace);
+ *   ptrdiff_t nSpace;
+ *   uint8_t* pSpace = DasBuf_prepare(pBuf, 4096, &nSpace);
+ *   if(nSpace < 0) return -nSpace;  // Allocation failed, already logged
  *   if(pSpace != NULL){
- *       size_t uGot = fill(pSpace, uSpace);   // may fill less than uSpace
+ *       size_t uGot = fill(pSpace, nSpace);   // may fill less than nSpace
  *       DasBuf_commit(pBuf, uGot);
  *   }
+ *   // else no room right now, drain the buffer and try again
  * @endcode
  *
  * @note Calling DasBuf_prepare() can grow an elastic buffer. Because of
@@ -298,17 +300,18 @@ DAS_API das_errcode DasBuf_write(DasBuf* pThis, const void* pData, size_t uLen);
  * @param uWant the number of bytes the caller needs room for.  Use 0 to
  *        take whatever space is free now without growing the buffer.
  * 
- * @param pSpace Receives the number of bytes available, which may be more
- *        than uWant, or 0 on failure
+ * @param pSpace Always written.  Receives the number of bytes available,
+ *        which may be more than uWant.  0 means there's no room: the buffer
+ *        is fixed and full, elastic and at its size limit, or read only.
+ *        None of those are errors.  A negative value is the negative of a
+ *        das_errcode, for an elastic buffer that couldn't allocate memory.
  * 
- * @returns Pointer to the first free byte, or NULL if the buffer is
- *        read-only, or can't provide uWant bytes (or any, when uWant is 0).
- *        Only the read-only case calls daserrf(). A buffer without room
- *        returns NULL, but does not call daserrf.
+ * @returns Pointer to the first free byte, or NULL if the buffer can't
+ *        provide uWant bytes (or any, when uWant is 0).
  *
  * @memberof DasBuf
  */
-DAS_API uint8_t* DasBuf_prepare(DasBuf* pThis, size_t uWant, size_t* pSpace);
+DAS_API uint8_t* DasBuf_prepare(DasBuf* pThis, size_t uWant, ptrdiff_t* pSpace);
 
 /** Add bytes written through DasBuf_prepare() to the buffer contents
  *

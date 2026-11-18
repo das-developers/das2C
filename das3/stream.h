@@ -174,7 +174,7 @@ DAS_API int DasStream_toInfoStr(const DasStream* pSd, char* sBuf, size_t uLen);
  *
  *    Stream: das-basic-stream v3.0
  *
- * Short enough to use inline as a printf %s argument.
+ * Short enough to use inline as a printf %%s argument.
  *
  * @param pThis The object to describe.
  * @param sBuf  The output buffer.

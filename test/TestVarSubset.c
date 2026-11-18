@@ -292,8 +292,8 @@ static int test_ex27_blob_refuses_qube(void)
 		CHECK((int)DasAry_lengthIn(pN, 1, aAddr) == aBytes[i]);
 		uTotal += (size_t)aBytes[i];
 
-		size_t uCt = 0;
-		const uint8_t* pRun = DasAry_valsIn(pN, DASVT_UBYTE, 1, aAddr, &uCt);
+		ptrdiff_t nCt = 0;
+		const uint8_t* pRun = DasAry_valsIn(pN, DASVT_UBYTE, 1, aAddr, &nCt);
 		MUST(pRun != NULL);
 		CHECK(memcmp(pRun, "\x89PNG", 4) == 0);
 	}
@@ -339,10 +339,10 @@ static int test_qube_measures_whole_extent(void)
 	CHECK((aShape[0] == 4)&&(aShape[1] == 3));
 	CHECK(aShape[2] == 5);                       /* not 2, which record 0 alone gives */
 
-	size_t uLen = 0;
-	const float* pVals = DasAry_floatsIn(pA, DAS_ADDR0, &uLen);
+	ptrdiff_t nLen = 0;
+	const float* pVals = DasAry_floatsIn(pA, DAS_ADDR0, &nLen);
 	MUST(pVals != NULL);
-	CHECK(uLen == 60);
+	CHECK(nLen == 60);
 	for(int i = 0; i < 4; ++i)
 		for(int j = 0; j < 3; ++j)
 			for(int k = 0; k < 5; ++k)
@@ -432,10 +432,10 @@ static int test_degeneracy_repeats(void)
 	CHECK((aShape[0]==4)&&(aShape[1]==3)&&(aShape[2]==5));
 	CHECK(DasAry_size(pAll) == 60);
 
-	size_t uLen = 0;
-	const float* pVals = DasAry_floatsIn(pAll, DAS_ADDR0, &uLen);
+	ptrdiff_t nLen = 0;
+	const float* pVals = DasAry_floatsIn(pAll, DAS_ADDR0, &nLen);
 	MUST(pVals != NULL);
-	CHECK(uLen == 60);
+	CHECK(nLen == 60);
 	/* value depends on index 1 only: 5 copies of 0, then 1, then 2, per record */
 	for(int i = 0; i < 4; ++i)
 		for(int j = 0; j < 3; ++j)
@@ -446,11 +446,11 @@ static int test_degeneracy_repeats(void)
 	ptrdiff_t aMin[3] = {0,0,0}, aMax[3] = {4,3,5};
 	DasAry* pSame = new_DasAry_materializeQube(pSensor, 3, aMin, aMax, NULL);
 	MUST(pSame != NULL);
-	size_t uLen2 = 0;
-	const float* pV2 = DasAry_floatsIn(pSame, DAS_ADDR0, &uLen2);
+	ptrdiff_t nLen2 = 0;
+	const float* pV2 = DasAry_floatsIn(pSame, DAS_ADDR0, &nLen2);
 	MUST(pV2 != NULL);
-	CHECK(uLen2 == uLen);
-	CHECK(memcmp(pVals, pV2, uLen*sizeof(float)) == 0);
+	CHECK(nLen2 == nLen);
+	CHECK(memcmp(pVals, pV2, nLen*sizeof(float)) == 0);
 	dec_DasAry(pSame);
 	dec_DasAry(pAll);
 
@@ -577,9 +577,9 @@ static int test_lend_vs_own(void)
 
 	CHECK(DasAry_shape(pOwn, aShape) == nRank);
 	CHECK(DasAry_size(pOwn) == 89);
-	size_t uCt = 0;
+	ptrdiff_t nCt = 0;
 	ptrdiff_t aAddr[DASIDX_MAX] = DASIDX_INIT_BEGIN;
-	const uint8_t* pRun = DasAry_valsIn(pOwn, DASVT_UBYTE, 2, aAddr, &uCt);
+	const uint8_t* pRun = DasAry_valsIn(pOwn, DASVT_UBYTE, 2, aAddr, &nCt);
 	MUST(pRun != NULL);
 	CHECK(strcmp((const char*)pRun, "NOMINAL") == 0);
 	dec_DasAry(pOwn);

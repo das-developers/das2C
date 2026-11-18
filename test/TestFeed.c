@@ -106,7 +106,7 @@ static das_errcode onComment(DasStream* pSd, const DasComment* pCmt, void* pUser
  * input.  Anything else contributes its type and count only. */
 static void hashAry(DasAry* pAry)
 {
-	size_t uVals = 0;
+	ptrdiff_t nVals = 0;
 	das_vt vt = DasAry_vt(pAry);
 
 	hashStr(DasAry_id(pAry));
@@ -114,23 +114,23 @@ static void hashAry(DasAry* pAry)
 	hashLong((int64_t)DasAry_size(pAry));
 
 	if((vt >= DASVT_UBYTE)&&(vt <= DASVT_DOUBLE)){
-		const uint8_t* pRaw = DasAry_valsIn(pAry, vt, DAS_ADDR0, &uVals);
+		const uint8_t* pRaw = DasAry_valsIn(pAry, vt, DAS_ADDR0, &nVals);
 		if(pRaw != NULL)
-			hashBytes(pRaw, uVals * DasAry_valSize(pAry));
+			hashBytes(pRaw, nVals * DasAry_valSize(pAry));
 		return;
 	}
 
 	if(vt == DASVT_TIME){
-		const DasTime* pT = DasAry_timesIn(pAry, DAS_ADDR0, &uVals);
-		for(size_t u = 0; pT != NULL && u < uVals; ++u)
-			hashDouble(DasTime_toSec1958(pT + u));
+		const DasTime* pT = DasAry_timesIn(pAry, DAS_ADDR0, &nVals);
+		for(ptrdiff_t i = 0; pT != NULL && i < nVals; ++i)
+			hashDouble(DasTime_toSec1958(pT + i));
 		return;
 	}
 
 	if(vt == DASVT_TEXT){
-		char** pS = (char**)DasAry_valsIn(pAry, DASVT_TEXT, DAS_ADDR0, &uVals);
-		for(size_t u = 0; pS != NULL && u < uVals; ++u)
-			hashStr(pS[u]);
+		char** pS = (char**)DasAry_valsIn(pAry, DASVT_TEXT, DAS_ADDR0, &nVals);
+		for(ptrdiff_t i = 0; pS != NULL && i < nVals; ++i)
+			hashStr(pS[i]);
 		return;
 	}
 }

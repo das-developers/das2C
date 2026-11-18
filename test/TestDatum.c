@@ -288,18 +288,50 @@ static void test_failed_reads(void)
 		"empty", DASVT_DOUBLE, 0, NULL, DAS_SHAPE1(0), DASUNITS_DIMENSIONLESS
 	);
 	if(pAry == NULL){ FAIL("no array"); return; }
+	ptrdiff_t nCount = 99;
 	size_t uCount = 99, uSz = 99;
-	if(DasAry_valsIn(pAry, DASVT_DOUBLE, DAS_ADDR0, &uCount) != NULL)
+	if(DasAry_valsIn(pAry, DASVT_DOUBLE, DAS_ADDR0, &nCount) != NULL)
 		FAIL("empty array gave values");
-	if(uCount != 0) FAIL("empty valsIn count %zu", uCount);
-	uCount = 99;
-	if(DasAry_valsIn(pAry, DASVT_FLOAT, DAS_ADDR0, &uCount) != NULL)
+	if(nCount != 0) FAIL("empty valsIn count %td", nCount);
+
+	/* An error is told apart from an empty by the sign of the count */
+	nCount = 99;
+	if(DasAry_valsIn(pAry, DASVT_FLOAT, DAS_ADDR0, &nCount) != NULL)
 		FAIL("wrong type gave values");
-	if(uCount != 0) FAIL("wrong type valsIn count %zu", uCount);
-	uCount = 99;
+	if(nCount != -DASERR_ARRAY) FAIL("wrong type valsIn count %td", nCount);
+	nCount = 99;
+	if(DasAry_valsIn(pAry, DASVT_DOUBLE, DAS_ADDR2(0,0), &nCount) != NULL)
+		FAIL("too many indices gave values");
+	if(nCount != -DASERR_ARRAY) FAIL("bad index valsIn count %td", nCount);
+
+	/* Past the data is nothing there, not an error: arrays may still be filling */
+	nCount = 99;
+	if(DasAry_valsIn(pAry, DASVT_DOUBLE, DAS_ADDR1(5), &nCount) != NULL)
+		FAIL("location past the data gave values");
+	if(nCount != 0) FAIL("location past the data valsIn count %td", nCount);
+	if(DasAry_lengthIn(pAry, DAS_ADDR1(5)) != 0)
+		FAIL("location past the data has a length");
+
 	if(DasAry_data(pAry, &uSz, &uCount) != NULL) FAIL("empty array gave data");
 	if((uCount != 0)||(uSz != sizeof(double)))
 		FAIL("empty data count %zu, size %zu", uCount, uSz);
+	dec_DasAry(pAry);
+
+	/* qubeIn: bad dimensions are errors, nothing to fill is a 0 */
+	pAry = new_DasAry(
+		"qube", DASVT_FLOAT, 0, NULL, DAS_SHAPE2(0, 4), DASUNITS_DIMENSIONLESS
+	);
+	if(pAry == NULL){ FAIL("no qube array"); return; }
+	ptrdiff_t nFill = DasAry_qubeIn(pAry, 0);
+	if(nFill != -DASERR_ARRAY) FAIL("qube of dim 0 gave %td", nFill);
+	nFill = DasAry_qubeIn(pAry, 2);
+	if(nFill != -DASERR_ARRAY) FAIL("qube past the rank gave %td", nFill);
+	nFill = DasAry_qubeIn(pAry, DAS_IDX1);
+	if(nFill != 0) FAIL("qube of an empty array gave %td", nFill);
+	float aVals[3] = {1.0f, 2.0f, 3.0f};
+	DasAry_append(pAry, (const uint8_t*)aVals, 3);
+	nFill = DasAry_qubeIn(pAry, DAS_IDX1);
+	if(nFill != 1) FAIL("qube of a 3 of 4 row gave %td fills", nFill);
 	dec_DasAry(pAry);
 }
 

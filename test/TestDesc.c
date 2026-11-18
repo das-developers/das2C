@@ -45,6 +45,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
 
 #include <das3/core.h>
 #include <das3/desc_p.h>   /* tests link the static archive, DasDesc_init on the stack */
@@ -73,12 +74,12 @@ static int _check_slots(DasDesc* pDesc)
 {
 	size_t uProps = DasAry_lengthIn(&(pDesc->properties), DAS_ADDR0);
 	for(size_t u = 0; u < uProps; ++u){
-		size_t uSlot = 0;
+		ptrdiff_t nSlot = 0;
 		const DasProp* pProp = (const DasProp*)DasAry_dataIn(
-			&(pDesc->properties), DASVT_UBYTE, DAS_ADDR1(u), &uSlot
+			&(pDesc->properties), DASVT_UBYTE, DAS_ADDR1(u), &nSlot
 		);
 		if(DasProp_isValid(pProp))
-			CHECK(DasProp_size(pProp) <= uSlot);
+			CHECK(DasProp_size(pProp) <= (size_t)nSlot);
 	}
 	return 0;
 }
@@ -383,12 +384,12 @@ static int test_refused(void)
 	DasDesc_init(&desc, DASDESCTYPE_UNK, NULL);
 	for(int i = 0; i < 2; ++i){
 		CHECK(DasAry_append(&(aDesc[i]->properties), NULL, 32) != NULL);
-		size_t uLen = 0;
+		ptrdiff_t nLen = 0;
 		const uint8_t* pSlot = DasAry_dataIn(
-			&(aDesc[i]->properties), DASVT_UBYTE, DAS_ADDR1(0), &uLen
+			&(aDesc[i]->properties), DASVT_UBYTE, DAS_ADDR1(0), &nLen
 		);
-		CHECK(uLen == 32);
-		for(size_t u = 0; u < uLen; ++u) CHECK(pSlot[u] == 0);
+		CHECK(nLen == 32);
+		for(ptrdiff_t j = 0; j < nLen; ++j) CHECK(pSlot[j] == 0);
 	}
 	DasDesc_freeProps(&desc);
 	del_DasDesc(pHeap);
@@ -791,6 +792,100 @@ static int test_double_ary(void)
 	return 0;
 }
 
+/* DasDesc_valStrs() is a lookup plus DasProp_toStrs(), so the splitting rules
+   are tested above.  This checks the lookup: present, absent, inherited. */
+static int test_val_strs(void)
+{
+	DasDesc parent, child;
+	memset(&parent, 0, sizeof(parent));
+	memset(&child, 0, sizeof(child));
+	DasDesc_init(&parent, DASDESCTYPE_UNK, NULL);
+	DasDesc_init(&child, DASDESCTYPE_UNK, NULL);
+	child.parent = &parent;   /* containers set this, there's no public setter */
+
+	CHECK(DasDesc_flexSet(
+		&parent, NULL, DASPROP_STRING|DASPROP_SET, "tags", "alpha|beta|gamma",
+		'|', NULL, DASPROP_DAS3
+	) == DAS_OKAY);
+	CHECK(DasDesc_setVal(&child, "title", "Bx, By, Bz") == DAS_OKAY);
+
+	memset(g_aItems, 0, sizeof(g_aItems));
+	for(int i = 0; i < MAX_ITEMS; ++i) g_psItems[i] = g_aItems[i];
+
+	/* Inherited from the parent, and the count stops at the item count, not
+	   at the number of buffers offered (the old version ran off the end) */
+	CHECK(DasDesc_valStrs(&child, "tags", g_psItems, MAX_ITEMS, ITEM_LEN) == 3);
+	CHECK(strcmp(g_aItems[0], "alpha") == 0);
+	CHECK(strcmp(g_aItems[2], "gamma") == 0);
+
+	/* Fewer buffers than items reads only that many */
+	CHECK(DasDesc_valStrs(&child, "tags", g_psItems, 2, ITEM_LEN) == 2);
+
+	/* A single valued property is one item, separators in it or not */
+	CHECK(DasDesc_valStrs(&child, "title", g_psItems, MAX_ITEMS, ITEM_LEN) == 1);
+	CHECK(strcmp(g_aItems[0], "Bx, By, Bz") == 0);
+
+	/* Not present is a 0, not an error */
+	CHECK(DasDesc_valStrs(&child, "nope", g_psItems, MAX_ITEMS, ITEM_LEN) == 0);
+
+	DasDesc_freeProps(&child);
+	DasDesc_freeProps(&parent);
+	return 0;
+}
+
+/* valDouble and valDatum: 1 read, 0 missing, negative unreadable, and the
+   output always written */
+static int test_val_numeric(void)
+{
+	DasDesc desc;
+	memset(&desc, 0, sizeof(desc));
+	DasDesc_init(&desc, DASDESCTYPE_UNK, NULL);
+
+	CHECK(DasDesc_setVal(&desc, "num", "2.5") == DAS_OKAY);
+	CHECK(DasDesc_setVal(&desc, "word", "banana") == DAS_OKAY);
+	CHECK(DasDesc_setValDatum(&desc, "width", 250.0, DASUNITS_MILLISECONDS) == DAS_OKAY);
+
+	double r = 0.0;
+	CHECK(DasDesc_valDouble(&desc, "num", &r) == 1);
+	CHECK(r == 2.5);
+	r = 0.0;
+	CHECK(DasDesc_valDouble(&desc, "nope", &r) == 0);
+	CHECK(r == DASVAL_FILL);
+	r = 0.0;
+	CHECK(DasDesc_valDouble(&desc, "word", &r) == -DASERR_DESC);
+	CHECK(r == DASVAL_FILL);
+
+	r = 0.0;
+	CHECK(DasDesc_valDatum(&desc, "width", DASUNITS_SECONDS, &r) == 1);
+	CHECK(dasval_within(r, 0.25, 1e-12));
+	r = 0.0;
+	CHECK(DasDesc_valDatum(&desc, "nope", DASUNITS_SECONDS, &r) == 0);
+	CHECK(r == DASVAL_FILL);
+	r = 0.0;
+	CHECK(DasDesc_valDatum(&desc, "width", DASUNITS_HERTZ, &r) == -DASERR_DESC);
+	CHECK(r == DASVAL_FILL);
+
+	/* A time string read in the units asked for, not the property's own */
+	CHECK(DasDesc_flexSet(
+		&desc, "datetime", 0, "epoch", "2000-01-01T00:00:10", '\0',
+		DASUNITS_UTC, DASPROP_DAS3
+	) == DAS_OKAY);
+	r = 0.0;
+	CHECK(DasDesc_valDatum(&desc, "epoch", DASUNITS_T2000, &r) == 1);
+	CHECK(dasval_within(r, 10.0, 1e-6));
+
+	int n = 0;
+	CHECK(DasDesc_valInt(&desc, "num", &n) == 1);  /* sscanf stops at the '.' */
+	CHECK(n == 2);
+	CHECK(DasDesc_valInt(&desc, "nope", &n) == 0);
+	CHECK(n == INT_MIN);
+	CHECK(DasDesc_valInt(&desc, "word", &n) == -DASERR_DESC);
+	CHECK(n == INT_MIN);
+
+	DasDesc_freeProps(&desc);
+	return 0;
+}
+
 int main(int argc, char** argv)
 {
 	(void)argc;
@@ -821,6 +916,8 @@ int main(int argc, char** argv)
 	if((nRet = test_write_order()) != 0) return nRet;
 	if((nRet = test_xml_escape()) != 0)  return nRet;
 	if((nRet = test_double_ary()) != 0)  return nRet;
+	if((nRet = test_val_strs()) != 0)    return nRet;
+	if((nRet = test_val_numeric()) != 0) return nRet;
 	printf("INFO: ======== end of intentional errors, the verdict follows ========\n");
 
 	DasDesc_freeProps(&desc);

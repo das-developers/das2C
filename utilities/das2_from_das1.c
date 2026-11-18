@@ -218,19 +218,16 @@ DasPkt* createPktDesc(
 	
 	/* X-MULIT-Y */
 	if(strcmp(sForm, "x_multi_y") == 0){
-		if(DasDesc_has( pDsdf, "items" )){
-			nItems = DasDesc_valInt(pDsdf, "items" );
-		} 
-		else{
-			if(DasDesc_has(pDsdf, "ny")){
-	        nItems = DasDesc_valInt( pDsdf, "ny" );
-			}
-			else{
-				daserrf(112, "[%s] ERROR: Can't determine number of Y vectors from"
-						     "DSDF file %s", g_sMyName, sDsdfFile);
-				return NULL;
-			}
-	   }
+		int nHas = DasDesc_valInt(pDsdf, "items", &nItems);
+		if(nHas == 0)
+			nHas = DasDesc_valInt(pDsdf, "ny", &nItems);
+		if(nHas < 0)
+			return NULL;   /* unreadable value, already logged */
+		if(nHas == 0){
+			daserrf(112, "[%s] ERROR: Can't determine number of Y vectors from"
+					     "DSDF file %s", g_sMyName, sDsdfFile);
+			return NULL;
+		}
 		
 		if(nItems == 1){
 			pPlane = new_DasPlane(DASPLANETYPE_Y, pYName, new_DasEnc_copy(pEnc4), yUnits);

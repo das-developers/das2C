@@ -595,6 +595,14 @@ static int _DasGen_subsetIntoEval(
 
 		int nRet = pThis->pVTbl->eval(pThis, aAddr, pWrite, uRemain);
 		if(nRet < 0) return nRet;
+		/* An operation over an array that misses here has no fill to stand
+		   in, and a rectangle can't have a hole, so this is an error */
+		if(nRet == 0){
+			char sLoc[64] = {'\0'};
+			return -1 * daserrf(DASERR_ARRAY, "No value at %s in the requested range",
+				das_idx_prn(nExtRank, aAddr, 64, sLoc)
+			);
+		}
 
 		pWrite  += uItemSz;
 		uRemain -= uItemSz;
@@ -657,7 +665,7 @@ static int _DasGenAry_eval(
 		pThis->pAry, (das_vt)pBase->elem, nAryRank, aAryAddr
 	);
 	if(pSrc == NULL)
-		return -1 * daserrf(DASERR_ARRAY, "Invalid index for backing array");
+		return 0;   /* nothing at this location, the arrays may still be filling */
 
 	memcpy(pRun, pSrc, pThis->uItemElems * uElemSz);
 	return (int)pThis->uItemElems;
@@ -913,9 +921,9 @@ static int _DasGenAry_subsetInto(
 			if(pThis->idxmap[d] == DASIDX_UNUSED) continue;
 			aBaseIdx[(int)pThis->idxmap[d]] = pMin[d];
 		}
-		size_t uAvail = 0;
+		ptrdiff_t nAvail = 0;
 		pBaseRead = DasAry_valsIn(
-			pThis->pAry, vtEl, DasAry_rank(pThis->pAry), aBaseIdx, &uAvail
+			pThis->pAry, vtEl, DasAry_rank(pThis->pAry), aBaseIdx, &nAvail
 		);
 		if(pBaseRead == NULL)
 			bStride = false;   /* fall through to the safe walk */
@@ -1277,9 +1285,9 @@ static int _DasGenOp_eval(
 
 	uint8_t aL[sizeof(DasTime)], aR[sizeof(DasTime)];
 	int nL = DasGen_eval(pThis->pLeft, pExtAddr, aL, sizeof(aL));
-	if(nL < 0) return nL;
+	if(nL < 1) return nL;   /* an error, or nothing there to operate on */
 	int nR = DasGen_eval(pThis->pRight, pExtAddr, aR, sizeof(aR));
-	if(nR < 0) return nR;
+	if(nR < 1) return nR;
 	if((nL != 1)||(nR != 1))
 		return -1 * daserrf(DASERR_NOTIMP,
 			"Operations are scalar-only in v1, refusing a %d x %d item pairing",

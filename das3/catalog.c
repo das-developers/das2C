@@ -403,10 +403,12 @@ static DasNode* _dascat_drive(
 		const char* sUrl = DasNodeWalk_urlAt(pWalk, 0);
 		_dascat_fetch(pMgr, sAgent, pCache, sUrl, rConSec, &f);
 		if(f.pBytes != NULL){
-			size_t uLen = 0;
-			const char* p = (const char*)DasAry_bytesIn(f.pBytes, DAS_ADDR0, &uLen);
-			if(DasNodeWalk_feed(pWalk, 0, p, uLen, f.sFinal) == DAS_OKAY)
-				_dascat_keep(&f, p, uLen);
+			ptrdiff_t nLen = 0;
+			const char* p = (const char*)DasAry_bytesIn(f.pBytes, DAS_ADDR0, &nLen);
+			if(nLen < 0)
+				DasNodeWalk_fail(pWalk, 0, NULL);
+			else if(DasNodeWalk_feed(pWalk, 0, p, (size_t)nLen, f.sFinal) == DAS_OKAY)
+				_dascat_keep(&f, p, (size_t)nLen);
 		}
 		else{
 			if(f.bNoAnswer && (pbNoAnswer != NULL)) *pbNoAnswer = true;
@@ -511,12 +513,13 @@ static DasNode* _dascat_loadUrl(
 	_dascat_fetch(pMgr, sAgent, pCache, sUrl, DASHTTP_TIMEOUT_MAX, &f);
 	DasNode* pNode = NULL;
 	if(f.pBytes != NULL){
-		size_t uLen = 0;
-		const char* p = (const char*)DasAry_bytesIn(f.pBytes, DAS_ADDR0, &uLen);
-		pNode = _dasnode_fromJson(p, uLen, sUrl, f.sFinal, sUri);
+		ptrdiff_t nLen = 0;
+		const char* p = (const char*)DasAry_bytesIn(f.pBytes, DAS_ADDR0, &nLen);
+		if(nLen >= 0)
+			pNode = _dasnode_fromJson(p, (size_t)nLen, sUrl, f.sFinal, sUri);
 		if(pNode != NULL){
 			pNode->bOwner = true;
-			_dascat_keep(&f, p, uLen);
+			_dascat_keep(&f, p, (size_t)nLen);
 		}
 	}
 	_dascat_fetchDone(&f);

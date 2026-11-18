@@ -608,6 +608,14 @@ das_errcode onData(DasDs* pDs, int iPktId, void* pUser)
 			if((nRet = _getAt(pCols->aVars[c], iter.addr, &dm)) != DAS_OKAY)
 				return nRet;
 
+			/* Nothing here: blank cells, as many as the column has, so the
+			   row stays lined up with the header */
+			if(DasDatum_isNull(&dm)){
+				int nCols = _numCols(pCols->aVars[c]);
+				for(int i = 1; i < nCols; ++i) fputs(g_sSep, stdout);
+				continue;
+			}
+
 			int nSigDig = DasUnits_isTimePoint(dm.units) ? g_nSecRes : g_nGenRes;
 			if((nRet = _prnCells(&dm, nSigDig)) != DAS_OKAY)
 				return nRet;

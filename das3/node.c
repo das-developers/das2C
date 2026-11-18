@@ -815,10 +815,10 @@ static void _DasNode_attach(DasNode* pParent, DasNode* pChild, const char* sName
 /* The name a loaded child was attached under, "" for a bad entry */
 static const char* _DasCatNode_loadedName(const DasCatNode* pCat, ptrdiff_t i, size_t* pLen)
 {
-	size_t uLen = 0;
-	const char* s = (const char*)DasAry_bytesIn(pCat->pSubPaths, DAS_ADDR1(i), &uLen);
-	if((s == NULL)||(uLen == 0)){ *pLen = 0; return ""; }
-	*pLen = uLen - 1;   /* the stored NUL is not part of the name */
+	ptrdiff_t nLen = 0;
+	const char* s = (const char*)DasAry_bytesIn(pCat->pSubPaths, DAS_ADDR1(i), &nLen);
+	if((s == NULL)||(nLen <= 0)){ *pLen = 0; return ""; }
+	*pLen = (size_t)nLen - 1;   /* the stored NUL is not part of the name */
 	return s;
 }
 

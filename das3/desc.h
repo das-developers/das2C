@@ -446,70 +446,48 @@ DAS_API bool DasDesc_rmProp(DasDesc* pThis, const char* sName);
 DAS_API const char* DasDesc_val(const DasDesc* pThis, const char* sName);
 
 
-/** Get a multi-valued string property
- * 
- * Some properties, especially those from DSDF files, contain multiple 
- * string values in a single field separated by pipe "|" characters.
- * For example:
+/** Get the items of a multi-valued property as strings
  *
- *  data_01 = 'efield | Electric field intensity | V m**-1'
+ * Looks up the property, searching parents as DasDesc_prop() does, and
+ * splits it with DasProp_toStrs().  The property's own separator is used,
+ * whitespace separators included, and each item is copied into its own
+ * caller supplied buffer, so no heap memory is needed.  A single valued
+ * property comes back as one item.
  *
- * This function breaks these values into multiple strings without 
- * requiring heap memory.
+ * @code
+ * char aBuf[8][64];
+ * char* psItems[8];
+ * for(int i = 0; i < 8; ++i) psItems[i] = aBuf[i];
  *
- * Output bytes are copied into the given pBuf.  Then null values
- * are then written over all leading and trailing whitespace for each
- * element as well as the pipe characters.
- *
- * Finally a pointer to each starting string is copied into psVals.
- * If an element contains not data, for example:
- *
- *   coord_01 = 'frequency | | Hz'
- *
- * then the corresponding character pointer will be NULL, but the
- * number of character pointers is unchanged.
+ * int nItems = DasDesc_valStrs(pDesc, "tags", psItems, 8, 64);
+ * if(nItems < 0) return -nItems;  // An error, the message is already logged
+ * for(int i = 0; i < nItems; ++i)
+ *    printf("tag %d: %s\n", i, psItems[i]);
+ * @endcode
  *
  * @param[in] pThis the descriptor to query
  *
  * @param[in] sName the name of the property to retrieve
  *
- * @param[out] pBuf will hold the full output property data
+ * @param[out] psBuf an array of uNumStrs buffers, each uLenEa bytes long
  *
- * @param[in] uBufSz the maximum number of bytes to copy out including
- *            the terminating null character.
+ * @param[in] uNumStrs the number of buffers in psBuf, items past this
+ *            many are not read
  *
- * @param[out] psVals will hold pointers to the start of each
- *            property value.  If a value is empty, the corresponding
- *            pointer is null.
+ * @param[in] uLenEa the size of each buffer, including the terminating
+ *            null character
  *
- * @param[in] uMaxVals the maximum number of string pointers to
- *            write to psVals.
+ * @returns The number of items written to psBuf, 0 if the property is not
+ *          present, or the negative of a das_errcode on an error.
  *
- * @returns The number of string values for this property, which is
- *          zero if a property with the given name is not present.
+ * @see DasProp_toStrs, and DasDesc_val to get the original property value
+ *      in a single buffer unaltered.
  *
  * @memberof DasDesc
- *
- * @see DasDesc_val to retrieve the original property value in
- * a single buffer unaltered.
  */
-DAS_API size_t DasDesc_valStrs(
-	DasDesc* pThis, const char* sName, char* pBuf, size_t uBufSz,
-	char** psVals, size_t uMaxVals
-);
-
-/** Get string array with given separator 
- *
- * This is just a helper, though you can use it if you like to specify a
- * a separator character.  The combination '\\SEP' is treated as a literal
- * SEP and does not break a field.  Literal '\\' characters have no meaning
- * unless followed by a SEP character.
- *
- * @see DasDesc_valStrs
- */
-DAS_API size_t DasDesc_valStrsSep(
-	DasDesc* pThis, const char* sName, char cSep,
-	char* pBuf, size_t uBufSz, char** psVals, size_t uMaxVals
+DAS_API int DasDesc_valStrs(
+	const DasDesc* pThis, const char* sName, char** psBuf, size_t uNumStrs,
+	size_t uLenEa
 );
 
 
@@ -530,11 +508,27 @@ DAS_API das_errcode DasDesc_setValf(
 );
 
 
-/** Read the property of type double named sName.
- * The property value is parsed using sscanf.
+/** Read a numeric property as a double
+ *
+ * The property value is parsed using sscanf, no units are applied.
+ *
+ * @param pThis The descriptor holding the property, parents are searched too
+ * @param sName The name of the property to read
+ * @param pOut Set to the value, or DASVAL_FILL if the property is missing or
+ *        doesn't read as a number.  Always written.
+ *
+ * @returns 1 if the value was read, 0 if there's no such property, or the
+ *        negative of a das_errcode if the value doesn't read as a number.
+ *
+ * @code
+ * double rFill;
+ * int nRet = DasDesc_valDouble(pDesc, "fill", &rFill);
+ * if(nRet < 0) return -nRet;  // An error, the message is already logged
+ * if(nRet == 0) rFill = 0.0;  // Not given, use a default
+ * @endcode
  * @memberof DasDesc
  */
-DAS_API double DasDesc_valDouble(const DasDesc* pThis, const char* sName);
+DAS_API int DasDesc_valDouble(const DasDesc* pThis, const char* sName, double* pOut);
 
 /** Set property of type double.  
  * @memberof DasDesc
@@ -553,12 +547,16 @@ DAS_API das_errcode DasDesc_setValDouble(
  *        represented.  If the property value is stored in a different set of
  *        units than those indicated by this parameter than the output will be
  *        converted to the given unit type.  
- * @returns The converted value or @b DASVAL_FILL if conversion to the desired
- *        units is not possible.
+ * @param pOut Set to the converted value, or DASVAL_FILL if the property is
+ *        missing or can't be converted.  Always written.
+ * @returns 1 if the value was read, 0 if there's no such property, or the
+ *        negative of a das_errcode if the value doesn't parse or can't be
+ *        converted to the given units.
+ * @see DasDesc_valDouble for an example of checking the return value
  * @memberof DasDesc
  */
-DAS_API double DasDesc_valDatum(
-	DasDesc* pThis, const char* sName, DasUnits units 
+DAS_API int DasDesc_valDatum(
+	const DasDesc* pThis, const char* sName, DasUnits units, double* pOut
 );
 
 /** Set property of type Datum (double, UnitType pair)
@@ -606,17 +604,21 @@ DAS_API das_errcode DasDesc_setValDoubles(
 	DasDesc* pThis, const char* sName, int nItems, double* pValues
 );
 
-/** Get a property integer value
+/** Read a property as an integer
  *
- * @param pThis the descriptor object to query
+ * The property value is parsed using sscanf.
+ *
+ * @param pThis the descriptor object to query, parents are searched too
  * @param sName the name of the property to retrieve
- * @returns The value of the named property or exits the program if the
- *          named property doesn't exist in this descriptor.
- * 
- * @see DasDesc_has()
+ * @param pOut Set to the value, or INT_MIN if the property is missing or
+ *        doesn't read as an integer.  Always written.
+ * @returns 1 if the value was read, 0 if there's no such property, or the
+ *        negative of a das_errcode if the value doesn't read as an integer.
+ *
+ * @see DasDesc_valDouble for an example of checking the return value
  * @memberof DasDesc
  */
-DAS_API int DasDesc_valInt(const DasDesc* pThis, const char* sName);
+DAS_API int DasDesc_valInt(const DasDesc* pThis, const char* sName, int* pOut);
 
 /** Set the property of type int.
  * @memberof DasDesc

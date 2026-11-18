@@ -174,11 +174,14 @@ ptrdiff_t _DasXport_fill(DasXport* pThis, DasBuf* pBuf, size_t uLen)
 	if(uLen == 0) return 0;
 
 	/* An elastic buffer grows here, a pinned one has to have the room */
-	size_t uSpace = 0;
-	uint8_t* pDest = DasBuf_prepare(pBuf, uLen, &uSpace);
+	ptrdiff_t nSpace = 0;
+	uint8_t* pDest = DasBuf_prepare(pBuf, uLen, &nSpace);
+	if(nSpace < 0) return -1;   /* allocation failed, already logged */
 	if(pDest == NULL){
-		/* prepare already reported a read-only buffer, only "full" is ours */
-		if(!DasBuf_isReadOnly(pBuf))
+		/* prepare is quiet about no room, but this read needs it */
+		if(DasBuf_isReadOnly(pBuf))
+			daserrf(DASERR_BUF, "Can't read %zu bytes into a read only buffer", uLen);
+		else
 			daserrf(DASERR_BUF, "Buffer can't take %zu more bytes, only %zu "
 			          "of space is left", uLen, DasBuf_writeSpace(pBuf));
 		return -1;

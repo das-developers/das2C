@@ -1540,11 +1540,13 @@ das_errcode onDataSet(DasDs* pDsIn, int iPktId, void* pUser)
 						   DasDs_addAry() adds its own reference. */
 						DasDs_addAry(pDsOut, pAry);
 						int nItems;
-						const DasCodec* pCodec = DasDs_codecFor(pDsIn, DasAry_id(pAry), &nItems);
+						DasCodec* pCodec = NULL;
+						int nHas = DasDs_codecFor(pDsIn, DasAry_id(pAry), &pCodec, &nItems);
+						if(nHas < 0) return PERR;
 						
 						/* If there's no codec for the input array, we don't need
 							to worry about it because these are header only values */
-						if(pCodec != NULL){
+						if(nHas > 0){
 							DasCodec* pCodecOut = DasDs_cloneCodec(
 								pDsOut, NULL, pCodec, nItems, DASCODEC_WRITE
 							);
@@ -1697,7 +1699,8 @@ das_errcode _writeLocation(DasDs* pDsIn, XCalc* pCalc, double rTimeShift)
 	DasDatum dm;
 	for(; !iter.done; DasDsUniqIter_next(&iter)){
 
-		if(DasVar_datumAt(pCalc->pTime, iter.addr, (DasByteSeq){0}, &dm) != 0)
+		if((DasVar_datumAt(pCalc->pTime, iter.addr, (DasByteSeq){0}, &dm) != 0)||
+		   DasDatum_isNull(&dm))
 			return daserrf(PERR, "Could not read the time value");
 		rEt = _dm2et(&dm, rTimeShift);
 
@@ -1817,7 +1820,8 @@ das_errcode _writeRotation(DasDs* pDsIn, XCalc* pCalc, double rTimeShift)
 	DasDatum dm;
 	for(; !iter.done; DasDsUniqIter_next(&iter)){
 
-		if(DasVar_datumAt(pCalc->pTime, iter.addr, (DasByteSeq){0}, &dm) != 0)
+		if((DasVar_datumAt(pCalc->pTime, iter.addr, (DasByteSeq){0}, &dm) != 0)||
+		   DasDatum_isNull(&dm))
 			return daserrf(PERR, "Could not read the time value");
 
 		rEt = _dm2et(&dm, rTimeShift);
@@ -1842,7 +1846,8 @@ das_errcode _writeRotation(DasDs* pDsIn, XCalc* pCalc, double rTimeShift)
 
 		/* An empty work buffer is enough only for array backed vectors; a
 		   computed input asks for scratch (> 0) and is refused here. */
-		if(DasVar_datumAt(pVarIn, iter.addr, (DasByteSeq){0}, &dm) != 0)
+		if((DasVar_datumAt(pVarIn, iter.addr, (DasByteSeq){0}, &dm) != 0)||
+		   DasDatum_isNull(&dm))
 			return daserrf(PERR, "Could not read the input vector value");
 
 		const DasForm* pFormIn = DasDatum_form(&dm);

@@ -107,16 +107,13 @@ das_errcode onStreamHdr(DasStream* pSdIn, void* v)
 	char sResInfo[64] = {'\0'};
 	
 	/* Update the output xTagWidth if it's less than the resolution */
-	if( DasDesc_has((DasDesc*)g_pSdOut, "xTagWidth" ) ) {
-		double rInWidth = DasDesc_valDatum((DasDesc*)g_pSdOut, "xTagWidth", DASUNITS_SECONDS);
-		if(rInWidth < rBinSzSec)
-			DasDesc_setValDatum((DasDesc*)g_pSdOut, "xTagWidth", rBinSzSec, DASUNITS_SECONDS);
-		else
-			rCacheRes = rInWidth;
-	}
-	else{
+	/* An unreadable width (already logged) is replaced like a missing one */
+	double rInWidth = 0.0;
+	int nRet = DasDesc_valDatum((DasDesc*)g_pSdOut, "xTagWidth", DASUNITS_SECONDS, &rInWidth);
+	if((nRet > 0) && (rInWidth >= rBinSzSec))
+		rCacheRes = rInWidth;
+	else
 		DasDesc_setValDatum((DasDesc*)g_pSdOut, "xTagWidth", rBinSzSec, DASUNITS_SECONDS);
-	}
 	
 	/* Set the xCacheResolution, remember this should be no higher than the 
 	 * xTagWidth */

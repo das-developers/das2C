@@ -2423,14 +2423,20 @@ das_errcode makeCdfVar(
 	   square off anything ragged: a CDF record is a rectangle, so the Qube
 	   call is the one that matches the destination. */
 	DasAry* pAry = new_DasAry_subsetQube(pVar, nDsRank, aMin, aMax, NULL);
+	if(pAry == NULL)
+		return PERR;   /* the subset call logged why */
 
 	ptrdiff_t aAryShape[DASIDX_MAX] = DASIDX_INIT_UNUSED;
 	ptrdiff_t aTmp[DASIDX_MAX] = DASIDX_INIT_UNUSED;
 	int nAryRank = DasAry_shape(pAry, aAryShape);
 
-	size_t uLen = 0;
+	ptrdiff_t nLen = 0;
 	das_vt vt = DasAry_vt(pAry);
-	const uint8_t* pVals = DasAry_valsIn(pAry, vt, DAS_ADDR0, &uLen);
+	const uint8_t* pVals = DasAry_valsIn(pAry, vt, DAS_ADDR0, &nLen);
+	if(nLen < 0){
+		dec_DasAry(pAry);
+		return PERR;
+	}
 
 	/* Put index information into data types needed for function call */
 	static const long indices[DASIDX_MAX]  = {0,0,0,0, 0,0,0,0};
@@ -3258,11 +3264,11 @@ static das_errcode _writeRecVaryText(
 	das_vt vt = DasAry_vt(pAry);
 	size_t uCut = 0;
 	for(ptrdiff_t i = 0; i < nRecs; ++i){
-		size_t uLen = 0;
-		const char* pStr = (const char*)DasAry_valsIn(pAry, vt, DAS_ADDR1(i), &uLen);
+		ptrdiff_t nLen = 0;
+		const char* pStr = (const char*)DasAry_valsIn(pAry, vt, DAS_ADDR1(i), &nLen);
 		if(pStr == NULL){ free(pPad); return PERR; }
-		const char* pEnd = (const char*)memchr(pStr, '\0', uLen);
-		size_t uChars = (pEnd != NULL) ? (size_t)(pEnd - pStr) : uLen;
+		const char* pEnd = (const char*)memchr(pStr, '\0', (size_t)nLen);
+		size_t uChars = (pEnd != NULL) ? (size_t)(pEnd - pStr) : (size_t)nLen;
 		if(uChars > uWidth){ uChars = uWidth; ++uCut; }
 		memcpy(pPad + (size_t)i * uWidth, pStr, uChars);
 	}

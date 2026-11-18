@@ -330,9 +330,11 @@ static das_errcode writeAndClear(Context* pCtx, int iPktId, DasDs* pDsIn)
 		TimeConv* pC = &(pWork->aConv[c]);
 		das_vt vt = DasAry_vt(pC->pEpoch);
 
-		size_t uVals = 0;
-		const uint8_t* pBeg = DasAry_valsIn(pC->pEpoch, vt, 0, NULL, &uVals);
-		if(pBeg == NULL) continue;
+		ptrdiff_t nVals = 0;
+		const uint8_t* pBeg = DasAry_valsIn(pC->pEpoch, vt, 0, NULL, &nVals);
+		if(nVals < 0) return (das_errcode)(-nVals);
+		if(pBeg == NULL) continue;   /* empty batch */
+		size_t uVals = (size_t)nVals;
 
 		/* A fill value is converted by its meaning, not by arithmetic: running an
 		   epoch fill sentinel (e.g. INT64_MAX) through the calendar math overflows.

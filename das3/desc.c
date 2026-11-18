@@ -141,10 +141,10 @@ int DasDesc_info(const DasDesc* pThis, const char* sIndent, char* sBuf, size_t u
 	const DasAry* pProps = &(pThis->properties);
 	size_t uProps = DasAry_lengthIn(pProps, DAS_ADDR0);
 
-	size_t uPropLen = 0;
+	ptrdiff_t nPropLen = 0;
 	for(size_t u = 0; u < uProps; ++u){
 		const DasProp* pProp = (const DasProp*) DasAry_bytesIn(
-			pProps, DAS_ADDR1(u), &uPropLen
+			pProps, DAS_ADDR1(u), &nPropLen
 		);
 	
 		if(!DasProp_isValid(pProp))
@@ -194,9 +194,9 @@ const DasProp* DasDesc_localProp(const DasDesc* pThis, const char* sName)
 	const DasProp* pProp;
 
 	for(size_t i = 0; i < nProps; ++i){
-		size_t uPropLen = 0;
-		pProp = (const DasProp*) DasAry_bytesIn(pProps, DAS_ADDR1(i), &uPropLen);
-		if((pProp->flags & DASPROP_VALID_MASK) && 
+		ptrdiff_t nPropLen = 0;
+		pProp = (const DasProp*) DasAry_bytesIn(pProps, DAS_ADDR1(i), &nPropLen);
+		if(DasProp_isValid(pProp) && 
 			(strcmp(pProp->buffer, sName) == 0)
 		)
 		return pProp;
@@ -227,13 +227,13 @@ static const DasProp* _DasDesc_liveAt(const DasDesc* pThis, size_t uIdx)
 	if(uIdx >= uSlots - pThis->uInvalid)
 		return NULL;
 
-	size_t uPropLen;
+	ptrdiff_t nPropLen;
 	if(pThis->uInvalid == 0)
-		return (const DasProp*)DasAry_bytesIn(pProps, DAS_ADDR1(uIdx), &uPropLen);
+		return (const DasProp*)DasAry_bytesIn(pProps, DAS_ADDR1(uIdx), &nPropLen);
 
 	for(size_t u = 0; u < uSlots; ++u){
 		const DasProp* pProp = (const DasProp*)DasAry_bytesIn(
-			pProps, DAS_ADDR1(u), &uPropLen
+			pProps, DAS_ADDR1(u), &nPropLen
 		);
 		if(!DasProp_isValid(pProp)) continue;
 		if(uIdx == 0) return pProp;
@@ -247,83 +247,6 @@ const DasProp* DasDesc_propAt(const DasDesc* pThis, size_t uIdx)
 	return _DasDesc_liveAt(pThis, uIdx);
 }
 
-
-
-/* returns NULL if property does not exist, pointer to string value          */
-/* otherwise.  Recursively searches up the parent hierarchy if the given     */
-
-/* property isn't present in this descriptor                                 */
-
-size_t DasDesc_valStrsSep(
-	DasDesc* pThis, const char* sName, char cSep,
-	char* pBuf, size_t uBufSz, char** psVals, size_t uMaxVals
-){
-	if((uBufSz < 2)||(uMaxVals < 1)) return 0;
-	if(isspace(cSep)){
-		daserrf(DASERR_DESC, 
-			"Space separators not supported, since functions trims each output"
-		);
-		return 0;
-	}
-	
-	const char* sVal = DasDesc_val(pThis, sName);
-	if(sVal == NULL)
-		return 0;
-
-	size_t uLen = strlen(sVal);
-	if(uLen > uBufSz - 2) uLen = uBufSz - 2;
-	
-	*pBuf = cSep;  /* Add separator to first buffer */
-	strncpy(pBuf+1, sVal, uLen); pBuf[uLen] = '\0';
-	
-	size_t u = 0;       /* Initial value is separator at start of buffer */
-	psVals[u] = pBuf;
-	
-	char* p = pBuf;     /* All other values start on separators */
-	while((*p != '\0')||(u < uMaxVals-1)){
-		if(*p == cSep){  psVals[u] = p;  ++u;  }
-		++p;
-	}
-	uMaxVals = u;  /* Reduce value count to what we measured */
-	
-	/* point value begin after the separator, if there is nothing after the
-	 * separator but an ending, mark the value as null */
-	size_t uSz;
-	for(u = 0; u < uMaxVals; ++u){  /* null space right */
-		*(psVals[u]) = '\0';
-		psVals[u] += 1;
-		uSz = 0;
-		p = psVals[u];
-		while((*p != cSep)&&(*p != '\0')){++uSz; ++p;}
-		if(uSz == 0) psVals[u] = NULL;
-	}
-	
-	/* Trim elements left */
-	for(u = 0; u < uMaxVals; ++u){
-		if(psVals[u] == NULL) continue;
-		
-		while(isspace( *(psVals[u]) ) && ( *(psVals[u]) != '\0')){
-			*(psVals[u]) = '\0';
-			psVals[u] += 1;
-		}
-		if(*(psVals[u]) == '\0'){   /* all content was space chars */
-			psVals[u] = NULL;
-			continue;
-		}
-	}
-	
-	/* Anything that is left has something, do tail trim */
-	for(u = 0; u < uMaxVals; ++u){
-		if(psVals[u] == NULL) continue;
-		
-		uSz = strlen(psVals[u]);
-		while((uSz > 0)&&( isspace(psVals[u][uSz - 1]))){
-			psVals[u][uSz - 1] = '\0';
-			uSz -= 1;
-		}
-	}
-	return uMaxVals;
-}
 
 const char* DasDesc_propType(const DasDesc* pThis, const char* sName)
 {
@@ -392,20 +315,13 @@ const char* DasDesc_val(const DasDesc* pThis, const char* sName)
 	return NULL;
 }
 
-size_t DasDesc_valStrs(
-	DasDesc* pThis, const char* sName, char* pBuf, size_t uBufSz,
-	char** psVals, size_t uMaxVals
+int DasDesc_valStrs(
+	const DasDesc* pThis, const char* sName, char** psBuf, size_t uNumStrs,
+	size_t uLenEa
 ){
 	const DasProp* pProp = DasDesc_prop(pThis, sName);
-	if(pProp == NULL) return 0;
-
-	char cSep = DasProp_sep(pProp);
-
-	/* Single-valued properties record no separator. 
-	   going with a default of `|` here for old das2 DSDF reading */
-	if(cSep == '\0') cSep = '|';
-
-	return DasDesc_valStrsSep(pThis, sName, cSep, pBuf, uBufSz, psVals, uMaxVals);
+	if(pProp == NULL) return 0;   /* not present is not an error */
+	return DasProp_toStrs(pProp, psBuf, uNumStrs, uLenEa);
 }
 
 bool DasDesc_valBool(DasDesc* pThis, const char* sName)
@@ -418,33 +334,34 @@ bool DasDesc_valBool(DasDesc* pThis, const char* sName)
 	return false;
 }
 
-double DasDesc_valDouble(const DasDesc* pThis, const char* sName)
+int DasDesc_valDouble(const DasDesc* pThis, const char* sName, double* pOut)
 {
-	double rVal;
+	*pOut = DASVAL_FILL;
 	const char* sVal = DasDesc_val( pThis, sName );
 	if(sVal == NULL) 
-		return DASVAL_FILL;
+		return 0;
    
-	if(sscanf(sVal, "%lf", &rVal ) != 1){
-		daserrf(DASERR_DESC, "Can't convert %s to an double", sVal);
-		return DASVAL_FILL;
-	};
-	return rVal;
+	double rVal;
+	if(sscanf(sVal, "%lf", &rVal ) != 1)
+		return -daserrf(DASERR_DESC, "Can't convert %s to a double", sVal);
+
+	*pOut = rVal;
+	return 1;
 }
 
-int DasDesc_valInt(const DasDesc* pThis, const char* sName ) 
+int DasDesc_valInt(const DasDesc* pThis, const char* sName, int* pOut)
 {
-	int nVal;
+	*pOut = INT_MIN;
 	const char* sVal = DasDesc_val( pThis, sName );
 	if(sVal == NULL)
-		return INT_MIN;
+		return 0;
 
-	if( sscanf(sVal, "%d", &nVal) != 1){
-		daserrf(DASERR_DESC, "Can't convert %s to an integer", sVal);
-		return INT_MIN;
-	}
+	int nVal;
+	if( sscanf(sVal, "%d", &nVal) != 1)
+		return -daserrf(DASERR_DESC, "Can't convert %s to an integer", sVal);
    
-	return nVal;
+	*pOut = nVal;
+	return 1;
 }
 
 static bool _Desc_looksLikeTime(const char* sVal)
@@ -454,20 +371,20 @@ static bool _Desc_looksLikeTime(const char* sVal)
 	return false;
 }
 
-double DasDesc_valDatum(DasDesc* pThis, const char* sName, DasUnits units)
-{
+int DasDesc_valDatum(
+	const DasDesc* pThis, const char* sName, DasUnits units, double* pOut
+){
+	*pOut = DASVAL_FILL;
 	const DasProp* pProp = DasDesc_prop(pThis, sName);
-	if(pProp == NULL) return DASVAL_FILL;
+	if(pProp == NULL) return 0;
 
 	const char* sValue = DasProp_value(pProp);
 
 	// Can't convert calendar units to non calendar units
-	if(!DasUnits_canConvert(pProp->units, units)){
-		daserrf(DASERR_DESC, 
+	if(!DasUnits_canConvert(pProp->units, units))
+		return -daserrf(DASERR_DESC, 
 			"Can't convert property units of type %s to %s", pProp->units, units
 		);
-		return DASVAL_FILL;
-	}
 
 	/* If these are calendar units and I look like time, use parse time */
 	if(DasUnits_isTimePoint(pProp->units) || (pProp->units == DASUNITS_DIMENSIONLESS))
@@ -476,21 +393,20 @@ double DasDesc_valDatum(DasDesc* pThis, const char* sName, DasUnits units)
 			looks like a Time string */
 		if(_Desc_looksLikeTime(sValue)){
 			DasTime dt;
-			if(!DasTime_fromStr(&dt, sValue)){
-				daserrf(DASERR_DESC, "Couldn't parse %s as a date time", sValue);
-				return DASVAL_FILL;	
-			}
-			return DasTime_toPoint(&dt, pProp->units);
+			if(!DasTime_fromStr(&dt, sValue))
+				return -daserrf(DASERR_DESC, "Couldn't parse %s as a date time", sValue);
+
+			*pOut = DasTime_toPoint(&dt, units);
+			return 1;
 		}
 	}
 
 	double rValue;
-	if( sscanf(sValue, "%lf", &rValue) != 1){
-		daserrf(DASERR_DESC, "Couldn't parse %s as a real value", sValue);
-		return DASVAL_FILL;
-	}
+	if( sscanf(sValue, "%lf", &rValue) != 1)
+		return -daserrf(DASERR_DESC, "Couldn't parse %s as a real value", sValue);
 	
-	return DasUnits_convert(rValue, pProp->units, units);
+	*pOut = DasUnits_convert(rValue, pProp->units, units);
+	return 1;
 }
 
 double* DasDesc_newValDoubles(DasDesc* pThis, const char* sName, int* pNumItems)
@@ -517,8 +433,8 @@ bool DasDesc_isEqual(const DasDesc* pThis, const DasDesc* pOther)
 
 	size_t uProps = DasAry_lengthIn(pMyAry, DAS_ADDR0);
 	for(size_t u = 0; u < uProps; u++){
-		size_t uPropLen;
-		const DasProp* pMyProp = (const DasProp*)DasAry_bytesIn(pMyAry, DAS_ADDR1(u), &uPropLen);
+		ptrdiff_t nPropLen;
+		const DasProp* pMyProp = (const DasProp*)DasAry_bytesIn(pMyAry, DAS_ADDR1(u), &nPropLen);
 		if(!DasProp_isValid(pMyProp)) continue;
 		const DasProp* pYourProp = DasDesc_localProp(pOther, pMyProp->buffer);
 		
@@ -542,10 +458,12 @@ static uint8_t* _DasDesc_getPropBuf(
 	DasAry* pProps = &(pThis->properties);
 	size_t nProps = DasAry_lengthIn(pProps, DAS_ADDR0);
 	DasProp* pProp;
+	ptrdiff_t nPropSz = 0;
 
 	for(size_t i = 0; i < nProps; ++i){
-		pProp = (DasProp*) DasAry_dataIn(pProps, DASVT_UBYTE, DAS_ADDR1(i), pPropSz);
+		pProp = (DasProp*) DasAry_dataIn(pProps, DASVT_UBYTE, DAS_ADDR1(i), &nPropSz);
 		if(DasProp_isValid(pProp) && (strcmp(pProp->buffer, sName) == 0)){
+			*pPropSz = (size_t)nPropSz;  /* valid prop, so the count is > 0 */
 			if(pIdx != NULL) *pIdx = i;
 			return (uint8_t*)pProp;
 		}
@@ -576,16 +494,16 @@ static uint8_t* _DasDesc_getWriteBuf(DasDesc* pThis, const char* sName, size_t u
 	}
 	DasAry_markEnd(pProps, DAS_IDX1);
 
-	size_t uTmp = 0;
+	ptrdiff_t nTmp = 0;
 	if(bRetire){
 		/* The append may have moved the storage, look the old slot up again */
-		pBuf = DasAry_dataIn(pProps, DASVT_UBYTE, DAS_ADDR1((ptrdiff_t)uOldIdx), &uTmp);
+		pBuf = DasAry_dataIn(pProps, DASVT_UBYTE, DAS_ADDR1((ptrdiff_t)uOldIdx), &nTmp);
 		DasProp_invalidate((DasProp*)pBuf);
 		++(pThis->uInvalid);
 	}
 
-	pBuf = DasAry_dataIn(pProps, DASVT_UBYTE, DAS_ADDR1(-1), &uTmp);
-	assert(uTmp == uNeedSz);
+	pBuf = DasAry_dataIn(pProps, DASVT_UBYTE, DAS_ADDR1(-1), &nTmp);
+	assert(nTmp == (ptrdiff_t)uNeedSz);
 	return pBuf;
 }
 
@@ -598,11 +516,13 @@ static bool _DasDesc_ownsPtr(DasDesc* pThis, const void* p)
 	if((p == NULL)||(DasAry_lengthIn(pProps, DAS_ADDR0) == 0))
 		return false;
 
-	size_t uLen = 0;
-	const uint8_t* pBeg  = DasAry_dataIn(pProps, DASVT_UBYTE, DAS_ADDR1(0), &uLen);
-	const uint8_t* pLast = DasAry_dataIn(pProps, DASVT_UBYTE, DAS_ADDR1(-1), &uLen);
+	ptrdiff_t nLen = 0;
+	const uint8_t* pBeg  = DasAry_dataIn(pProps, DASVT_UBYTE, DAS_ADDR1(0), &nLen);
+	const uint8_t* pLast = DasAry_dataIn(pProps, DASVT_UBYTE, DAS_ADDR1(-1), &nLen);
+	if((pBeg == NULL)||(pLast == NULL))
+		return false;
 	uintptr_t uPtr = (uintptr_t)p;
-	return (uPtr >= (uintptr_t)pBeg) && (uPtr < (uintptr_t)(pLast + uLen));
+	return (uPtr >= (uintptr_t)pBeg) && (uPtr < (uintptr_t)(pLast + nLen));
 }
 
 /* Heap copy of a string, NULL on failure (strdup is not C99) */
@@ -926,8 +846,8 @@ void DasDesc_copyIn(DasDesc* pThis, const DasDesc* pOther)
 	const DasProp* pProp = NULL;
 
 	for(size_t u = 0; u < uProps; ++u){
-		size_t uNewLen = 0;
-		pProp = (const DasProp*) DasAry_bytesIn(pSrc, DAS_ADDR1(u), &uNewLen);
+		ptrdiff_t nNewLen = 0;
+		pProp = (const DasProp*) DasAry_bytesIn(pSrc, DAS_ADDR1(u), &nNewLen);
 		if(!DasProp_isValid(pProp))
 			continue;
 
@@ -1013,8 +933,8 @@ static das_errcode _DasDesc_encodeMaybeWrap(
 	
 	das_errcode nRet = DAS_OKAY; 
 	for(u = 0; u < uProps; ++u){
-		size_t uPropLen = 0;
-		pProp = (const DasProp*) DasAry_bytesIn(pProps, DAS_ADDR1(u), &uPropLen);
+		ptrdiff_t nPropLen = 0;
+		pProp = (const DasProp*) DasAry_bytesIn(pProps, DAS_ADDR1(u), &nPropLen);
 		if(!DasProp_isValid(pProp))
 			continue;
 

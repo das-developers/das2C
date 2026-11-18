@@ -831,7 +831,7 @@ static int test_subset_values(void)
 
 	const double C = 299792458.0 * 1.0e-9;
 	ptrdiff_t aMin[3], aMax[3];
-	size_t uVals = 0;
+	ptrdiff_t nVals = 0;
 
 	/* Case 1: apparent altitude over all echoes of the first frequency.
 	   app_alt = mex_alt[i] - range[k], so it varies along i and k only. */
@@ -843,16 +843,16 @@ static int test_subset_values(void)
 	CHECK((aShape[0] == AIS_RECS)&&(aShape[1] == AIS_ECHOS));
 	CHECK(DasAry_units(pSlice) == DasUnits_fromStr("km"));
 	{
-		const double* pVals = DasAry_doublesIn(pSlice, DAS_ADDR0, &uVals);
+		const double* pVals = DasAry_doublesIn(pSlice, DAS_ADDR0, &nVals);
 		MUST(pVals != NULL);
-		CHECK(uVals == (size_t)(AIS_RECS*AIS_ECHOS));
+		CHECK(nVals == (ptrdiff_t)(AIS_RECS*AIS_ECHOS));
 		/* record 0, echo 0 and the last echo of record 2.  Note the temps:
 		   dasval_within() does not parenthesize its arguments, so an expression
 		   passed straight in re-associates and silently compares nonsense. */
 		double rFirst = g_aMexAlt[0] - 167.443*0.5*C;
 		double rLast  = g_aMexAlt[2] - (167.443 + 91.4286*(AIS_ECHOS-1))*0.5*C;
 		CHECK(dasval_within(pVals[0], rFirst, 1e-3));
-		CHECK(dasval_within(pVals[uVals-1], rLast, 1e-3));
+		CHECK(dasval_within(pVals[nVals-1], rLast, 1e-3));
 	}
 	dec_DasAry(pSlice);
 
@@ -866,8 +866,8 @@ static int test_subset_values(void)
 	CHECK(DasAry_shape(pSlice, aShape) == 2);
 	CHECK((aShape[0] == AIS_RECS)&&(aShape[1] == AIS_FREQS));
 	{
-		const double* pVals = DasAry_doublesIn(pSlice, DAS_ADDR0, &uVals);
-		CHECK(uVals == (size_t)(AIS_RECS*AIS_FREQS));
+		const double* pVals = DasAry_doublesIn(pSlice, DAS_ADDR0, &nVals);
+		CHECK(nVals == (ptrdiff_t)(AIS_RECS*AIS_FREQS));
 		for(int i = 0; i < AIS_RECS; ++i){
 			double rWant = g_aMexAlt[i]
 			             - (167.443 + 91.4286*(AIS_ECHOS-1))*0.5*C;
@@ -902,9 +902,9 @@ static int test_subset_values(void)
 	pSlice = new_DasAry_subset(s.pEcho, 3, aMin, aMax, NULL);
 	MUST(pSlice != NULL);
 	{
-		const float* pVals = DasAry_floatsIn(pSlice, DAS_ADDR0, &uVals);
+		const float* pVals = DasAry_floatsIn(pSlice, DAS_ADDR0, &nVals);
 		MUST(pVals != NULL);
-		CHECK(uVals == (size_t)AIS_ECHOS);
+		CHECK(nVals == (ptrdiff_t)AIS_ECHOS);
 		for(int k = 0; k < AIS_ECHOS; ++k)
 			CHECK(pVals[k] == g_aAmp[1][1][k]);
 	}
@@ -919,8 +919,8 @@ static int test_subset_values(void)
 	CHECK(DasAry_shape(pSlice, aShape) == 2);
 	CHECK((aShape[0] == AIS_RECS)&&(aShape[1] == AIS_FREQS));
 	{
-		const float* pVals = DasAry_floatsIn(pSlice, DAS_ADDR0, &uVals);
-		CHECK(uVals == (size_t)(AIS_RECS*AIS_FREQS));
+		const float* pVals = DasAry_floatsIn(pSlice, DAS_ADDR0, &nVals);
+		CHECK(nVals == (ptrdiff_t)(AIS_RECS*AIS_FREQS));
 		for(int i = 0; i < AIS_RECS; ++i)
 			for(int j = 0; j < AIS_FREQS; ++j)
 				CHECK(pVals[i*AIS_FREQS + j] == g_aAmp[i][j][AIS_ECHOS-1]);
@@ -1074,18 +1074,19 @@ static int test_subset_view_vs_copy(void)
 	CHECK(ref_DasAry(pView) == 1);
 	CHECK(ref_DasAry(pOwn)  == 1);
 
-	size_t uView = 0;
-	const float* pV = DasAry_floatsIn(pView, DAS_ADDR0, &uView);
+	ptrdiff_t nView = 0;
+	const float* pV = DasAry_floatsIn(pView, DAS_ADDR0, &nView);
 	MUST(pV != NULL);
 	float rWas = g_aAmp[1][1][0];
 	CHECK(pV[0] == rWas);
 
 	/* An owned result may be written without disturbing anything upstream. */
-	size_t uOwn = 0;
-	const double* pO = DasAry_doublesIn(pOwn, DAS_ADDR0, &uOwn);
+	ptrdiff_t nOwn = 0;
+	const double* pO = DasAry_doublesIn(pOwn, DAS_ADDR0, &nOwn);
 	MUST(pO != NULL);
 	((double*)pO)[0] = -12345.0;
-	CHECK(DasAry_floatAt(s.pAryEcho, DAS_ADDR3(1,1,0)) == rWas);
+	const float* pEcho = (const float*)DasAry_valAt(s.pAryEcho, DASVT_FLOAT, DAS_ADDR3(1,1,0));
+	CHECK((pEcho != NULL) && (*pEcho == rWas));
 	dec_DasAry(pOwn);
 
 	/* A view pins its backing store, so it stays readable afterward. */
@@ -1149,10 +1150,10 @@ static int test_subset_ragged(void)
 	CHECK(DasAry_shape(pSlice, aShape) == 2);
 	CHECK((aShape[0] == nRows)&&(aShape[1] == 5));   /* never DASIDX_RAGGED */
 
-	size_t uVals = 0;
-	const float* pVals = DasAry_floatsIn(pSlice, DAS_ADDR0, &uVals);
+	ptrdiff_t nVals = 0;
+	const float* pVals = DasAry_floatsIn(pSlice, DAS_ADDR0, &nVals);
 	MUST(pVals != NULL);
-	CHECK(uVals == (size_t)(nRows*5));
+	CHECK(nVals == (ptrdiff_t)(nRows*5));
 	for(int i = 0; i < nRows; ++i){
 		for(int j = 0; j < 5; ++j){
 			float rWant = (j < aLens[i]) ? (float)(100*i + j) : rFill;
@@ -1165,8 +1166,8 @@ static int test_subset_ragged(void)
 	aMax[1] = 2;
 	pSlice = new_DasAry_subsetQube(pSet, 2, aMin, aMax, NULL);
 	MUST(pSlice != NULL);
-	pVals = DasAry_floatsIn(pSlice, DAS_ADDR0, &uVals);
-	CHECK(uVals == (size_t)(nRows*2));
+	pVals = DasAry_floatsIn(pSlice, DAS_ADDR0, &nVals);
+	CHECK(nVals == (ptrdiff_t)(nRows*2));
 	for(int i = 0; i < nRows; ++i)
 		for(int j = 0; j < 2; ++j)
 			CHECK(pVals[i*2 + j] == (float)(100*i + j));
@@ -1196,9 +1197,9 @@ static int test_subset_ragged(void)
 		CHECK((int)DasAry_lengthIn(pNat, 1, aRow) == aLens[i]);
 	}
 
-	pVals = DasAry_floatsIn(pNat, DAS_ADDR0, &uVals);
+	pVals = DasAry_floatsIn(pNat, DAS_ADDR0, &nVals);
 	MUST(pVals != NULL);
-	CHECK(uVals == (size_t)(aLens[0] + aLens[1] + aLens[2]));
+	CHECK(nVals == (ptrdiff_t)(aLens[0] + aLens[1] + aLens[2]));
 
 	size_t uAt = 0;
 	for(int i = 0; i < nRows; ++i)
@@ -1277,10 +1278,10 @@ static int test_subset_composite(void)
 	CHECK(DasAry_shape(pSlice, aShape) == 2);
 	CHECK((aShape[0] == 4)&&(aShape[1] == 3));
 
-	size_t uVals = 0;
-	const float* pVals = DasAry_floatsIn(pSlice, DAS_ADDR0, &uVals);
+	ptrdiff_t nVals = 0;
+	const float* pVals = DasAry_floatsIn(pSlice, DAS_ADDR0, &nVals);
 	MUST(pVals != NULL);
-	CHECK(uVals == 12);
+	CHECK(nVals == 12);
 	for(int i = 0; i < 12; ++i) CHECK(pVals[i] == (float)i);
 	dec_DasAry(pSlice);
 
@@ -1387,9 +1388,9 @@ static int test_seq_declared_extent(void)
 	aMax[1] = 256;                                 /* exactly the extent */
 	DasAry* pAry = new_DasAry_subset(pSet, 3, aMin, aMax, NULL);
 	MUST(pAry != NULL);
-	size_t uVals = 0;
-	const double* pVals = DasAry_doublesIn(pAry, DAS_ADDR0, &uVals);
-	CHECK(uVals == 256);
+	ptrdiff_t nVals = 0;
+	const double* pVals = DasAry_doublesIn(pAry, DAS_ADDR0, &nVals);
+	CHECK(nVals == 256);
 	CHECK(pVals[0] == -128.0);
 	CHECK(pVals[255] == -128.0 + 255.0);
 	dec_DasAry(pAry);
@@ -1664,11 +1665,11 @@ static int test_seq_multi_index(void)
 	ptrdiff_t aMin[3] = {0,0,0}, aMax[3] = {1,2,3};
 	DasAry* pAry = new_DasAry_subset(pSet, 3, aMin, aMax, NULL);
 	MUST(pAry != NULL);
-	size_t uVals = 0;
-	const double* pVals = DasAry_doublesIn(pAry, DAS_ADDR0, &uVals);
+	ptrdiff_t nVals = 0;
+	const double* pVals = DasAry_doublesIn(pAry, DAS_ADDR0, &nVals);
 	const double aWant[6] = {0.0, 0.125, 0.25, 16.0, 16.125, 16.25};
 	MUST(pVals != NULL);
-	CHECK(uVals == 6);
+	CHECK(nVals == 6);
 	for(size_t q = 0; q < 6; ++q){
 		if(pVals[q] != aWant[q]){
 			printf("ERROR: subset cube [%zu]: got %g, expected %g\n",
@@ -1953,6 +1954,119 @@ static int test_front_doors(void)
 	return nErrs;
 }
 
+/* Nothing at a location is not an error.  Arrays may still be filling in, so
+   reading past the data gives a null datum and a 0 return, with nothing
+   logged, through every class that can sit on an array. */
+static void _countLogErr(const DasLogMsg* pMsg, void* pUser)
+{
+	if(pMsg->level >= DASLOG_ERROR) ++(*(int*)pUser);
+}
+
+static int test_nothing_there(void)
+{
+	int nErrs = 0;
+	float fill = -1.0f;
+	int8_t aMap[1] = { 0 };
+
+	/* Two scalars, two 3-vectors, two 8 byte strings */
+	DasAry* pSc = new_DasAry(
+		"sc", DASVT_FLOAT, 0, (const uint8_t*)&fill, DAS_SHAPE1(0), DASUNITS_NT
+	);
+	DasAry* pVc = new_DasAry(
+		"vc", DASVT_FLOAT, 0, (const uint8_t*)&fill, DAS_SHAPE2(0, 3), DASUNITS_NT
+	);
+	uint8_t uFill = 0;
+	DasAry* pBy = new_DasAry(
+		"by", DASVT_UBYTE, 0, &uFill, DAS_SHAPE2(0, 8), DASUNITS_DIMENSIONLESS
+	);
+	MUST((pSc != NULL)&&(pVc != NULL)&&(pBy != NULL));
+	float aVals[6] = { 1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f };
+	MUST(DasAry_append(pSc, (const uint8_t*)aVals, 2) != NULL);
+	MUST(DasAry_append(pVc, (const uint8_t*)aVals, 6) != NULL);
+	MUST(DasAry_append(pBy, (const uint8_t*)"SURVEY\0\0BURST\0\0\0", 16) != NULL);
+
+	DasGen* pGenSc = new_DasGenAry(pSc, 1, aMap);
+	DasGen* pGenVc = new_DasGenAry(pVc, 1, aMap);
+	DasGen* pGenBy = new_DasGenAry(pBy, 1, aMap);
+	MUST((pGenSc != NULL)&&(pGenVc != NULL)&&(pGenBy != NULL));
+
+	DasVar* pScalar = _linearVar(pGenSc, DASUNITS_NT);
+	ptrdiff_t aIntShape[1] = { 3 };
+	DasForm* pFormVec = new_DasFormVec("TSCS", DASVECSYS_CART, NULL);
+	MUST(pFormVec != NULL);
+	DasVar* pVec = _new_DasVarComp_gen(pGenVc, DASUNITS_NT, pFormVec, 1, aIntShape);
+	del_DasForm(pFormVec);
+	DasVar* pStr = _new_DasVarBytes_gen(pGenBy, NULL, true, 8);
+	MUST((pScalar != NULL)&&(pVec != NULL)&&(pStr != NULL));
+	DasVar* pSum = new_DasVarBin(pScalar, '+', pScalar);
+	MUST(pSum != NULL);
+
+	int nLogged = 0;
+	DasLogHook count = {_countLogErr, &nLogged};
+	DasLogHook prev = daslog_setHook(&count);
+
+	DasVar* aVars[4] = { pScalar, pVec, pStr, pSum };
+	for(int i = 0; i < 4; ++i){
+		DasDatum dm;
+		ptrdiff_t aAddr[1] = { 1 };    /* the last one present */
+		CHECK(DasVar_datumAt(aVars[i], aAddr, (DasByteSeq){0}, &dm) == 0);
+		CHECK(!DasDatum_isNull(&dm));
+
+		aAddr[0] = 5;                  /* not filled in yet */
+		CHECK(DasVar_datumAt(aVars[i], aAddr, (DasByteSeq){0}, &dm) == 0);
+		CHECK(DasDatum_isNull(&dm));
+	}
+	CHECK(nLogged == 0);
+	daslog_setHook(&prev);
+
+	dec_DasVar(pSum);
+	dec_DasVar(pScalar);
+	dec_DasVar(pVec);
+	dec_DasVar(pStr);
+	DasGen_decRef(pGenSc);
+	DasGen_decRef(pGenVc);
+	DasGen_decRef(pGenBy);
+	dec_DasAry(pSc);
+	dec_DasAry(pVc);
+	dec_DasAry(pBy);
+	return nErrs;
+}
+
+/* A buffer of DASVAR_STR_SZ always holds a DasVar_toStr() line.  An operation
+   tree too deep to show is elided as "(...)", never clipped mid-name and never
+   refused. */
+static int test_tostr_size(void)
+{
+	int nErrs = 0;
+	char sBuf[DASVAR_STR_SZ];
+
+	DasVar* pAlt = _ref_seqVar(1000.0, -1.0, DasUnits_fromStr("km"));
+	MUST(pAlt != NULL);
+	MUST(DasVar_toStr(pAlt, sBuf, sizeof(sBuf)) != NULL);
+	CHECK(strstr(sBuf, "(...)") == NULL);
+
+	/* Each level nests the last: ((a + a) + a) + ... */
+	DasVar* pTree = pAlt;
+	inc_DasVar(pTree);
+	for(int i = 0; i < 40; ++i){
+		DasVar* pNext = new_DasVarBin(pTree, '+', pAlt);
+		MUST(pNext != NULL);
+		dec_DasVar(pTree);
+		pTree = pNext;
+	}
+	MUST(DasVar_toStr(pTree, sBuf, sizeof(sBuf)) != NULL);
+	CHECK(strlen(sBuf) < sizeof(sBuf));
+	CHECK(strstr(sBuf, "(...)") != NULL);
+
+	/* A buffer too small for the line is still refused */
+	char sTiny[16];
+	CHECK(DasVar_toStr(pAlt, sTiny, sizeof(sTiny)) == NULL);
+
+	dec_DasVar(pTree);
+	dec_DasVar(pAlt);
+	return nErrs;
+}
+
 int main(int argc, char** argv)
 {
 	(void)argc;
@@ -1992,6 +2106,8 @@ int main(int argc, char** argv)
 		{"test_seq_multi_index",     test_seq_multi_index},
 		{"test_seq_vector",          test_seq_vector},
 		{"test_front_doors",         test_front_doors},
+		{"test_nothing_there",       test_nothing_there},
+		{"test_tostr_size",          test_tostr_size},
 	};
 	int nCase = (int)(sizeof(aCase)/sizeof(aCase[0]));
 

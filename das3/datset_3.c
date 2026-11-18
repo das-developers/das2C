@@ -1800,8 +1800,12 @@ static void _serial_onCloseProp(context_t* pCtx, DasDesc* pDest){
 	DasAry* pAry = &(pCtx->aPropVal);
 	uint8_t uTerm = 0;
 	DasAry_append(pAry, &uTerm, 1);  // Null terminate the value string
-	size_t uValLen = 0;
-	const char* sValue = DasAry_charsIn(pAry, DAS_ADDR0, &uValLen);
+	ptrdiff_t nValLen = 0;
+	const char* sValue = DasAry_charsIn(pAry, DAS_ADDR0, &nValLen);
+	if(nValLen < 0){
+		pCtx->nDasErr = (das_errcode)(-nValLen);
+		return;
+	}
 
 	if(pDest == NULL){
 		pCtx->nDasErr = daserrf(DASERR_SERIAL, "Property element at improper location");

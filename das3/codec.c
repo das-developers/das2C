@@ -2147,13 +2147,15 @@ int DasCodec_encode(
 	DasAry* pAry       = pThis->pAry;
 	das_vt vtAry = DasAry_vt(pAry);
 	
-	size_t uAvailable = 0;  /* Total items, but for strings this is total bytes + nulls! */
+	ptrdiff_t nAvail = 0;  /* Total items, but for strings this is total bytes + nulls! */
 
-	const uint8_t* pItem0 = DasAry_valsIn(pThis->pAry, vtAry, nDim, pAddr, &uAvailable);
+	const uint8_t* pItem0 = DasAry_valsIn(pThis->pAry, vtAry, nDim, pAddr, &nAvail);
+	if(nAvail < 0)
+		return (int)nAvail;  /* already -errcode, the message is logged */
 	
-	if(uAvailable > 2147483648L)
+	if(nAvail > INT_MAX)
 		return -1 * daserrf(DASERR_ENC, "too many values at index");
-	int nAvailable = (int)uAvailable;
+	int nAvailable = (int)nAvail;
 	if(nAvailable == 0)
 		return -1* daserrf(DASERR_ENC, "No values were available to write from array %s",
 			DasAry_id(pAry)
@@ -2295,23 +2297,25 @@ int DasCodec_encode(
 			bool bNullTerm = (pThis->uProc & DASENC_NULLTERM) != 0;
 			bool bItemTerm = (pThis->nBufValSz == DASCODEC_ITEM_TERM);
 			int  nAryRank  = DasAry_rank(pAry);
-			size_t uStrLen = 0;
+			ptrdiff_t nStrLen = 0;
 			const char* sStr = NULL;
 
 			/* If every external index is pinned by pAddr (the per-record DAS_ADDR1
 			   write DasDs_encodeData uses) there's exactly one item to emit --
 			   the external iterator range is empty, so handle it directly. */
 			if(nDim >= (nAryRank - 1)){
-				sStr = DasAry_charsIn(pAry, nAryRank - 1, pAddr, &uStrLen);
+				sStr = DasAry_charsIn(pAry, nAryRank - 1, pAddr, &nStrLen);
+				if(nStrLen < 0)
+					return (int)nStrLen;
 				if(sStr == NULL)
 					return -1 * daserrf(DASERR_ENC,
 						"No text available to write from array %s", DasAry_id(pAry)
 					);
 				if(bNullTerm){
-					const void* pNul = memchr(sStr, '\0', uStrLen);
-					if(pNul != NULL) uStrLen = (const char*)pNul - sStr;
+					const void* pNul = memchr(sStr, '\0', nStrLen);
+					if(pNul != NULL) nStrLen = (const char*)pNul - sStr;
 				}
-				DasBuf_write(pBuf, sStr, uStrLen);
+				DasBuf_write(pBuf, sStr, nStrLen);
 				if(bItemTerm) DasBuf_write(pBuf, &cSep, 1);
 				return 1;
 			}
@@ -2345,15 +2349,17 @@ int DasCodec_encode(
 						DasBuf_write(pBuf, &cSep, 1);
 				}
 
-				sStr = DasAry_charsIn(pAry, nAryRank - 1, iter.addr, &uStrLen);
+				sStr = DasAry_charsIn(pAry, nAryRank - 1, iter.addr, &nStrLen);
+				if(nStrLen < 0)
+					return (int)nStrLen;
 				if(bNullTerm){
-					const void* pNul = memchr(sStr, '\0', uStrLen);
-					if(pNul != NULL) uStrLen = (const char*)pNul - sStr;
+					const void* pNul = memchr(sStr, '\0', nStrLen);
+					if(pNul != NULL) nStrLen = (const char*)pNul - sStr;
 				}
-				DasBuf_write(pBuf, sStr, uStrLen);
+				DasBuf_write(pBuf, sStr, nStrLen);
 				if(bItemTerm) DasBuf_write(pBuf, &cSep, 1);
 
-				uRowChars += uStrLen;
+				uRowChars += (size_t)nStrLen;
 				++nWrote;
 			}
 			return nWrote;
@@ -2377,21 +2383,23 @@ int DasCodec_encode(
 			uint32_t uLineEnd = DASENC_TEXT | DASENC_TRIM;
 			bool bPktNewline = ((uFlags & DASENC_PKT_LAST) != 0)
 			                   && ((pThis->uProc & uLineEnd) == uLineEnd);
-			size_t uLen = 0;
+			ptrdiff_t nLen = 0;
 			const uint8_t* pRun = NULL;
 
 			/* Single pinned item (the per-record DAS_ADDR1 write path) */
 			if(nDim >= (nAryRank - 1)){
-				pRun = DasAry_bytesIn(pAry, nAryRank - 1, pAddr, &uLen);
+				pRun = DasAry_bytesIn(pAry, nAryRank - 1, pAddr, &nLen);
+				if(nLen < 0)
+					return (int)nLen;
 				if(pRun == NULL)
 					return -1 * daserrf(DASERR_ENC,
 						"No bytes available to write from array %s", DasAry_id(pAry)
 					);
 				if(bNullTerm){
-					const void* pNul = memchr(pRun, '\0', uLen);
-					if(pNul != NULL) uLen = (const uint8_t*)pNul - pRun;
+					const void* pNul = memchr(pRun, '\0', nLen);
+					if(pNul != NULL) nLen = (const uint8_t*)pNul - pRun;
 				}
-				if((nRet = _blob_write_item(pBuf, pRun, uLen, bBase64, bPktNewline)) != DAS_OKAY)
+				if((nRet = _blob_write_item(pBuf, pRun, nLen, bBase64, bPktNewline)) != DAS_OKAY)
 					return -1 * nRet;
 				return 1;
 			}
@@ -2406,14 +2414,16 @@ int DasCodec_encode(
 			init_DasAryIter(&iter, pAry, nDim, -2, aBeg, NULL);
 			int nWrote = 0;
 			while(!iter.done){
-				pRun = DasAry_bytesIn(pAry, nAryRank - 1, iter.addr, &uLen);
+				pRun = DasAry_bytesIn(pAry, nAryRank - 1, iter.addr, &nLen);
+				if(nLen < 0)
+					return (int)nLen;
 				if(bNullTerm){
-					const void* pNul = memchr(pRun, '\0', uLen);
-					if(pNul != NULL) uLen = (const uint8_t*)pNul - pRun;
+					const void* pNul = memchr(pRun, '\0', nLen);
+					if(pNul != NULL) nLen = (const uint8_t*)pNul - pRun;
 				}
 				DasAryIter_next(&iter);
 				bool bNewline = bPktNewline && iter.done;  /* last item only */
-				if((nRet = _blob_write_item(pBuf, pRun, uLen, bBase64, bNewline)) != DAS_OKAY)
+				if((nRet = _blob_write_item(pBuf, pRun, nLen, bBase64, bNewline)) != DAS_OKAY)
 					return -1 * nRet;
 				++nWrote;
 			}

@@ -94,8 +94,8 @@ static int DasDim_copyInProps(DasDim* pThis, char cAxis, const DasDesc* pOther)
 
 	int nCopied = 0;
 	for(size_t u = 0; u < uProps; ++u){
-		size_t uPropLen = 0;
-		const DasProp* pIn = (const DasProp*) DasAry_bytesIn(pSrcAry, DAS_ADDR1(u), &uPropLen);
+		ptrdiff_t nPropLen = 0;
+		const DasProp* pIn = (const DasProp*) DasAry_bytesIn(pSrcAry, DAS_ADDR1(u), &nPropLen);
 		if(!DasProp_isValid(pIn))
 			continue;
 

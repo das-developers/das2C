@@ -220,9 +220,7 @@ int DasDim_info(const DasDim* pThis, char* sBuf, size_t uLen)
 	/* Yea this is order N^2, but we never have that many variables in a dim */
 	/* Do the recognized variables first */
 
-	/* DasVar_toStr() clips to its buffer rather than sizing, this is big
-	   enough for any one-line variable summary we produce */
-	char sInfo[2048] = {'\0'};
+	char sInfo[DASVAR_STR_SZ] = {'\0'};   /* always holds a whole line */
 	for(int nOrder = 0; nOrder < 16; ++nOrder){
 		
 		for(size_t u = 0; u < pThis->uVars; ++u){

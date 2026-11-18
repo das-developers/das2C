@@ -276,7 +276,14 @@ size_t _DasVar_runScratch(const DasVar* pThis);
  * Hands back a pointer to the run and the bytes in it.  That pointer is the
  * variable's OWN storage when it has any -- das2C lends rather than copies --
  * and pScratch otherwise.  Returns NULL having set *pNeed when the scratch is
- * too small, or NULL with *pNeed 0 on a loud error. */
+ * too small, or NULL with *pNeed 0 on a loud error.
+ *
+ * Nothing at the location, such as one the backing arrays haven't filled in
+ * yet, is not an error: the return is _DasVar_emptyRun with *pBytes 0.  So
+ * NULL always means "can't answer" and a caller that copies *pBytes bytes
+ * needs no special case for an empty run. */
+extern const uint8_t _DasVar_emptyRun[1];
+
 const uint8_t* _DasVar_runAt(
 	const DasVar* pThis, const ptrdiff_t* pAddr, uint8_t* pScratch, size_t uScratch,
 	size_t* pBytes, size_t* pNeed

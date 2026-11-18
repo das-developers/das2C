@@ -275,22 +275,23 @@ das_errcode DasBuf_puts(DasBuf* pThis, const char* sStr){
 /* Quiet on "no room": Caller should report as it sees fit. 
    Only an allocation failure or trying to write to read-only 
    buffer triggers a "throw" */
-uint8_t* DasBuf_prepare(DasBuf* pThis, size_t uWant, size_t* pSpace)
+uint8_t* DasBuf_prepare(DasBuf* pThis, size_t uWant, ptrdiff_t* pSpace)
 {
 	*pSpace = 0;
-	/* Read-only is permanent, so asking is a caller bug and says so.  No room
-	   is quiet, a caller may have another way to cope. */
-	if(pThis->pWrite == NULL){
-		daserrf(DASERR_BUF, "Attempted write to a read only buffer");
-		return NULL;
-	}
+	/* No room is quiet whatever the reason: a full fixed buffer, an elastic
+	   one at its limit, or a read only one.  The caller may have another way
+	   to cope.  Only a failed allocation is an error. */
+	if(pThis->pWrite == NULL) return NULL;
 
 	if(uWant > 0){
-		if(_DasBuf_ensure(pThis, uWant) != 0) return NULL;
+		int nGrow = _DasBuf_ensure(pThis, uWant);
+		if(nGrow > 0){ *pSpace = -nGrow; return NULL; }  /* already logged */
+		if(nGrow < 0) return NULL;
 	}
 
-	*pSpace = DasBuf_writeSpace(pThis);
-	if(*pSpace == 0) return NULL;
+	size_t uSpace = DasBuf_writeSpace(pThis);
+	if(uSpace == 0) return NULL;
+	*pSpace = (ptrdiff_t)uSpace;
 	return (uint8_t*)pThis->pWrite;
 }
 

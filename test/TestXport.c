@@ -213,43 +213,44 @@ static void testElastic(void)
 	del_DasBuf(pBuf);
 
 	/* prepare asks for room up front, and commit can't move anything */
-	size_t uSpace = 0;
+	ptrdiff_t nSpace = 0;
 	pBuf = new_DasBuf_elastic(16, 128);
-	uint8_t* pDest = DasBuf_prepare(pBuf, 100, &uSpace);
-	CHECK(pDest != NULL && uSpace >= 100 && DasBuf_capacity(pBuf) == 128,
-	      "prepare grows to fit, %zu bytes of space", uSpace);
+	uint8_t* pDest = DasBuf_prepare(pBuf, 100, &nSpace);
+	CHECK(pDest != NULL && nSpace >= 100 && DasBuf_capacity(pBuf) == 128,
+	      "prepare grows to fit, %td bytes of space", nSpace);
 	memset(pDest, 'x', 100);
 	CHECK(DasBuf_commit(pBuf, 100) == DAS_OKAY && DasBuf_written(pBuf) == 100, "commit");
-	CHECK(DasBuf_prepare(pBuf, 29, &uSpace) == NULL && uSpace == 0,
+	CHECK(DasBuf_prepare(pBuf, 29, &nSpace) == NULL && nSpace == 0,
 	      "prepare past the limit fails quietly");
-	CHECK(DasBuf_prepare(pBuf, 0, &uSpace) != NULL && uSpace == 28,
+	CHECK(DasBuf_prepare(pBuf, 0, &nSpace) != NULL && nSpace == 28,
 	      "prepare of 0 takes what is free");
 	del_DasBuf(pBuf);
 
-	/* Read-only is a caller bug and is reported once, "no room" is quiet */
+	/* No room is quiet for prepare, read-only included.  A fill that needs
+	   the room reports it, once. */
 	int nErrs = 0;
 	DasLogHook count = {_countBufErr, &nErrs};
 	DasLogHook prev = daslog_setHook(&count);
 
 	DasBuf* pRo = new_DasBuf_wrap((void*)g_sText, 20, "r");
 	CHECK(DasBuf_isReadOnly(pRo) && !DasBuf_isReadOnly(pFix), "read-only flag");
-	CHECK(DasBuf_prepare(pRo, 0, &uSpace) == NULL && uSpace == 0,
+	CHECK(DasBuf_prepare(pRo, 0, &nSpace) == NULL && nSpace == 0,
 	      "read-only buffer refuses prepare");
-	CHECK(nErrs == 1, "read-only prepare reports it, %d errors", nErrs);
+	CHECK(nErrs == 0, "read-only prepare is quiet, %d errors", nErrs);
 	DasXport* pRoIn = new_DasXport_mem((void*)g_sText, 20, "r");
 	CHECK(_DasXport_fill(pRoIn, pRo, 20) == -1, "fill into a read-only buffer refused");
-	CHECK(nErrs == 2, "and reports it once, %d errors", nErrs - 1);
+	CHECK(nErrs == 1, "and reports it once, %d errors", nErrs);
 	del_DasXport(pRoIn);
 	del_DasBuf(pRo);
 
 	nErrs = 0;
-	CHECK(DasBuf_prepare(pFix, 17, &uSpace) == NULL && nErrs == 0,
+	CHECK(DasBuf_prepare(pFix, 17, &nSpace) == NULL && nErrs == 0,
 	      "no room is quiet, %d errors", nErrs);
 	daslog_setHook(&prev);
 
-	CHECK(DasBuf_prepare(pFix, 17, &uSpace) == NULL && uSpace == 0,
+	CHECK(DasBuf_prepare(pFix, 17, &nSpace) == NULL && nSpace == 0,
 	      "pinned buffer can't prepare more than it has");
-	CHECK(DasBuf_prepare(pFix, 16, &uSpace) != NULL && uSpace == 16,
+	CHECK(DasBuf_prepare(pFix, 16, &nSpace) != NULL && nSpace == 16,
 	      "pinned buffer prepares what it has");
 	del_DasBuf(pFix);
 

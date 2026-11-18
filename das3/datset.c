@@ -628,10 +628,11 @@ das_errcode DasDs_recBytes(const DasDs* pThis, int* pBytes)
 	return DAS_OKAY;
 }
 
-DasCodec* DasDs_codecFor(
-	const DasDs* pThis, const char* sAryId, int* pItems
+int DasDs_codecFor(
+	const DasDs* pThis, const char* sAryId, DasCodec** ppCodec, int* pItems
 ){
-	*pItems = 0;  /* Header-only arrays return NULL without it being an error */
+	*ppCodec = NULL;
+	*pItems = 0;
 	size_t u;
 	const DasAry* pFind = NULL;
 	for(u = 0; u < pThis->uArrays; ++u){
@@ -640,17 +641,14 @@ DasCodec* DasDs_codecFor(
 			break;
 		}
 	}
-	if(pFind == NULL){
-		daserrf(DASERR_DS, "No array with ID %s present in this dataset", sAryId);
-		return NULL;
-	}
+	if(pFind == NULL)
+		return -daserrf(DASERR_DS, "No array with ID %s present in this dataset", sAryId);
 
-	DasCodec* pCodec = NULL;
 	for( u = 0; u < pThis->uCodecs; u++){
-		pCodec = &(pThis->lCodecs[u]);
-		if(pCodec->pAry == pFind){
+		if(pThis->lCodecs[u].pAry == pFind){
+			*ppCodec = &(pThis->lCodecs[u]);
 			*pItems = pThis->lItems[u];
-			return pCodec;
+			return 1;
 		}
 	}
 
@@ -660,7 +658,7 @@ DasCodec* DasDs_codecFor(
 		"No codec for array '%s' in dataset '%s (%s)', must be a header only array", 
 		sAryId, pThis->sId, pThis->sGroupId
 	);
-	return NULL;
+	return 0;
 }
 
 /* ************************************************************************* */

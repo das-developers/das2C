@@ -233,6 +233,7 @@ const uint8_t* _DasVarBin_runAt(
 	const DasVarBin* pThis = (const DasVarBin*)pBase;
 	const DasBinOp* pOp = pThis->pRecipe;
 	*pNeed = 0;
+	*pBytes = 0;
 
 	size_t uRes = _DasVar_itemBytes(pBase);
 	if(uRes == 0){
@@ -253,6 +254,7 @@ const uint8_t* _DasVarBin_runAt(
 		pThis->pLeft, pAddr, pTail, uTail, &uLBytes, &uSub
 	);
 	if(pL == NULL){ *pNeed = (uSub > 0) ? uSub + uRes : 0; return NULL; }
+	if(uLBytes == 0) return _DasVar_emptyRun;   /* nothing here to operate on */
 
 	/* Only advance past scratch the operand actually consumed; an array backed
 	   operand was lent its own memory and used none. */
@@ -262,6 +264,7 @@ const uint8_t* _DasVarBin_runAt(
 		pThis->pRight, pAddr, pTail + uUsedL, uTail - uUsedL, &uRBytes, &uSub
 	);
 	if(pR == NULL){ *pNeed = (uSub > 0) ? uSub + uRes + uUsedL : 0; return NULL; }
+	if(uRBytes == 0) return _DasVar_emptyRun;
 
 	if(!DasBinOp_apply(pOp, pL, pR, pScratch)) return NULL;
 
@@ -292,6 +295,7 @@ static int DasVarBin_get(
 	);
 	if(pRun == NULL)
 		return (uNeed > 0) ? (int)uNeed : -1 * DASERR_VAR;
+	if(uBytes == 0) return 0;   /* nothing here, pOut stays the null datum */
 
 	/* Packing is the form's job: it is the only thing that knows whether nine
 	   doubles are a rotation or a matrix.  A form with no pack slot has no
@@ -394,13 +398,19 @@ static char* DasVarBin_prnGen(const DasVar* pBase, char* sBuf, size_t uLen)
 	const DasVarBin* pThis = (const DasVarBin*)pBase;
 
 	/* Only the operands' generators, not their whole lines: units, ranges and
-	   formalism are stated once for the result. */
+	   formalism are stated once for the result.  An operand, or the whole
+	   expression, too long for the space it has shows as "(...)" instead of
+	   being clipped mid-name, so a nested tree never prints a wrong one. */
 	char sLeft[256] = {'\0'}, sRight[256] = {'\0'};
 	pThis->pLeft->pVTbl->prnGen(pThis->pLeft,  sLeft,  sizeof(sLeft));
 	pThis->pRight->pVTbl->prnGen(pThis->pRight, sRight, sizeof(sRight));
+	if(strlen(sLeft)  + 1 >= sizeof(sLeft))  strcpy(sLeft,  "(...)");
+	if(strlen(sRight) + 1 >= sizeof(sRight)) strcpy(sRight, "(...)");
 
-	snprintf(sBuf, uLen, "(%s %s %s)",
+	int n = snprintf(sBuf, uLen, "(%s %s %s)",
 		sLeft, dasop_name(pThis->op, NULL), sRight);
+	if((n < 0)||((size_t)n >= uLen))
+		snprintf(sBuf, uLen, "(...)");
 	return sBuf;
 }
 

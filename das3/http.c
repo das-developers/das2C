@@ -692,10 +692,12 @@ static struct addrinfo* _das_http_getsrvaddr(
 	/* First see if I already have the address info I need in the cache */
 	pthread_mutex_lock(&g_mtxAddrArys);
 
-	size_t uStrLen, uHosts = DasAry_lengthIn(g_pHostAry, DAS_ADDR0);
+	size_t uHosts = DasAry_lengthIn(g_pHostAry, DAS_ADDR0);
+	ptrdiff_t nStrLen = 0;
 	const char* sName = NULL;
 	for(size_t u = 0; u < uHosts; ++u){
-		sName = DasAry_charsIn(g_pHostAry, DAS_ADDR1(u), &uStrLen);
+		sName = DasAry_charsIn(g_pHostAry, DAS_ADDR1(u), &nStrLen);
+		if(sName == NULL) continue;
 
 		if(strcmp(sKey, sName) == 0){
 			pAddrInfo = *((struct addrinfo**) DasAry_valAt(g_pAddrInfoAry, DASVT_UNK, DAS_ADDR1(u)));

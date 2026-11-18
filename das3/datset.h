@@ -529,22 +529,41 @@ DAS_API size_t DasDs_numCodecs(const DasDs* pThis);
 DAS_API DasCodec* DasDs_codecAt(const DasDs* pThis, size_t uIdx);
 
 /** Get the codec for a named array
- * 
+ *
+ * Not every array has a codec.  An array that only holds header values is
+ * written in the dataset header, not in packets, so finding no codec is a
+ * normal answer, not an error.  The return value says which case applies.
+ *
  * @param pThis A dataset owning both codecs and arrays
- * 
+ *
  * @param sAryId The string ID of the array for which a codec is needed.
- * 
- * @param pItems A pointer to a single int to hold the number of items
- *        serialized at a time using this codec (the schema's numItems)
- * 
- * @returns A const pointer to the internal codec that serializes the
- *        named array's memory.  The pointer is not guaranteed to be
- *        constant.  Make a copy of it's value if needed later.
- * 
+ *
+ * @param ppCodec Set to the dataset's own codec for the array, or NULL if
+ *        there isn't one.  Always written.  Adding a codec may move the codec
+ *        storage, so don't hold the pointer across DasDs_add*Codec() calls.
+ *
+ * @param pItems Set to the number of items serialized at a time using this
+ *        codec (the schema's numItems), or 0 if there is no codec.  Always
+ *        written.
+ *
+ * @returns 1 if the array has a codec, 0 if it's a header only array, or
+ *        the negative of a das_errcode if the dataset has no array with
+ *        this ID.
+ *
+ * @code
+ * DasCodec* pCodec;
+ * int nItems;
+ * int nRet = DasDs_codecFor(pDs, "time", &pCodec, &nItems);
+ * if(nRet < 0) return -nRet;  // An error, the message is already logged
+ * if(nRet == 0){
+ *    // Header values, nothing to read or write in packets
+ * }
+ * @endcode
+ *
  * @memberof DasDs
  */
-DAS_API DasCodec* DasDs_codecFor(
-	const DasDs* pThis, const char* sAryId, int* pItems
+DAS_API int DasDs_codecFor(
+	const DasDs* pThis, const char* sAryId, DasCodec** ppCodec, int* pItems
 );
 
 /** Get the number of values we expect the Ith codec to read from each
@@ -911,7 +930,7 @@ DAS_API int DasDs_info(const DasDs* pThis, char* sBuf, size_t uLen);
  *
  *    Dataset: 'BDC_ROI' | i:2441 | plot cartesian2d
  *
- * Short enough to use inline as a printf %s argument.
+ * Short enough to use inline as a printf %%s argument.
  *
  * @param pThis The object to describe.
  * @param sBuf  The output buffer.

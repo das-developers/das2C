@@ -879,24 +879,22 @@ double DasPlane_fill(const DasPlane* pThis){
 	
 	if(! pThis->_bFillSet && (pThis->planeType != DASPLANETYPE_X)){ 
 	
+		/* A fill value that doesn't parse is logged and skipped, the next
+		   candidate or the library default is used instead */
 		if(pVarThis->planeType == DASPLANETYPE_Y){
-			if(DasDesc_has((DasDesc*)pVarThis, "yFill")){
-				pVarThis->rFill = DasDesc_valDouble( (DasDesc*)pThis, "yFill");
+			if(DasDesc_valDouble((DasDesc*)pThis, "yFill", &(pVarThis->rFill)) > 0)
 				pVarThis->_bFillSet = true;
-			}
 		}
 		
 		if(pThis->planeType == DASPLANETYPE_YSCAN || pThis->planeType == DASPLANETYPE_Z){
-			if(DasDesc_has((DasDesc*)pThis, "zFill")){
-				pVarThis->rFill = DasDesc_valDouble((DasDesc*)pThis, "zFill");
+			if(DasDesc_valDouble((DasDesc*)pThis, "zFill", &(pVarThis->rFill)) > 0)
 				pVarThis->_bFillSet = true;
-			}
 		}
 	
 		/* Take the generic as a last resort */
-		if((!pVarThis->_bFillSet)&&( DasDesc_has((DasDesc*)pThis, "fill") )) {
-			pVarThis->rFill = DasDesc_valDouble( (DasDesc*)pThis, "fill" );
-			pVarThis->_bFillSet = true;
+		if(!pVarThis->_bFillSet){
+			if(DasDesc_valDouble((DasDesc*)pThis, "fill", &(pVarThis->rFill)) > 0)
+				pVarThis->_bFillSet = true;
 		}
 		
 		if(! pVarThis->_bFillSet ) pVarThis->rFill = DASVAL_FILL;

@@ -380,11 +380,11 @@ struct das_credmgr_t {
 
 static cred_rec* _DasCredMngr_recs(const DasCredMgr* pThis, size_t* pN)
 {
-	size_t uN = 0;
+	ptrdiff_t nN = 0;
 	uint8_t* p = NULL;
 	if(DasAry_size(pThis->pRecs) > 0)
-		p = DasAry_dataIn(pThis->pRecs, DASVT_UNK, DAS_ADDR0, &uN);
-	*pN = (p == NULL) ? 0 : uN;
+		p = DasAry_dataIn(pThis->pRecs, DASVT_UNK, DAS_ADDR0, &nN);
+	*pN = (p == NULL) ? 0 : (size_t)nN;
 	return (cred_rec*)p;
 }
 
@@ -424,8 +424,8 @@ static cred_rec* _DasCredMngr_findExact(
 
 static char* _DasCredMngr_row(const DasCredMgr* pThis, ptrdiff_t iRow)
 {
-	size_t uLen = 0;
-	return (char*)DasAry_dataIn(pThis->pSecrets, DASVT_UBYTE, DAS_ADDR1(iRow), &uLen);
+	ptrdiff_t nLen = 0;
+	return (char*)DasAry_dataIn(pThis->pSecrets, DASVT_UBYTE, DAS_ADDR1(iRow), &nLen);
 }
 
 static bool _prefixRead(const char* s, uint32_t* pFlags)

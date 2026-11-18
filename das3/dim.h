@@ -247,8 +247,22 @@ DAS_API bool DasDim_isPrimeCoord(const DasDim* pThis);
 
 /** Print a multi-line description of a dimension.
  *
- * A multi-line summary: the dimension, its properties, and one line per
- * variable.  Same calling convention as DasDs_info().
+ * A multi-line summary, built from the one line summaries of its parts:
+ *
+ * - The title, exactly as DasDim_toStr() makes it.
+ * - One line per property, indented three spaces, as DasDesc_info() makes
+ *   them, then a blank line.  Both are left out when there are no
+ *   properties.
+ * - One line per variable:
+ *   @verbatim
+   Var: <role> | <variable line>
+   @endverbatim
+ *   indented three spaces, with the role padded to 9 characters.  Everything
+ *   after the first " | " is DasVar_toStr() of that variable.  Variables
+ *   with a known role come first, center then mean, median and so on, and
+ *   the rest follow.
+ *
+ * Same calling convention as DasDs_info().
  *
  * @param pThis The dimension to describe.
  *
@@ -269,11 +283,27 @@ DAS_API int DasDim_info(const DasDim* pThis, char* sBuf, size_t uLen);
 
 /** Print a one line summary of a dimension
  *
- * The first line of the _info() output, for example:
+ * The layout is stable and may be parsed:
  *
- *    Data Dimension: B (magnetic_field) | axis: y
+ * @verbatim
+   <Coordinate|Data> Dimension: <name> (<physDim>)[ | <axis|annotation>: <ax>[,<ax> ...]]
+   @endverbatim
  *
- * Short enough to use inline as a printf %s argument.
+ * - The first word is the dimension type, see DasDim_type().
+ * - @b name is DasDim_name() and @b physDim is DasDim_physDim().
+ * - The last section is there only when the dimension names plot axes.
+ *   Each @b ax is one or two letters, separated by commas with no spaces.
+ *   "annotation" in place of "axis" marks a coordinate that is not a
+ *   primary one, see DasDim_isPrimeCoord().
+ *
+ * For example:
+ *
+ * @verbatim
+   Data Dimension: B (magnetic_field) | axis: y
+   @endverbatim
+ *
+ * This is also the first line of DasDim_info().  Short enough to use inline
+ * as a printf %%s argument.
  *
  * @param pThis The object to describe.
  * @param sBuf  The output buffer.

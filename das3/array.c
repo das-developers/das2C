@@ -386,8 +386,11 @@ bool DasAry_setFill(DasAry* pThis, das_vt vt, const uint8_t* pFill)
 /* ************************************************************************* */
 /* Common operations used in multiple functions */
 
-static das_idx_info* _Array_LastParentFor(const DasAry* pThis, int iDim)
-{
+/* NULL with *pErr == DAS_OKAY means there are no children to qube */
+static das_idx_info* _Array_LastParentFor(
+	const DasAry* pThis, int iDim, das_errcode* pErr
+){
+	*pErr = DAS_OKAY;
 	DynaBuf* pBuf;
 	das_idx_info* pParent = pThis->pIdx0;
 	ptrdiff_t iOffset;
@@ -398,8 +401,8 @@ static das_idx_info* _Array_LastParentFor(const DasAry* pThis, int iDim)
 		
 		pBuf = pThis->pBufs[d];
 		if(iOffset >= pBuf->uValid){
-			daserrf(DASERR_ARRAY, "Invalid state for array %s", pThis->sId);
-			return 0;
+			*pErr = daserrf(DASERR_ARRAY, "Invalid state for array %s", pThis->sId);
+			return NULL;
 		}
 		pParent = ((das_idx_info*)(pBuf->pHead)) + iOffset;
 	}
@@ -643,14 +646,10 @@ size_t DasAry_lengthIn(const DasAry* pThis, int nAddr, ptrdiff_t* pAddr)
 	das_idx_info* pParent;
 	uint8_t* pItem;
 	
-	if(! _Array_ParentAndItemAt(pThis, nAddr, pAddr, &pParent, &pItem)){
-		char sInfo[128] = {'\0'};
-		char sLoc[64] = {'\0'};
-		daserrf(DASERR_ARRAY, "Invalid subset index %s in array %s",
-				     das_idx_prn(nAddr, pAddr, 64, sLoc),
-		           DasAry_toStr(pThis, sInfo, 128));
+	/* A location the array doesn't hold is just nothing there.  Arrays may
+	   still be filling in, so asking ahead of the data is legitimate. */
+	if(! _Array_ParentAndItemAt(pThis, nAddr, pAddr, &pParent, &pItem))
 		return 0;
-	}
 	
 	if(pParent == NULL) return 1;
 	else return pParent->uCount;
@@ -799,14 +798,10 @@ const uint8_t* DasAry_valAt(
 	das_idx_info* pParent;
 	uint8_t* pItem;
 	
-	if(! _Array_ParentAndItemAt(pThis, pThis->nRank, pAddr, &pParent, &pItem)){
-		char sInfo[128] = {'\0'};
-		char sLoc[64] = {'\0'};
-		daserrf(DASERR_ARRAY, "Invalid subset index %s in array %s",
-				     das_idx_prn(pThis->nRank, pAddr, 64, sLoc),
-		           DasAry_toStr(pThis, sInfo, 128));
+	/* Nothing at a location the array doesn't hold, see DasAry_lengthIn() */
+	if(! _Array_ParentAndItemAt(pThis, pThis->nRank, pAddr, &pParent, &pItem))
 		return NULL;
-	}
+
 	assert(pItem != NULL);
 	return pItem;
 }
@@ -816,27 +811,28 @@ const uint8_t* DasAry_valAt(
  * of 1 */
 
 uint8_t* DasAry_dataIn(
-	DasAry* pThis, das_vt et, int nAddr, ptrdiff_t* pAddr, size_t* pCount
+	DasAry* pThis, das_vt et, int nAddr, ptrdiff_t* pAddr, ptrdiff_t* pCount
 ){
 	return (uint8_t*)DasAry_valsIn(pThis, et, nAddr, pAddr,  pCount);
 }
 
 const uint8_t* DasAry_valsIn(
 	const DasAry* pThis, das_vt et, int nAddr, ptrdiff_t* pAddr,
-	size_t* pCount
+	ptrdiff_t* pCount
 ){
-	/* Zero up front so every NULL return, including the non-error empty
-	 * subset case below, leaves callers with a count they can trust. */
+	/* Zero up front so the non-error empty subset case below leaves callers
+	 * with a count they can trust.  Error returns overwrite this with the
+	 * negative error code so callers can tell errors from empties in-band. */
 	*pCount = 0;
 
 	das_vt etype = pThis->pBufs[pThis->nRank-1]->etype;
 	if(etype != et){
-		daserrf(DASERR_ARRAY, "Elements for array '%s' are '%s' not '%s'",
+		*pCount = -daserrf(DASERR_ARRAY, "Elements for array '%s' are '%s' not '%s'",
 				     pThis->sId, dasvt_name(etype), dasvt_name(et));
 		return NULL;
 	}
 	if((nAddr > pThis->nRank)||(nAddr < 0)){
-		daserrf(DASERR_ARRAY, "Rank %d array '%s' does not have an index "
+		*pCount = -daserrf(DASERR_ARRAY, "Rank %d array '%s' does not have an index "
 				     "number %d ", pThis->nRank, pThis->sId, nAddr);
 		return NULL;
 	}
@@ -846,14 +842,9 @@ const uint8_t* DasAry_valsIn(
 	das_idx_info* pParent = pThis->pIdx0;
 	uint8_t* pItem = NULL;
 	
-	if(!_Array_ParentAndItemAt(pThis, nAddr, pAddr, &pParent, &pItem)){
-		char sInfo[128] = {'\0'};
-		char sLoc[64] = {'\0'};
-		daserrf(DASERR_ARRAY, "Invalid subset index %s in array %s",
-				     das_idx_prn(nAddr, pAddr, 64, sLoc),
-		           DasAry_toStr(pThis, sInfo, 128));
+	/* Nothing at a location the array doesn't hold, see DasAry_lengthIn() */
+	if(!_Array_ParentAndItemAt(pThis, nAddr, pAddr, &pParent, &pItem))
 		return NULL;
-	}
 
 	if(pItem != NULL){
 		*pCount = 1;
@@ -870,7 +861,7 @@ const uint8_t* DasAry_valsIn(
 		return NULL;
 	}
 	
-	*pCount = uLastOff - uFirstOff + 1;
+	*pCount = (ptrdiff_t)(uLastOff - uFirstOff + 1);
 	DynaBuf* pBuf = pThis->pBufs[pThis->nRank - 1];
 	return (const uint8_t*) pBuf->pHead + (uFirstOff * pBuf->uElemSz);
 }
@@ -1105,14 +1096,13 @@ uint8_t* DasAry_append(DasAry* pThis, const uint8_t* pVals, size_t uCount)
  * 
  */
 
-static size_t _Array_qubeSelf(
+static ptrdiff_t _Array_qubeSelf(
 	DasAry* pThis, int iChildDim, das_idx_info* pParent
 ){
 	if(pThis->pIdx0 != &(pThis->index0)){
 		char sInfo[128] = {'\0'};
-		daserrf(DASERR_ARRAY, "Write operation attempted on sub-array %s", 
+		return -daserrf(DASERR_ARRAY, "Write operation attempted on sub-array %s", 
 		           DasAry_toStr(pThis, sInfo, 128));
-		return 0;
 	}
 	/* One of two situations:
 	 * 1. I have all the children I need, so just check all children 
@@ -1129,35 +1119,36 @@ static size_t _Array_qubeSelf(
 	
 	/* Make sure I have all sub elements filled */
 	if(uNeed > 0){
-		if(!DynaBuf_appendFill(pBuf, uNeed)) return 0;
+		if(!DynaBuf_appendFill(pBuf, uNeed))
+			return -DASERR_ARRAY;  /* the allocator logged why */
 		pParent->uCount = pBuf->uShape;
 	}
 	
 	/* I just have normal children then I'm done */
-	if(iChildDim == pThis->nRank - 1) return uNeed;
+	if(iChildDim == pThis->nRank - 1) return (ptrdiff_t)uNeed;
 	
 	/* I have index children, fill all of them *IN ORDER* */
-	size_t uWrote = 0;
+	ptrdiff_t nWrote = 0;
 	das_idx_info* pChild;
 	for(size_t u = 0; u < pBuf->uShape; ++u){
 		pChild = ((das_idx_info*)(pBuf->pHead)) + pParent->nOffset + u;
-		uWrote += _Array_qubeSelf(pThis, iChildDim + 1, pChild);
+		ptrdiff_t nRet = _Array_qubeSelf(pThis, iChildDim + 1, pChild);
+		if(nRet < 0) return nRet;
+		nWrote += nRet;
 	}
-	return uWrote;
+	return nWrote;
 }
 
-size_t DasAry_qubeIn(DasAry* pThis, int iRecDim)
+ptrdiff_t DasAry_qubeIn(DasAry* pThis, int iRecDim)
 {
 	
-	if(iRecDim == 0){
-		daserrf(DASERR_ARRAY, "Dimension 0 is always automatically a qube");
-		return 0;
-	}	
-	if(iRecDim >= pThis->nRank){
+	if(iRecDim == 0)
+		return -daserrf(DASERR_ARRAY, "Dimension 0 is always automatically a qube");
+
+	if((iRecDim < 0)||(iRecDim >= pThis->nRank)){
 		char sAry[128];
-		daserrf(DASERR_ARRAY, "In array %s, dimension %d does not exist",
+		return -daserrf(DASERR_ARRAY, "In array %s, dimension %d does not exist",
 		           DasAry_toStr(pThis, sAry, 128), iRecDim);
-		return 0;
 	}
 
 	/* Count back from the last index towards the first and find the highest
@@ -1180,11 +1171,12 @@ size_t DasAry_qubeIn(DasAry* pThis, int iRecDim)
 	if(iQubeDim < 1) return 0;  /* Can't qube anything, vals are ragged */
 	
 	/* Get the last parent descriptor for elements in dimension iQubeDim */
-	das_idx_info* pParent;
-	if((pParent = _Array_LastParentFor(pThis, iQubeDim)) == NULL) return 0;
+	das_errcode nErr;
+	das_idx_info* pParent = _Array_LastParentFor(pThis, iQubeDim, &nErr);
+	if(pParent == NULL)
+		return -nErr;   /* 0 if there's just nothing to qube yet */
 	
-	size_t uWrote = _Array_qubeSelf(pThis, iQubeDim, pParent);
-	return uWrote;
+	return _Array_qubeSelf(pThis, iQubeDim, pParent);
 }
 
 /* ************************************************************************* */
