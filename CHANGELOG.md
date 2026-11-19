@@ -10,21 +10,46 @@ Newest release first.
 
 ## 3.0.5 - 2026-11-19
 
-Source compatible for most callers; the API changes below need small edits
-where those functions are used.  You'll need to recompile any apps. A 
-relink is not sufficent, the ABI changed slightly.
+This release is source compatible for most callers.  The API changes below need small edits where those functions are used.  You'll need to recompile any apps. A re-link is not sufficient, the ABI changed slightly.
 
-### Fixes
+## Behavior
+- Logins are sent only over https, and only to the server that asked.  A 401 over plain http fails without prompting.
 
-- Over-long time and datum strings could overran stack buffers. These are
-  trigger an error return and are not truncated.  `DasDatum_fromStr`,
-  `DasTime_fromStr`
+- The library writes no files unless asked.  The catalog node disk cache is off by default. The `das_fetch` utilitiy turns it on.
   
-- Functions initialize their output params on every return path, including
-  errors.  For example `DasAry_valsIn()` left the count stale.
+- Cached catalog nodes honor `Cache-Control: no-store`.
+
+- Reading an address (index) that arrays have not filled yet is not an error, instead 0, NULL or a null datum is returned.
   
-- Deleting a dataset (`DasDs`) with exactly six codecs freed its inline
-  codec array.
+- More errors are reported in the return value for programs that run in `DASERRDISP_RET` mode.
+
+## API changes
+
+- *changed*:`DasAry_valsIn()`, `DasAry_dataIn()` and the typed `*In` readers: count is `ptrdiff_t*`, negative on error.
+  
+- *changed*: `DasAry_qubeIn()` returns `ptrdiff_t`, negative on error.  Check any calls to DasAry_qubeIn in app code!
+
+- *changed*: `DasBuf_prepare()`: space is `ptrdiff_t*`, negative on error.
+
+- *changed*: `DasDs_codecFor()` returns int (1, 0, < 0), codec via out-param.
+
+- *changed*: `DasDesc_valDouble()`, `valDatum()`, `valInt()` return int, value output is via a parameter.
+  
+- *changed*: `DasDesc_valStrs()` takes per-item buffers, like `DasProp_toStrs()`.
+
+- *changed*: `DasCat_setCache()` is replaced by `DasCat_setCaching()`, `DasCat_caching()`, `DasCat_setCacheDir()` and `DasCat_setCacheAge()`.
+  
+- *Removed*: `DasDesc_valStrsSep()` and the `DasAry_floatAt()`-style macros in array.h.  These were unused, and unsafe for empty returns.
+  
+- *New*: `DASVAR_STR_SZ`.  `DasVar_toStr()` and `DasDim_toStr()` formats are documented and stable.
+
+## Fixes
+
+- Over-long time and datum strings could theoretically over run stack buffers. These now trigger an error return instead, and aren't truncated.  `DasDatum_fromStr`,  `DasTime_fromStr`
+  
+- Functions initialize their output params on every return path, including errors.  For example `DasAry_valsIn()` left `*pCount` stale.
+  
+- Deleting a dataset (`DasDs`) with exactly six codecs freed its inline codec array.
   
 - das3 header write failures were not reported. `DasIO_writeDesc`
 
@@ -32,62 +57,17 @@ relink is not sufficent, the ABI changed slightly.
 
 - Catalog Enum FlagSet controls sent the flag name, not its value.
 
-- A login was replayed to the target of a cross-origin redirect and a 401
-  at the redirect site would marked the good login refused.
+- A login was replayed to the target of a cross-origin redirect and a 401 at the redirect site would mark the good login refused.
 
-### Behavior
-
-- Logins are sent only over https, and only to the server that asked.  A
-  401 over plain http fails without prompting.
-
-- The library writes no files unless asked.  The catalog node disk cache is
-  off by default. The `das_fetch` utilitiy turns it on.
-  
-- Cached catalog nodes honor `Cache-Control: no-store`.
-
-- Reading an address (index) that arrays have not filled yet is not an 
-  error, instead 0, NULL or a null datum is returned.
-  
-- More errors are reported in the return value for programs that run in
-  `DASERRDISP_RET` mode.
-  
-
-### API changes
-
-- `DasAry_valsIn()`, `DasAry_dataIn()` and the typed `*In` readers: count is
-  `ptrdiff_t*`, negative on error.
-  
-- `DasAry_qubeIn()` returns `ptrdiff_t`, negative on error.  Check any
-   calls to DasAry_qubeIn in app code!
-
-- `DasBuf_prepare()`: space is `ptrdiff_t*`, negative on error.
-
-- `DasDs_codecFor()` returns int (1, 0, < 0), codec via out-param.
-
-- `DasDesc_valDouble()`, `valDatum()`, `valInt()` return int, value via
-  out-param.
-  
-- `DasDesc_valStrs()` takes per-item buffers, like `DasProp_toStrs()`.
-
-- `DasCat_setCache()` is replaced by `DasCat_setCaching()`,
-  `DasCat_caching()`, `DasCat_setCacheDir()` and `DasCat_setCacheAge()`.
-  
-- Removed: `DasDesc_valStrsSep()` and the `DasAry_floatAt()`-style macros
-  in array.h.  These were unused, and unsafe for empty returns.
-  
-- New: `DASVAR_STR_SZ`.  `DasVar_toStr()` and `DasDim_toStr()` formats are
-  documented and stable.
-
-### Utilities
+## Utilities
 
 - das_fetch: a `-C DIR` that is too long exits with code 2.
 
 - das3_csv: now outputs blank cells where a value is missing.
 
-### Build and test
+## Build and test
 
-- `make test_net` runs the network catalog test (TestCatalog, fixed);
-  `make test` stays offline.
+- `make test_net` runs the network catalog test (TestCatalog, fixed), as before  `make test` stays offline.
 
 
 ## 3.0.4 - 2026-11-11
