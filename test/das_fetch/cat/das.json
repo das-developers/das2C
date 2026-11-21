@@ -1,0 +1,10 @@
+{
+ "type": "Catalog",
+ "version": "0.5",
+ "name": "das2",
+ "title": "Offline test copy of the tag:das2.org,2012: node",
+ "separator": null,
+ "catalog": {
+  "site": {"type": "Catalog", "title": "Federated Site Catalog", "urls": ["test/das_fetch/cat/site.json"]}
+ }
+}

@@ -46,6 +46,7 @@
 #include <das3/catalog.h>
 
 #define SITE   "test/das_fetch/cat/site.json"
+#define DAS2   "test/das_fetch/cat/das.json"
 #define UIOWA  "test/das_fetch/cat/uiowa.json"
 #define UIOWA_URI "tag:das2.org,2012:site:/uiowa"
 
@@ -86,13 +87,6 @@ static das_errcode quiet2(
 	daslog_setLevel(DASLOG_WARN);
 	return n;
 }
-static DasNode* quietResolve(DasCat* p, const char* s)
-{
-	daslog_setLevel(DASLOG_CRITICAL);
-	DasNode* pNode = DasCat_resolve(p, s);
-	daslog_setLevel(DASLOG_WARN);
-	return pNode;
-}
 
 /* ************************************************************************* */
 static void test_isUrlOrFile(void)
@@ -107,14 +101,14 @@ static void test_isUrlOrFile(void)
 	CHECK(DasCat_isNodeUrl("test/das_fetch/cat/site.json"), "relative path ending in .json");
 	CHECK(!DasCat_isNodeUrl("uiowa/juno/wav/survey"), "catalog path");
 	CHECK(!DasCat_isNodeUrl("tag:das2.org,2012:site:/uiowa"), "catalog URI");
-	CHECK(!DasCat_isNodeUrl("site:/uiowa"), "shorthand URI");
+	CHECK(!DasCat_isNodeUrl("tag:das2.org,2012:site:/uiowa"), "a catalog name");
 	CHECK(!DasCat_isNodeUrl(NULL), "NULL");
 	CHECK(!DasCat_isNodeUrl(""), "empty");
 
 	printf("TEST: dasurl_hasScheme\n");
 	CHECK(dasurl_hasScheme("tag:das2.org,2012:site:/uiowa"), "tag URI");
 	CHECK(dasurl_hasScheme("doi:10.1037/a0040251/"), "doi URI");
-	CHECK(dasurl_hasScheme("site:/uiowa") && dasurl_hasScheme("test:x"), "shorthands");
+	CHECK(dasurl_hasScheme("tag:das2.org,2012:site:/uiowa") && dasurl_hasScheme("test:x"), "any scheme");
 	CHECK(dasurl_hasScheme("https://host/x.json"), "a URL is a URI too");
 	CHECK(!dasurl_hasScheme("uiowa/juno/wav:x"), "relative path, colon after a slash");
 	CHECK(!dasurl_hasScheme("C:\\nodes\\x") && !dasurl_hasScheme("C:/x"), "drive letters are not schemes");
@@ -124,139 +118,193 @@ static void test_isUrlOrFile(void)
 /* ************************************************************************* */
 static void test_policy(void)
 {
-	printf("TEST: prefix, seed and mount setters\n");
+	printf("TEST: seed and mount setters\n");
 	DasCat* pCat = new_DasCat(NULL, "TestCat");
 	CHECK(pCat != NULL, "new_DasCat");
 	CHECK(DasCat_credMgr(pCat) == NULL, "no manager");
 	CHECK(streq(DasCat_agent(pCat), "TestCat"), "agent copied");
-	CHECK(streq(DasCat_prefix(pCat), DASCAT_SITE_PREFIX), "default prefix");
-	CHECK(!DasCat_hasSeed(pCat), "no seed yet");
-	CHECK(DasCat_seedUrl(pCat) == NULL, "no seed url");
-	CHECK(streq(DasCat_prefix(pCat), DASCAT_SITE_PREFIX), "no seed: paths start at the default prefix");
+	CHECK(streq(DasCat_seedUri(pCat), ""), "the compiled in seed is a root, paths are full names");
+	CHECK(DasCat_seedUrl(pCat) == NULL, "the compiled in seed has no location of its own");
 	CHECK(DasCat_numMounts(pCat) == 0, "no mounts");
-	CHECK(DasCat_lastUri(pCat) == NULL, "no resolve yet");
-
-	CHECK(DasCat_setPrefix(pCat, "site:/uiowa") == DAS_OKAY, "prefix shorthand");
-	CHECK(streq(DasCat_prefix(pCat), UIOWA_URI), "prefix expanded: %s", DasCat_prefix(pCat));
-	CHECK(DasCat_setPrefix(pCat, "site:uiowa") == DAS_OKAY, "prefix shorthand, slash left out");
-	CHECK(streq(DasCat_prefix(pCat), UIOWA_URI), "slash supplied: %s", DasCat_prefix(pCat));
-	CHECK(DasCat_setPrefix(pCat, "test:") == DAS_OKAY, "bare shorthand");
-	CHECK(streq(DasCat_prefix(pCat), "tag:das2.org,2012:test:/"), "bare shorthand ends in a slash");
-	CHECK(DasCat_setPrefix(pCat, "tag:das2.org,2012:test:/") == DAS_OKAY, "prefix full");
-	CHECK(quiet(DasCat_setPrefix, pCat, SITE) != DAS_OKAY, "a file is not a prefix");
-	CHECK(quiet(DasCat_setPrefix, pCat, "") != DAS_OKAY, "empty prefix");
 
 	CHECK(quiet2(DasCat_setSeed, pCat, "uiowa", NULL) != DAS_OKAY, "a path is not a seed");
 	CHECK(DasCat_setSeed(pCat, SITE, NULL) == DAS_OKAY, "seed by file");
-	CHECK(DasCat_hasSeed(pCat), "has seed");
-	CHECK(streq(DasCat_seedUrl(pCat), SITE), "seed url kept");
-	CHECK(quiet2(DasCat_setSeed, pCat, UIOWA, NULL) != DAS_OKAY, "one seed only");
-	CHECK(quiet2(DasCat_setSeed, pCat, UIOWA, UIOWA_URI) != DAS_OKAY, "no second seed with a prefix either");
-	CHECK(quiet(DasCat_setPrefix, pCat, "site:/") != DAS_OKAY, "no prefix once a seed is set, paths start at the seed");
-	CHECK(streq(DasCat_prefix(pCat), ""), "the seed superseded the prefix set before it");
-	CHECK(streq(DasCat_prefix(pCat), ""), "a seed without a prefix is a root, paths start at nothing");
+	CHECK(streq(DasCat_seedUrl(pCat), SITE), "its location");
+	CHECK(streq(DasCat_seedUri(pCat), ""), "a root seed: paths are names below it");
+	CHECK(DasCat_numMounts(pCat) == 0, "the seed is not a mount");
+	CHECK(DasCat_setSeed(pCat, UIOWA, NULL) == DAS_OKAY, "a second seed replaces the first");
+	CHECK(streq(DasCat_seedUrl(pCat), UIOWA), "new location");
 	CHECK(DasCat_mount(pCat, UIOWA, UIOWA_URI) == DAS_OKAY, "a mount joins an offline catalog");
-	CHECK(DasCat_numMounts(pCat) == 1, "the seed is not a mount");
-	CHECK(DasCat_covers(pCat, UIOWA_URI "/x") && !DasCat_covers(pCat, "tag:das2.org,2012:site:/swri"),
-	      "covered by the mount, walled off elsewhere");
+	CHECK(DasCat_numMounts(pCat) == 1, "one mount");
+	CHECK(DasCat_setSeed(pCat, NULL, DASNODE_URI_SITES) == DAS_OKAY, "a node of the das catalog, by name alone");
+	CHECK(streq(DasCat_seedUri(pCat), DASNODE_URI_SITES), "its name");
+	CHECK(DasCat_seedUrl(pCat) == NULL, "found through the root, no location of its own");
+	CHECK(DasCat_covers(pCat, DASNODE_URI_UIOWA), "names under it are covered");
+	CHECK(!DasCat_covers(pCat, "tag:cdaweb.gsfc.nasa.gov,2025:"), "the rest of the catalog is not");
+	CHECK(quiet2(DasCat_setSeed, pCat, NULL, "./site.json") != DAS_OKAY, "a location is not a name");
+	CHECK(DasCat_setSeed(pCat, NULL, "") == DAS_OKAY, "an empty name is no name");
+	CHECK(streq(DasCat_seedUri(pCat), ""), "the compiled in root");
+	CHECK(DasCat_setSeed(pCat, NULL, DASNODE_URI_SITES) == DAS_OKAY, "named again");
+	CHECK(DasCat_setSeed(pCat, NULL, NULL) == DAS_OKAY, "back to the compiled in seed");
+	CHECK(DasCat_seedUrl(pCat) == NULL, "no location");
+	CHECK(streq(DasCat_seedUri(pCat), ""), "a root again");
+	CHECK(DasCat_numMounts(pCat) == 1, "mounts are kept across seed changes");
 	del_DasCat(pCat);
 
 	pCat = new_DasCat(NULL, NULL);
 	CHECK(DasCat_agent(pCat) == NULL, "NULL agent stays NULL");
-	CHECK(quiet2(DasCat_mount, pCat, UIOWA, "") != DAS_OKAY, "a mount needs a URI");
-	CHECK(quiet2(DasCat_setSeed, pCat, UIOWA, UIOWA) != DAS_OKAY, "seed prefix can't be a file");
-	CHECK(quiet2(DasCat_setSeed, pCat, "uiowa", UIOWA_URI) != DAS_OKAY, "seed URL must be a location");
-	CHECK(DasCat_setSeed(pCat, UIOWA, "site:/uiowa") == DAS_OKAY, "seed with a prefix");
-	CHECK(streq(DasCat_prefix(pCat), UIOWA_URI), "seed prefix expanded, and it is where paths start");
-	CHECK(DasCat_hasSeed(pCat), "a seed with a prefix is a seed");
-	CHECK(quiet2(DasCat_setSeed, pCat, SITE, NULL) != DAS_OKAY, "no second seed");
+	CHECK(quiet2(DasCat_mount, pCat, UIOWA, "") != DAS_OKAY, "a mount name can't be empty");
+	CHECK(quiet2(DasCat_mount, pCat, UIOWA, NULL) != DAS_OKAY, "or NULL, a start point is a seed");
+	CHECK(quiet2(DasCat_mount, pCat, "uiowa", UIOWA_URI) != DAS_OKAY, "a mount URL must be a location");
+	CHECK(quiet2(DasCat_mount, pCat, UIOWA, UIOWA) != DAS_OKAY, "a mount name can't be a file");
+	CHECK(quiet2(DasCat_setSeed, pCat, UIOWA, UIOWA) != DAS_OKAY, "seed name can't be a file");
+	CHECK(DasCat_setSeed(pCat, UIOWA, UIOWA_URI) == DAS_OKAY, "seed with a name");
+	CHECK(streq(DasCat_seedUri(pCat), UIOWA_URI), "where paths start");
+	CHECK(DasCat_numMounts(pCat) == 0, "a named seed is not a mount");
+	CHECK(DasCat_setSeed(pCat, SITE, "site") == DAS_OKAY, "a name is any string");
+	CHECK(streq(DasCat_seedUri(pCat), "site"), "and is not expanded: %s", DasCat_seedUri(pCat));
+
+	/* A name is taken as written; one that ends with the node's separator
+	   is found out when the node loads, and every lookup through it says so */
+	das_catmiss m;
+	CHECK(DasCat_setSeed(pCat, UIOWA, "tag:das2.org,2012:site:/uiowa/") == DAS_OKAY, "with a trailing separator");
+	CHECK(streq(DasCat_seedUri(pCat), UIOWA_URI "/"), "kept as written: %s", DasCat_seedUri(pCat));
+	CHECK((DasCat_resolve(pCat, "geomag", &m) == NULL) && (m.nCause == DASMISS_BADNAME),
+	      "relative lookups fail: %d %s", m.nCause, m.sMsg);
+	CHECK(strstr(m.sMsg, "'" UIOWA_URI "'") != NULL, "naming the right name: %s", m.sMsg);
+	CHECK((DasCat_seed(pCat, &m) == NULL) && (m.nCause == DASMISS_BADNAME), "and the seed itself");
+	CHECK((DasCat_check(pCat, &m) == 1) && (m.nCause == DASMISS_BADNAME), "check() finds it");
+	CHECK(DasCat_setSeed(pCat, SITE, "tag:das2.org,2012:site:/") == DAS_OKAY, "the site node, named with its separator");
+	CHECK((DasCat_resolve(pCat, "uiowa", &m) == NULL) && (m.nCause == DASMISS_BADNAME) &&
+	      strstr(m.sMsg, "':/'"), "found out by its own separator: %s", m.sMsg);
+	const char* sUrl = NULL;
+	const char* sUri = NULL;
+	CHECK(!DasCat_mountAt(pCat, 0, &sUrl, &sUri) && (sUrl == NULL) && (sUri == NULL),
+	      "past the end: false, and the outputs are written anyway");
 	del_DasCat(pCat);
 
 	pCat = new_DasCat(NULL, NULL);
 	CHECK(DasCat_mount(pCat, UIOWA, UIOWA_URI) == DAS_OKAY, "mount one");
-	CHECK(DasCat_mount(pCat, SITE, "site:swri") == DAS_OKAY, "mount two, slash left out");
+	CHECK(DasCat_mount(pCat, SITE, "tag:das2.org,2012:site:/swri") == DAS_OKAY, "mount two");
 	CHECK(DasCat_numMounts(pCat) == 2, "two mounts");
-	CHECK(!DasCat_hasSeed(pCat), "mounts are not a seed");
-	CHECK(DasCat_covers(pCat, "tag:das2.org,2012:site:/swri/x"), "slash supplied in the mount URI");
-	CHECK(DasCat_covers(pCat, "tag:das2.org,2012:site:/lanl"), "mounts fall through");
-	CHECK(DasCat_setSeed(pCat, SITE, "test:/") == DAS_OKAY, "a seed after mounts isolates them");
-	CHECK(DasCat_hasSeed(pCat) && (DasCat_numMounts(pCat) == 2), "two mounts, the seed is not one");
-	CHECK(!DasCat_covers(pCat, "tag:das2.org,2012:site:/lanl"), "no fall through now");
+	CHECK(DasCat_mountAt(pCat, 0, &sUrl, &sUri) && streq(sUrl, UIOWA) && streq(sUri, UIOWA_URI),
+	      "listed in the order mounted");
+	CHECK(DasCat_covers(pCat, "tag:das2.org,2012:site:/swri/x"), "under a mount");
+	CHECK(DasCat_covers(pCat, "tag:das2.org,2012:site:/lanl"), "mounts fall through to the seed");
+	CHECK(DasCat_setSeed(pCat, SITE, "tag:das2.org,2012:test") == DAS_OKAY, "a named seed after mounts");
+	CHECK(DasCat_numMounts(pCat) == 2, "still two mounts");
+	CHECK(!DasCat_covers(pCat, "tag:das2.org,2012:site:/lanl"), "outside the seed and the mounts");
+	CHECK(DasCat_covers(pCat, UIOWA_URI "/x"), "the earlier mounts are still there");
+	CHECK(DasCat_covers(pCat, "tag:das2.org,2012:test:/x"), "and under the seed");
+	CHECK(DasCat_setSeed(pCat, SITE, NULL) == DAS_OKAY, "a root seed");
+	CHECK(DasCat_covers(pCat, "tag:das2.org,2012:site:/lanl"), "is asked about everything");
+
+	DasCat_setAgent(pCat, "later/2.0");
+	CHECK(streq(DasCat_agent(pCat), "later/2.0"), "agent changed after construction");
+	DasCat_setAgent(pCat, DasCat_agent(pCat));
+	CHECK(streq(DasCat_agent(pCat), "later/2.0"), "own string back is fine");
+	DasCat_setAgent(pCat, "");
+	CHECK(DasCat_agent(pCat) == NULL, "empty agent is the library default");
 	del_DasCat(pCat);
 }
 
 /* ************************************************************************* */
 static void test_seed(void)
 {
-	printf("TEST: a node file as the seed\n");
+	printf("TEST: a node file as a root seed\n");
 	DasCat* pCat = new_DasCat(NULL, "TestCat");
 	DasCat_setCaching(pCat, false);    /* explicitly off, file nodes are not cached anyway */
 	CHECK(DasCat_setSeed(pCat, SITE, NULL) == DAS_OKAY, "set seed");
 
-	DasNode* pRoot = DasCat_resolve(pCat, NULL);
+	das_catmiss m;
+	memset(&m, 0x55, sizeof(m));       /* garbage in, so a missed field shows */
+	DasNode* pRoot = DasCat_resolve(pCat, NULL, &m);
 	CHECK(pRoot != NULL, "root resolves");
 	CHECK(pRoot && DasNode_isCatalog(pRoot), "root is a catalog");
-	CHECK(streq(DasCat_lastUri(pCat), ""), "no path: last URI is empty, a root has none");
+	CHECK((m.nCause == DAS_OKAY) && streq(m.sUri, "") && (m.pNear == NULL) &&
+	      streq(m.sMsg, "") && streq(m.sUrl, "") && streq(m.sRest, "") && (m.nHttp == 0),
+	      "a success writes every field: URI empty, a root has none");
 	CHECK(pRoot && (DasNode_pathUri(pRoot) == NULL), "the node has no URI");
-	CHECK(DasCat_seed(pCat) == pRoot, "the seed accessor is the same node");
-	CHECK(DasCat_resolve(pCat, "") == pRoot, "empty path is the same as NULL");
+	CHECK(DasCat_seed(pCat, &m) == pRoot, "the seed accessor is the same node");
+	CHECK((m.nCause == DAS_OKAY) && streq(m.sUri, ""), "and says so");
+	CHECK(DasCat_resolve(pCat, "", NULL) == pRoot, "empty path is the same as NULL");
 
-	/* Policy is frozen now */
-	CHECK(quiet(DasCat_setPrefix, pCat, "site:/") != DAS_OKAY, "no policy change after resolve");
+	/* Mounts may change after a resolve */
+	CHECK(DasCat_mount(pCat, UIOWA, "zz") == DAS_OKAY, "mount after resolve");
+	CHECK(DasCat_unmount(pCat, "zz") == DAS_OKAY, "and unmount");
 
-	DasNode* pSrc = DasCat_resolve(pCat, "uiowa/geomag/flex");
+	DasNode* pSrc = DasCat_resolve(pCat, "uiowa/geomag/flex", &m);
 	CHECK(pSrc != NULL, "deep path resolves");
 	CHECK(pSrc && DasNode_isStreamSrc(pSrc), "leaf is a stream source");
-	char sExpect[1100];
 	/* Below a root, names are the path from it: the root's ":/"
 	   separator is not used since there is nothing to join to */
-	strcpy(sExpect, "uiowa/geomag/flex");
-	CHECK(streq(DasCat_lastUri(pCat), sExpect), "relative path is the name below a root: %s",
-	      DasCat_lastUri(pCat));
-	CHECK(pSrc && streq(DasNode_pathUri(pSrc), sExpect), "node path URI: %s",
+	CHECK(streq(m.sUri, "uiowa/geomag/flex"), "relative path is the name below a root: %s", m.sUri);
+	CHECK(pSrc && streq(DasNode_pathUri(pSrc), "uiowa/geomag/flex"), "node path URI: %s",
 	      pSrc ? DasNode_pathUri(pSrc) : "(null)");
-	CHECK(DasCat_resolve(pCat, "uiowa/geomag/flex") == pSrc, "second resolve is the cached node");
+	CHECK(DasCat_resolve(pCat, "uiowa/geomag/flex", NULL) == pSrc, "second resolve is the cached node");
 
-	DasNode* pUiowa = DasCat_resolve(pCat, "uiowa");
+	DasNode* pUiowa = DasCat_resolve(pCat, "uiowa", NULL);
 	CHECK(pUiowa && DasNode_isCatalog(pUiowa), "intermediate node");
 	CHECK(pUiowa && (DasNode_numSubs(pUiowa) == 3), "uiowa lists three children");
 	CHECK(pUiowa && (DasNode_subTypeAt(pUiowa, 2) == DASNODETYPE_INV), "unknown child type is DASNODETYPE_INV");
 
-	/* Misses, and what the catalog can say about them */
-	CHECK(quietResolve(pCat, "uiowa/nope/deeper") == NULL, "bad child fails");
-	strcpy(sExpect, "uiowa/nope/deeper");
-	CHECK(streq(DasCat_lastUri(pCat), sExpect), "last URI is the failed path");
-	CHECK(DasCat_covers(pCat, DasCat_lastUri(pCat)), "under the root is covered");
-	CHECK(!DasCat_covers(pCat, UIOWA_URI), "a URI with a scheme is not under a root");
-	const char* sRest = NULL;
-	DasNode* pNear = DasCat_nearest(pCat, &sRest);
-	CHECK(pNear == pUiowa, "nearest is the deepest catalog that loaded");
-	CHECK(streq(sRest, "nope/deeper"), "rest below it: %s", sRest ? sRest : "(null)");
-	strcpy(sExpect, "uiowa");
-	CHECK(streq(DasCat_lastUri(pCat), sExpect), "last URI now names the nearest node");
+	/* Misses, and what the session says about them */
+	CHECK(DasCat_resolve(pCat, "uiowa/nope/deeper", &m) == NULL, "bad child fails");
+	CHECK(m.nCause == DASMISS_NOCHILD, "a name that is not listed: %d", m.nCause);
+	CHECK(streq(m.sUri, "uiowa/nope/deeper"), "the URI tried: %s", m.sUri);
+	CHECK(m.pNear == pUiowa, "nearest is the deepest catalog that loaded");
+	CHECK(streq(m.sRest, "nope/deeper"), "rest below it: %s", m.sRest);
+	CHECK(strstr(m.sMsg, "'nope'") && strstr(m.sMsg, "geomag broken odd"),
+	      "the message names the child and what is there: %s", m.sMsg);
+	CHECK(DasCat_covers(pCat, m.sUri), "under a root is covered");
 
-	CHECK(quietResolve(pCat, "uiowa/broken") == NULL, "listed child with a missing file fails");
-	pNear = DasCat_nearest(pCat, &sRest);
-	CHECK((pNear == pUiowa) && streq(sRest, "broken"), "nearest for a missing file");
+	CHECK(DasCat_resolve(pCat, "uiowa/broken", &m) == NULL, "listed child with a missing file fails");
+	CHECK((m.nCause == DASMISS_LOAD) && (m.pNear == pUiowa) && streq(m.sRest, "broken"),
+	      "a listed child that won't load: %d %s", m.nCause, m.sMsg);
+	CHECK((m.sUrl[0] != '\0') && (m.nHttp == 0), "names the file, no HTTP: %s", m.sUrl);
+	CHECK(strstr(m.sMsg, "listed but could not be loaded") != NULL, "says so: %s", m.sMsg);
 
-	CHECK(quietResolve(pCat, "uiowa/odd") == NULL, "unknown node type fails to load");
+	CHECK(DasCat_resolve(pCat, "uiowa/odd", &m) == NULL, "unknown node type fails to load");
+	CHECK(m.nCause == DASMISS_UNSUPPORTED, "listed with a type das2C can't load: %s", m.sMsg);
 
-	CHECK(quietResolve(pCat, "nope") == NULL, "bad child of the root");
-	pNear = DasCat_nearest(pCat, &sRest);
-	CHECK((pNear == pRoot) && streq(sRest, "nope"), "nearest for a root child is the root itself");
-	CHECK(streq(DasCat_lastUri(pCat), ""), "last URI is empty after a root is nearest");
+	CHECK(DasCat_resolve(pCat, "nope", &m) == NULL, "bad child of the root");
+	CHECK((m.pNear == pRoot) && streq(m.sRest, "nope"), "nearest for a root child is the root itself");
+	CHECK(strstr(m.sMsg, "the root") != NULL, "a root is named as one: %s", m.sMsg);
 
-	/* A good resolve leaves nothing for nearest to find */
-	CHECK(DasCat_resolve(pCat, "uiowa/geomag") != NULL, "source set resolves");
-	CHECK(DasCat_nearest(pCat, &sRest) == NULL, "nearest after success is nothing");
+	/* A good resolve after a bad one leaves nothing behind */
+	CHECK(DasCat_resolve(pCat, "uiowa/geomag", &m) != NULL, "source set resolves");
+	CHECK((m.nCause == DAS_OKAY) && (m.pNear == NULL) && streq(m.sMsg, ""), "success clears the miss");
 
-	/* A location given as the path is a root */
-	DasNode* pDirect = DasCat_resolve(pCat, UIOWA);
+	/* A child of a node in hand */
+	CHECK(DasCat_subNode(pCat, pUiowa, "geomag", &m) != NULL, "subNode finds a child");
+	CHECK(streq(m.sUri, "uiowa/geomag"), "and reports its URI: %s", m.sUri);
+	CHECK(DasCat_subNode(pCat, pUiowa, "nope", &m) == NULL, "subNode miss");
+	CHECK((m.nCause == DASMISS_NOCHILD) && (m.pNear == pUiowa), "with the node it started from");
+
+	/* A location given as the path is a node of its own */
+	DasNode* pDirect = DasCat_resolve(pCat, UIOWA, &m);
 	CHECK(pDirect && DasNode_isCatalog(pDirect), "node by file path");
-	CHECK(streq(DasCat_lastUri(pCat), UIOWA), "the location stands in for a name: %s", DasCat_lastUri(pCat));
+	CHECK(streq(m.sUri, UIOWA), "the location stands in for a name: %s", m.sUri);
 	CHECK(pDirect && (DasNode_pathUri(pDirect) == NULL), "a node loaded by location has no URI");
-	CHECK(DasCat_nearest(pCat, &sRest) == NULL, "nearest means nothing for a location");
-	CHECK(DasCat_resolve(pCat, "./" UIOWA) != pDirect, "a different spelling is a different load");
+	CHECK(DasCat_resolve(pCat, "./" UIOWA, NULL) != pDirect, "a different spelling is a different load");
+	CHECK(DasCat_resolve(pCat, "test/das_fetch/cat/missing.json", &m) == NULL, "a missing file by location");
+	CHECK((m.nCause == DASMISS_LOAD) && (m.pNear == NULL), "is a load failure with no nearest");
+
+	/* Sources */
+	das_catmiss ms;
+	DasSrc* pDs = new_DasSrc_cat(pCat, "uiowa/geomag/flex", &ms);
+	CHECK((pDs != NULL) && (ms.nCause == DAS_OKAY), "a source by path");
+	del_DasSrc(pDs);
+	CHECK(new_DasSrc_cat(pCat, "uiowa/geomag", &ms) == NULL, "a container is not a source");
+	CHECK((ms.nCause == DASMISS_NOTSRC) && strstr(ms.sMsg, "flex"), "and names what it holds: %s", ms.sMsg);
+	CHECK(new_DasSrc_cat(pCat, "uiowa/nope", &ms) == NULL, "a miss is a miss for sources too");
+	CHECK(ms.nCause == DASMISS_NOCHILD, "the resolve's reason comes through");
+
+	/* No struct: the reason goes to the log instead */
+	daslog_setLevel(DASLOG_CRITICAL);
+	CHECK(DasCat_resolve(pCat, "uiowa/nope", NULL) == NULL, "NULL miss is fine");
+	CHECK(new_DasSrc_cat(pCat, "uiowa/geomag", NULL) == NULL, "for sources too");
+	daslog_setLevel(DASLOG_WARN);
 
 	del_DasCat(pCat);
 }
@@ -264,83 +312,98 @@ static void test_seed(void)
 /* ************************************************************************* */
 static void test_prefixedSeed(void)
 {
-	printf("TEST: a seed with a prefix\n");
+	printf("TEST: a seed with a name\n");
 	DasCat* pCat = new_DasCat(NULL, "TestCat");
-	CHECK(DasCat_setSeed(pCat, UIOWA, "site:/uiowa") == DAS_OKAY, "seed with a prefix");
+	CHECK(DasCat_setSeed(pCat, UIOWA, "tag:das2.org,2012:site:/uiowa") == DAS_OKAY, "seed with a name");
 
-	DasNode* pTop = DasCat_resolve(pCat, NULL);
+	das_catmiss m;
+	DasNode* pTop = DasCat_resolve(pCat, NULL, &m);
 	CHECK(pTop && DasNode_isCatalog(pTop), "no path: the named node");
-	CHECK(streq(DasCat_lastUri(pCat), UIOWA_URI), "its URI");
+	CHECK(streq(m.sUri, UIOWA_URI), "its URI");
 	CHECK(pTop && streq(DasNode_pathUri(pTop), UIOWA_URI), "node knows its given URI");
 
-	DasNode* pSrc = DasCat_resolve(pCat, "geomag/flex");
-	CHECK(pSrc && DasNode_isStreamSrc(pSrc), "relative to the root");
-	CHECK(streq(DasCat_lastUri(pCat), UIOWA_URI "/geomag/flex"), "relative path gets the root URI: %s",
-	      DasCat_lastUri(pCat));
+	DasNode* pSrc = DasCat_resolve(pCat, "geomag/flex", &m);
+	CHECK(pSrc && DasNode_isStreamSrc(pSrc), "relative to the seed");
+	CHECK(streq(m.sUri, UIOWA_URI "/geomag/flex"), "the prefix names a node, its separator joins: %s", m.sUri);
 	CHECK(pSrc && streq(DasNode_pathUri(pSrc), UIOWA_URI "/geomag/flex"), "node path URI");
 
-	CHECK(DasCat_resolve(pCat, UIOWA_URI "/geomag") != NULL, "full URI under the root");
-	CHECK(DasCat_resolve(pCat, "site:/uiowa/geomag") != NULL, "shorthand URI under the root");
-	CHECK(streq(DasCat_lastUri(pCat), UIOWA_URI "/geomag"), "shorthand expanded");
+	CHECK(DasCat_resolve(pCat, UIOWA_URI "/geomag", &m) != NULL, "full name under the seed");
+	CHECK(streq(m.sUri, UIOWA_URI "/geomag"), "taken as it is");
 
-	CHECK(quietResolve(pCat, "tag:das2.org,2012:site:/swri/x") == NULL, "outside the root fails");
-	CHECK(!DasCat_covers(pCat, DasCat_lastUri(pCat)), "and the policy says so");
-	CHECK(DasCat_covers(pCat, UIOWA_URI "/anything"), "under the root is covered");
+	/* Only the seed's own name marks a full name; any other string is a
+	   path below the seed, whatever it looks like */
+	CHECK(DasCat_resolve(pCat, "tag:das2.org,2012:site:/swri/x", &m) == NULL, "another site's name");
+	CHECK((m.nCause == DASMISS_NOCHILD) && streq(m.sUri, UIOWA_URI "/tag:das2.org,2012:site:/swri/x"),
+	      "is a path below the seed: %s", m.sUri);
+	CHECK(DasCat_resolve(pCat, UIOWA_URI "x/y", &m) == NULL, "a look-alike of the seed's name");
+	CHECK(m.nCause == DASMISS_OUTSIDE, "is outside it: %s", m.sMsg);
+	CHECK(!DasCat_covers(pCat, "tag:das2.org,2012:site:/swri/x"), "covers() goes by names alone");
+	CHECK(DasCat_covers(pCat, UIOWA_URI "/anything"), "under the seed is covered");
 
-	CHECK(quietResolve(pCat, "geomag/nope") == NULL, "bad child under the root");
-	const char* sRest = NULL;
-	DasNode* pNear = DasCat_nearest(pCat, &sRest);
-	CHECK(pNear && DasNode_isCatalog(pNear) && streq(sRest, "nope"), "nearest under a named root: %s",
-	      sRest ? sRest : "(null)");
-	CHECK(streq(DasCat_lastUri(pCat), UIOWA_URI "/geomag"), "nearest URI under a named root");
+	CHECK(DasCat_resolve(pCat, "geomag/nope", &m) == NULL, "bad child under the seed");
+	CHECK(m.pNear && DasNode_isCatalog(m.pNear) && streq(m.sRest, "nope"), "nearest under a named seed: %s",
+	      m.sRest);
+	CHECK(m.pNear && streq(DasNode_pathUri(m.pNear), UIOWA_URI "/geomag"), "nearest is named");
 	del_DasCat(pCat);
 
-	/* The site file as the site node: the bare shorthand names the node,
-	   the node's separator builds the children, so names come out as
-	   the live catalog spells them */
+	/* The site file as the site node: the node's separator builds the
+	   children, so names come out as the live catalog spells them */
 	pCat = new_DasCat(NULL, "TestCat");
-	CHECK(DasCat_setSeed(pCat, SITE, "site:") == DAS_OKAY, "seed named by bare shorthand");
-	CHECK(streq(DasCat_prefix(pCat), DASNODE_URI_SITES), "bare shorthand is the node name: %s", DasCat_prefix(pCat));
-	pSrc = DasCat_resolve(pCat, "uiowa/geomag/flex");
+	CHECK(DasCat_setSeed(pCat, SITE, DASNODE_URI_SITES) == DAS_OKAY, "seed named as the site node");
+	pSrc = DasCat_resolve(pCat, "uiowa/geomag/flex", NULL);
 	CHECK(pSrc && streq(DasNode_pathUri(pSrc), UIOWA_URI "/geomag/flex"), "children spelled as the live catalog: %s",
 	      pSrc ? DasNode_pathUri(pSrc) : "(null)");
-	CHECK(DasCat_resolve(pCat, "site:/uiowa/geomag/flex") == pSrc, "full URI reaches the same node");
-	CHECK(DasCat_resolve(pCat, "site:uiowa/geomag/flex") == pSrc, "slash left out, same node");
-	CHECK(DasCat_resolve(pCat, "site:") == DasCat_resolve(pCat, NULL), "bare shorthand resolves the root");
+	CHECK(DasCat_resolve(pCat, "tag:das2.org,2012:site:/uiowa/geomag/flex", NULL) == pSrc, "full URI reaches the same node");
+	das_catmiss m2;
+	CHECK((DasCat_resolve(pCat, DASNODE_URI_SITES ":uiowa/geomag/flex", &m2) == NULL) &&
+	      (m2.nCause == DASMISS_OUTSIDE), "slash left out is another name: %s", m2.sMsg);
+	CHECK(strstr(m2.sMsg, "its separator is ':/'") != NULL, "and the message says which: %s", m2.sMsg);
+	CHECK(DasCat_resolve(pCat, DASNODE_URI_SITES, NULL) == DasCat_resolve(pCat, NULL, NULL),
+	      "the seed's name resolves the seed");
+	del_DasCat(pCat);
+
+	/* das.json as the seed, named as the das2 node: its separator is null,
+	   so "site:/uiowa" below it is tag:das2.org,2012:site:/uiowa, the
+	   short form das3py writes, and full names work too */
+	pCat = new_DasCat(NULL, "TestCat");
+	CHECK(DasCat_setSeed(pCat, DAS2, DASNODE_URI_ROOT) == DAS_OKAY, "the das2 node as seed");
+	pSrc = DasCat_resolve(pCat, "site:/uiowa/geomag/flex", &m2);
+	CHECK(pSrc && streq(DasNode_pathUri(pSrc), UIOWA_URI "/geomag/flex"), "short form: %s", m2.sMsg);
+	CHECK(DasCat_resolve(pCat, UIOWA_URI "/geomag/flex", NULL) == pSrc, "full name, same node");
 	del_DasCat(pCat);
 }
 
 /* ************************************************************************* */
 static void test_mountUnderSeed(void)
 {
-	printf("TEST: mounts in a seed's name space\n");
+	printf("TEST: mounts in a root's name space\n");
 	const char* sGeomag = "test/das_fetch/geomag_flex_0.7.json";
+	das_catmiss m;
 
-	/* A root seed: names are paths from it, and a mount at one of them is
+	/* A root: names are paths from it, and a mount at one of them is
 	   consulted before the listing, however the path is spelled */
 	DasCat* pCat = new_DasCat(NULL, "TestCat");
 	CHECK(DasCat_setSeed(pCat, SITE, NULL) == DAS_OKAY, "root seed");
 	CHECK(DasCat_mount(pCat, sGeomag, "uiowa/broken") == DAS_OKAY, "mount at a path from the root");
-	DasNode* pNode = DasCat_resolve(pCat, "uiowa/broken");
+	DasNode* pNode = DasCat_resolve(pCat, "uiowa/broken", &m);
 	CHECK(pNode && DasNode_isStreamSrc(pNode), "the mount shadows a listed child whose file is missing");
-	CHECK(streq(DasCat_lastUri(pCat), "uiowa/broken"), "named by the path: %s", DasCat_lastUri(pCat));
+	CHECK(streq(m.sUri, "uiowa/broken"), "named by the path: %s", m.sUri);
 	CHECK(pNode && streq(DasNode_pathUri(pNode), "uiowa/broken"), "the node carries the mount name");
-	CHECK(DasCat_resolve(pCat, "uiowa/broken") == pNode, "and is kept");
-	DasNode* pFlex = DasCat_resolve(pCat, "uiowa/geomag/flex");
-	CHECK(pFlex && DasNode_isStreamSrc(pFlex) && (pFlex != pNode), "paths off the mount still walk the seed");
+	CHECK(DasCat_resolve(pCat, "uiowa/broken", NULL) == pNode, "and is kept");
+	DasNode* pFlex = DasCat_resolve(pCat, "uiowa/geomag/flex", NULL);
+	CHECK(pFlex && DasNode_isStreamSrc(pFlex) && (pFlex != pNode), "paths off the mount still walk the root");
 	CHECK(DasCat_covers(pCat, "uiowa/broken/deeper"), "under the mount is covered");
 	del_DasCat(pCat);
 
-	/* A prefixed seed: the relative spelling and the full URI reach the
+	/* A named seed: the relative spelling and the full URI reach the
 	   same mount */
 	pCat = new_DasCat(NULL, "TestCat");
-	CHECK(DasCat_setSeed(pCat, UIOWA, "site:/uiowa") == DAS_OKAY, "prefixed seed");
-	CHECK(DasCat_mount(pCat, sGeomag, "site:/uiowa/broken") == DAS_OKAY, "mount under the prefix");
-	pNode = DasCat_resolve(pCat, "broken");
+	CHECK(DasCat_setSeed(pCat, UIOWA, "tag:das2.org,2012:site:/uiowa") == DAS_OKAY, "named seed");
+	CHECK(DasCat_mount(pCat, sGeomag, "tag:das2.org,2012:site:/uiowa/broken") == DAS_OKAY, "mount under it");
+	pNode = DasCat_resolve(pCat, "broken", &m);
 	CHECK(pNode && DasNode_isStreamSrc(pNode), "relative path through the mount");
-	CHECK(streq(DasCat_lastUri(pCat), UIOWA_URI "/broken"), "composed name: %s", DasCat_lastUri(pCat));
-	CHECK(DasCat_resolve(pCat, UIOWA_URI "/broken") == pNode, "full URI is the same node");
-	CHECK(DasCat_resolve(pCat, "site:/uiowa/broken") == pNode, "shorthand too");
+	CHECK(streq(m.sUri, UIOWA_URI "/broken"), "composed name: %s", m.sUri);
+	CHECK(DasCat_resolve(pCat, UIOWA_URI "/broken", NULL) == pNode, "full URI is the same node");
 	del_DasCat(pCat);
 }
 
@@ -348,37 +411,222 @@ static void test_mountUnderSeed(void)
 static void test_mounts(void)
 {
 	printf("TEST: mounts on the federated catalog (mounted side only, offline)\n");
+	das_catmiss m;
 	DasCat* pCat = new_DasCat(NULL, "TestCat");
-	CHECK(DasCat_mount(pCat, UIOWA, "site:/uiowa") == DAS_OKAY, "mount");
+	CHECK(DasCat_mount(pCat, UIOWA, "tag:das2.org,2012:site:/uiowa") == DAS_OKAY, "mount");
 
-	/* A mount does not move where relative paths start; the prefix does,
-	   and a path from there lands on the mount */
-	CHECK(DasCat_setPrefix(pCat, "site:/uiowa/") == DAS_OKAY, "prefix at the mount, with its separator");
-	DasNode* pSrc = DasCat_resolve(pCat, "geomag/flex");
-	CHECK(pSrc && DasNode_isStreamSrc(pSrc), "relative to the prefix, through the mount");
-	CHECK(streq(DasCat_lastUri(pCat), UIOWA_URI "/geomag/flex"), "URI under the mount");
+	/* With the compiled in seed, a root, paths are full names.  Paths
+	   relative to a node are DasCat_subNode()'s job, joined by that
+	   node's own separator */
+	DasNode* pTop = DasCat_resolve(pCat, UIOWA_URI, &m);
+	CHECK(pTop && DasNode_isCatalog(pTop), "the mount by its name: %s", m.sMsg);
+	DasNode* pSrc = pTop ? DasCat_subNode(pCat, pTop, "geomag/flex", &m) : NULL;
+	CHECK(pSrc && DasNode_isStreamSrc(pSrc), "relative to it");
+	CHECK(streq(m.sUri, UIOWA_URI "/geomag/flex"), "URI under the mount: %s", m.sUri);
 
-	/* Full URIs under the mount never touch the network */
-	CHECK(DasCat_resolve(pCat, "site:/uiowa/geomag") != NULL, "full URI through the mount");
+	/* A name ending with a separator names nothing */
+	CHECK((DasCat_resolve(pCat, UIOWA_URI "/", &m) == NULL) && (m.nCause == DASMISS_NOCHILD),
+	      "names nothing: %d %s", m.nCause, m.sMsg);
+	CHECK(strstr(m.sMsg, "ends with the separator") != NULL, "and says why: %s", m.sMsg);
+
+	/* Full URIs under the mount don't touch the network */
+	CHECK(DasCat_resolve(pCat, "tag:das2.org,2012:site:/uiowa/geomag", NULL) != NULL, "full URI through the mount");
 	CHECK(DasCat_covers(pCat, "tag:das2.org,2012:site:/swri"), "a mount leaves the rest of the catalog reachable");
-	del_DasCat(pCat);
-
-	/* With a prefix relative paths start there, and land on the mount */
-	pCat = new_DasCat(NULL, "TestCat");
-	CHECK(DasCat_setPrefix(pCat, "site:/") == DAS_OKAY, "prefix");
-	CHECK(DasCat_mount(pCat, UIOWA, "site:/uiowa") == DAS_OKAY, "mount after prefix");
-	pSrc = DasCat_resolve(pCat, "uiowa/geomag/flex");
-	CHECK(pSrc && DasNode_isStreamSrc(pSrc), "prefix + path through the mount");
-	CHECK(streq(DasCat_lastUri(pCat), UIOWA_URI "/geomag/flex"), "URI: %s", DasCat_lastUri(pCat));
 	del_DasCat(pCat);
 
 	/* Two mounts, the longer URI must win when one is under the other */
 	pCat = new_DasCat(NULL, "TestCat");
-	CHECK(DasCat_mount(pCat, SITE, "site:/uiowa") == DAS_OKAY, "wide mount of the wrong file");
-	CHECK(DasCat_mount(pCat, "test/das_fetch/cat/geomag.json", "site:/uiowa/geomag") == DAS_OKAY,
+	CHECK(DasCat_mount(pCat, SITE, "tag:das2.org,2012:site:/uiowa") == DAS_OKAY, "wide mount of the wrong file");
+	CHECK(DasCat_mount(pCat, "test/das_fetch/cat/geomag.json", "tag:das2.org,2012:site:/uiowa/geomag") == DAS_OKAY,
 	      "narrow mount");
-	DasNode* pNode = DasCat_resolve(pCat, "site:/uiowa/geomag/flex");
+	DasNode* pNode = DasCat_resolve(pCat, "tag:das2.org,2012:site:/uiowa/geomag/flex", NULL);
 	CHECK(pNode && DasNode_isStreamSrc(pNode), "narrow mount shadows the wide one");
+	del_DasCat(pCat);
+}
+
+/* ************************************************************************* */
+static void test_change(void)
+{
+	printf("TEST: changing the seed and mounts after lookups\n");
+	das_catmiss m;
+	DasCat* pCat = new_DasCat(NULL, "TestCat");
+	CHECK(DasCat_setSeed(pCat, SITE, NULL) == DAS_OKAY, "a file as a root seed");
+	DasNode* pFlex = DasCat_resolve(pCat, "uiowa/geomag/flex", &m);
+	CHECK(pFlex && DasNode_isStreamSrc(pFlex), "resolves below it");
+
+	/* The same branch as a named seed: the root above it can't be reached */
+	CHECK(DasCat_setSeed(pCat, UIOWA, "tag:das2.org,2012:site:/uiowa") == DAS_OKAY, "replace the seed after a lookup");
+	CHECK(DasNode_isStreamSrc(pFlex) && streq(DasNode_pathUri(pFlex), "uiowa/geomag/flex"),
+	      "a node from before the change is still good");
+	DasNode* pNode = DasCat_resolve(pCat, "geomag/flex", &m);
+	CHECK(pNode && (pNode != pFlex) && streq(m.sUri, UIOWA_URI "/geomag/flex"),
+	      "relative paths start at the new seed: %s", m.sUri);
+	CHECK(DasCat_resolve(pCat, "tag:das2.org,2012:site:/swri", &m) == NULL, "another name, not mounted");
+	CHECK(m.nCause == DASMISS_NOCHILD, "is a path below the seed: %s", m.sMsg);
+	CHECK(strstr(m.sMsg, UIOWA_URI) != NULL, "naming the seed: %s", m.sMsg);
+	CHECK(DasCat_seed(pCat, &m) == DasCat_resolve(pCat, NULL, NULL), "seed() is the named node");
+	CHECK(streq(m.sUri, UIOWA_URI), "by its name: %s", m.sUri);
+
+	/* A mount outside the seed's name makes that branch reachable, and
+	   does not move where relative paths start */
+	CHECK(DasCat_mount(pCat, SITE, "tag:das2.org,2012:site:/swri") == DAS_OKAY, "mount beside the seed");
+	CHECK(DasCat_resolve(pCat, "tag:das2.org,2012:site:/swri", &m) != NULL, "now reachable");
+	CHECK(DasCat_resolve(pCat, "geomag/flex", &m) == pNode, "relative paths are unmoved");
+
+	/* Replaced at the same name, then removed by name */
+	CHECK(DasCat_mount(pCat, UIOWA, "tag:das2.org,2012:site:/swri") == DAS_OKAY, "remount at the same name");
+	const char* sUrl = NULL;
+	CHECK((DasCat_numMounts(pCat) == 1) && DasCat_mountAt(pCat, 0, &sUrl, NULL) && streq(sUrl, UIOWA),
+	      "replaced, not added");
+	CHECK(DasCat_unmount(pCat, "tag:das2.org,2012:site:/swri") == DAS_OKAY, "unmount by name");
+	CHECK(DasCat_numMounts(pCat) == 0, "gone");
+	CHECK(DasCat_resolve(pCat, "tag:das2.org,2012:site:/swri", &m) == NULL, "outside again");
+	CHECK(quiet(DasCat_unmount, pCat, "tag:das2.org,2012:site:/swri") != DAS_OKAY, "not mounted is a program error");
+	CHECK(quiet(DasCat_unmount, pCat, NULL) != DAS_OKAY, "the seed is not a mount");
+	CHECK(quiet(DasCat_unmount, pCat, UIOWA) != DAS_OKAY, "not even by its location");
+	CHECK(streq(DasCat_seedUrl(pCat), UIOWA), "and is still there");
+
+	/* By location: every mount from it */
+	CHECK(DasCat_mount(pCat, UIOWA, "tag:das2.org,2012:site:/a") == DAS_OKAY, "mount a");
+	CHECK(DasCat_mount(pCat, UIOWA, "tag:das2.org,2012:site:/b") == DAS_OKAY, "mount b, same file");
+	CHECK(DasCat_mount(pCat, SITE, "tag:das2.org,2012:site:/c") == DAS_OKAY, "mount c, another file");
+	CHECK(quiet(DasCat_unmount, pCat, DASNODE_URI_SITES) != DAS_OKAY, "the site node itself is not mounted");
+	CHECK(DasCat_numMounts(pCat) == 3, "a name matches exactly, site:/ is not a parent of the three");
+	CHECK(DasCat_unmount(pCat, UIOWA) == DAS_OKAY, "unmount by location");
+	const char* sUri = NULL;
+	CHECK((DasCat_numMounts(pCat) == 1) && DasCat_mountAt(pCat, 0, NULL, &sUri) &&
+	      streq(sUri, "tag:das2.org,2012:site:/c"), "only the other file's mount is left: %s", sUri ? sUri : "");
+	CHECK(streq(DasCat_seedUrl(pCat), UIOWA), "the seed from that file stays");
+
+	CHECK(DasCat_setSeed(pCat, NULL, NULL) == DAS_OKAY, "back to the compiled in seed");
+	CHECK(streq(DasCat_seedUri(pCat), ""), "a root again, paths are full names");
+	del_DasCat(pCat);
+}
+
+/* ************************************************************************* */
+/* Fixtures from test/das_walk/: root lists a and ab, look-alikes with "/"
+ * separators, and src, a source; dots lists a and ab again under ".". */
+#define W_ROOT "test/das_walk/root.json"
+#define W_A    "test/das_walk/a.json"
+#define W_AB   "test/das_walk/ab.json"
+#define W_SRC  "test/das_walk/src.json"
+#define W_DOTS "test/das_walk/dots.json"
+#define W_LONG "test/das_walk/longsep.json"
+#define DOI    "doi:12457:tracers.tracers-1"
+
+static const char* srcOf(const DasNode* p){ return p ? DasNode_srcUrl(p) : "(none)"; }
+
+static void test_boundary(void)
+{
+	printf("TEST: a name is under a node only when the node's separator follows\n");
+	das_catmiss m;
+	DasNode* pNode;
+
+	/* The seed: a name that only starts like the seed's is outside it */
+	DasCat* pCat = new_DasCat(NULL, "TestCat");
+	CHECK(DasCat_setSeed(pCat, W_DOTS, DOI) == DAS_OKAY, "a seed named by a DOI");
+	pNode = DasCat_resolve(pCat, DOI ".a/b", &m);
+	CHECK(streq(srcOf(pNode), W_SRC), "through the seed's '.' then a child's '/': %s", m.sMsg);
+	pNode = DasCat_resolve(pCat, "ab/x", &m);
+	CHECK(pNode && streq(m.sUri, DOI ".ab/x"), "relative, joined with the seed's separator: %s", m.sUri);
+	pNode = DasCat_resolve(pCat, DOI "a/b", &m);
+	CHECK(!pNode && (m.nCause == DASMISS_OUTSIDE), "the separator left out names something else: %s", m.sMsg);
+	pNode = DasCat_resolve(pCat, DOI "0", &m);
+	CHECK(!pNode && (m.nCause == DASMISS_OUTSIDE), "a longer name is not under it: %s", m.sMsg);
+	CHECK(DasCat_covers(pCat, DOI "0"), "covers() goes by the name alone, it loads nothing");
+	del_DasCat(pCat);
+
+	/* A mount's look-alike is asked of the seed */
+	pCat = new_DasCat(NULL, "TestCat");
+	DasCat_setSeed(pCat, W_ROOT, NULL);
+	DasCat_mount(pCat, W_A, "a");
+	pNode = DasCat_resolve(pCat, "a/b", &m);
+	CHECK(streq(srcOf(pNode), W_SRC), "under the mount: %s", m.sMsg);
+	pNode = DasCat_resolve(pCat, "ab/x", &m);
+	CHECK(streq(srcOf(pNode), W_SRC), "a name that only starts like the mount's goes to the seed: %s", m.sMsg);
+	del_DasCat(pCat);
+
+	/* An inner mount answers alone for what is under it, whatever the
+	   outer one has loaded */
+	pCat = new_DasCat(NULL, "TestCat");
+	DasCat_setSeed(pCat, W_ROOT, NULL);
+	DasCat_mount(pCat, W_ROOT, "m:r");
+	DasCat_mount(pCat, W_AB, "m:r/a");
+	CHECK(DasCat_resolve(pCat, "m:r/src", NULL) != NULL, "the outer mount, loaded first");
+	pNode = DasCat_resolve(pCat, "m:r/a", &m);
+	CHECK(streq(srcOf(pNode), W_AB), "the inner mount by name, not the outer's child: %s", srcOf(pNode));
+	pNode = DasCat_resolve(pCat, "m:r/a/b", &m);
+	CHECK(!pNode && (m.nCause == DASMISS_NOCHILD), "the outer's a/b is shadowed: %s", m.sMsg);
+	CHECK(DasCat_resolve(pCat, "m:r/a/x", NULL) != NULL, "the inner tree's own child");
+	pNode = DasCat_resolve(pCat, "m:r/ab/x", &m);
+	CHECK(pNode != NULL, "the inner mount's look-alike goes to the outer: %s", m.sMsg);
+	del_DasCat(pCat);
+
+	/* A source has no separator: more of a name passes it by, anything
+	   else is under it, where nothing is */
+	pCat = new_DasCat(NULL, "TestCat");
+	DasCat_setSeed(pCat, W_ROOT, NULL);
+	DasCat_mount(pCat, W_SRC, "a");
+	pNode = DasCat_resolve(pCat, "a", &m);
+	CHECK(pNode && DasNode_isStreamSrc(pNode), "a source mounted over a catalog");
+	pNode = DasCat_resolve(pCat, "a/b", &m);
+	CHECK(!pNode && (m.nCause == DASMISS_NOCHILD), "nothing under it, the catalog's a/b is shadowed: %s",
+	      m.sMsg);
+	pNode = DasCat_resolve(pCat, "ab/x", &m);
+	CHECK(streq(srcOf(pNode), W_SRC), "more of a name passes it by: %s", m.sMsg);
+	del_DasCat(pCat);
+
+	/* A mount name is taken as written, a separator on the end included,
+	   and is found out when the node loads */
+	pCat = new_DasCat(NULL, "TestCat");
+	DasCat_setSeed(pCat, W_ROOT, NULL);
+	CHECK(DasCat_mount(pCat, W_AB, "mx:x/") == DAS_OKAY, "mount with a trailing slash");
+	const char* sUri = NULL;
+	CHECK(DasCat_mountAt(pCat, 0, NULL, &sUri) && streq(sUri, "mx:x/"), "kept as written: %s", sUri);
+	pNode = DasCat_resolve(pCat, "mx:x/x", &m);
+	CHECK(!pNode && (m.nCause == DASMISS_BADNAME), "lookups under it say so: %d %s", m.nCause, m.sMsg);
+	CHECK((DasCat_check(pCat, &m) == 1) && (m.nCause == DASMISS_BADNAME), "check() finds it: %s", m.sMsg);
+	CHECK(quiet(DasCat_unmount, pCat, "mx:x") != DAS_OKAY, "unmounted only by the name given");
+	CHECK(DasCat_unmount(pCat, "mx:x/") == DAS_OKAY, "which works");
+	del_DasCat(pCat);
+
+	/* A separator longer than 7 characters is refused, not cut short */
+	pCat = new_DasCat(NULL, "TestCat");
+	CHECK(DasCat_setSeed(pCat, W_LONG, "m:long") == DAS_OKAY, "a seed with a long separator");
+	daslog_setLevel(DASLOG_CRITICAL);
+	pNode = DasCat_seed(pCat, &m);
+	daslog_setLevel(DASLOG_WARN);
+	CHECK(!pNode && (m.nCause == DASMISS_PARSE), "is not a usable node: %d %s", m.nCause, m.sMsg);
+	del_DasCat(pCat);
+}
+
+/* ************************************************************************* */
+static void test_check(void)
+{
+	printf("TEST: DasCat_check and a seed that won't load\n");
+	das_catmiss m;
+	DasCat* pCat = new_DasCat(NULL, "TestCat");
+	DasCat_setSeed(pCat, SITE, NULL);
+	DasCat_mount(pCat, UIOWA, "tag:das2.org,2012:site:/uiowa");
+	CHECK(DasCat_check(pCat, &m) == 0, "a good seed and a good mount");
+	CHECK(m.nCause == DAS_OKAY, "nothing to report");
+
+	DasCat_mount(pCat, "test/das_fetch/cat/missing.json", "tag:das2.org,2012:site:/zz");
+	CHECK(DasCat_check(pCat, &m) == 1, "one bad mount");
+	CHECK((m.nCause == DASMISS_LOAD) && strstr(m.sUrl, "missing.json"), "is the first problem: %s", m.sMsg);
+	daslog_setLevel(DASLOG_CRITICAL);
+	CHECK(DasCat_check(pCat, NULL) == 1, "NULL logs instead");
+	daslog_setLevel(DASLOG_WARN);
+
+	DasCat_setSeed(pCat, "test/das_fetch/cat/missing.json", NULL);
+	CHECK(DasCat_check(pCat, &m) == 2, "a bad seed counts too");
+	CHECK(m.nCause == DASMISS_LOAD, "and is found first: %s", m.sMsg);
+	CHECK(strstr(m.sMsg, "seed") != NULL, "naming it the seed: %s", m.sMsg);
+	CHECK(DasCat_seed(pCat, &m) == NULL, "seed() fails the same way");
+	CHECK((m.nCause == DASMISS_LOAD) && strstr(m.sUrl, "missing.json"), "naming the file: %s", m.sUrl);
+	CHECK(DasCat_resolve(pCat, "uiowa/geomag", &m) == NULL, "a path below a bad seed");
+	CHECK(m.nCause == DASMISS_LOAD, "fails for the seed's reason: %s", m.sMsg);
+	CHECK(DasCat_resolve(pCat, "tag:das2.org,2012:site:/uiowa/geomag", &m) != NULL, "a mount still works");
 	del_DasCat(pCat);
 }
 
@@ -489,6 +737,9 @@ int main(int argc, char** argv)
 	test_prefixedSeed();
 	test_mountUnderSeed();
 	test_mounts();
+	test_change();
+	test_boundary();
+	test_check();
 
 	printf("%d checks passed, %d failed\n", g_nPass, g_nFail);
 	return (g_nFail == 0) ? 0 : 1;

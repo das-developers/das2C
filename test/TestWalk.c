@@ -136,7 +136,7 @@ static DasNode* loadRoot(void)
 {
 	size_t uLen = 0;
 	char* pDoc = readFile(ROOT_URL, &uLen);
-	DasNode* pRoot = (pDoc == NULL) ? NULL : new_DasNode_json(pDoc, uLen, ROOT_URL, "site:/walk");
+	DasNode* pRoot = (pDoc == NULL) ? NULL : new_DasNode_json(pDoc, uLen, ROOT_URL, ROOT_URI);
 	free(pDoc);
 	return pRoot;
 }
@@ -149,7 +149,7 @@ static void test_json(void)
 	CHECK(pRoot != NULL, "root loads from bytes");
 	if(pRoot == NULL) return;
 	CHECK(DasNode_isCatalog(pRoot), "it is a catalog");
-	CHECK(streq(DasNode_pathUri(pRoot), ROOT_URI), "shorthand expanded: %s", DasNode_pathUri(pRoot));
+	CHECK(streq(DasNode_pathUri(pRoot), ROOT_URI), "named as given: %s", DasNode_pathUri(pRoot));
 	CHECK(streq(DasNode_srcUrl(pRoot), ROOT_URL), "source URL kept");
 	CHECK(DasNode_numSubs(pRoot) == 5, "five children listed, none loaded");
 	CHECK(DasNode_subTypeAt(pRoot, 4) == DASNODETYPE_STREAM_SRC, "last child is a stream source");

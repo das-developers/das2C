@@ -503,20 +503,6 @@ static void test_geomag(void)
 	CHECK(DasSrc_check(pSrc, pReq, NULL) == DAS_OKAY, "URL only is unstamped");
 	del_DasReq(pReq);
 
-	/* A source built with a shorthand path stamps the full URI */
-	size_t uLen = 0;
-	char* sDoc = readFile(GEOMAG, &uLen);
-	DasSrc* pShort = sDoc ? new_DasSrc_json(sDoc, uLen, "site:uiowa/tracers/tracers-2/spice/geomagcoords/flex", NULL) : NULL;
-	free(sDoc);
-	CHECK(pShort && streq(DasSrc_path(pShort), DasSrc_path(pSrc)), "shorthand expanded, slash supplied: %s",
-	      pShort ? DasSrc_path(pShort) : "(null)");
-	if(pShort){
-		pReq = new_DasReq_src(pShort, 0);
-		CHECK(pReq && (DasSrc_check(pSrc, pReq, NULL) == DAS_OKAY), "its requisitions grade here");
-		del_DasReq(pReq);
-		del_DasSrc(pShort);
-	}
-
 	del_DasSrc(pSrc);
 }
 
@@ -835,7 +821,7 @@ static void test_node(void)
 	printf("From a node tree:\n");
 	DasCat* pCat = new_DasCat(NULL, "TestSource");
 	DasCat_setSeed(pCat, GEOMAG, "tag:das2.org,2012:site:/uiowa/geomag/flex");
-	DasNode* pRoot = DasCat_seed(pCat);
+	DasNode* pRoot = DasCat_resolve(pCat, NULL, NULL);
 	CHECK(pRoot != NULL, "node loads");
 	if(pRoot == NULL){ del_DasCat(pCat); return; }
 	DasSrc* pSrc = new_DasSrc_node(pRoot);
@@ -887,8 +873,8 @@ static void test_pick(void)
 	printf("Loadable sources under a container:\n");
 	const char* aNames[4];
 	DasCat* pCat = new_DasCat(NULL, "TestSource");
-	DasCat_setSeed(pCat, "test/das_fetch/cat/twin.json", "site:/uiowa/twin");
-	DasNode* pTwin = DasCat_seed(pCat);
+	DasCat_setSeed(pCat, "test/das_fetch/cat/twin.json", "tag:das2.org,2012:site:/uiowa/twin");
+	DasNode* pTwin = DasCat_resolve(pCat, NULL, NULL);
 	CHECK(pTwin != NULL, "twin loads");
 	if(pTwin == NULL){ del_DasCat(pCat); return; }
 	CHECK(DasSrc_loadable(pTwin, aNames, 4) == 2 && streq(aNames[0], "flex") && streq(aNames[1], "das3"),
@@ -898,7 +884,7 @@ static void test_pick(void)
 	CHECK(new_DasSrc_node(pTwin) == NULL, "a container is not a source, no child is picked");
 	daslog_setLevel(DASLOG_WARN);
 
-	DasNode* pSub = DasCat_subNode(pCat, pTwin, "das3");
+	DasNode* pSub = DasCat_subNode(pCat, pTwin, "das3", NULL);
 	CHECK(pSub != NULL, "the caller's choice loads through the tree");
 	CHECK(DasSrc_loadable(pSub, NULL, 0) == 0, "a source has no loadable children");
 	DasSrc* pSrc = (pSub == NULL) ? NULL : new_DasSrc_node(pSub);
@@ -907,8 +893,8 @@ static void test_pick(void)
 	del_DasCat(pCat);
 
 	pCat = new_DasCat(NULL, "TestSource");
-	DasCat_setSeed(pCat, "test/das_fetch/cat/old.json", "site:/uiowa/old");
-	DasNode* pOld = DasCat_seed(pCat);
+	DasCat_setSeed(pCat, "test/das_fetch/cat/old.json", "tag:das2.org,2012:site:/uiowa/old");
+	DasNode* pOld = DasCat_resolve(pCat, NULL, NULL);
 	CHECK(pOld != NULL, "old loads");
 	if(pOld == NULL){ del_DasCat(pCat); return; }
 	CHECK(DasSrc_loadable(pOld, aNames, 4) == 2, "a 2018 Collection lists both HttpStreamSrc children");

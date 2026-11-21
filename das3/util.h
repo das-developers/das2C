@@ -400,11 +400,12 @@ DAS_API const char* DasUrlParts_get(
 	const DasUrlParts* pParts, const char* sUrl, das_urlpart ePart, size_t* pLen
 );
 
-/** Is this string a full URI rather than a relative catalog path?
+/** Does this string start with a URI scheme?
  *
  * True when it starts with a URI scheme, a letter followed by letters,
- * digits, '+', '-' or '.' and then a colon, as in "tag:", "doi:" and the
- * shorthands "site:" and "test:".  A single letter before the colon is a
+ * digits, '+', '-' or '.' and then a colon, as in "tag:" and "doi:".  The
+ * catalog does not use this: it does not interpret names, see
+ * catalog.h.  A single letter before the colon is a
  * Windows drive, not a scheme.  Note that URLs are URIs too; test with
  * DasCat_isNodeUrl() first when the difference matters.
  *
@@ -542,59 +543,90 @@ DAS_API int dasfs_listDir(
 	const char* sPath, char ppDirList[][256], size_t uMaxDirs, char cType
 );
 
-/** See a given string matches the short or long form of an option
+/** Does an argument match the short or long form of an option?
  *
- * This is commonly used in loops over each command line argument. It
- * works for arguments in the form:
- * 
- *   -a value
- *   --my-arg=value
- * 
- * The form that has spaces between the long option name and the value
- * is not supported
- * 
+ * For loops over the command line.  A long form ending in '=' names an
+ * option that takes a value, given either way GNU getopt_long() allows:
+ *
+ *   -l info
+ *   --log=info
+ *   --log info
+ *
+ * A long form without the '=' is a flag and must match exactly, so
+ * "--clean" does not match "--cleanup".
+ *
  * @param sArg - A string to test
- * @param sShort - The short form of an option
- * @param sLong  - The long form of an option
- * @param pLong  - If not NULL, the associated bool value is set to true if
- *         the long form of a argument was found.
- * 
+ * @param sShort - The short form of an option, "-l"
+ * @param sLong  - The long form, "--log=" for one that takes a value
+ * @param pLong  - If not NULL, set to true when the long form matched.
+ *
  * @returns true if the string matches the given option, false otherwise
  */
 DAS_API bool dasarg_isOpt(const char* sArg, const char* sShort, const char* sLong, bool* pLong);
 
 
-/** Get the value of an argument if the current entry in argv matches
- * either the short or long form of an option.
- * 
- * This is typically used to test command line arguments in a loop.  It
- * works for arguments in the form:
- * 
- *   -a value
- *   --my-arg=value
- * 
- * The form that has spaces between the long option name and the value
- * is not supported
+/** Get an option's value, if the current argument is that option
+ *
+ * Takes the forms dasarg_isOpt() describes, and points into argv rather
+ * than copying, so nothing is cut and a repeated option can keep each of
+ * its values.
+ *
+ * @code
+ const char* sLevel = NULL;
+ const char* sVal;
+ for(int i = 1; i < argc; ++i){
+    if(dasarg_optVal(argv, argc, "-l", "--log=", &i, &sVal)){
+       if(sVal == NULL){ fprintf(stderr, "-l needs a level\n"); return 3; }
+       sLevel = sVal;
+       continue;
+    }
+    ...
+ }
+ @endcode
  *
  * @param argv -  The list of command line parameters
  * @param argc -  The number of command line parameters
  * @param sShort - The short form of the option
- * @param sLong - The long form of the option
- * @param pArgIdx - A pointer to the current argument index.  It is 
- *        incremented if the option is found.
- * @param sDest - The location to receive the option value
- * @param uDest - The size of the location to receive the option value
- *                Note the macro DAS_FIELD_SZ is useful for getting 
- *                the size of a field in a structure.
- * 
- * @returns false if the argument was not found or the option value
- *   missing often the argument, true otherwise and the index at 
- *   pArgInd is incremented.
- * 
+ * @param sLong - The long form of the option, ending in '='
+ * @param pArgIdx - The index of the current argument; moved past the
+ *        value when the value is the next argument.
+ * @param psVal - Set to the value, or NULL when the option matched but
+ *        has none ("--log=", or "-l" last on the line).  Always written.
+ *
+ * @returns true if the current argument is this option, with or without
+ *        a value; false, with pArgIdx untouched, if it is not.
+ */
+DAS_API bool dasarg_optVal(
+  char** argv, int argc, const char* sShort, const char* sLong, int* pArgIdx,
+  const char** psVal
+);
+
+
+/** Copy an option's value, if the current argument is that option
+ *
+ * As dasarg_optVal(), but copies the value into a buffer.  A missing
+ * value, or one that does not fit, is an error: it is reported with
+ * daserrf() and false is returned.  A value that does not fit is not cut,
+ * sDest is left empty.
+ *
+ * @param argv -  The list of command line parameters
+ * @param argc -  The number of command line parameters
+ * @param sShort - The short form of the option
+ * @param sLong - The long form of the option, ending in '='
+ * @param pArgIdx - A pointer to the current argument index.  It is
+ *        moved past the value when the value is the next argument.
+ * @param sDest - The location to receive the option value, always NUL
+ *        terminated when written
+ * @param uDest - The size of sDest.  The macro DAS_FIELD_SZ is useful for
+ *        getting the size of a field in a structure.
+ *
+ * @returns true if the option and its value were found, false if the
+ *        argument is not this option or its value is missing or too long.
+ *
  * @see also DAS_FIELD_SZ
  */
 DAS_API bool dasarg_getOptVal(
-  char** argv, int argc, const char* sShort, const char* sLong, int* pArgIdx, 
+  char** argv, int argc, const char* sShort, const char* sLong, int* pArgIdx,
   char* sDest, size_t uDest
 );
 

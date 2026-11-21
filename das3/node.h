@@ -41,7 +41,7 @@ extern "C" {
  * machine do not drive the walk themselves: a DasCat session, see
  * catalog.h, reads files, keeps a cache, makes the HTTP requests and
  * loops the walk until it stops.  A browser build drives it from
- * JavaScript with fetch().  The compiled in seed, the index of the das2
+ * JavaScript with fetch().  The compiled in seed, the root of the das2
  * catalog, is loaded through the same walk interface by
  * new_DasNodeWalk_seed().
  *
@@ -53,8 +53,9 @@ extern "C" {
  * Catalog nodes do not know their names.  Like files on a disk, a
  * node's URI comes from the entries above it, up to the root, which has
  * none.  So a node built from bytes is named by the caller, or not at
- * all: a seed given no prefix is a root, and the nodes below it are named
- * by their path from it.
+ * all: a seed given no name is a root, and the nodes below it are named
+ * by their path from it.  The same document reached by two paths is two
+ * nodes, one per name.
  *
  * Driving a walk by hand, which is what a browser build does:
  *
@@ -124,7 +125,7 @@ typedef struct das_node_t DasNode;
 
 /** @} */
 
-/** The compiled in seed URLs: the index of the das catalog and its mirrors
+/** The compiled in seed URLs: the root of the das catalog and its mirrors
  *
  * The seed is a root, a node with no name, whose children are the top
  * level catalogs, each named by a whole URI prefix such as
@@ -148,7 +149,7 @@ DAS_API const char** DasNode_seedUrls(size_t* pLen);
  * @param uBytes The number of bytes in pBytes.
  * @param sUrl Where the text came from, recorded as the node's source
  *             URL, see DasNode_srcUrl().  May be NULL.
- * @param sPathUri The catalog URI of the node, shorthands expanded.  NULL
+ * @param sPathUri The catalog URI of the node, as given.  NULL
  *             or empty makes it a root: no URI, and the nodes walked to
  *             below it are named by their path from it.
  * @return A new node, to be freed with del_DasNode(), or NULL after
@@ -181,10 +182,10 @@ DAS_API bool DasNode_isSpdfCat(const DasNode* pNode);
 
 /** Get the path URI for this catalog node
  *
- * Names are composed walking down: a seed given a prefix hands it to its
+ * Names are composed walking down: a seed given a name hands it to its
  * children with its separator between, and so on.  A seed given no
- * prefix is a root, and a root is the one node with no URI; the compiled
- * in das catalog index is the usual example.
+ * name is a root, and a root is the one node with no URI; the compiled
+ * in das catalog root is the usual example.
  *
  * @param pThis the catalog node
  * @return The URI, or NULL for a root
@@ -420,7 +421,7 @@ DAS_API DasNodeWalk* new_DasNodeWalk(DasNode* pFrom, const char* sRelPath);
  *
  * One step, whose candidates are the URLs from DasNode_seedUrls() in order,
  * so a mirror that does not answer is passed over for the next.  The
- * result is the index of the das catalog, a root: it has no URI, its
+ * result is the root of the das catalog: it has no URI, its
  * children are the top level catalogs by URI prefix, and it is the
  * caller's to keep and to free with del_DasNode().  Everything else in
  * the federated catalog is a walk from it.

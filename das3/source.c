@@ -766,10 +766,7 @@ DasSrc* new_DasSrc_json(const char* sDoc, size_t uLen, const char* sPathUri, con
 
 	/* A source given no URI has none, and a requisition it makes carries
 	 * no stamp, see DasReq_setSrc(): nothing can hold it to one source */
-	char sUri[600] = {'\0'};
-	if((sPathUri != NULL) && (sPathUri[0] != '\0'))
-		_das_uri_expand(sPathUri, sUri, sizeof(sUri));
-	pThis->sPath = _dassrc_strdupz(sUri);
+	pThis->sPath = _dassrc_strdupz(sPathUri);
 	pThis->sUrl = _dassrc_strdupz(sUrl);
 	if((pThis->sPath == NULL)||(pThis->sUrl == NULL)){ del_DasSrc(pThis); return NULL; }
 

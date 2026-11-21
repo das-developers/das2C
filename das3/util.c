@@ -547,57 +547,79 @@ int dasfs_listDir(
 /* ************************************************************************* */
 /* Command line helps */
 
-/* See a given string matches the short or long form of an argument */
-bool dasarg_isOpt(
-	const char* sArg, const char* sShort, const char* sLong, bool* pLong 
+/* A long name ending in '=' takes a value, joined ("--log=info") or as the
+ * next argument ("--log info"), as GNU getopt_long() allows.  Without the
+ * '=' it is a flag and must match exactly, so "--clean" is not
+ * "--cleanup".  psJoined gets the text after the '=' for the joined form,
+ * NULL otherwise. */
+static bool _dasarg_match(
+	const char* sArg, const char* sShort, const char* sLong, const char** psJoined
 ){
-	if(strcmp(sArg, sShort) == 0){
-		if(pLong) *pLong = false;
-		return true;
-	}
-	size_t uLen = strlen(sLong);  /* Include the '=' */
+	*psJoined = NULL;
+	if(sArg == NULL) return false;
+	if((sShort != NULL) && (strcmp(sArg, sShort) == 0)) return true;
+	if(sLong == NULL) return false;
 
-	if(strncmp(sArg, sLong, uLen) == 0){
-		if(pLong) *pLong = true;
+	size_t uLong = strlen(sLong);
+	if((uLong == 0)||(sLong[uLong - 1] != '=')) return strcmp(sArg, sLong) == 0;
+	if(strncmp(sArg, sLong, uLong) == 0){
+		*psJoined = sArg + uLong;
 		return true;
 	}
-	return false;
+	return (strncmp(sArg, sLong, uLong - 1) == 0) && (sArg[uLong - 1] == '\0');
 }
 
-/* Get the value of an argument if the current entry in argv matches
- * either the short or long form */
+bool dasarg_isOpt(
+	const char* sArg, const char* sShort, const char* sLong, bool* pLong
+){
+	const char* sJoined;
+	bool bIs = _dasarg_match(sArg, sShort, sLong, &sJoined);
+	if(pLong != NULL)
+		*pLong = bIs && !((sShort != NULL) && (strcmp(sArg, sShort) == 0));
+	return bIs;
+}
+
+bool dasarg_optVal(
+	char** argv, int argc, const char* sShort, const char* sLong, int* pArgIdx,
+	const char** psVal
+){
+	*psVal = NULL;
+	const char* sJoined;
+	if(!_dasarg_match(argv[*pArgIdx], sShort, sLong, &sJoined)) return false;
+
+	if(sJoined != NULL){
+		if(sJoined[0] != '\0') *psVal = sJoined;
+	}
+	else if(*pArgIdx + 1 < argc){
+		++(*pArgIdx);
+		*psVal = argv[*pArgIdx];
+	}
+	return true;
+}
 
 bool dasarg_getOptVal(
-	char** argv, int argc, const char* sShort, const char* sLong, int* pArgIdx, 
+	char** argv, int argc, const char* sShort, const char* sLong, int* pArgIdx,
 	char* sDest, size_t uDest
 ){
-	bool bIsLong = false;
-
-	if(! dasarg_isOpt(argv[*pArgIdx], sShort, sLong, &bIsLong))
-		return false;
-	
+	int iOpt = *pArgIdx;
 	const char* sVal;
-	if(bIsLong){
-		size_t uLongSz = strlen(sLong);
-		if(argv[*pArgIdx][uLongSz] == '\0') /* Nothing in str after prefix */
-			goto NO_ARG;
+	if(!dasarg_optVal(argv, argc, sShort, sLong, pArgIdx, &sVal)) return false;
 
-		sVal = argv[*pArgIdx] + uLongSz;
+	if(sVal == NULL){
+		daserrf(DASERR_UTIL, "Missing value after option %s", argv[iOpt]);
+		return false;
 	}
-	else{
-		if(*pArgIdx > argc-2) /* Ain't no subsequent arg */
-			goto NO_ARG;
-
-		sVal = argv[*pArgIdx+1];
-		++(*pArgIdx);
+	size_t uVal = strlen(sVal);
+	if(uVal >= uDest){
+		/* Not cut to fit: a shortened file name or time is worse than none */
+		if(uDest > 0) sDest[0] = '\0';
+		*pArgIdx = iOpt;
+		daserrf(DASERR_UTIL, "The value for option %s is %zu characters, at most %zu fit",
+		        argv[iOpt], uVal, (uDest > 0) ? uDest - 1 : 0);
+		return false;
 	}
-
-	strncpy(sDest, sVal, uDest - 1);
+	memcpy(sDest, sVal, uVal + 1);
 	return true;
-	
-NO_ARG:
-	daserrf(DASERR_UTIL, "Missing option after argument %s", argv[*pArgIdx]);
-	return false;
 }
 
 /* ************************************************************************* */

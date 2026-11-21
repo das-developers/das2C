@@ -1,0 +1,10 @@
+{
+ "type": "Catalog",
+ "version": "0.5",
+ "name": "long",
+ "title": "A separator longer than the 7 characters a catalog allows",
+ "separator": "::::::::",
+ "catalog": {
+  "a": {"type": "Catalog", "urls": ["test/das_walk/a.json"]}
+ }
+}

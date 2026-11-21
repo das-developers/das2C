@@ -8,7 +8,68 @@ if desired.
 Newest release first.
 
 
-## 3.0.5 - 2026-11-19
+## 3.0.6 - unreleased
+
+Catalog names are now taken literally and paths start in one place, the
+seed.  Callers of `DasCat_setPrefix()` need a small edit, see below.
+
+### Behavior
+
+- Catalog names are not interpreted: no `site:` or `test:` shorthands and
+  no prefix.  With the default seed, the das catalog root, every path is a
+  full name, `tag:das2.org,2012:site:/uiowa/juno`.
+
+- A node's name does not include its own separator.  A seed or mount
+  named with one on the end fails lookups with `DASMISS_BADNAME`.
+
+- A name is under a node only when the node's separator follows it, so
+  `tracers-10` is not under `tracers-1`.  A mount answers alone for the
+  names under it.
+
+- A catalog node whose separator is longer than 7 characters is unusable
+  (`DASMISS_PARSE`).
+
+- The compiled in GitHub mirror of the catalog root uses the `main`
+  branch.
+
+### Fixes
+
+- `dasarg_getOptVal()` could leave its buffer unterminated, and cut long
+  values without saying so.  A value that does not fit is now an error.
+
+- `dasarg_isOpt()` matched flags by prefix, so `--clean` matched
+  `--cleanup`.
+
+### API changes
+
+- `DasCat_setSeed(NULL, uri)` seeds a node of the das catalog by name,
+  found through the compiled in root and its mirrors.
+
+- Removed: `DasCat_setPrefix()`, `DasCat_prefix()` and
+  `DASCAT_SITE_PREFIX`.  Use `DasCat_setSeed()`.
+
+- New: `DasCat_seedUri()`, `DASMISS_BADNAME`, `dasarg_optVal()`.
+
+- `dasarg_getOptVal()` and `dasarg_isOpt()` accept `--opt=VALUE` and
+  `--opt VALUE`, as GNU getopt does.
+
+### Utilities
+
+- das_fetch: paths start at `tag:das2.org,2012:site`, so
+  `das_fetch node uiowa/juno` works.  Options were redone: `-r, --root`
+  (full names), `-s, --seed` NAME, FILE or FILE=NAME (was `-r, --start`),
+  `-o, --output` (was `-s`), `-t, --type` with short names such as das3,
+  d2s, csv and ccsds (was `-a`), `-u, --update` (was `-f`), `--cache` and
+  `--no-cache` (was `-C`), `--timeout` (was `-t`).  `-v` is the version,
+  the log level defaults to info, and `-q` and verbose mode are gone.
+  `DASFETCH_SEED` replaces `DASFETCH_START`.
+
+### Build and test
+
+- New TestArgs for the command line helpers.
+
+
+## 3.0.5 - 2026-11-18
 
 This release is source compatible for most callers.  The API changes below need small edits where those functions are used.  You'll need to recompile any apps. A re-link is not sufficient, the ABI changed slightly.
 

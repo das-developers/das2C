@@ -53,7 +53,7 @@
 #include <io.h>
 #define isatty _isatty
 #define fileno _fileno
-#define strncasecmp _strnicmp      /* MSVC keeps the POSIX one under its own name */
+#define strncasecmp _strnicmp
 #else
 #include <unistd.h>
 #include <sys/ioctl.h>
@@ -92,14 +92,14 @@
 #define URL_SZ 4096
 #define ERR_SZ 1024
 
-#define START_ENV "DASFETCH_START"
+#define SEED_ENV  "DASFETCH_SEED"
 #define MOUNT_ENV "DASFETCH_MOUNT"
 #define MAX_MOUNTS 16
 #define MAX_KIDS 32
 
 /* What to take when a catalog node offers several sources.  Order:
    das3, then das2, then anything since we only copy out bytes.  One ask
-   per type so das3 wins over das2 instead of tying with it; a -a list is
+   per type so das3 wins over das2 instead of tying with it; a -t list is
    one ask for the whole set. */
 #define DEF_ACCEPT_DAS3_BIN  "application/vnd.das.stream"
 #define DEF_ACCEPT_DAS3_TEXT "text/vnd.das.stream"
@@ -113,7 +113,7 @@ static void prnHelpMain(void)
 {
 	fputs(
 "NAME\n"
-"   " PROG " - fetch data by das catalog path, no server URLs required\n"
+"   " PROG " - fetch data by das catalog paths, not absolute locations\n"
 "\n"
 "USAGE\n"
 "   " PROG " [options] seeds\n"
@@ -124,109 +124,168 @@ static void prnHelpMain(void)
 "   " PROG " COMMAND -h\n"
 "\n"
 "DESCRIPTION\n"
-"   The das federated catalog is a tree of small JSON documents.  Catalog\n"
-"   nodes list other nodes, and data source nodes describe how to query a\n"
-"   server.  " PROG " walks that tree so you never have to know where a\n"
-"   server lives or what its query string looks like.\n"
+"   The das federated catalog is a tree of small JSON documents called\n"
+"   nodes.  Catalog nodes list other nodes, and data source nodes describe\n"
+"   how to query a server.  " PROG " follows a path through that tree for\n"
+"   you, so you do not need to know where a server is or how its query\n"
+"   URLs are built.\n"
 "\n"
-"   Interactive use is 'node' to look around, then 'data' to download.  In a\n"
-"   script, 'data' writes the response body to standard output, which can be\n"
-"   redirected to a file or piped to das3_csv, das2_psd and friends.  The\n"
-"   body is passed through untouched, so the output format is whatever the\n"
-"   source produces: das2 or das3 stream, CDF, CSV, or raw packets.\n"
+"   At the terminal, use 'node' to look around and then 'data' to download.\n"
+"   The 'data' command writes the server's reply to standard output, which\n"
+"   can be redirected to a file or piped to das3_csv, das2_psd and similar\n"
+"   programs.  The reply is not altered, so the output format is whatever\n"
+"   the source produces: a das2 or das3 stream, CDF, CSV, or raw packets.\n"
 "\n"
 "COMMANDS\n"
-"   seeds            Print the compiled in catalog seed URLs.\n"
-"   node [PATH]      List a catalog's children, or a data source's examples\n"
-"                    and query keys.  No PATH shows where paths start.\n"
-"   json PATH        Print a node's raw JSON, or a fragment of it.\n"
-"   url  PATH ...    Print the HTTP GET URL a query turns into.\n"
-"   data PATH ...    Run the query, write the response body to stdout.\n"
+"   seeds            Print the built in URLs of the das catalog root.\n"
+"   node [PATH]      List the children of a catalog, or the examples and\n"
+"                    query keys of a data source.  Without PATH, show the\n"
+"                    node where paths start.\n"
+"   json PATH        Print a node's JSON document, or one part of it.\n"
+"   url  PATH ...    Print the URL a query turns into.\n"
+"   data PATH ...    Run a query and write the reply to standard output.\n"
 "\n"
-"   Each command has a help page: '" PROG " data -h' explains query keys,\n"
-"   '" PROG " node -h' explains the listings.\n"
+"   Each command has its own help page.  '" PROG " data -h' explains query\n"
+"   keys and '" PROG " node -h' explains the listings.\n"
 "\n"
 "PATHS\n"
-"   Paths are catalog paths, not web paths.  Any of these forms work:\n"
+"   A PATH names a catalog node.  Paths start at the das2 sites node,\n"
+"   " DASNODE_URI_SITES ", so these two name the same node:\n"
 "\n"
-"      uiowa/juno/wav/survey             relative to the prefix, by\n"
-"                                        default '" DASCAT_SITE_PREFIX "'\n"
-"      site:/uiowa/juno/wav/survey       shorthand for the URI form below\n"
-"      tag:das2.org,2012:site:/uiowa     full catalog path URI\n"
-"      https://host/some/node.json       a node by direct URL\n"
-"      ./local_node.json                 a node file on disk\n"
+"      uiowa/juno/wav/survey\n"
+"      " DASNODE_URI_SITES ":/uiowa/juno/wav/survey\n"
+"\n"
+"   The node where paths start is called the seed.  To start somewhere\n"
+"   else use -s or the " SEED_ENV " variable.  To start at the top of the\n"
+"   das catalog, where every path is a full name, use -r.\n"
 "\n"
 "OPTIONS\n"
-"   -h, --help         This text, or with a command, that command's help.\n"
-"   -V, --version      Print the program and library version and exit.\n"
+"   -h, --help\n"
+"      Print this text.  After a command, print that command's help.\n"
 "\n"
-"   -r, --start START  Where relative paths start, in one of three forms.\n"
-"                      A catalog URI prefix, default\n"
-"                      '" DASCAT_SITE_PREFIX "':\n"
-"                         -r tag:das2.org,2012:test:/\n"
-"                      A URL or file, the node there becomes the seed, a\n"
-"                      root: paths are relative to it, names below it are\n"
-"                      paths from it, and nothing outside it can be\n"
-"                      reached:\n"
-"                         -r ./my_site_copy.json\n"
-"                      URL=URI, the same with the node declared to be the\n"
-"                      catalog node URI, so that saved requisitions match\n"
-"                      the node the file stands in for.  Any -m mounts join\n"
-"                      a seed to make an offline catalog:\n"
-"                         -r ./my_site_copy.json=site:\n"
-"                         -r https://doi.org/10.1037/a0040251/root.json=10.1037/a0040251\n"
-"                      Without -r the environment variable " START_ENV " is\n"
-"                      used the same way, if set.\n"
-"   -m, --mount URL=NAME\n"
-"                      Mount a node: the node at URL stands in for NAME and\n"
-"                      everything under it, the rest of the catalog is\n"
-"                      unchanged.  NAME is a catalog URI, or with a -r URL\n"
-"                      seed, a path from it.  A mount does not move where\n"
-"                      relative paths start:\n"
-"                         -m https://tracers-dev.physics.uiowa.edu/stream/source/tracers-1.json=\\\n"
-"                            site:/uiowa/tracers/tracers-1\n"
-"                      May be repeated.  The environment variable " MOUNT_ENV "\n"
-"                      stands in for -m, if set.\n"
+"   -v, --version\n"
+"      Print the program and library version and exit.\n"
 "\n"
-"   -s SECTIONS        For 'node', which parts of a source to print, a comma\n"
-"                      separated list from: examples, coords, data, formats,\n"
-"                      options, all.  The default leaves out formats.\n"
-"   -p PARAM=VALUE     Send a raw HTTP GET parameter, bypassing the interface\n"
-"                      translation.  Repeatable.\n"
-"   -a TYPES           Which source to use when a catalog node offers more\n"
-"                      than one: a comma separated list of the media types\n"
-"                      you can read in any order and */* for \"anything\".\n"
-"                      Without -a, das3 then das2 streams are tried, then anything.\n"
+"   -l, --log LEVEL\n"
+"      How much to report on standard error, one of: critical, error,\n"
+"      warning, info, debug, trace.  The first letter is enough.  The\n"
+"      default is info, use -l warning for quieter runs.\n"
 "\n"
-"   -f                 Fresh: ignore cached catalog nodes along the path and\n"
-"                      fetch them again.  Use after a catalog has changed.\n"
-"   -C DIR             Keep cached catalog nodes in DIR instead of the\n"
-"                      default below, or 'none' for no cache at all.\n"
+"   -r, --root\n"
+"      Start paths at the top of the das catalog instead of at the das2\n"
+"      sites.  Every path is then a full name, and catalogs other than\n"
+"      das2.org's can be reached:\n"
 "\n"
-"   -t SECONDS         Connection timeout for the data request, default 10.\n"
-"   -q                 Quiet, only errors on stderr.\n"
-"   -v                 Verbose: node and server URLs, all source sections,\n"
-"                      the arguments behind each example, usage hints, and\n"
-"                      a report of each URL contacted.\n"
-"   -l LEVEL           Log level: crit, error, warn, info, debug, trace.\n"
+"         " PROG " -r node " DASNODE_URI_ROOT "test:/uiowa\n"
+"\n"
+"   -s, --seed SEED\n"
+"      Start paths at another node.  There are three forms:\n"
+"\n"
+"         -s " DASNODE_URI_ROOT "test\n"
+"\n"
+"      A NAME alone is a node of the das catalog.  Paths are then relative\n"
+"      to it, so 'uiowa' is " DASNODE_URI_ROOT "test:/uiowa.\n"
+"\n"
+"         -s my_site_test.json\n"
+"\n"
+"      A FILE alone stands for the top of a catalog, with no name of its\n"
+"      own.  Paths are then names below that node.  FILE may be a URL.\n"
+"\n"
+"         -s my_juno_tests.json=" DASNODE_URI_SITES ":/uiowa/juno\n"
+"\n"
+"      FILE=NAME states which catalog node the file is.  Paths may then be\n"
+"      relative to NAME, so 'wav/survey' is the node\n"
+"      " DASNODE_URI_SITES ":/uiowa/juno/wav/survey.  A URL that contains\n"
+"      an '=' needs this form.\n"
+"\n"
+"      With any form, names outside the seed are not found.  To replace\n"
+"      one node and keep the rest, use -m.  -r and -s can't be used\n"
+"      together.\n"
+"\n"
+"   -m, --mount FILE=NAME\n"
+"      Use the node in FILE in place of the catalog node NAME.  Paths at\n"
+"      or below NAME are answered from FILE, and the rest of the catalog\n"
+"      is unchanged:\n"
+"\n"
+"         -m tracers-1.json=" DASNODE_URI_SITES ":/uiowa/tracers/tracers-1\n"
+"\n"
+"      FILE may be a URL.  -m may be repeated.\n"
+"\n"
+"   -o, --output SECTIONS\n"
+"      For the node command, what to print about a data source.  A comma\n"
+"      separated list, see '" PROG " node -h'.\n"
+"\n"
+"   -t, --type TYPES\n"
+"      Where a path leads to several sources for the same dataset, use the\n"
+"      one that provides one of these media types.  TYPES is a comma\n"
+"      separated list of media types, or of these short names:\n"
+"\n"
+"         das3  d3b  d3t         das streams, binary or text; das3 is both\n"
+"         das2  d2s  d2t         das2 streams\n"
+"         das1  d1s  d1t         das1 streams\n"
+"         qstream  qds  qdt      Autoplot QStreams\n"
+"         ccsds                  CCSDS packets, any mission\n"
+"         csv  cdf  json  png  xml\n"
+"\n"
+"      Other text without a '/' is looked for anywhere in the media type.\n"
+"      A quoted '*/*' matches any type.  Without -t, das3 streams are\n"
+"      preferred, then das2 streams, then anything else.\n"
+"\n"
+"   -p, --param PARAM=VALUE\n"
+"      For url and data, add PARAM=VALUE to the request URL as typed,\n"
+"      without checking it against the source's query keys.  May be\n"
+"      repeated.\n"
+"\n"
+"   -u, --update\n"
+"      Fetch the catalog nodes along the path again, ignoring saved\n"
+"      copies, and save the new ones.  Use this after a catalog has\n"
+"      changed.\n"
+"\n"
+"   --cache DIR\n"
+"      Keep saved copies of catalog nodes in DIR instead of the default\n"
+"      location, see FILES.\n"
+"\n"
+"   --no-cache\n"
+"      Do not read or write saved copies of catalog nodes.\n"
+"\n"
+"   --timeout SECONDS\n"
+"      How long to wait for a connection to the data server, default 10.\n"
+"\n"
+"   A long option's value may follow a space or an '=', as in --seed X or\n"
+"   --seed=X.\n"
 "\n"
 "FILES\n"
 "   " HOME_VAR "/.das/cache/nodes/\n"
-"      Catalog nodes fetched over HTTP, kept for an hour.  Walking a catalog\n"
-"      costs one request per level, so repeat runs only talk to the data\n"
-"      server.  See -f and -C.\n"
+"      Saved copies of catalog nodes fetched over the network, reused for\n"
+"      one hour.  Following a path takes one request per level, so with\n"
+"      these a repeat run contacts only the data server.  See -u, --cache\n"
+"      and --no-cache.\n"
+"\n"
 "   " HOME_VAR "/.das/" CRED_FILE "\n"
-"      Saved credentials.  When a source needs them these are tried before\n"
-"      the username and password prompt.\n"
-"   The environment variable DAS_USERDIR replaces " HOME_VAR "/.das for both.\n"
+"      Saved usernames and passwords.  When a server asks for a login,\n"
+"      these are tried before you are prompted.\n"
 "\n"
 "ENVIRONMENT\n"
+"   " SEED_ENV "\n"
+"      A SEED value, used as if given with -s when neither -s nor -r is.\n"
+"\n"
+"   " MOUNT_ENV "\n"
+"      One FILE=NAME value, used as if given with -m when -m is absent.\n"
+"\n"
+"   DAS_USERDIR\n"
+"      The directory for the node cache and saved logins listed under\n"
+"      FILES, in place of " HOME_VAR "/.das.\n"
+"\n"
 "   https_proxy, http_proxy\n"
-"      Proxy for https and http URLs, as http://[USER:PASS@]HOST[:PORT].\n"
-"      The upper case names are used when the lower case ones are unset.\n"
+"      The proxy to use for https and http URLs, written as\n"
+"      http://[USER:PASS@]HOST[:PORT].  The upper case names are read when\n"
+"      the lower case ones are not set.\n"
+"\n"
 "   no_proxy\n"
-"      Comma separated hosts or domain suffixes to reach directly, * for\n"
-"      all.  CIDR ranges are not understood.\n"
+"      Hosts to contact directly instead of through the proxy.  A comma\n"
+"      separated list of host names or domain endings, or * for all.\n"
+"      Address ranges such as 10.0.0.0/8 are not recognized.  NO_PROXY is\n"
+"      read when no_proxy is not set.\n"
 "\n"
 "EXIT CODES\n"
 "   0 success    2 usage error      3 path did not resolve   4 bad query\n"
@@ -245,51 +304,68 @@ static void prnHelpNode(void)
 "USAGE\n"
 "   " PROG " [options] node [PATH]\n"
 "\n"
-"   Show what is at a catalog path.  With no PATH, where paths start, which\n"
-"   lists the federated sites.\n"
+"   Show what is at a catalog path.  Without PATH, show the node where\n"
+"   paths start, the das2 sites node unless -r, -s or the " SEED_ENV "\n"
+"   variable says otherwise.\n"
 "\n"
 "CATALOGS\n"
-"   A catalog node prints its name and URI, then one line per child:\n"
-"   name, node type, and title.  Append a child's name to the path to step\n"
-"   down.  The URI line ends with the separator this catalog uses, so the\n"
-"   next path is URI plus child name.  A '*' after the type marks node\n"
-"   types " PROG " can list but not load or fetch from (Das2DSDF, WebSocSrc).\n"
+"   For a catalog the listing gives its name, title and URI, then one line\n"
+"   per child: name, node type and title.  The 'Children' line shows the\n"
+"   separator this catalog puts before a child's name, so the path to a\n"
+"   child is the URI, the separator, then the name.  Where that line says\n"
+"   'named in full' there is no separator.\n"
 "\n"
-"   A SourceSet or Collection holds several descriptions of one dataset.\n"
-"   Only the one 'data' and 'url' would use is shown, chosen by what it\n"
-"   provides against the -a list.  -v lists them all.  To use another,\n"
-"   add its name to the path, as in uiowa/juno/wav/survey/das2.\n"
+"   A '*' after the type marks a kind of node that " PROG " can list but\n"
+"   cannot read or download from, such as Das2DSDF and WebSocSrc.\n"
+"\n"
+"   A SourceSet or Collection groups several data sources for the same\n"
+"   dataset.  Only the one that 'data' and 'url' would use is shown.  It\n"
+"   is chosen by media type, see -t in '" PROG " -h'.  Use -o sources to\n"
+"   list them all.  To use another, add its name to the path, as in\n"
+"   uiowa/juno/wav/survey/das2.\n"
 "\n"
 "DATA SOURCES\n"
-"   An HttpStreamSrc node prints a header, its examples, then one table per\n"
-"   interface section.\n"
+"   For a data source, node type HttpStreamSrc, the listing gives a header\n"
+"   and then sections.  These are printed unless -o says otherwise:\n"
 "\n"
-"   examples      Key is the number to give 'data' or 'url' to run that\n"
-"                 example.  With -v the KEY=VALUE arguments behind each one\n"
-"                 are shown too.\n"
-"   coords        Coordinate properties, such as the time range.\n"
+"   examples      Ready made queries.  Key is the number to give 'data' or\n"
+"                 'url' to run one.\n"
+"   coords        Coordinate settings, such as the time range.\n"
 "   data          Data variables that can be switched on or off.\n"
-"   formats       Output format groups and their settings.  Hidden by\n"
-"                 default, -s formats or -v shows them.  The header line\n"
-"                 'Formats:' always lists the group names.\n"
-"   options       Source options that fit nowhere else.\n"
+"   options       Other settings of the source.\n"
 "\n"
-"   Table columns: Key is what you type, without the section prefix; Type\n"
-"   and Units are the value's; Default is what the server uses when the key\n"
-"   is not given; Req marks keys the server insists on; Values lists an\n"
-"   enum's choices or a coordinate's range.\n"
+"   These are printed only when asked for:\n"
+"\n"
+"   formats       Output formats and their settings.  The 'Formats:' line\n"
+"                 of the header always lists the format names.\n"
+"   sources       Every source of a SourceSet or Collection.\n"
+"   all           Everything above.\n"
+"\n"
+"   All but examples and sources are tables of query keys, with these\n"
+"   columns:\n"
+"\n"
+"   Key           What to type, shown without the section prefix.\n"
+"   Type, Units   The kind of value and its units.\n"
+"   Default       The value the server uses when the key is not given.\n"
+"   Req           'yes' for keys the server requires.\n"
+"   Values        The choices, or the allowed range.\n"
+"\n"
+"   To see the URL an example turns into, give its number to 'url':\n"
+"   '" PROG " url PATH 0'.\n"
 "\n"
 "OPTIONS\n"
-"   -s SECTIONS   Print only these sections, comma separated: examples,\n"
-"                 coords, data, formats, options, all.\n"
-"   -v            Also print the node and server URLs, all sections, each\n"
-"                 example's arguments, and usage hints.\n"
+"   -o, --output SECTIONS\n"
+"      Print only these sections, comma separated, from the lists above.\n"
 "\n"
 "EXAMPLES\n"
 "   " PROG " node\n"
 "   " PROG " node uiowa/juno/wav\n"
-"   " PROG " node -s examples,coords uiowa/tracers/tracers-2/spice/geomagcoords\n"
-"   " PROG " -r https://tracers-dev.physics.uiowa.edu/stream/root.json=site:/uiowa/tracers node\n"
+"   " PROG " node -o examples,coords uiowa/tracers/tracers-2/spice/geomagcoords\n"
+"\n"
+"   A development server's copy of the TRACERS catalog:\n"
+"\n"
+"   DEV=https://tracers-dev.physics.uiowa.edu/stream/root.json\n"
+"   " PROG " -s $DEV=" DASNODE_URI_SITES ":/uiowa/tracers node\n"
 "\n", stdout);
 }
 
@@ -301,59 +377,67 @@ static void prnHelpQuery(bool bData)
 "\n", bData ? "data" : "url ");
 	if(bData)
 		fputs(
-"   Resolve the query, request it, and write the response body to stdout\n"
-"   untouched, so the output is whatever the source produces.  Diagnostics\n"
-"   go to stderr.  A password prompt, if the source needs one, is read from\n"
-"   the terminal, not stdin.  Exit code 0 means the whole body arrived.\n"
+"   Run a query and write the server's reply to standard output unchanged,\n"
+"   so the output format is whatever the source produces.  Messages go to\n"
+"   standard error.  If the server asks for a login, the prompt is read\n"
+"   from the terminal, not standard input.  Exit code 0 means the whole\n"
+"   reply arrived.\n"
 "\n", stdout);
 	else
 		fputs(
-"   Resolve the query and print the HTTP GET URL that 'data' would request,\n"
-"   without requesting it.  For scripts, and for checking what a KEY=VALUE\n"
-"   pair turns into.\n"
+"   Print the URL that 'data' would request for the same arguments, without\n"
+"   requesting it.  Useful in scripts, and for checking what a KEY=VALUE\n"
+"   argument turns into.\n"
 "\n", stdout);
 	fputs(
 "QUERY KEYS\n"
-"   Keys come from the source's interface definition, so they differ from\n"
-"   source to source.  Run 'node PATH' to see them.  They look like:\n"
+"   Each source defines its own query keys, so they differ from one source\n"
+"   to the next.  Run '" PROG " node PATH' to see them.  Full keys look\n"
+"   like:\n"
 "\n"
-"      coords.time.min=2026-03-01    a coordinate property\n"
-"      data.lshell.enabled=true      a data variable property\n"
-"      formats.csv.delimiter=Tab     an output format property\n"
+"      coords.time.min=2026-03-01    a coordinate setting\n"
+"      data.lshell.enabled=true      a data variable setting\n"
+"      formats.csv.delimiter=Tab     an output format setting\n"
 "      options.decompress=true       a source option\n"
 "\n"
-"   Shortcuts, as long as the result is unambiguous:\n"
+"   Shorter forms are accepted as long as the meaning is unambiguous:\n"
 "\n"
-"      time.min=2026-03-01           drop the section prefix\n"
-"      time=2026-03-01,2026-03-02    coordinate range MIN,MAX[,STEP].  STEP\n"
-"                                    is the resolution if the coordinate has\n"
-"                                    one, otherwise the interval.  Leave an\n"
-"                                    element empty to skip it: time=,2026-03-02\n"
-"      lshell=true  or just  lshell  toggle a data variable or boolean option\n"
-"      csv  or  formats.csv          select an output format group\n"
-"      1  or  examples.1             start from the maintainer's example 1,\n"
-"                                    then apply the other keys on top\n"
-"      min / minimum, max / maximum, res / resolution, inter / interval are\n"
-"                                    interchangeable property names\n"
+"      time.min=2026-03-01           leave off the section name\n"
+"      time=2026-03-01,2026-03-02    a coordinate range, MIN,MAX[,STEP].\n"
+"                                    STEP is the resolution if the\n"
+"                                    coordinate has one, otherwise the\n"
+"                                    interval.  Leave an element empty to\n"
+"                                    skip it: time=,2026-03-02\n"
+"      lshell=true  or just  lshell  turn on a data variable or a boolean\n"
+"                                    option\n"
+"      csv  or  formats.csv          select an output format\n"
+"      1  or  examples.1             start from example 1 of the source,\n"
+"                                    then apply the other keys to it\n"
 "\n"
-"   With no keys at all, example 0 runs, so a bare 'data PATH' always\n"
+"   The names min / minimum, max / maximum, res / resolution and\n"
+"   inter / interval are interchangeable.  The range form works for any\n"
+"   coordinate a source defines, not only time.\n"
+"\n"
+"   With no keys at all example 0 is run, so 'data PATH' alone always\n"
 "   produces something to look at.\n"
 "\n"
-"   Keys set to their default value are not sent to the server, except for\n"
-"   parameters the server requires.  Required parameters without a default\n"
-"   must be given or the request is refused locally with a message naming\n"
-"   the key to set.  Nothing in these rules assumes the first coordinate is\n"
-"   time; the coordinate names are whatever the source declares.\n"
+"   A key set to its default value is not sent to the server, unless the\n"
+"   server requires it.  A required key with no default must be given.  If\n"
+"   one is missing, " PROG " stops before contacting the server and names\n"
+"   the key to set.\n"
 "\n"
-"   A source that offers both stream versions has a key for it, usually\n"
-"   version=das2 or version=das3; its default is what the server sends when\n"
-"   you say nothing.\n"
+"   A source that can send both das2 and das3 streams has a key to choose\n"
+"   between them, usually version=das2 or version=das3.  Its default is\n"
+"   what the server sends when the key is not given.\n"
 "\n"
 "OPTIONS\n"
-"   -p PARAM=VALUE   Send a raw HTTP GET parameter, bypassing the interface\n"
-"                    translation.  Repeatable.  Ties your script to one\n"
-"                    server's API, so prefer KEY=VALUE when you can.\n"
-"   -t SECONDS       Connection timeout, default 10.\n"
+"   -p, --param PARAM=VALUE\n"
+"      Add PARAM=VALUE to the request URL as typed, without checking it\n"
+"      against the source's query keys.  May be repeated.  This ties a\n"
+"      script to one server's URL format, so prefer KEY=VALUE when you can.\n"
+"\n"
+"   --timeout SECONDS\n"
+"      How long to wait for a connection to the data server, default 10.\n"
 "\n"
 "EXAMPLES\n"
 "   A day of Juno Waves survey data:\n"
@@ -372,7 +456,8 @@ static void prnHelpQuery(bool bData)
 "\n"
 "   One housekeeping value from a development server, through das3_csv:\n"
 "\n"
-"      " PROG " -r https://tracers-dev.physics.uiowa.edu/stream/root.json=site:/uiowa/tracers \\\n"
+"      DEV=https://tracers-dev.physics.uiowa.edu/stream/root.json\n"
+"      " PROG " -s $DEV=" DASNODE_URI_SITES ":/uiowa/tracers \\\n"
 "         data tracers-2/ql/mag/hsk time=2026-01-01,2026-01-02 sprt | das3_csv\n"
 "\n"
 "   The URL a query turns into, without running it:\n"
@@ -387,14 +472,15 @@ static void prnHelpJson(void)
 "USAGE\n"
 "   " PROG " [options] json PATH[#FRAGMENT]\n"
 "\n"
-"   Print the node's JSON document, pretty printed, or just the part at\n"
-"   FRAGMENT, a slash separated path into it.  For looking at what the\n"
-"   catalog really says when a listing leaves you wondering.\n"
+"   Print a node's JSON document, indented for reading.  With #FRAGMENT,\n"
+"   print only that part of it.  FRAGMENT is a slash separated list of\n"
+"   element names.  This shows exactly what the catalog says when a 'node'\n"
+"   listing leaves a question open.\n"
 "\n"
 "EXAMPLES\n"
 "   " PROG " json uiowa/juno/wav/survey\n"
-"   " PROG " json 'uiowa/tracers/tracers-2/spice/geomagcoords#protocol/httpParams'\n"
-"   " PROG " json 'uiowa/tracers/tracers-2/spice/geomagcoords#interface/examples'\n"
+"   " PROG " json 'uiowa/juno/wav/survey/das2#protocol/http_params'\n"
+"   " PROG " json 'uiowa/juno/wav/survey/das2#protocol/examples'\n"
 "\n", stdout);
 }
 
@@ -404,10 +490,11 @@ static void prnHelpSeeds(void)
 "USAGE\n"
 "   " PROG " seeds\n"
 "\n"
-"   Print the compiled in URLs of the das catalog index, one per line.\n"
-"   The index is mirrored, the first URL that answers is used.  A -r START\n"
-"   argument or the " START_ENV " variable replaces it, a -m URL=URI argument\n"
-"   or the " MOUNT_ENV " variable mounts a node on it, see '" PROG " -h'.\n"
+"   Print the built in URLs of the das catalog root, one per line.  They\n"
+"   are mirrors of one another, and the first that answers is used.  Paths\n"
+"   start at the das2 sites node below this root unless -r, -s or the\n"
+"   " SEED_ENV " variable says otherwise, and -m or " MOUNT_ENV " can\n"
+"   replace parts of the catalog.  See '" PROG " -h'.\n"
 "\n", stdout);
 }
 
@@ -458,7 +545,7 @@ static const char* jstr(const DasJdo* p, const char* sPath)
 	return (p == NULL) ? NULL : DasJdo_str(DasJdo_subtree(p, sPath));
 }
 
-/* Section names as typed in -s lists, singular or plural */
+/* Section names as typed in -o lists, singular or plural */
 static bool secAlias(const char* s, das_srcsec* pSec)
 {
 	if(strieq(s,"coord")||strieq(s,"coords")||strieq(s,"coordinate")||strieq(s,"coordinates")){
@@ -475,11 +562,12 @@ static bool secAlias(const char* s, das_srcsec* pSec)
 /* ************************************************************************* */
 /* Display settings and terminal wrapping */
 
-/* Which parts of a source 'node' prints: one bit per section plus examples */
+/* Which parts of a source 'node' prints, see -o: one bit per section,
+   then the examples, then every source of a container */
 #define SHOW_EXAMPLES (1u << DASSRCSEC_SIZE)
-#define SHOW_ALL      ((1u << (DASSRCSEC_SIZE + 1)) - 1)
-static unsigned g_uShow = SHOW_ALL & ~(1u << DASSRCSEC_FORMAT);
-static bool g_bVerbose = false;
+#define SHOW_SOURCES  (1u << (DASSRCSEC_SIZE + 1))
+#define SHOW_ALL      ((1u << (DASSRCSEC_SIZE + 2)) - 1)
+static unsigned g_uShow = SHOW_ALL & ~((1u << DASSRCSEC_FORMAT) | SHOW_SOURCES);
 static int  g_nCols = 0;    /* terminal width, 0 when stdout is not a terminal */
 
 /* Display width of UTF-8 text, code points not bytes.  Catalog text has no
@@ -550,12 +638,6 @@ static void prnField(FILE* pOut, const char* sLabel, const char* sText)
 	fputc('\n', pOut);
 }
 
-/* Fixed properties are shown dimmed under -v so the eye goes to what can be
- * set.  Only on a terminal; a pipe gets plain text and the Req column
- * says "fixed" either way. */
-static const char* dimOn(void){  return (g_nCols > 0) ? "\033[2m" : ""; }
-static const char* dimOff(void){ return (g_nCols > 0) ? "\033[0m" : ""; }
-
 /* ************************************************************************* */
 /* Describing a source.  The library has the facts, these functions only
  * decide what goes in which column. */
@@ -602,30 +684,8 @@ static void propValues(const DasSrcProp* p, char* sBuf, size_t uLen)
 	if(DasSrcProp_type(p) == DASSRCPROPTYPE_BOOL) strcpyz(sBuf, "true, false", uLen);
 }
 
-/* Print the arguments that reproduce an example, indented under its row.
- * The library already has them in interface terms, whatever the node
- * layout, so this is a requisition read back as KEY=VALUE pairs. */
-static void printExampleArgs(const DasSrc* pSrc, size_t uIdx, int nCol, FILE* pOut)
-{
-	DasReq* pReq = new_DasReq_src(pSrc, (int)uIdx);
-	if(pReq == NULL) return;
-	char sArgs[4096] = {'\0'};
-	size_t u = 0;
-	for(size_t i = 0; (i < DasReq_numKeys(pReq)) && (u < sizeof(sArgs)); ++i)
-		u += snprintf(sArgs + u, sizeof(sArgs) - u, "%s=%s ", DasReq_keyAt(pReq, i), DasReq_valAt(pReq, i));
-	for(size_t i = 0; (i < DasReq_numRaw(pReq)) && (u < sizeof(sArgs)); ++i){
-		const char* sVal = NULL;
-		const char* sName = DasReq_rawAt(pReq, i, &sVal);
-		u += snprintf(sArgs + u, sizeof(sArgs) - u, "-p %s=%s ", sName, sVal);
-	}
-	del_DasReq(pReq);
-
-	for(int i = 0; i < nCol; ++i) fputc(' ', pOut);
-	fputsWrapped(sArgs, nCol, pOut);
-	fputs("\n", pOut);
-}
-
-/* The examples table: number and what it provides, arguments only with -v */
+/* The examples table: number and what it provides.  'url PATH N' shows
+   what one turns into. */
 static void printExamples(const DasSrc* pSrc, FILE* pOut)
 {
 	size_t uEx = DasSrc_numExamples(pSrc);
@@ -644,7 +704,6 @@ static void printExamples(const DasSrc* pSrc, FILE* pOut)
 		fprintf(pOut, "  %-*zu  ", (int)wKey, u);
 		fputsWrapped(DasSrc_exampleLblAt(pSrc, u), nCol, pOut);
 		fputc('\n', pOut);
-		if(g_bVerbose) printExampleArgs(pSrc, u, nCol, pOut);
 	}
 }
 
@@ -711,7 +770,7 @@ static void printKeyTables(const DasSrc* pSrc, FILE* pOut)
 			const DasSrcGroup* pG = DasSrc_groupAt(pSrc, sec, g);
 			for(size_t i = 0; i < DasSrcGroup_numProps(pG); ++i){
 				const DasSrcProp* p = DasSrcGroup_propAt(pG, i);
-				if((DasSrcProp_ctrl(p) == NULL) && !g_bVerbose) continue;
+				if(DasSrcProp_ctrl(p) == NULL) continue;
 				++uRows;
 				const char* sKey = DasSrcProp_key(p);
 				const char* sShort = strchr(sKey, '.') ? strchr(sKey, '.') + 1 : sKey;
@@ -719,7 +778,7 @@ static void printKeyTables(const DasSrc* pSrc, FILE* pOut)
 				propValues(p, sVals, sizeof(sVals));
 				size_t a[C_COUNT] = {
 					strlen(sShort), strlen(propTypeName(p)), strlen(DasSrcProp_units(p)),
-					sDef ? strlen(sDef) : 0, DasSrcProp_ctrl(p) ? 3 : 5, strlen(sVals), 0
+					sDef ? strlen(sDef) : 0, 3, strlen(sVals), 0
 				};
 				for(int c = 0; c < C_DESC; ++c) if(a[c] > aW[c]) aW[c] = a[c];
 			}
@@ -746,45 +805,21 @@ static void printKeyTables(const DasSrc* pSrc, FILE* pOut)
 			for(size_t i = 0; i < DasSrcGroup_numProps(pG); ++i){
 				const DasSrcProp* p = DasSrcGroup_propAt(pG, i);
 				const DasSrcCtrl* pC = DasSrcProp_ctrl(p);
-				if((pC == NULL) && !g_bVerbose) continue;
+				if(pC == NULL) continue;
 				const char* sKey = DasSrcProp_key(p);
 				const char* sShort = strchr(sKey, '.') ? strchr(sKey, '.') + 1 : sKey;
 				const char* sDef = DasSrcProp_value(p);
-				const char* sReq = (pC == NULL) ? "fixed" : DasSrcCtrl_isRequired(pC) ? "yes" : "";
+				const char* sReq = DasSrcCtrl_isRequired(pC) ? "yes" : "";
 				propValues(p, sVals, sizeof(sVals));
-				if(pC == NULL) fputs(dimOn(), pOut);
 				fprintf(pOut, "  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s  ",
 				        (int)aW[C_KEY], sShort, (int)aW[C_TYPE], propTypeName(p),
 				        (int)aW[C_UNITS], DasSrcProp_units(p), (int)aW[C_DEF], sDef ? sDef : "",
 				        (int)aW[C_REQ], sReq, (int)aW[C_VALS], sVals);
 				fputsWrapped(DasSrcProp_title(p, sTitle, sizeof(sTitle)), nDescCol, pOut);
-				if(pC == NULL) fputs(dimOff(), pOut);
 				fputc('\n', pOut);
 			}
 		}
 	}
-}
-
-/* Shortcut hints specific to this source: the coordinates that take a
- * MIN,MAX[,STEP] range */
-static void printShortcuts(const DasSrc* pSrc, FILE* pOut)
-{
-	fputs("\nShortcuts:\n", pOut);
-	for(size_t g = 0; g < DasSrc_numGroups(pSrc, DASSRCSEC_COORD); ++g){
-		const DasSrcGroup* pG = DasSrc_groupAt(pSrc, DASSRCSEC_COORD, g);
-		const DasSrcProp* pMin = DasSrcGroup_prop(pG, "min");
-		const DasSrcProp* pMax = DasSrcGroup_prop(pG, "max");
-		if((pMin == NULL)||(pMax == NULL)||(DasSrcProp_ctrl(pMin) == NULL)||(DasSrcProp_ctrl(pMax) == NULL))
-			continue;
-		const DasSrcProp* pRes = DasSrcGroup_prop(pG, "res");
-		const DasSrcProp* pInt = DasSrcGroup_prop(pG, "inter");
-		const char* sStep = (pRes && DasSrcProp_ctrl(pRes)) ? "RES" :
-		                    (pInt && DasSrcProp_ctrl(pInt)) ? "INTER" : NULL;
-		fprintf(pOut, "  %s=MIN,MAX%s%s\n", DasSrcGroup_name(pG), sStep ? "," : "", sStep ? sStep : "");
-	}
-	prnPara(pOut, 2, "KEY alone sets a boolean key true, N alone starts from example N, and the "
-	        "section prefix (coords., data., ...) may be dropped when unambiguous.  "
-	        "See '" PROG " data -h'.");
 }
 
 static void describeSrc(const DasSrc* pSrc, FILE* pOut, const char* sUri)
@@ -794,15 +829,12 @@ static void describeSrc(const DasSrc* pSrc, FILE* pOut, const char* sUri)
 	prnField(pOut, "Title:", DasSrc_title(pSrc));
 	prnField(pOut, "Summary:", DasJdo_str(DasSrc_jdo(pSrc, DASNODE_FRAG_DESC)));
 	prnField(pOut, "URI:", sUri);
-	if(g_bVerbose){
-		prnField(pOut, "From:", DasSrc_url(pSrc));
-		size_t uBases = DasSrc_numBaseUrls(pSrc);
-		if(uBases > 0){
-			fprintf(pOut, "Server:   %s", DasSrc_baseUrlAt(pSrc, 0));
-			if(uBases > 1) fprintf(pOut, " (+%zu alternate)", uBases - 1);
-			fputs("\n", pOut);
-		}
-	}
+
+	/* Where things came from is for the log, the listing is the catalog */
+	daslog_debugf("%s from %s", sUri, DasSrc_url(pSrc));
+	size_t uBases = DasSrc_numBaseUrls(pSrc);
+	if(uBases > 0)
+		daslog_debugf("Server %s, %zu alternate", DasSrc_baseUrlAt(pSrc, 0), uBases - 1);
 	prnAuth(pSrc, pOut);
 	prnFormats(pSrc, pOut);
 
@@ -813,17 +845,9 @@ static void describeSrc(const DasSrc* pSrc, FILE* pOut, const char* sUri)
 		if(DasSrcProp_ctrl(DasSrc_propAt(pSrc, u)) != NULL) ++uCtrls;
 	if(uCtrls == 0){
 		fputs("\nThis source takes no query parameters.\n", pOut);
-		if(!g_bVerbose) return;
+		return;
 	}
-	else if(g_bVerbose){
-		fputs("\nQuery keys, use as KEY=VALUE with 'data' or 'url':\n", pOut);
-	}
-
 	printKeyTables(pSrc, pOut);
-
-	/* Usage hints are for the first dozen runs, not the hundredth.  They
-	   live in 'data -h' and come back with -v. */
-	if(g_bVerbose && (uCtrls > 0)) printShortcuts(pSrc, pOut);
 }
 
 /* ************************************************************************* */
@@ -837,7 +861,7 @@ static void listCatalog(const DasNode* pNode, FILE* pOut, const char* sUri)
 	        DasNode_label(pNode) ? DasNode_label(pNode) : "");
 	prnField(pOut, "Title:", DasNode_title(pNode));
 	prnField(pOut, "URI:", sUri);
-	if(g_bVerbose) prnField(pOut, "From:", DasNode_srcUrl(pNode));
+	daslog_debugf("%s from %s", sUri, DasNode_srcUrl(pNode));
 
 	size_t uKids = DasNode_numSubs(pNode);
 	if(uKids == 0){ fputs("\nNo children listed.\n", pOut); return; }
@@ -851,7 +875,11 @@ static void listCatalog(const DasNode* pNode, FILE* pOut, const char* sUri)
 	}
 	int nDescCol = 2 + (int)wName + 2 + (int)wType + 3;
 
-	fprintf(pOut, "\nChildren (%zu):\n\n", uKids);
+	/* The separator is the node's, not part of its name, so it is shown
+	   here, where it is used */
+	const char* sSep = DasNode_pathSep(pNode);
+	if(sSep[0] == '\0') fprintf(pOut, "\nChildren (%zu), named in full:\n\n", uKids);
+	else fprintf(pOut, "\nChildren (%zu), after the separator '%s':\n\n", uKids, sSep);
 	bool bUnsupported = false;
 	for(size_t u = 0; u < uKids; ++u){
 		const char* sName = DasNode_subNameAt(pNode, u);
@@ -876,8 +904,8 @@ static void listCatalog(const DasNode* pNode, FILE* pOut, const char* sUri)
 
 /* What to show as a node's name.  A root has no URI: the caller's
  * fallback is shown when it has one, the location the node was loaded
- * from, else the node is called what it is.  Catalogs with a URI get
- * their child separator appended so the next step is obvious. */
+ * from, else the node is called what it is.  The name alone, it can be
+ * pasted back; a catalog's separator is shown with its children. */
 static void nodeUri(
 	const DasNode* pNode, const char* sFallback, char* sBuf, size_t uLen
 ){
@@ -887,8 +915,7 @@ static void nodeUri(
 		else snprintf(sBuf, uLen, "(the root)");
 		return;
 	}
-	const char* sSep = DasNode_isCatalog(pNode) ? DasNode_pathSep(pNode) : NULL;
-	snprintf(sBuf, uLen, "%s%s", sUri, sSep ? sSep : "");
+	snprintf(sBuf, uLen, "%s", sUri);
 }
 
 /* ************************************************************************* */
@@ -900,64 +927,125 @@ static void nodeUri(
  * and the wording of a failed lookup. */
 
 
-/* A -r START or -m URL=URI value, or their environment stand-ins, turned
- * into catalog policy.  URL=URI names a node: the seed for -r, a mount for
- * -m.  For -r a URL alone is a seed with no name, a root, and anything
- * else is a URI prefix.  A mount always needs a name.
- *
- * The split is at the last '='.  What follows it is a name when it has a
- * scheme, "site:/x", or, since a mount under a root seed is named by a
- * path, when it is not a location and the URL before it carries no query
- * string.  A URL with a query string can end in "=x" itself, so a mount
- * on one needs a name with a scheme.  Command line mistakes are reported
- * here, the catalog logs its refusals.  False on either. */
-static bool applyStartArg(DasCat* pCat, const char* sVal, bool bMount)
+/* Split FILE=NAME at the last '=' when the text before it is a location
+ * and the text after it is a name.  Names are not interpreted, so a URL
+ * whose query string ends in "=x" reads as named x; such a URL always
+ * needs =NAME.  False, with sUrl empty, for anything else. */
+static bool splitFileName(const char* sVal, char* sUrl, size_t uUrl, const char** psName)
 {
-	const char* sOpt = bMount ? "-m" : "-r";
+	sUrl[0] = '\0';
+	*psName = NULL;
 	const char* pEq = strrchr(sVal, '=');
-	const char* sName = (pEq != NULL) ? pEq + 1 : NULL;
-	bool bNamed = false;
-	if((sName != NULL) && (sName[0] != '\0') && !DasCat_isNodeUrl(sName)){
-		if(dasurl_hasScheme(sName)) bNamed = true;
-		else bNamed = (memchr(sVal, '?', (size_t)(pEq - sVal)) == NULL);
-	}
+	if((pEq == NULL)||(pEq[1] == '\0')||DasCat_isNodeUrl(pEq + 1)) return false;
+	size_t uLen = (size_t)(pEq - sVal);
+	if(uLen >= uUrl) return false;
+	memcpy(sUrl, sVal, uLen);
+	sUrl[uLen] = '\0';
+	if(!DasCat_isNodeUrl(sUrl)){ sUrl[0] = '\0'; return false; }
+	*psName = pEq + 1;
+	return true;
+}
 
-	if(bNamed){
-		char sUrl[URL_SZ];
-		size_t uLen = (size_t)(pEq - sVal);
-		if(uLen >= sizeof(sUrl)) uLen = sizeof(sUrl) - 1;
-		memcpy(sUrl, sVal, uLen);
-		sUrl[uLen] = '\0';
-		if(!DasCat_isNodeUrl(sUrl)){
-			fprintf(stderr, PROG ": %s takes URL=URI, '%s' before the '=' is not a URL or a file\n", sOpt, sUrl);
-			return false;
-		}
-		if(bMount) return DasCat_mount(pCat, sUrl, sName) == DAS_OKAY;
+/* A -s value or its environment stand-in, sFrom says which for messages.
+ * Three forms: FILE=NAME, FILE (a root), or a NAME alone, a node found
+ * through the das catalog root.  The catalog logs its own refusals. */
+static bool applySeedArg(DasCat* pCat, const char* sVal, const char* sFrom)
+{
+	char sUrl[URL_SZ];
+	const char* sName = NULL;
+	if(splitFileName(sVal, sUrl, sizeof(sUrl), &sName))
 		return DasCat_setSeed(pCat, sUrl, sName) == DAS_OKAY;
+	if(DasCat_isNodeUrl(sVal))
+		return DasCat_setSeed(pCat, sVal, NULL) == DAS_OKAY;
+	if(sVal[0] == '\0' || sVal[strlen(sVal) - 1] == '='){
+		fprintf(stderr, PROG ": %s takes NAME, FILE or FILE=NAME, '%s' is none of them\n", sFrom, sVal);
+		return false;
 	}
+	return DasCat_setSeed(pCat, NULL, sVal) == DAS_OKAY;
+}
 
-	/* A location after the '=' is the old order, URI=URL, or "=URL" */
-	if((sName != NULL) && DasCat_isNodeUrl(sName)){
-		fprintf(stderr, PROG ": %s takes URL=URI, the location first and the catalog name "
-		        "it stands for after the '='\n", sOpt);
+/* A -m value or its environment stand-in: always FILE=NAME */
+static bool applyMountArg(DasCat* pCat, const char* sVal, const char* sFrom)
+{
+	char sUrl[URL_SZ];
+	const char* sName = NULL;
+	if(!splitFileName(sVal, sUrl, sizeof(sUrl), &sName)){
+		fprintf(stderr, PROG ": %s takes FILE=NAME, a location then the catalog name it "
+		        "stands for, '%s' is not that\n", sFrom, sVal);
 		return false;
 	}
-	if(bMount){
-		fprintf(stderr, PROG ": -m needs URL=URI, see -h\n");
-		return false;
+	return DasCat_mount(pCat, sUrl, sName) == DAS_OKAY;
+}
+
+/* Everyday names for -t.  The extensions and type names are the ones
+   dasflex servers use in their mime.json; a name stands for every media
+   type listed with it.  "ccsds" needs no entry: packet types are per
+   mission, vnd.nasa.tracers+ccsds-spp and the like, and the substring
+   rule in stubProvides() finds them all. */
+static const char* g_aTypeNames[][2] = {
+	{"das3",    "application/vnd.das.stream,text/vnd.das.stream"},
+	{"d3b",     "application/vnd.das.stream"},
+	{"d3t",     "text/vnd.das.stream"},
+	{"das2",    "application/vnd.das2.das2stream,text/vnd.das2.das2stream"},
+	{"d2s",     "application/vnd.das2.das2stream"},
+	{"d2t",     "text/vnd.das2.das2stream"},
+	{"das1",    "application/vnd.das2.das1stream,text/vnd.das2.das1stream"},
+	{"d1s",     "application/vnd.das2.das1stream"},
+	{"d1t",     "text/vnd.das2.das1stream"},
+	{"qstream", "application/vnd.das2.qstream,text/vnd.das2.qstream"},
+	{"qds",     "application/vnd.das2.qstream"},
+	{"qdt",     "text/vnd.das2.qstream"},
+	{"csv",     "text/csv"},
+	{"cdf",     "application/x-cdf"},
+	{"json",    "application/json"},
+	{"png",     "image/png"},
+	{"xml",     "text/xml"}
+};
+
+/* A -t list with the everyday names swapped for their media types.  Other
+   items pass through as typed.  False if the result won't fit. */
+static bool expandTypes(const char* sList, char* sOut, size_t uOut)
+{
+	size_t uLen = 0;
+	sOut[0] = '\0';
+	const char* p = sList;
+	while(true){
+		p += strspn(p, ", \t");
+		size_t uTok = strcspn(p, ", \t");
+		if(uTok == 0) return true;
+		const char* sAdd = NULL;
+		size_t uAdd = uTok;
+		for(size_t u = 0; u < sizeof(g_aTypeNames)/sizeof(g_aTypeNames[0]); ++u){
+			if((strlen(g_aTypeNames[u][0]) == uTok) && (strncasecmp(p, g_aTypeNames[u][0], uTok) == 0)){
+				sAdd = g_aTypeNames[u][1];
+				uAdd = strlen(sAdd);
+				break;
+			}
+		}
+		if(uLen + uAdd + 2 > uOut) return false;
+		if(uLen > 0) sOut[uLen++] = ',';
+		memcpy(sOut + uLen, sAdd ? sAdd : p, uAdd);
+		uLen += uAdd;
+		sOut[uLen] = '\0';
+		p += uTok;
 	}
-	if(DasCat_isNodeUrl(sVal)) return DasCat_setSeed(pCat, sVal, NULL) == DAS_OKAY;   /* a root */
-	if(pEq != NULL){
-		fprintf(stderr, PROG ": -r takes URL=URI, and '%s' after the '=' is not a catalog name\n", sName);
-		return false;
-	}
-	return DasCat_setPrefix(pCat, sVal) == DAS_OKAY;
+}
+
+/* Is sNeed, uNeed characters, anywhere in the first uHay of sHay, ignoring
+   case? */
+static bool strnicontains(const char* sHay, size_t uHay, const char* sNeed, size_t uNeed)
+{
+	for(size_t u = 0; u + uNeed <= uHay; ++u)
+		if(strncasecmp(sHay + u, sNeed, uNeed) == 0) return true;
+	return false;
 }
 
 /* Does a child's catalog entry provide any media type in the list?  The
-   list is a set of exact types compared ignoring case, and the bare
-   wildcard, star slash star, takes anything, including an entry with no
-   provides list at all.  Parameters on the catalog side are cut. */
+   list is a set compared ignoring case: an item with a '/' is a whole
+   media type, one without is looked for anywhere in the type, so "csv"
+   finds text/csv.  The bare wildcard, star slash star, takes anything,
+   including an entry with no provides list at all.  Parameters on the
+   catalog side are cut. */
 static bool stubProvides(const DasJdo* pStub, const char* sAccept)
 {
 	const DasJdo* pProv = (pStub == NULL) ? NULL : DasJdo_subtree(pStub, "provides");
@@ -970,11 +1058,15 @@ static bool stubProvides(const DasJdo* pStub, const char* sAccept)
 		if(uWant == 0) return false;
 		if((uWant == 3) && (strncmp(sWant, "*/*", 3) == 0)) return true;
 		if(bList){
+			bool bWhole = (memchr(sWant, '/', uWant) != NULL);
 			for(const DasJsonAryEl* pEl = DasJdo_aryFirst(pProv); pEl; pEl = pEl->next){
 				const char* sHas = DasJdo_str(pEl->value);
 				if(sHas == NULL) continue;
 				size_t uHas = strcspn(sHas, "; \t");
-				if((uHas == uWant) && (strncasecmp(sWant, sHas, uWant) == 0)) return true;
+				if(bWhole){
+					if((uHas == uWant) && (strncasecmp(sWant, sHas, uWant) == 0)) return true;
+				}
+				else if(strnicontains(sHas, uHas, sWant, uWant)) return true;
 			}
 		}
 		sWant += uWant;
@@ -991,9 +1083,9 @@ static const DasJdo* childStub(const DasNode* pNode, const char* sName)
 
 /* The library lists the children it can load; which one to fetch from
  * is this program's call, made on the media types each child provides.
- * Without -a it tries das3 streams, then das2, then anything, one ask
+ * Without -t it tries das3 streams, then das2, then anything, one ask
  * per type.
- * An -a list is one ask and a set, so a user who lists two formats gets
+ * A -t list is one ask and a set, so a user who lists two formats gets
  * every source that emits either and names one on the path if that is
  * several.  The chosen child is loaded by the session so credentials and
  * the cache follow. */
@@ -1037,74 +1129,49 @@ static DasSrc* pickSrc(DasCat* pCat, DasNode* pNode, const char* sAccept)
 		return NULL;
 	}
 
-	DasNode* pSub = DasCat_subNode(pCat, pNode, aPick[0]);
+	das_catmiss miss;
+	DasNode* pSub = DasCat_subNode(pCat, pNode, aPick[0], &miss);
 	if(pSub == NULL){
-		fprintf(stderr, PROG ": couldn't load source '%s' under %s\n", aPick[0], DasNode_pathUri(pNode));
+		fprintf(stderr, PROG ": couldn't load source '%s' under %s: %s\n", aPick[0], DasNode_pathUri(pNode), miss.sMsg);
 		return NULL;
 	}
 	return new_DasSrc_node(pSub);
 }
 
-/* A path did not resolve.  Say whether the policy or the catalog is to
- * blame, and for the catalog, which child was the problem and what its
- * parent offers.  Call right after the failed DasCat_resolve(). */
-static void explainUnresolved(DasCat* pCat, const char* sPath)
-{
-	char sFullUri[URI_SZ];
-	strcpyz(sFullUri, DasCat_lastUri(pCat), sizeof(sFullUri));
+/* A path did not resolve.  The library says why; what is added here is
+ * the command line remedy for two mistakes it cannot know are mistakes:
+ * a full URI outside the -s node, and a full URI under a -s root, whose
+ * children are named by their path from it rather than by URI. */
+static void explainUnresolved(
+	const DasCat* pCat, const das_catmiss* pMiss, const char* sPath, bool bSites
+){
+	const DasNode* pNear = pMiss->pNear;
+	bool bRootMiss = (pMiss->nCause == DASMISS_NOCHILD) && (pNear != NULL) &&
+		(DasNode_pathUri(pNear) == NULL);
 
-	/* The common mistake with a seed is asking for something it does not
-	   cover, say so instead of hunting for a parent */
-	if(!DasCat_covers(pCat, sFullUri)){
-		daslog_errorf("'%s' is outside the -r seed %s, use -m to mount it on the "
-		               "federated catalog instead", sFullUri, DasCat_prefix(pCat));
-		return;
+	/* With the sites node as the seed every path is relative to it, so a
+	   name written from higher up is the usual slip.  The library does not
+	   interpret names; this guess is the program's, only for the hint. */
+	const char* sHint = NULL;
+	if(bSites && (pMiss->nCause == DASMISS_NOCHILD) && (sPath != NULL)){
+		if(strncmp(sPath, "site:", 5) == 0)
+			sHint = "Paths start at " DASNODE_URI_SITES ", leave off the 'site:/'";
+		else if(strncmp(sPath, "test:", 5) == 0)
+			sHint = "The test catalog is beside the sites node, use -s " DASNODE_URI_ROOT "test";
+		else if(dasurl_hasScheme(sPath))
+			sHint = "Paths start at " DASNODE_URI_SITES ", use -r to give full names";
 	}
 
-	const char* sRest = NULL;
-	DasNode* pNode = DasCat_nearest(pCat, &sRest);
-	if((pNode == NULL)||(sRest == NULL)||(sRest[0] == '\0')){
-		/* A root seed has no URI, so the path to it is empty; name the file */
-		if((sFullUri[0] == '\0') && DasCat_hasSeed(pCat))
-			daslog_errorf("Couldn't load the seed %s", DasCat_seedUrl(pCat));
-		else
-			daslog_errorf("Couldn't resolve catalog path '%s'", sFullUri);
-		return;
-	}
-	const char* sParentUri = DasCat_lastUri(pCat);
-
-	/* Only the first component below the deepest node that loaded can be
-	   the culprit */
-	char sChild[NAME_SZ];
-	strcpyz(sChild, sRest, sizeof(sChild));
-	char* pSlash = strchr(sChild, '/');
-	if(pSlash != NULL) *pSlash = '\0';
-
-	char sMsg[ERR_SZ];
-	size_t uKids = DasNode_numSubs(pNode);
-	size_t n = 0;
-	bool bFound = false;
-	for(size_t u = 0; u < uKids; ++u){
-		const char* sName = DasNode_subNameAt(pNode, u);
-		if(strieq(sName, sChild)){
-			const char* sType = jstr(DasNode_subStubAt(pNode, u), DASNODE_FRAG_TYPE);
-			if(DasNode_subTypeAt(pNode, u) == DASNODETYPE_INV)
-				n = snprintf(sMsg, sizeof(sMsg), "'%s' under %s is a %s node, which " PROG
-				             " can list but not load or fetch from", sChild, sParentUri, sType ? sType : "?");
-			else
-				n = snprintf(sMsg, sizeof(sMsg), "'%s' under %s is listed but could not be loaded",
-				             sChild, sParentUri);
-			bFound = true;
-			break;
-		}
-	}
-	if(!bFound) n = snprintf(sMsg, sizeof(sMsg), "No child named '%s' under %s", sChild, sParentUri);
-	if(uKids > 0){
-		n += snprintf(sMsg + n, sizeof(sMsg) - n, ".  Children:");
-		for(size_t u = 0; (u < uKids) && (n < sizeof(sMsg)); ++u)
-			n += snprintf(sMsg + n, sizeof(sMsg) - n, " %s", DasNode_subNameAt(pNode, u));
-	}
-	daslog_errorf("%s", sMsg);
+	if(pMiss->nCause == DASMISS_OUTSIDE)
+		daslog_errorf("%s.  Use -m to mount a file on the federated catalog "
+		              "instead", pMiss->sMsg);
+	else if(bRootMiss && (DasCat_seedUrl(pCat) != NULL))
+		daslog_errorf("%s.  Below a -s file given no name, paths are names from "
+		              "it; use -s FILE=NAME to give it one, or -m", pMiss->sMsg);
+	else if(sHint != NULL)
+		daslog_errorf("%s.  %s", pMiss->sMsg, sHint);
+	else
+		daslog_errorf("%s", pMiss->sMsg);
 }
 
 /* Everything main() owns.  The catalog frees its nodes, then the credential
@@ -1150,7 +1217,7 @@ static int streamUrl(DasCat* pCat, const char* sUrl, float rTimeout)
 	del_DasHttpResp(pRes);
 	DasXport* pOut = new_DasXport_stdout();
 
-	/* Each transport keeps its own error, so a failed copy says which end
+	/* Each transport keeps its error message, so a failed copy says which end
 	 * broke.  The output end is ours to classify, everything else is the
 	 * server's fault as far as the exit code is concerned.  A full disk or
 	 * a closed pipe downstream often only shows up at the final flush. */
@@ -1196,7 +1263,7 @@ static int termWidth(void)
 	return 80;
 }
 
-/* -s SECTIONS: comma separated section names to a bit set */
+/* -o SECTIONS: comma separated section names to a bit set */
 static bool parseShow(const char* sList, unsigned* puShow)
 {
 	char sCopy[256];
@@ -1206,6 +1273,7 @@ static bool parseShow(const char* sList, unsigned* puShow)
 		das_srcsec sec;
 		if(strieq(pTok, "all")) *puShow = SHOW_ALL;
 		else if(strieq(pTok, "examples")||strieq(pTok, "example")||strieq(pTok, "ex")) *puShow |= SHOW_EXAMPLES;
+		else if(strieq(pTok, "sources")||strieq(pTok, "source")||strieq(pTok, "src")) *puShow |= SHOW_SOURCES;
 		else if(secAlias(pTok, &sec)) *puShow |= (1u << sec);
 		else return false;
 	}
@@ -1214,7 +1282,7 @@ static bool parseShow(const char* sList, unsigned* puShow)
 
 int main(int argc, char** argv)
 {
-	daslib_init(PROG, DASERRDISP_EXIT, DASLOG_WARN, NULL);
+	daslib_init(PROG, DASERRDISP_EXIT, DASLOG_INFO, NULL);
 	daslog_showLine(false);   /* messages here are for users, not debuggers */
 
 	char sAgent[64];
@@ -1224,13 +1292,16 @@ int main(int argc, char** argv)
 	const char* sCmd = NULL;
 	const char* sPath = NULL;
 	const char* sCacheArg = NULL;
-	const char* sStartArg = NULL;
+	const char* sSeedArg = NULL;
 	const char* aMountArg[MAX_MOUNTS];
 	size_t uMountArg = 0;
-	const char* sAccept = NULL;   /* -a, else the two step default in pickSrc */
+	const char* sAccept = NULL;   /* -t, else the two step default in pickSrc */
+	char sAcceptBuf[1024];
 	bool bHelp = false;
-	bool bFresh = false;
-	bool bQuiet = false;
+	bool bRoot = false;
+	bool bUpdate = false;
+	bool bNoCache = false;
+	bool bOutput = false;
 	const char* aKeyVals[MAX_KEYS];   /* KEY=VALUE arguments, applied in order */
 	size_t uKeyVals = 0;
 	const char* aRaw[MAX_RAW];        /* -p PARAM=VALUE arguments */
@@ -1240,26 +1311,33 @@ int main(int argc, char** argv)
 
 	for(int i = 1; i < argc; ++i){
 		const char* sArg = argv[i];
-		if((strcmp(sArg, "-h") == 0)||(strcmp(sArg, "--help") == 0)){ bHelp = true; continue; }
-		if((strcmp(sArg, "-V") == 0)||(strcmp(sArg, "--version") == 0)){
+		if(dasarg_isOpt(sArg, "-h", "--help", NULL)){ bHelp = true; continue; }
+		if(dasarg_isOpt(sArg, "-v", "--version", NULL)){
 			printf(PROG " (das2C %s)\n", daslib_version());
 			return RET_OK;
 		}
-		if(strcmp(sArg, "-q") == 0){ daslog_setLevel(DASLOG_ERROR); bQuiet = true; continue; }
-		if(strcmp(sArg, "-v") == 0){ daslog_setLevel(DASLOG_INFO); g_bVerbose = true; g_uShow = SHOW_ALL; continue; }
-		if(strcmp(sArg, "-f") == 0){ bFresh = true; continue; }
-		if(strcmp(sArg, "--start") == 0) sArg = "-r";
-		if(strcmp(sArg, "--mount") == 0) sArg = "-m";
-		if((strcmp(sArg, "-r") == 0)||(strcmp(sArg, "-m") == 0)||(strcmp(sArg, "-s") == 0)||
-		   (strcmp(sArg, "-C") == 0)||(strcmp(sArg, "-p") == 0)||(strcmp(sArg, "-t") == 0)||
-		   (strcmp(sArg, "-l") == 0)||(strcmp(sArg, "-a") == 0)){
-			if(i + 1 >= argc){
+		if(dasarg_isOpt(sArg, "-r", "--root", NULL)){ bRoot = true; continue; }
+		if(dasarg_isOpt(sArg, "-u", "--update", NULL)){ bUpdate = true; continue; }
+		if(dasarg_isOpt(sArg, NULL, "--no-cache", NULL)){ bNoCache = true; continue; }
+
+		/* Options with a value, given as -x V, --xx V or --xx=V */
+		const char* sVal = NULL;
+		char cOpt = '\0';
+		if     (dasarg_optVal(argv, argc, "-l", "--log=",     &i, &sVal)) cOpt = 'l';
+		else if(dasarg_optVal(argv, argc, "-s", "--seed=",    &i, &sVal)) cOpt = 's';
+		else if(dasarg_optVal(argv, argc, "-m", "--mount=",   &i, &sVal)) cOpt = 'm';
+		else if(dasarg_optVal(argv, argc, "-o", "--output=",  &i, &sVal)) cOpt = 'o';
+		else if(dasarg_optVal(argv, argc, "-t", "--type=",    &i, &sVal)) cOpt = 't';
+		else if(dasarg_optVal(argv, argc, "-p", "--param=",   &i, &sVal)) cOpt = 'p';
+		else if(dasarg_optVal(argv, argc, NULL, "--cache=",   &i, &sVal)) cOpt = 'c';
+		else if(dasarg_optVal(argv, argc, NULL, "--timeout=", &i, &sVal)) cOpt = 'w';
+		if(cOpt != '\0'){
+			if(sVal == NULL){
 				fprintf(stderr, PROG ": option %s needs a value, use -h for help\n", sArg);
 				return RET_USAGE;
 			}
-			const char* sVal = argv[++i];
-			switch(sArg[1]){
-			case 'r': sStartArg = sVal; break;
+			switch(cOpt){
+			case 's': sSeedArg = sVal; break;
 			case 'm':
 				if(uMountArg >= MAX_MOUNTS){
 					fprintf(stderr, PROG ": at most %d mounts\n", MAX_MOUNTS);
@@ -1267,18 +1345,38 @@ int main(int argc, char** argv)
 				}
 				aMountArg[uMountArg++] = sVal;
 				break;
-			case 'a': sAccept = sVal; break;
-			case 's':
+			case 't':
+				if(!expandTypes(sVal, sAcceptBuf, sizeof(sAcceptBuf))){
+					fprintf(stderr, PROG ": -t list is too long\n");
+					return RET_USAGE;
+				}
+				sAccept = sAcceptBuf;
+				break;
+			case 'o':
 				if(!parseShow(sVal, &g_uShow)){
-					fprintf(stderr, PROG ": -s takes a list from coords, data, formats, options, "
-					        "examples, all\n");
+					fprintf(stderr, PROG ": -o takes a list from examples, coords, data, options, "
+					        "formats, sources, all\n");
+					return RET_USAGE;
+				}
+				bOutput = true;
+				break;
+			case 'c': sCacheArg = sVal; break;
+			case 'w':{
+				char* pEnd = NULL;
+				rTimeout = strtof(sVal, &pEnd);
+				if((pEnd == sVal)||(*pEnd != '\0')||!(rTimeout > 0)){
+					fprintf(stderr, PROG ": --timeout takes a number of seconds, not '%s'\n", sVal);
 					return RET_USAGE;
 				}
 				break;
-			case 'C': sCacheArg = sVal; break;
-			case 't': rTimeout = (float)atof(sVal); break;
+			}
 			case 'l':{
 				int nLvl = daslog_levelFromStr(sVal);
+				if(nLvl < 0){
+					fprintf(stderr, PROG ": -l takes one of critical, error, warning, info, "
+					        "debug, trace, not '%s'\n", sVal);
+					return RET_USAGE;
+				}
 				daslog_setLevel(nLvl);
 				break;
 			}
@@ -1318,17 +1416,35 @@ int main(int argc, char** argv)
 	DasCredMgr_setPrompt(pMgr, DasCredMgr_termPrompt, NULL);
 	pCat = new_DasCat(pMgr, sAgent);
 
-	/* Environment fallbacks for -r and -m, for people who live in one test
-	   catalog.  The start is applied first so a mount can complain about a
-	   conflicting one. */
-	const char* sEnv = getenv(START_ENV);
-	if((sStartArg == NULL) && (sEnv != NULL) && (sEnv[0] != '\0')) sStartArg = sEnv;
-	sEnv = getenv(MOUNT_ENV);
-	if((uMountArg == 0) && (sEnv != NULL) && (sEnv[0] != '\0')) aMountArg[uMountArg++] = sEnv;
-	if((sStartArg != NULL) && !applyStartArg(pCat, sStartArg, false))
+	/* Where paths start: -r, -s, the environment, else the das2 sites
+	   node, found through the das catalog root.  The seed is set before
+	   the mounts so a mount can complain about a conflicting one. */
+	if(bRoot && (sSeedArg != NULL)){
+		fprintf(stderr, PROG ": -r and -s can't be used together, use -h for help\n");
 		return finish(pCat, RET_USAGE);
+	}
+	const char* sFrom = "-s";
+	const char* sEnv = getenv(SEED_ENV);
+	if(!bRoot && (sSeedArg == NULL) && (sEnv != NULL) && (sEnv[0] != '\0')){
+		sSeedArg = sEnv;
+		sFrom = SEED_ENV;
+	}
+	bool bSites = !bRoot && (sSeedArg == NULL);
+	if(sSeedArg != NULL){
+		if(!applySeedArg(pCat, sSeedArg, sFrom)) return finish(pCat, RET_USAGE);
+	}
+	else if(bSites){
+		DasCat_setSeed(pCat, NULL, DASNODE_URI_SITES);
+	}
+
+	sFrom = "-m";
+	sEnv = getenv(MOUNT_ENV);
+	if((uMountArg == 0) && (sEnv != NULL) && (sEnv[0] != '\0')){
+		aMountArg[uMountArg++] = sEnv;
+		sFrom = MOUNT_ENV;
+	}
 	for(size_t u = 0; u < uMountArg; ++u)
-		if(!applyStartArg(pCat, aMountArg[u], true)) return finish(pCat, RET_USAGE);
+		if(!applyMountArg(pCat, aMountArg[u], sFrom)) return finish(pCat, RET_USAGE);
 
 	if(sCmd == NULL){
 		fprintf(stderr, PROG ": no command given, use -h for help\n");
@@ -1351,21 +1467,26 @@ int main(int argc, char** argv)
 		return finish(pCat, RET_USAGE);
 	}
 	/* Mounts are consulted on the way, they are not a place to start */
-	if((bJson || bUrl || bData) && (sPath == NULL) && !DasCat_hasSeed(pCat)){
+	if((bJson || bUrl || bData) && (sPath == NULL) && (DasCat_seedUrl(pCat) == NULL)){
 		fprintf(stderr, PROG ": the %s command needs a PATH, use -h for help\n", sCmd);
 		return finish(pCat, RET_USAGE);
 	}
 	if(bNode && (uKeyVals > 0))
 		daslog_warn("KEY=VALUE arguments are ignored by the node command");
+	if(bOutput && !bNode){
+		fprintf(stderr, PROG ": -o is for the node command, the %s command writes to "
+		        "standard output\n", sCmd);
+		return finish(pCat, RET_USAGE);
+	}
 
 	/* Node cache: the library writes none unless asked, das_fetch asks for
-	   the shared one unless told otherwise.  -f refreshes rather than
+	   the shared one unless told otherwise.  -u refreshes rather than
 	   disables so that the run after a catalog change leaves the cache
 	   current.  A user directory too long for the cache only costs speed. */
-	if((sCacheArg == NULL) || !strieq(sCacheArg, "none")){
+	if(!bNoCache){
 		if((sCacheArg != NULL) && (DasCat_setCacheDir(pCat, sCacheArg) != DAS_OKAY))
 			return finish(pCat, RET_USAGE);
-		if(bFresh) DasCat_setCacheAge(pCat, 0);
+		if(bUpdate) DasCat_setCacheAge(pCat, 0);
 		DasCat_setCaching(pCat, true);
 	}
 
@@ -1376,21 +1497,17 @@ int main(int argc, char** argv)
 		strcpyz(sPathBuf, sPath, sizeof(sPathBuf));
 		char* pHash = strchr(sPathBuf, '#');
 		if(pHash != NULL){ *pHash = '\0'; sFrag = pHash + 1; }
-		/* "a/b/" means the same as "a/b", shell completion adds the slash */
-		if(!DasCat_isNodeUrl(sPathBuf)){
-			size_t u = strlen(sPathBuf);
-			while((u > 1) && (sPathBuf[u-1] == '/') && (sPathBuf[u-2] != ':')) sPathBuf[--u] = '\0';
-		}
 		sPath = sPathBuf;
 	}
 
-	DasNode* pNode = DasCat_resolve(pCat, sPath);
+	das_catmiss miss;
+	DasNode* pNode = DasCat_resolve(pCat, sPath, &miss);
 	if(pNode == NULL){
-		explainUnresolved(pCat, sPath);
+		explainUnresolved(pCat, &miss, sPath, bSites);
 		return finish(pCat, RET_NODE);
 	}
 	char sShow[1200];
-	nodeUri(pNode, DasCat_lastUri(pCat), sShow, sizeof(sShow));
+	nodeUri(pNode, miss.sUri, sShow, sizeof(sShow));
 
 	int nRet = RET_OK;
 
@@ -1412,20 +1529,20 @@ int main(int argc, char** argv)
 			/* A source container is one step from the goal.  Users never type
 			   the source's name, so by default act as if they had asked for the
 			   default source and describe it under the container's URI.  The
-			   container listing itself only matters once more than one source
-			   type can be fetched from, so it is verbose only for now. */
+			   container listing itself is for -o sources. */
 			das_nodetype nType = DasNode_type(pNode);
 			bool bSrcSet = (nType == DASNODETYPE_SRCSET)||(nType == DASNODETYPE_COLLECTION);
-			if(!bSrcSet || g_bVerbose) listCatalog(pNode, stdout, sShow);
+			bool bSources = (g_uShow & SHOW_SOURCES) != 0;
+			if(!bSrcSet || bSources) listCatalog(pNode, stdout, sShow);
 
 			if(bSrcSet){
 				DasSrc* pSrc = pickSrc(pCat, pNode, sAccept);
 				if(pSrc == NULL){
 					/* pickSrc said why; the listing shows what to name */
-					if(!g_bVerbose) listCatalog(pNode, stdout, sShow);
+					if(!bSources) listCatalog(pNode, stdout, sShow);
 					nRet = RET_NODE;
 				}
-				else if(!g_bVerbose){
+				else if(!bSources){
 					describeSrc(pSrc, stdout, sShow);
 				}
 				else{
@@ -1462,7 +1579,7 @@ int main(int argc, char** argv)
 			const char* sType = jstr(DasNode_jdo(pNode, NULL), DASNODE_FRAG_TYPE);
 			printf("%s:  %s\n%-10s%s\n", sType ? sType : "Node",
 			       DasNode_label(pNode) ? DasNode_label(pNode) : "", "URI:", sShow);
-			if(g_bVerbose) printf("From:     %s\n", DasNode_srcUrl(pNode));
+			daslog_debugf("%s from %s", sShow, DasNode_srcUrl(pNode));
 			printf("\n" PROG " has no detailed printer for this node type, try the json command.\n");
 		}
 		return finish(pCat, nRet);
@@ -1505,8 +1622,7 @@ int main(int argc, char** argv)
 	   quick way to see a source work, and say so */
 	if((nExample < 0) && (uKeyVals == 0) && (uRaw == 0) && (DasSrc_numExamples(pSrc) > 0)){
 		nExample = 0;
-		if(!bQuiet)
-			fprintf(stderr, PROG ": no query given, using example 0, \"%s\"\n", DasSrc_exampleLblAt(pSrc, 0));
+		daslog_infof("No query given, using example 0, \"%s\"", DasSrc_exampleLblAt(pSrc, 0));
 	}
 
 	/* Order matters: the example is the base, explicit keys override it, and

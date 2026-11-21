@@ -1,0 +1,11 @@
+{
+ "type": "Catalog",
+ "version": "0.5",
+ "name": "tracers-1",
+ "title": "A seed named by a DOI, '.' between it and its children",
+ "separator": ".",
+ "catalog": {
+  "a": {"type": "Catalog", "urls": ["test/das_walk/a.json"]},
+  "ab": {"type": "Catalog", "urls": ["test/das_walk/ab.json"]}
+ }
+}

@@ -65,7 +65,7 @@ extern "C" {
  * The common path, through a DasCat:
  *
  * @code
- * DasSrc* pSrc = new_DasSrc_cat(pCat, "uiowa/juno/wav/survey");
+ * DasSrc* pSrc = new_DasSrc_cat(pCat, "uiowa/juno/wav/survey", NULL);
  * DasReq* pReq = new_DasReq_src(pSrc, 0);             // seeded from example 0
  * DasReq_set(pReq, "time.res", "30");                 // then adjusted
  *
@@ -262,7 +262,7 @@ DAS_API DasSrc* new_DasSrc_node(const DasNode* pNode);
  *
  * @param sDoc The JSON text, need not be NUL terminated.
  * @param uLen The number of bytes in sDoc.
- * @param sPathUri The catalog URI of the node, shorthands accepted.  It
+ * @param sPathUri The catalog URI of the node, as given.  It
  *        is the source's identity: requisitions are stamped with it and
  *        later checked against it, see DasSrc_check().  NULL or empty
  *        leaves the source without one, and its requisitions unstamped.

@@ -94,15 +94,15 @@ int main(int argc, char** argv) {
 	 * root of its own with no URI.  The session owns
 	 * every node it loads; del_DasCat() at the end frees them all.
 	 */
-	DasNode* pCasEphem = DasCat_resolve(pCat, sUrl);
+	DasNode* pCasEphem = DasCat_resolve(pCat, sUrl, NULL);
 	nTest += info_or_exit(sUrl, pCasEphem, "Cassini Saturn Ephemeris", false, nTest);
 
 	sUrl = "https://das2.org/catalog/das/site/uiowa/juno/wav.json";
-	DasNode* pWavCat = DasCat_resolve(pCat, sUrl);
+	DasNode* pWavCat = DasCat_resolve(pCat, sUrl, NULL);
 	nTest += info_or_exit(sUrl, pWavCat, "Juno Waves Catalog", false, nTest);
 
 	/* Children of a root are named from it, so this one is just "survey" */
-	const DasNode* pSurvey = DasCat_subNode(pCat, pWavCat, "survey");
+	const DasNode* pSurvey = DasCat_subNode(pCat, pWavCat, "survey", NULL);
 	nTest += info_or_exit(sUrl, pSurvey, "Juno Waves Survey Data Source", true, nTest);
 	if(strcmp(DasNode_pathUri(pSurvey), "survey") != 0){
 		printf("TEST %d: child of a root is named from it, got %s   [FAILED]\n", nTest,
@@ -117,8 +117,8 @@ int main(int argc, char** argv) {
 	else printf("... [FAILED]");
 	nTest += 1;
 	
-	/* The compiled in seed, the root of the das catalog */
-	DasNode* pRoot = DasCat_seed(pCat);
+	/* The root of the das catalog */
+	DasNode* pRoot = DasCat_seed(pCat, NULL);
 	/* Can't call info or exit because the root has no URI */
 	if(pRoot == NULL){
 		printf("TEST %d: Find and load root node   [FAILED]\n", nTest);
@@ -131,33 +131,33 @@ int main(int argc, char** argv) {
 	
 	/* Extra cassini check */
 	sUri = "tag:das2.org,2012:site:/uiowa/cassini/rpws/survey";
-	const DasNode* pCasSur = DasCat_subNode(pCat, pRoot, sUri);
+	const DasNode* pCasSur = DasCat_subNode(pCat, pRoot, sUri, NULL);
 	nTest += info_or_exit(sUri, pCasSur, "Cassini/survey", true, nTest);
 
 		
 	/*das root */
 	sUri = "tag:das2.org,2012:";
-	const DasNode* pDas2 = DasCat_subNode(pCat, pRoot, sUri);
+	const DasNode* pDas2 = DasCat_subNode(pCat, pRoot, sUri, NULL);
 	nTest += info_or_exit(sUri, pDas2, "Root", true, nTest);
 	
 	/* spase root */
 	sUri = "tag:spase-group.org,2018:spase://";
-	const DasNode* pSpase = DasCat_subNode(pCat, pRoot, sUri);
+	const DasNode* pSpase = DasCat_subNode(pCat, pRoot, sUri, NULL);
 	nTest += info_or_exit(sUri, pSpase, "Root", true, nTest);
 	
 	/* cdaweb root */
 	sUri = "tag:cdaweb.sci.gsfc.nasa.gov,2018:";
-	const DasNode* pCdaWeb = DasCat_subNode(pCat, pRoot, sUri);
+	const DasNode* pCdaWeb = DasCat_subNode(pCat, pRoot, sUri, NULL);
 	nTest += info_or_exit(sUri, pCdaWeb, "Root", true, nTest);
 	
 	/* Deep dig from existing root */
 	sUri = "tag:das2.org,2012:site:/uiowa/juno/wav/uncalibrated/hrs";
-	const DasNode* pWavUcalHrs = DasCat_subNode(pCat, pRoot, sUri);
+	const DasNode* pWavUcalHrs = DasCat_subNode(pCat, pRoot, sUri, NULL);
 	nTest += info_or_exit(sUri, pWavUcalHrs, "Juno Waves Uncalibrated HFWBR", true, nTest);
 	
 	/* A deep path through the session: the levels walked above stay loaded */
 	sUri = "tag:das2.org,2012:site:/uiowa/juno/wav/survey/das2";
-	DasNode* pSurvey2 = DasCat_resolve(pCat, sUri);
+	DasNode* pSurvey2 = DasCat_resolve(pCat, sUri, NULL);
 	nTest += info_or_exit(sUri, pSurvey2, "Waves Survey Deep Read", true, nTest);
 	
 	/* Get a Query definition */
@@ -172,7 +172,44 @@ int main(int argc, char** argv) {
 	}
 	nTest += 1;
 	
-	/* TODO: Add more JSON catalog tests */
+	/* A seed named alone is found through the das catalog root.  It is the
+	   node the walk from the root already loaded, so the same path from it is the same node */
+	printf("TEST %d: Seed by name, relative paths from it ", nTest);
+	das_catmiss miss;
+	DasCat_setSeed(pCat, NULL, DASNODE_URI_SITES);
+	DasNode* pSites = DasCat_seed(pCat, &miss);
+	DasNode* pRel = DasCat_resolve(pCat, "uiowa/juno/wav/survey/das2", &miss);
+	DasNode* pFull = DasCat_resolve(pCat, sUri, &miss);
+	if((pSites == NULL) || (strcmp(DasNode_pathUri(pSites), DASNODE_URI_SITES) != 0) ||
+	   (pRel != pSurvey2) || (pFull != pSurvey2) || (DasCat_seedUrl(pCat) != NULL)){
+		printf("   [FAILED]\n");
+		return nTest;
+	}
+	printf("   [OKAY]\n");
+	nTest += 1;
+
+	/* A look-alike starts with the seed's name but not its separator; a
+	   full name elsewhere is taken as relative, so it is simply not there */
+	printf("TEST %d: Outside a seed named alone ", nTest);
+	if((DasCat_resolve(pCat, "tag:das2.org,2012:sites", &miss) != NULL) ||
+	   (miss.nCause != DASMISS_OUTSIDE) ||
+	   (DasCat_resolve(pCat, "tag:cdaweb.sci.gsfc.nasa.gov,2018:", &miss) != NULL) ||
+	   (miss.nCause != DASMISS_NOCHILD)){
+		printf("   [FAILED]\n");
+		return nTest;
+	}
+	printf("   [OKAY]\n");
+	nTest += 1;
+
+	printf("TEST %d: A seed name the catalog does not have ", nTest);
+	DasCat_setSeed(pCat, NULL, "tag:das2.org,2012:sites");
+	if((DasCat_seed(pCat, &miss) != NULL) || (miss.nCause != DASMISS_NOCHILD)){
+		printf("   [FAILED]\n");
+		return nTest;
+	}
+	printf("   [OKAY] %s\n", miss.sMsg);
+	nTest += 1;
+
 	del_DasCat(pCat);
 	return 0;
 }

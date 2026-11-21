@@ -47,10 +47,11 @@
 /* Time out values for connections */
 
 
-/* The compiled in seed: the index of the das catalog and its mirrors */
+/* The compiled in seed: the root of the das catalog and its mirrors.  The
+   files are named index.json for history, they list only the top catalogs */
 static const char* g_lDasDefRoots[2] = {
 	"https://das2.org/catalog/index.json",
-	"https://raw.githubusercontent.com/das-developers/das-cat/master/cat/index.json"
+	"https://raw.githubusercontent.com/das-developers/das-cat/main/cat/index.json"
 };
 static int g_nDasDefRoots = 2;
 
@@ -433,6 +434,18 @@ DasNode* _dasnode_fromJson(
 			return NULL;
 		}
 
+		/* A separator is at most _D2C_SEP_SZ - 1 characters, a das catalog
+		   rule.  A longer one is refused, not cut short: a shortened one
+		   would compose names that no catalog has. */
+		const DasJdo* pSep = DasJdo_subtree(pRoot, DASNODE_FRAG_PATH_SEP);
+		if((pSep != NULL) && (pSep->type == DASJSONTYPE_STR) &&
+		   (strlen(DasJdo_str(pSep)) >= _D2C_SEP_SZ)){
+			daslog_errorf("Error in catalog object from %s, separator '%s' is longer "
+			              "than %d characters", sFinalUrl, DasJdo_str(pSep), _D2C_SEP_SZ - 1);
+			free(pRoot); free(pShim);
+			return NULL;
+		}
+
 		DasCatNode* pThis = (DasCatNode*)calloc(1, sizeof(DasCatNode));
 		if(pThis == NULL){
 			daserrf(DASERR_NODE, "Couldn't allocate catalog node");
@@ -454,12 +467,12 @@ DasNode* _dasnode_fromJson(
 		pThis->pContainer = (DasJdo*)pVal;   /* Save the location of the sub-element tag */
 		strncpy(pThis->sContainer, sContainer, 63);
 
-		/* See if a path sep object is present */
+		/* No separator key means '/', a das catalog rule; null means none,
+		   children's names join the node's directly */
 		pThis->sPathSep[0] = '/';
-		const DasJdo* pSep = DasJdo_subtree(pRoot, DASNODE_FRAG_PATH_SEP);
 		if(pSep != NULL){
 			if(pSep->type == DASJSONTYPE_STR)
-				strncpy(pThis->sPathSep, DasJdo_str(pSep), 7);
+				memcpy(pThis->sPathSep, DasJdo_str(pSep), strlen(DasJdo_str(pSep)) + 1);
 			if(pSep->type == DASJSONTYPE_NULL)
 				pThis->sPathSep[0] = '\0';  /* Empty string */
 		}
@@ -526,18 +539,7 @@ bool _DasNode_subMatch(DasNode* pBase, const char* sSubPathWithSep)
 	if(!DasNode_isCatalog(pBase)) return false;
 	
 	DasCatNode* pThis = (DasCatNode*)pBase;
-	
-	
-	const char* sSep = "/";
-	const DasJdo* pObj = _DasNode_getJdoType(pBase, DASJSONTYPE_STR, DASNODE_FRAG_PATH_SEP);
-	if(pObj != NULL){
-		sSep = ((DasJsonStr*)pObj->value)->string;
-	}
-	else{
-		pObj = _DasNode_getJdoType(pBase, DASJSONTYPE_NULL, DASNODE_FRAG_PATH_SEP);
-		if(pObj != NULL) sSep = "";
-	}
-		
+	const char* sSep = pThis->sPathSep;   /* the default applied, see _dasnode_fromJson() */
 	size_t uSepLen = strlen(sSep);
 	
 	if(strncmp(sSep, sSubPathWithSep, uSepLen) != 0) return false;
@@ -576,11 +578,10 @@ DasNode* new_DasNode_json(
 ){
 	/* No name given means a root: the node has no URI and what is walked
 	   to below it is named by the path from it */
-	char sUri[600] = {'\0'};
-	if((sPathUri != NULL) && (sPathUri[0] != '\0')) _das_uri_expand(sPathUri, sUri, sizeof(sUri));
+	if(sPathUri == NULL) sPathUri = "";
 	if(sUrl == NULL) sUrl = "";
 
-	DasNode* pNode = _dasnode_fromJson(pBytes, uBytes, sUrl, sUrl, sUri);
+	DasNode* pNode = _dasnode_fromJson(pBytes, uBytes, sUrl, sUrl, sPathUri);
 	if(pNode) pNode->bOwner = true;
 	return pNode;
 }
@@ -623,125 +624,6 @@ void del_DasNode(DasNode* pThis)
 
 	pThis->bOwner = false;       /* so the tree pass takes this node too */
 	_DasNode_delTree(pThis);
-}
-
-/* ************************************************************************* */
-/* URI spellings, see node_p.h */
-
-static const char* g_aUriShort[] = {"site:", "test:"};
-
-const char* _das_uri_expand(const char* sIn, char* sOut, size_t uOut)
-{
-	if(uOut == 0) return sOut;
-	sOut[0] = '\0';
-	if(sIn == NULL) return sOut;
-	for(size_t u = 0; u < sizeof(g_aUriShort)/sizeof(g_aUriShort[0]); ++u){
-		size_t uLen = strlen(g_aUriShort[u]);
-		if(strncmp(sIn, g_aUriShort[u], uLen) != 0) continue;
-		/* The shorthand alone names the node, "tag:das2.org,2012:site";
-		   with more after it, it stands for the node plus its ":/" child
-		   separator, as the live catalog composes names top down */
-		const char* sRest = sIn + uLen;
-		while(*sRest == '/') ++sRest;
-		if(*sRest == '\0')
-			snprintf(sOut, uOut, DASNODE_URI_ROOT "%.*s", (int)(uLen - 1), g_aUriShort[u]);
-		else
-			snprintf(sOut, uOut, DASNODE_URI_ROOT "%s/%s", g_aUriShort[u], sRest);
-		return sOut;
-	}
-	strncpy(sOut, sIn, uOut - 1);
-	sOut[uOut - 1] = '\0';
-	return sOut;
-}
-
-/* ************************************************************************* */
-/* The mount table */
-
-/* Append a JSON string literal, escaping the two characters that matter */
-static size_t _dasnode_jsonStr(char* sOut, size_t uOut, const char* sIn)
-{
-	size_t u = 0;
-	if(u < uOut - 1) sOut[u++] = '"';
-	for(; (*sIn != '\0') && (u < uOut - 3); ++sIn){
-		if((*sIn == '"')||(*sIn == '\\')) sOut[u++] = '\\';
-		sOut[u++] = *sIn;
-	}
-	if(u < uOut - 1) sOut[u++] = '"';
-	sOut[u] = '\0';
-	return u;
-}
-
-/* read comments in node_p.h header on this function first before editing it */
-DasNode* _dasnode_newMountTable(const char** aUrl, const char** aUri, size_t uMounts)
-{
-	if(uMounts == 0){
-		daslog_error("A mount table needs at least one mount");
-		return NULL;
-	}
-	size_t uTotal = 0;
-	for(size_t i = 0; i < uMounts; ++i){
-		if((aUri[i] == NULL)||(aUri[i][0] == '\0')||(aUrl[i] == NULL)||(aUrl[i][0] == '\0')){
-			daslog_error("A mount needs both a URL to load and a URI to sit at");
-			return NULL;
-		}
-		uTotal += strlen(aUri[i]) + strlen(aUrl[i]);
-	}
-
-	/* The mount table is an ordinary Catalog node that only exists in memory.
-	 * Its separator is null, like the das catalog index's, so child names
-	 * are whole URI prefixes, and a lookup takes the first child whose name
-	 * is a prefix of the path.
-	 *
-	 * Sized from the inputs since a mount list has no natural bound.  The
-	 * escaping below at most doubles a string, hence the factor. */
-	size_t uJson = 256 + 2 * uTotal + 64 * uMounts;
-	char* sJson = (char*)calloc(uJson, 1);
-	if(sJson == NULL){
-		daserrf(DASERR_NODE, "Couldn't allocate the mount table");
-		return NULL;
-	}
-	size_t u = 0;
-	u += snprintf(sJson + u, uJson - u,
-		"{\"type\":\"Catalog\",\"version\":\"0.5\",\"name\":\"mounts\","
-		"\"title\":\"Mount table\",\"separator\":null,\"catalog\":{"
-	);
-
-	/* Longest URI first, see node_p.h.  A selection sort over an index
-	 * array; mount lists are a handful of entries */
-	size_t aOrder[64];
-	if(uMounts > sizeof(aOrder)/sizeof(aOrder[0])){
-		daslog_error("Too many mounts");
-		free(sJson);
-		return NULL;
-	}
-	for(size_t i = 0; i < uMounts; ++i) aOrder[i] = i;
-	for(size_t i = 0; i + 1 < uMounts; ++i){
-		size_t iMax = i;
-		for(size_t j = i + 1; j < uMounts; ++j)
-			if(strlen(aUri[aOrder[j]]) > strlen(aUri[aOrder[iMax]])) iMax = j;
-		size_t t = aOrder[i]; aOrder[i] = aOrder[iMax]; aOrder[iMax] = t;
-	}
-
-	for(size_t i = 0; i < uMounts; ++i){
-		size_t k = aOrder[i];
-		if(i > 0) u += snprintf(sJson + u, uJson - u, ",");
-		u += _dasnode_jsonStr(sJson + u, uJson - u, aUri[k]);
-		u += snprintf(sJson + u, uJson - u, ":{\"type\":\"Catalog\",\"urls\":[");
-		u += _dasnode_jsonStr(sJson + u, uJson - u, aUrl[k]);
-		u += snprintf(sJson + u, uJson - u, "]}");
-	}
-	u += snprintf(sJson + u, uJson - u, "}}");
-	if(u >= uJson - 1){
-		daslog_error("Mount URI or URL too long");
-		free(sJson);
-		return NULL;
-	}
-
-	/* Nothing is fetched here, the first walk through the table does that */
-	DasNode* pTable = _dasnode_fromJson(sJson, u, "memory:mounts", "memory:mounts", "");
-	free(sJson);
-	if(pTable != NULL) pTable->bOwner = true;
-	return pTable;
 }
 
 /* ************************************************************************* */
@@ -1027,7 +909,7 @@ static void _DasNodeWalk_advance(DasNodeWalk* pThis)
 		   driver knows whether the whole path failed and has the user's
 		   wording of it. */
 		const char* sLabel = DasNode_label(pF->pParent);
-		daslog_infof("Node %s (URI '%s') has no child node that starts with %s",
+		daslog_debugf("Node %s (URI '%s') has no child node that starts with %s",
 		              sLabel ? sLabel : "", pF->pParent->sPath, pF->sRest);
 		_DasNodeWalk_pop(pThis);
 	}
@@ -1153,7 +1035,7 @@ das_errcode DasNodeWalk_feed(
 
 	DasNode* pNode = _dasnode_fromJson(pBytes, uBytes, sUrl, sFinalUrl, pF->sUri);
 	if((pNode != NULL) && (pF->pParent == NULL) && (pNode->nType != DASNODETYPE_CATALOG)){
-		daslog_infof("%s is not a Catalog node, skipping it as a seed", sUrl);
+		daslog_debugf("%s is not a Catalog node, skipping it as a seed", sUrl);
 		_DasNode_delTree(pNode);
 		pNode = NULL;
 	}

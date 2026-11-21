@@ -169,7 +169,7 @@ HDRS:=$(notdir $(LIB_HDRS))
 
 # Test programs that need nothing from the excluded sources.  Anything that
 # opens a URL, reads credentials, or needs SPICE stays out.
-TEST_PROGS:=TestLog TestValue TestDatum TestGen TestForm TestCplx TestVar \
+TEST_PROGS:=TestLog TestArgs TestValue TestDatum TestGen TestForm TestCplx TestVar \
  TestVarSubset TestDim TestDesc TestUnits TestTT2000 TestArray TestDs TestIter \
  TestRaggedEncode TestFilter TestUri TestV3Read TestFeed TestWalk
 
@@ -388,6 +388,8 @@ test: build_test
 	@echo "INFO: wasm test programs run under $(NODE)"
 	@echo "INFO: Running unit test for errors and logging, $(BD)/TestLog..."
 	@$(NODE) $(BD)/TestLog.js
+	@echo "INFO: Running unit test for command line helpers, $(BD)/TestArgs..."
+	@$(NODE) $(BD)/TestArgs.js
 	@echo "INFO: Running unit test for the value layer, $(BD)/TestValue..."
 	@$(NODE) $(BD)/TestValue.js
 	@echo "INFO: Running unit test for the datum layer, $(BD)/TestDatum..."
