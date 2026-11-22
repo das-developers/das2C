@@ -32,7 +32,19 @@ seed.  Callers of `DasCat_setPrefix()` need a small edit, see below.
 - The compiled in GitHub mirror of the catalog root uses the `main`
   branch.
 
+- A FlagSet flag with `subSep` is a multi-select, the das2 `set:`
+  constraint.  Each switch on it sends its `pval`, and the elements are
+  joined with `subSep` behind the flag's prefix once, in node order:
+  `fan=090,270`, or `-lfdr LEx` with `subSep` "".
+
+- Query URLs are easier to read: `dasurl_encode()` leaves `: / @ , =`
+  plain, so times print as `2026-01-02T14:30`.  Servers decode either
+  form the same way.
+
 ### Fixes
+
+- `dasurl_encode()` used `isalnum()`, so in a single byte locale bytes
+  above 127 went out unencoded.
 
 - `dasarg_getOptVal()` could leave its buffer unterminated, and cut long
   values without saying so.  A value that does not fit is now an error.
@@ -64,9 +76,17 @@ seed.  Callers of `DasCat_setPrefix()` need a small edit, see below.
   the log level defaults to info, and `-q` and verbose mode are gone.
   `DASFETCH_SEED` replaces `DASFETCH_START`.
 
+- das_fetch: `url -o params` prints the source's base URLs, then one
+  decoded query parameter per line, for reading.
+
 ### Build and test
 
 - New TestArgs for the command line helpers.
+
+- New fixture `test/das_fetch/subsep_0.7.json` for multi-select flags.
+
+- The CMake and Windows das_fetch tests still used the removed `-C`
+  option.
 
 
 ## 3.0.5 - 2026-11-18

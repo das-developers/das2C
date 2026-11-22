@@ -1,0 +1,56 @@
+{
+	"type": "HttpStreamSrc",
+	"version": "0.7",
+	"label": "subSep test source",
+	"title": "Synthetic node for one-level multi-select flags (subSep)",
+	"protocol": {
+		"method": "GET",
+		"baseUrls": ["https://example.org/das/server?server=dataset&dataset=Test/SubSep"],
+		"httpParams": {
+			"start_time": {"required": true, "type": "isotime"},
+			"end_time": {"required": true, "type": "isotime"},
+			"params": {
+				"required": false, "type": "FlagSet", "flagSep": " ",
+				"flags": {
+					"fan": {"type": "string", "prefix": "fan=", "subSep": ","},
+					"outputType": {"type": "string", "prefix": "outputType="},
+					"lfdr": {"type": "string", "prefix": "-lfdr ", "subSep": ""}
+				}
+			}
+		}
+	},
+	"interface": {
+		"coords": {"time": {"label": "Time", "props": {
+			"min": {"label": "Minimum", "value": "2017-168", "set": {"param": "start_time", "required": true}},
+			"max": {"label": "Maximum", "value": "2017-169", "set": {"param": "end_time", "required": true}}
+		}}},
+		"options": {"label": "Options", "props": {
+			"fan_090": {"label": "Fan 090", "title": "Include JEDI fan 090", "type": "boolean", "value": false,
+				"set": {"param": "params", "flag": "fan", "value": true, "pval": "090"}},
+			"fan_180": {"label": "Fan 180", "title": "Include JEDI fan 180", "type": "boolean", "value": false,
+				"set": {"param": "params", "flag": "fan", "value": true, "pval": "180"}},
+			"fan_270": {"label": "Fan 270", "title": "Include JEDI fan 270", "type": "boolean", "value": false,
+				"set": {"param": "params", "flag": "fan", "value": true, "pval": "270"}},
+			"outputType": {"label": "Output Type", "type": "enum", "value": null,
+				"set": {"param": "params", "flag": "outputType",
+					"enum": [{"value": "counts"}, {"value": "counts_per_sec"}, {"value": "flux"}]}},
+			"lfdr_L": {"label": "LFDR L", "title": "Include LFDR item L", "type": "boolean", "value": false,
+				"set": {"param": "params", "flag": "lfdr", "value": true, "pval": "L"}},
+			"lfdr_H": {"label": "LFDR H", "title": "Include LFDR item H", "type": "boolean", "value": false,
+				"set": {"param": "params", "flag": "lfdr", "value": true, "pval": "H"}},
+			"lfdr_Ex": {"label": "LFDR Ex", "title": "Include LFDR item Ex", "type": "boolean", "value": false,
+				"set": {"param": "params", "flag": "lfdr", "value": true, "pval": "Ex"}},
+			"lfdr_Ez": {"label": "LFDR Ez", "title": "Include LFDR item Ez", "type": "boolean", "value": false,
+				"set": {"param": "params", "flag": "lfdr", "value": true, "pval": "Ez"}}
+		}},
+		"examples": [
+			{"label": "Two fans, picked out of order", "settings": {
+				"options/props/fan_270": true, "options/props/fan_090": true,
+				"options/props/outputType": "flux"}},
+			{"label": "LFDR L and Ex, no separator", "settings": {
+				"options/props/lfdr_Ex": true, "options/props/lfdr_L": true}},
+			{"label": "One fan", "settings": {"options/props/fan_180": true}},
+			{"label": "Nothing optional", "settings": {}}
+		]
+	}
+}

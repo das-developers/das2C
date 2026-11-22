@@ -462,7 +462,11 @@ size_t dasurl_encode(const char* sIn, char* sOut, size_t uOut)
 	size_t uNeed = 0;
 	if(uOut > 0) sOut[0] = '\0';
 	for(const unsigned char* p = (const unsigned char*)sIn; p && *p; ++p){
-		bool bPlain = isalnum(*p)||(*p == '-')||(*p == '.')||(*p == '_')||(*p == '~');
+		/* Ranges, not isalnum(): in a single byte locale that passes
+		   bytes above 127 through */
+		unsigned char c = *p;
+		bool bPlain = ((c >= 'a')&&(c <= 'z'))||((c >= 'A')&&(c <= 'Z'))||((c >= '0')&&(c <= '9'))||
+		              (strchr("-._~:/@,=", c) != NULL);
 		size_t n = bPlain ? 1 : 3;
 		if(uNeed + n < uOut){
 			if(bPlain){

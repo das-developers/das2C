@@ -211,9 +211,10 @@ static void prnHelpMain(void)
 "\n"
 "      FILE may be a URL.  -m may be repeated.\n"
 "\n"
-"   -o, --output SECTIONS\n"
-"      For the node command, what to print about a data source.  A comma\n"
-"      separated list, see '" PROG " node -h'.\n"
+"   -o, --output OUTPUT\n"
+"      What to print, for the commands that offer a choice: the sections\n"
+"      of a data source for node, the layout of the URL for url.  See\n"
+"      '" PROG " node -h' and '" PROG " url -h'.\n"
 "\n"
 "   -t, --type TYPES\n"
 "      Where a path leads to several sources for the same dataset, use the\n"
@@ -430,7 +431,20 @@ static void prnHelpQuery(bool bData)
 "   between them, usually version=das2 or version=das3.  Its default is\n"
 "   what the server sends when the key is not given.\n"
 "\n"
-"OPTIONS\n"
+"OPTIONS\n", stdout);
+	if(!bData)
+		fputs(
+"   -o, --output FORM\n"
+"      How to print the URL, one of:\n"
+"\n"
+"         url      The whole URL on one line, ready to paste.  The\n"
+"                  default.\n"
+"         params   The source's base URLs, one per line, in the order\n"
+"                  'data' tries them.  Then each parameter the query adds,\n"
+"                  on a line of its own, indented three spaces and\n"
+"                  decoded.  For reading, not for pasting.\n"
+"\n", stdout);
+	fputs(
 "   -p, --param PARAM=VALUE\n"
 "      Add PARAM=VALUE to the request URL as typed, without checking it\n"
 "      against the source's query keys.  May be repeated.  This ties a\n"
@@ -463,6 +477,14 @@ static void prnHelpQuery(bool bData)
 "   The URL a query turns into, without running it:\n"
 "\n"
 "      " PROG " url uiowa/juno/wav/survey time=2021-02-21,2021-02-22 b\n"
+"\n"
+"   The same query, one parameter per line:\n"
+"\n"
+"      " PROG " url -o params uiowa/juno/wav/survey time=2021-02-21,2021-02-22 b\n"
+"      https://jupiter.physics.uiowa.edu/das/server?server=dataset&dataset=Juno/WAV/Survey\n"
+"         end_time=2021-02-22\n"
+"         start_time=2021-02-21\n"
+"         params=B\n"
 "\n", stdout);
 }
 
@@ -1264,6 +1286,43 @@ static int termWidth(void)
 }
 
 /* -o SECTIONS: comma separated section names to a bit set */
+/* url -o params.  Each base URL as the node lists it, then the
+ * parameters the request adds, which are the same for every base.
+ * DasSrc_reqUrl() writes the base, then '?' or '&', then the request's
+ * parameters, so they are what follows base 0 in sUrl.  Decoded as a
+ * server reads a query, '+' is a space, but control characters stay
+ * encoded so a value can't break the layout. */
+static void printParams(const DasSrc* pSrc, const char* sUrl)
+{
+	for(size_t u = 0; u < DasSrc_numBaseUrls(pSrc); ++u){
+		const char* sBase = DasSrc_baseUrlAt(pSrc, u);
+		if(sBase) printf("%s\n", sBase);
+	}
+	const char* sBase = DasSrc_baseUrlAt(pSrc, 0);
+	size_t uBase = sBase ? strlen(sBase) : 0;
+	if((sBase == NULL)||(strncmp(sUrl, sBase, uBase) != 0)||(sUrl[uBase] == '\0')) return;
+
+	for(const char* p = sUrl + uBase + 1; *p; ){
+		const char* pEnd = strchr(p, '&');
+		if(pEnd == NULL) pEnd = p + strlen(p);
+		if(pEnd > p){
+			fputs("   ", stdout);
+			for(const char* c = p; c < pEnd; ++c){
+				if(*c == '+'){ putchar(' '); continue; }
+				if((*c == '%') && (pEnd - c >= 3) &&
+				   isxdigit((unsigned char)c[1]) && isxdigit((unsigned char)c[2])){
+					char sHex[3] = {c[1], c[2], '\0'};
+					unsigned char b = (unsigned char)strtoul(sHex, NULL, 16);
+					if((b >= 0x20) && (b != 0x7F)){ putchar(b); c += 2; continue; }
+				}
+				putchar(*c);
+			}
+			putchar('\n');
+		}
+		p = (*pEnd == '&') ? pEnd + 1 : pEnd;
+	}
+}
+
 static bool parseShow(const char* sList, unsigned* puShow)
 {
 	char sCopy[256];
@@ -1301,7 +1360,7 @@ int main(int argc, char** argv)
 	bool bRoot = false;
 	bool bUpdate = false;
 	bool bNoCache = false;
-	bool bOutput = false;
+	const char* sOutput = NULL;   /* -o, read once the command is known */
 	const char* aKeyVals[MAX_KEYS];   /* KEY=VALUE arguments, applied in order */
 	size_t uKeyVals = 0;
 	const char* aRaw[MAX_RAW];        /* -p PARAM=VALUE arguments */
@@ -1352,14 +1411,7 @@ int main(int argc, char** argv)
 				}
 				sAccept = sAcceptBuf;
 				break;
-			case 'o':
-				if(!parseShow(sVal, &g_uShow)){
-					fprintf(stderr, PROG ": -o takes a list from examples, coords, data, options, "
-					        "formats, sources, all\n");
-					return RET_USAGE;
-				}
-				bOutput = true;
-				break;
+			case 'o': sOutput = sVal; break;
 			case 'c': sCacheArg = sVal; break;
 			case 'w':{
 				char* pEnd = NULL;
@@ -1473,10 +1525,27 @@ int main(int argc, char** argv)
 	}
 	if(bNode && (uKeyVals > 0))
 		daslog_warn("KEY=VALUE arguments are ignored by the node command");
-	if(bOutput && !bNode){
-		fprintf(stderr, PROG ": -o is for the node command, the %s command writes to "
-		        "standard output\n", sCmd);
-		return finish(pCat, RET_USAGE);
+	bool bUrlParams = false;
+	if(sOutput != NULL){
+		if(bNode){
+			if(!parseShow(sOutput, &g_uShow)){
+				fprintf(stderr, PROG ": -o for the node command takes a list from examples, "
+				        "coords, data, options, formats, sources, all\n");
+				return finish(pCat, RET_USAGE);
+			}
+		}
+		else if(bUrl){
+			if(strieq(sOutput, "params")) bUrlParams = true;
+			else if(!strieq(sOutput, "url")){
+				fprintf(stderr, PROG ": -o for the url command is url or params\n");
+				return finish(pCat, RET_USAGE);
+			}
+		}
+		else{
+			fprintf(stderr, PROG ": -o is for the node and url commands, the %s command "
+			        "writes to standard output\n", sCmd);
+			return finish(pCat, RET_USAGE);
+		}
 	}
 
 	/* Node cache: the library writes none unless asked, das_fetch asks for
@@ -1666,6 +1735,7 @@ int main(int argc, char** argv)
 		size_t uNeed = DasSrc_reqUrl(pSrc, pReq, 0, sUrl, sizeof(sUrl));
 		if(uNeed == 0) nRet = RET_QUERY;
 		else if(uNeed >= sizeof(sUrl)){ daslog_error("Query URL too long"); nRet = RET_QUERY; }
+		else if(bUrlParams) printParams(pSrc, sUrl);
 		else printf("%s\n", sUrl);
 		del_DasReq(pReq);
 		del_DasSrc(pSrc);

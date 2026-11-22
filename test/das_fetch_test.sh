@@ -11,6 +11,7 @@
 #   hsk_flex_0.7.json     0.7 with 73 data variables and a das2/das3 version enum
 #   juno_survey_0.6.json  2018 era HttpStreamSrc 0.6, flag_set with space
 #                         separator, base URL that already has a query string
+#   subsep_0.7.json       0.7 multi-select flags (subSep), from das-cat
 #
 # Each case is: arguments, then the exact URL expected on stdout.  Error cases
 # check the exit code instead.
@@ -65,7 +66,7 @@ JB="http://127.0.0.1:8765/data/juno_survey.d2s?server=dataset&dataset=Juno/WAV/S
 # --- 0.7 geomag: ranges, shortcuts, aliases, flags, examples, formats --------
 
 expect_url $G time=2026-04-01,2026-04-01T01:30,60 lshell -- \
-	"$GB?read.time.min=2026-04-01&read.time.max=2026-04-01T01%3A30&read.time.inter=60&read.data=lshell"
+	"$GB?read.time.min=2026-04-01&read.time.max=2026-04-01T01:30&read.time.inter=60&read.data=lshell"
 
 # minimum/maximum spellings work on a 0.7 node, section prefix optional
 expect_url $G coord.time.minimum=2026-02-01 time.maximum=2026-02-02 inter=60 -- \
@@ -132,7 +133,7 @@ expect_url $SU 0 -- \
 	"$GB?read.time.min=2026-01-01&read.time.max=2026-01-02&read.time.inter=60"
 unset DASFETCH_MOUNT
 expect_url -m $G=$SU -s $H=$HU 0 -- \
-	"$HB?read.time.min=2026-01-06T14%3A12&read.time.max=2026-01-06T14%3A24"   # a seed and a mount make an offline catalog
+	"$HB?read.time.min=2026-01-06T14:12&read.time.max=2026-01-06T14:24"   # a seed and a mount make an offline catalog
 expect_url -m $G=$SU -s $H=$HU $SU 0 -- \
 	"$GB?read.time.min=2026-01-01&read.time.max=2026-01-02&read.time.inter=60"
 expect_rc 2 url -m site:/uiowa 0                              # mount needs FILE=NAME
@@ -150,7 +151,7 @@ export DASFETCH_SEED=$G=$SU
 expect_url 0 -- \
 	"$GB?read.time.min=2026-01-01&read.time.max=2026-01-02&read.time.inter=60"
 expect_url -s $H=$HU 0 -- \
-	"$HB?read.time.min=2026-01-06T14%3A12&read.time.max=2026-01-06T14%3A24"
+	"$HB?read.time.min=2026-01-06T14:12&read.time.max=2026-01-06T14:24"
 expect_rc 2 url -r 0                                          # the root is no source
 export DASFETCH_SEED=
 expect_rc 2 url 0                                             # no seed file, no default path
@@ -168,13 +169,13 @@ expect_url $G 0 -p read.time.inter=5 -p extra=1 -- \
 
 # the node default (das3) is not sent, only choices are
 expect_url $H 0 -- \
-	"$HB?read.time.min=2026-01-06T14%3A12&read.time.max=2026-01-06T14%3A24"
+	"$HB?read.time.min=2026-01-06T14:12&read.time.max=2026-01-06T14:24"
 expect_url $H 0 version=das2 nmi_errors irq3_errors data.hsk_task_errors -- \
-	"$HB?read.time.min=2026-01-06T14%3A12&read.time.max=2026-01-06T14%3A24&read.data=nmi_errors%2Cirq3_errors%2Chsk_task_errors&format.version=2"
+	"$HB?read.time.min=2026-01-06T14:12&read.time.max=2026-01-06T14:24&read.data=nmi_errors,irq3_errors,hsk_task_errors&format.version=2"
 expect_url $H 1 -- \
-	"$HB?read.time.min=2026-01-05T14%3A24&read.time.max=2026-01-06T14%3A24&format.type=cdf"
+	"$HB?read.time.min=2026-01-05T14:24&read.time.max=2026-01-06T14:24&format.type=cdf"
 expect_url $H 0 formats.csv das.version=das2 time.res=10 -- \
-	"$HB?read.time.min=2026-01-06T14%3A12&read.time.max=2026-01-06T14%3A24&bin.time.max=10&format.version=2&format.type=csv"
+	"$HB?read.time.min=2026-01-06T14:12&read.time.max=2026-01-06T14:24&bin.time.max=10&format.version=2&format.type=csv"
 
 # --- 0.6 juno: '&' joiner, space separated flags, protocol level examples ---
 
@@ -187,7 +188,38 @@ expect_url $J time=2021-02-21,2021-02-22,0 ascii option.xmas=true -- \
 # URL comes out in interface order; user keys still win, required defaults
 # must not clobber the example's values
 expect_url $J 7 resolution=10 -- \
-	"$JB&end_time=2016-177T00%3A00&start_time=2016-176T00%3A00&resolution=10&params=B"
+	"$JB&end_time=2016-177T00:00&start_time=2016-176T00:00&resolution=10&params=B"
+
+# --- 0.7 subsep: multi-select flags, elements joined behind one prefix ------
+
+S=$FX/subsep_0.7.json
+SB="https://example.org/das/server?server=dataset&dataset=Test/SubSep&start_time=2017-168&end_time=2017-169"
+expect_url $S 0 -- "$SB&params=fan=090,270%20outputType=flux"
+expect_url $S lfdr_ex lfdr_l fan_180 -- "$SB&params=fan=180%20-lfdr%20LEx"
+
+# --- url -o params: every base, then the query's parameters decoded ------
+
+expect_url -o params $S lfdr_ex lfdr_l fan_180 -- \
+"https://example.org/das/server?server=dataset&dataset=Test/SubSep
+   start_time=2017-168
+   end_time=2017-169
+   params=fan=180 -lfdr LEx"
+
+expect_url -o params $G 0 -- \
+"$GB
+http://127.0.0.1:8765/data/geomag_alt.d2s
+   read.time.min=2026-01-01
+   read.time.max=2026-01-02
+   read.time.inter=60"
+
+# a raw '+' and '%' show as typed, not as a space or an escape
+expect_url -o params $S 3 -p 'x=a+b%41' -- \
+"https://example.org/das/server?server=dataset&dataset=Test/SubSep
+   start_time=2017-168
+   end_time=2017-169
+   x=a+b%41"
+
+expect_url -o url $S 3 -- "$SB"
 
 # --- choosing among a node's sources by -t ---------------------------------
 
@@ -198,7 +230,7 @@ expect_url $J 7 resolution=10 -- \
 T=$FX/cat/twin.json
 O=$FX/cat/old.json
 expect_url -s $T=site:/uiowa/twin 0 -- \
-	"$HB?read.time.min=2026-01-06T14%3A12&read.time.max=2026-01-06T14%3A24"
+	"$HB?read.time.min=2026-01-06T14:12&read.time.max=2026-01-06T14:24"
 expect_url -s $T=site:/uiowa/twin -t text/csv 0 -- \
 	"$GB?read.time.min=2026-01-01&read.time.max=2026-01-02&read.time.inter=60"
 expect_url -s $T=site:/uiowa/twin -t 'image/png, application/x-cdf' 0 -- \
@@ -214,11 +246,11 @@ expect_url -s $T=site:/uiowa/twin --type das2 0 -- \
 	"$GB?read.time.min=2026-01-01&read.time.max=2026-01-02&read.time.inter=60"
 expect_rc 3 url -s $T=site:/uiowa/twin -t das 0                   # both have it, name one
 expect_url -s $T=site:/uiowa/twin -t das3 0 -- \
-	"$HB?read.time.min=2026-01-06T14%3A12&read.time.max=2026-01-06T14%3A24"   # everyday names
+	"$HB?read.time.min=2026-01-06T14:12&read.time.max=2026-01-06T14:24"   # everyday names
 expect_url -s $T=site:/uiowa/twin -t DAS3 0 -- \
-	"$HB?read.time.min=2026-01-06T14%3A12&read.time.max=2026-01-06T14%3A24"
+	"$HB?read.time.min=2026-01-06T14:12&read.time.max=2026-01-06T14:24"
 expect_url -s $T=site:/uiowa/twin -t d3b 0 -- \
-	"$HB?read.time.min=2026-01-06T14%3A12&read.time.max=2026-01-06T14%3A24"
+	"$HB?read.time.min=2026-01-06T14:12&read.time.max=2026-01-06T14:24"
 expect_rc 3 url -s $T=site:/uiowa/twin -t d3t 0                   # no das3 text source
 expect_url -s $T=site:/uiowa/twin -t d2s 0 -- \
 	"$GB?read.time.min=2026-01-01&read.time.max=2026-01-02&read.time.inter=60"
@@ -252,6 +284,10 @@ expect_url -m $G=site:/uiowa/twin/flex -m $T=site:/uiowa/twin -t '*/*' site:/uio
 	"$GB?read.time.min=2026-01-01&read.time.max=2026-01-02&read.time.inter=60"
 
 # --- error paths, by exit code ----------------------------------------------
+
+expect_rc 2 url -o coords $S
+expect_rc 2 node -o params $S
+expect_rc 2 json -o url $S
 
 expect_rc 4 url $G time=2026-04-01,2026-04-01T01:30          # required inter missing
 expect_rc 4 url $G 0 foo=1                                    # no such key

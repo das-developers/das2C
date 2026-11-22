@@ -314,7 +314,7 @@ static bool _dassrc_isPropDict(const DasJdo* p)
 static const DasJdo* _dassrc_groupProps(const DasJdo* pGroup)
 {
 	const DasJdo* pProps = _dassrc_jget(pGroup, "props");
-	return _dassrc_jisdict(pProps) ? pProps : pGroup;
+	return _dassrc_jisdict(pProps) ? pProps : pGroup;   /* 2018 layout: no props */
 }
 
 /* Count and fill share one walk.  With pSrc NULL only the counts are
@@ -448,7 +448,7 @@ static void _dassrc_walkSection(_walk_t* pW, das_srcsec sec, const DasJdo* pSec)
 static void _dassrc_walkIface(_walk_t* pW, const DasJdo* pIface)
 {
 	const DasJdo* pCoords = _dassrc_jget(pIface, "coords");
-	if(pCoords == NULL) pCoords = _dassrc_jget(pIface, "coordinates");
+	if(pCoords == NULL) pCoords = _dassrc_jget(pIface, "coordinates");   /* 2018 layout */
 	_dassrc_walkSection(pW, DASSRCSEC_COORD, pCoords);
 	_dassrc_walkSection(pW, DASSRCSEC_DATA, _dassrc_jget(pIface, "data"));
 	_dassrc_walkSection(pW, DASSRCSEC_FORMAT, _dassrc_jget(pIface, "formats"));
@@ -516,6 +516,9 @@ static bool _DasSrcCtrl_flagIsSlot(const DasSrcCtrl* pC)
 	return (_dassrc_jstr(pC->pSet, "flag") != NULL) &&
 	       (pC->pProp->type != DASSRCPROPTYPE_BOOL);
 }
+
+/* ---- 2018 layout, begin: protocol level examples, read back into
+   controls.  Delete down to the end marker. ---- */
 
 /* The prefix of a control's set block flag, "" when none */
 static const char* _DasSrcCtrl_flagPrefix(const DasSrcCtrl* pC)
@@ -660,12 +663,13 @@ static bool _DasSrc_exampleFromParams(DasSrc* pThis, DasReq* pReq, const DasJdo*
 	}
 	return true;
 }
+/* ---- 2018 layout, end ---- */
 
 static bool _DasSrc_loadExamples(DasSrc* pThis)
 {
 	const DasJdo* pEx = _dassrc_jget(pThis->pIface, "examples");
 	const DasJdo* pProto = _dassrc_jget(pThis->pDoc, "protocol");
-	bool bLegacyEx = false;
+	bool bLegacyEx = false;   /* 2018 layout, through the if below */
 	if(!_dassrc_jisary(pEx)){
 		pEx = _dassrc_jget(pProto, "examples");
 		bLegacyEx = _dassrc_jisdict(pEx);
@@ -677,6 +681,7 @@ static bool _DasSrc_loadExamples(DasSrc* pThis)
 	if(pThis->aExample == NULL) return false;
 
 	char sKey[256], sVal[SCALAR_SZ];
+	/* ---- 2018 layout, begin ---- */
 	if(bLegacyEx){
 		for(const DasJsonDictEl* pEl = DasJdo_dictFirst(pEx); pEl; pEl = pEl->next){
 			DasReq* pReq = new_DasReq();
@@ -693,6 +698,7 @@ static bool _DasSrc_loadExamples(DasSrc* pThis)
 		}
 		return true;
 	}
+	/* ---- 2018 layout, end ---- */
 
 	for(const DasJsonAryEl* pEl = DasJdo_aryFirst(pEx); pEl; pEl = pEl->next){
 		DasReq* pReq = new_DasReq();
@@ -776,10 +782,11 @@ DasSrc* new_DasSrc_json(const char* sDoc, size_t uLen, const char* sPathUri, con
 	pStream->pProto = _dassrc_jget(pDoc, "protocol");
 	if(!_dassrc_jisdict(pStream->pProto)) pStream->pProto = NULL;
 	pStream->pParams = _dassrc_jget(pStream->pProto, "httpParams");
-	if(pStream->pParams == NULL) pStream->pParams = _dassrc_jget(pStream->pProto, "http_params");
+	if(pStream->pParams == NULL) pStream->pParams = _dassrc_jget(pStream->pProto, "http_params");   /* 2018 layout */
 	pStream->pBaseUrls = _dassrc_jget(pStream->pProto, "baseUrls");
-	if(pStream->pBaseUrls == NULL) pStream->pBaseUrls = _dassrc_jget(pStream->pProto, "base_urls");
+	if(pStream->pBaseUrls == NULL) pStream->pBaseUrls = _dassrc_jget(pStream->pProto, "base_urls");   /* 2018 layout */
 	if(!_dassrc_jisary(pStream->pBaseUrls)) pStream->pBaseUrls = NULL;
+	/* 2018 layout, both lines; nothing reads bLegacy */
 	pThis->bLegacy = (_dassrc_jget(pStream->pProto, "http_params") != NULL) ||
 	                 (_dassrc_jget(pThis->pIface, "coordinates") != NULL);
 
@@ -878,7 +885,7 @@ static const DasJdo* _DasSrc_auth(const DasSrc* pThis)
 {
 	const DasJdo* pProto = _dassrc_jget(pThis->pDoc, "protocol");
 	const DasJdo* pAuth = _dassrc_jget(pProto, "authorization");
-	return pAuth ? pAuth : _dassrc_jget(pProto, "authentication");
+	return pAuth ? pAuth : _dassrc_jget(pProto, "authentication");   /* 2018 layout */
 }
 
 bool DasSrc_needsAuth(const DasSrc* pThis)
@@ -1479,7 +1486,8 @@ const char* DasSrc_mime(const DasSrc* pThis, const DasReq* pReq)
 	const DasSrcGroup* pG = _DasSrc_chosenFormat(pThis, pReq);
 	if((pG != NULL) && (pG->uMime > 0)) return pG->aMime[0];
 
-	/* 2018 nodes state a default format outside the interface */
+	/* 2018 nodes state a default format outside the interface.  2018 layout,
+	   down to the return. */
 	const char* s = _dassrc_jstr(pThis->pDoc, "format/default/mime");
 	if(s == NULL) s = _dassrc_jstr(pThis->pDoc, "protocol/format/default/mime");
 	if(s == NULL) s = _dassrc_jstr(pThis->pDoc, "interface/format/default/mime");
@@ -1510,8 +1518,23 @@ const char* DasSrc_baseUrlAt(const DasSrc* pThis, size_t uIdx)
 }
 
 /* The output parameter list.  Names are borrowed from the document or the
- * requisition, values are owned because flag sets grow by appending. */
-typedef struct { const char* sName; char* sVal; } _param_t;
+ * requisition.  A flag set parameter collects one piece per flag sent and
+ * is joined with its flagSep when the URL is built, not as controls are
+ * visited, because a flag with a subSep gathers elements from controls
+ * anywhere in the node into one piece.  A plain value set afterwards
+ * replaces the pieces, as a raw parameter replaces what controls built. */
+typedef struct {
+	const DasJdo* pFlag;  /* merge key, the flag's entry; NULL when not merged */
+	char* sVal;           /* owned, prefix then element(s) */
+} _piece_t;
+
+typedef struct {
+	const char* sName;
+	char* sVal;           /* owned, plain value, NULL when only flags */
+	const char* sFlagSep; /* borrowed from the document */
+	_piece_t* aPiece; size_t uPiece; size_t uCap;
+} _param_t;
+
 typedef struct { _param_t* a; size_t u; size_t uCap; } _out_t;
 
 static _param_t* _dassrc_outFind(_out_t* pO, const char* sName)
@@ -1521,43 +1544,110 @@ static _param_t* _dassrc_outFind(_out_t* pO, const char* sName)
 	return NULL;
 }
 
-static bool _dassrc_outSet(_out_t* pO, const char* sName, const char* sVal)
+static _param_t* _dassrc_outGet(_out_t* pO, const char* sName)
 {
 	_param_t* p = _dassrc_outFind(pO, sName);
-	if(p == NULL){
-		if(pO->u == pO->uCap){
-			size_t uCap = pO->uCap ? pO->uCap * 2 : 16;
-			_param_t* a = (_param_t*)realloc(pO->a, uCap * sizeof(_param_t));
-			if(a == NULL) return false;
-			pO->a = a;
-			pO->uCap = uCap;
-		}
-		p = pO->a + pO->u;
-		p->sName = sName;
-		p->sVal = NULL;
-		pO->u += 1;
+	if(p != NULL) return p;
+	if(pO->u == pO->uCap){
+		size_t uCap = pO->uCap ? pO->uCap * 2 : 16;
+		_param_t* a = (_param_t*)realloc(pO->a, uCap * sizeof(_param_t));
+		if(a == NULL) return NULL;
+		pO->a = a;
+		pO->uCap = uCap;
 	}
+	p = pO->a + pO->u;
+	memset(p, 0, sizeof(_param_t));
+	p->sName = sName;
+	pO->u += 1;
+	return p;
+}
+
+static void _dassrc_outDropPieces(_param_t* p)
+{
+	for(size_t u = 0; u < p->uPiece; ++u) free(p->aPiece[u].sVal);
+	free(p->aPiece);
+	p->aPiece = NULL;
+	p->uPiece = 0;
+	p->uCap = 0;
+}
+
+static bool _dassrc_outSet(_out_t* pO, const char* sName, const char* sVal)
+{
+	_param_t* p = _dassrc_outGet(pO, sName);
+	if(p == NULL) return false;
 	char* sNew = _dassrc_strdupz(sVal);
 	if(sNew == NULL) return false;
 	free(p->sVal);
 	p->sVal = sNew;
+	_dassrc_outDropPieces(p);
 	return true;
 }
 
-static bool _dassrc_outAddFlag(_out_t* pO, const char* sName, const char* sFlagVal, const char* sSep)
-{
-	_param_t* p = _dassrc_outFind(pO, sName);
-	if((p == NULL)||(p->sVal[0] == '\0')) return _dassrc_outSet(pO, sName, sFlagVal);
-	char* sNew = dasstr_newf("%s%s%s", p->sVal, sSep, sFlagVal);
-	if(sNew == NULL) return false;
-	free(p->sVal);
-	p->sVal = sNew;
+/* Send a flag.  With sSubSep, a second element for the same flag joins
+ * the first piece instead of starting another. */
+static bool _dassrc_outAddFlag(
+	_out_t* pO, const char* sName, const char* sFlagSep, const DasJdo* pFlag,
+	const char* sPrefix, const char* sSubSep, const char* sElem
+){
+	_param_t* p = _dassrc_outGet(pO, sName);
+	if(p == NULL) return false;
+	p->sFlagSep = sFlagSep;
+
+	if(sSubSep != NULL){
+		for(size_t u = 0; u < p->uPiece; ++u){
+			_piece_t* pP = p->aPiece + u;
+			if(pP->pFlag != pFlag) continue;
+			char* sNew = dasstr_newf("%s%s%s", pP->sVal, sSubSep, sElem);
+			if(sNew == NULL) return false;
+			free(pP->sVal);
+			pP->sVal = sNew;
+			return true;
+		}
+	}
+	if(p->uPiece == p->uCap){
+		size_t uCap = p->uCap ? p->uCap * 2 : 4;
+		_piece_t* a = (_piece_t*)realloc(p->aPiece, uCap * sizeof(_piece_t));
+		if(a == NULL) return false;
+		p->aPiece = a;
+		p->uCap = uCap;
+	}
+	_piece_t* pP = p->aPiece + p->uPiece;
+	pP->pFlag = sSubSep ? pFlag : NULL;
+	pP->sVal = dasstr_newf("%s%s", sPrefix ? sPrefix : "", sElem);
+	if(pP->sVal == NULL) return false;
+	p->uPiece += 1;
 	return true;
+}
+
+/* The value as sent: the plain value, if any, then each piece, joined
+ * with flagSep.  Allocated, NULL when out of memory. */
+static char* _dassrc_outJoin(const _param_t* p)
+{
+	const char* sSep = p->sFlagSep ? p->sFlagSep : " ";
+	size_t uSep = strlen(sSep);
+	size_t uLen = (p->sVal ? strlen(p->sVal) : 0) + 1;
+	for(size_t u = 0; u < p->uPiece; ++u) uLen += uSep + strlen(p->aPiece[u].sVal);
+
+	char* s = (char*)malloc(uLen);
+	if(s == NULL) return NULL;
+	size_t n = 0;
+	if(p->sVal){ strcpy(s, p->sVal); n = strlen(s); }
+	for(size_t u = 0; u < p->uPiece; ++u){
+		if(n > 0){ memcpy(s + n, sSep, uSep); n += uSep; }
+		size_t uVal = strlen(p->aPiece[u].sVal);
+		memcpy(s + n, p->aPiece[u].sVal, uVal);
+		n += uVal;
+	}
+	s[n] = '\0';
+	return s;
 }
 
 static void _dassrc_outClear(_out_t* pO)
 {
-	for(size_t u = 0; u < pO->u; ++u) free(pO->a[u].sVal);
+	for(size_t u = 0; u < pO->u; ++u){
+		free(pO->a[u].sVal);
+		_dassrc_outDropPieces(pO->a + u);
+	}
 	free(pO->a);
 	memset(pO, 0, sizeof(_out_t));
 }
@@ -1573,6 +1663,10 @@ static void _dassrc_outClear(_out_t* pO)
  *     parameter's flagSep.  A switch sends the flag's value (its entry
  *     under the parameter's flags, else the flag name), a slot sends the
  *     control's value, see _DasSrcCtrl_flagIsSlot()
+ *   - flag with a subSep (the das2 set: constraint): a multi-select.  A
+ *     switch sends its pval, a slot its value, and everything sent to
+ *     that flag is joined with subSep behind one prefix, in the order the
+ *     controls appear in the node.  "" joins with nothing between.
  *   - otherwise the value as given, or the block's pval
  */
 static bool _DasSrcCtrl_translate(const DasSrcCtrl* pC, const char* sVal, _out_t* pO, char* sWhy, size_t uWhy)
@@ -1620,17 +1714,29 @@ static bool _DasSrcCtrl_translate(const DasSrcCtrl* pC, const char* sVal, _out_t
 			         "the node is broken", sFlag, p->sKey, pC->sParam);
 			return false;
 		}
-		char sFVal[SCALAR_SZ], sFull[SCALAR_SZ];
+		const char* sSubSep = _dassrc_jstr(pF, "subSep");
+		char sFVal[SCALAR_SZ];
 		if(bSlot)
 			_dassrc_strcpyz(sFVal, bHavePVal ? sPVal : sVal, sizeof(sFVal));
+		else if(sSubSep != NULL){
+			/* Every switch on the flag would send the same flag value, so
+			   the element has to come from the switch */
+			if(!bHavePVal){
+				snprintf(sWhy, uWhy, "Flag '%s' under protocol parameter %s joins elements, but "
+				         "%s gives no pval for its element, the node is broken", sFlag, pC->sParam, p->sKey);
+				return false;
+			}
+			_dassrc_strcpyz(sFVal, sPVal, sizeof(sFVal));
+		}
 		else if(!_das_json_scalar(_dassrc_jget(pF, "value"), sFVal, sizeof(sFVal)))
 			_dassrc_strcpyz(sFVal, sFlag, sizeof(sFVal));
-		const char* sPrefix = _dassrc_jstr(pF, "prefix");
-		snprintf(sFull, sizeof(sFull), "%s%s", sPrefix ? sPrefix : "", sFVal);
 		const char* sSep = _dassrc_jstr(pC->pParam, "flagSep");
-		if(sSep == NULL) sSep = _dassrc_jstr(pC->pParam, "flag_sep");
+		if(sSep == NULL) sSep = _dassrc_jstr(pC->pParam, "flag_sep");   /* 2018 layout */
 		if(sSep == NULL) sSep = " ";
-		if(!_dassrc_outAddFlag(pO, pC->sParam, sFull, sSep)){ snprintf(sWhy, uWhy, "Out of memory"); return false; }
+		if(!_dassrc_outAddFlag(pO, pC->sParam, sSep, pF, _dassrc_jstr(pF, "prefix"), sSubSep, sFVal)){
+			snprintf(sWhy, uWhy, "Out of memory");
+			return false;
+		}
 		return true;
 	}
 	if(!_dassrc_outSet(pO, pC->sParam, bHavePVal ? sPVal : sVal)){ snprintf(sWhy, uWhy, "Out of memory"); return false; }
@@ -1744,10 +1850,13 @@ size_t DasSrc_reqUrl(const DasSrc* pThis, DasReq* pReq, size_t uBase, char* sBuf
 	size_t uNeed = strlen(sBase);
 	const char* sJoin = strchr(sBase, '?') ? "&" : "?";
 	for(size_t i = 0; i < out.u; ++i){
-		size_t uEnc = dasurl_encode(out.a[i].sVal, NULL, 0) + 1;
+		char* sVal = _dassrc_outJoin(out.a + i);
+		if(sVal == NULL){ _dassrc_outClear(&out); return 0; }
+		size_t uEnc = dasurl_encode(sVal, NULL, 0) + 1;
 		char* sEnc = (char*)malloc(uEnc);
-		if(sEnc == NULL){ _dassrc_outClear(&out); return 0; }
-		dasurl_encode(out.a[i].sVal, sEnc, uEnc);
+		if(sEnc == NULL){ free(sVal); _dassrc_outClear(&out); return 0; }
+		dasurl_encode(sVal, sEnc, uEnc);
+		free(sVal);
 		u = _dassrc_catf(sBuf, uLen, u, "%s%s=%s", sJoin, out.a[i].sName, sEnc);
 		uNeed += strlen(sJoin) + strlen(out.a[i].sName) + 1 + strlen(sEnc);
 		free(sEnc);

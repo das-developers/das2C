@@ -40,6 +40,7 @@
 #define GEOMAG "test/das_fetch/geomag_flex_0.7.json"
 #define HSK    "test/das_fetch/hsk_flex_0.7.json"
 #define JUNO   "test/das_fetch/juno_survey_0.6.json"
+#define SUBSEP "test/das_fetch/subsep_0.7.json"
 
 #define GB "http://127.0.0.1:8765/data/geomag.d2s"
 #define HB "https://space.physics.uiowa.edu/das/stream/source/tracers/tracers-2/l1a/cdpu/hsk/flex"
@@ -216,10 +217,14 @@ static void test_helpers(void)
 {
 	printf("URL encoding and time spans:\n");
 	char sBuf[64];
-	CHECK(dasurl_encode("2026-01-02T14:30", sBuf, sizeof(sBuf)) == 18, "encoded length");
-	CHECK(streq(sBuf, "2026-01-02T14%3A30"), "colon encoded, got %s", sBuf);
+	CHECK(dasurl_encode("2026-01-02T14:30", sBuf, sizeof(sBuf)) == 16, "encoded length");
+	CHECK(streq(sBuf, "2026-01-02T14:30"), "colon left plain, got %s", sBuf);
 	CHECK(dasurl_encode("a b&c", sBuf, sizeof(sBuf)) == 9, "space and ampersand");
 	CHECK(streq(sBuf, "a%20b%26c"), "got %s", sBuf);
+	dasurl_encode("fan=090,270 x/y@z", sBuf, sizeof(sBuf));
+	CHECK(streq(sBuf, "fan=090,270%20x/y@z"), "query safe set plain, got %s", sBuf);
+	dasurl_encode("1+2;3#4%5?6\n\xe9", sBuf, sizeof(sBuf));
+	CHECK(streq(sBuf, "1%2B2%3B3%234%255%3F6%0A%E9"), "specials, control and high bytes, got %s", sBuf);
 	CHECK(dasurl_encode("abc", sBuf, 2) == 3, "needed length when short");
 	CHECK(streq(sBuf, "a"), "cut short and terminated, got '%s'", sBuf);
 	CHECK(dasurl_encode("abc", NULL, 0) == 3, "measure only");
@@ -429,7 +434,7 @@ static void test_geomag(void)
 		CHECK(DasSrc_check(pSrc, pReq, &uBad) == DAS_OKAY, "now clean");
 		char sUrl[2048];
 		CHECK(DasSrc_reqUrl(pSrc, pReq, 0, sUrl, sizeof(sUrl)) > 0, "builds");
-		CHECK(streq(sUrl, GB "?read.time.min=2026-04-01&read.time.max=2026-04-01T01%3A30&read.time.inter=60"),
+		CHECK(streq(sUrl, GB "?read.time.min=2026-04-01&read.time.max=2026-04-01T01:30&read.time.inter=60"),
 		      "got %s", sUrl);
 		size_t uNeed = DasSrc_reqUrl(pSrc, pReq, 0, sUrl, 20);
 		CHECK(uNeed > 20 && strlen(sUrl) == 19, "snprintf style on a short buffer, need %zu", uNeed);
@@ -443,7 +448,7 @@ static void test_geomag(void)
 
 	/* The URL cases das_fetch has always been held to */
 	URL_IS(pSrc, -1, K("time=2026-04-01,2026-04-01T01:30,60", "lshell"), NONE,
-		GB "?read.time.min=2026-04-01&read.time.max=2026-04-01T01%3A30&read.time.inter=60&read.data=lshell");
+		GB "?read.time.min=2026-04-01&read.time.max=2026-04-01T01:30&read.time.inter=60&read.data=lshell");
 	URL_IS(pSrc, -1, K("coord.time.minimum=2026-02-01", "time.maximum=2026-02-02", "inter=60"), NONE,
 		GB "?read.time.min=2026-02-01&read.time.max=2026-02-02&read.time.inter=60");
 	URL_IS(pSrc, 0, NONE, NONE,
@@ -465,7 +470,7 @@ static void test_geomag(void)
 	}
 	/* the span form */
 	URL_IS(pSrc, -1, K("time=2026-01-02T14", "inter=60"), NONE,
-		GB "?read.time.min=2026-01-02T14%3A00%3A00&read.time.max=2026-01-02T15%3A00%3A00&read.time.inter=60");
+		GB "?read.time.min=2026-01-02T14:00:00&read.time.max=2026-01-02T15:00:00&read.time.inter=60");
 
 	URL_FAILS(pSrc, -1, K("time=2026-04-01,2026-04-01T01:30"));   /* required inter missing */
 	URL_FAILS(pSrc, 0, K("foo=1"));                                /* no such key */
@@ -562,13 +567,13 @@ static void test_hsk(void)
 	CHECK(streq(DasSrc_mime(pSrc, NULL), "application/vnd.das2.das2stream"), "default mime: %s", DasSrc_mime(pSrc, NULL));
 
 	URL_IS(pSrc, 0, NONE, NONE,
-		HB "?read.time.min=2026-01-06T14%3A12&read.time.max=2026-01-06T14%3A24");
+		HB "?read.time.min=2026-01-06T14:12&read.time.max=2026-01-06T14:24");
 	URL_IS(pSrc, 0, K("version=das2", "nmi_errors", "irq3_errors", "data.hsk_task_errors"), NONE,
-		HB "?read.time.min=2026-01-06T14%3A12&read.time.max=2026-01-06T14%3A24&read.data=nmi_errors%2Cirq3_errors%2Chsk_task_errors&format.version=2");
+		HB "?read.time.min=2026-01-06T14:12&read.time.max=2026-01-06T14:24&read.data=nmi_errors,irq3_errors,hsk_task_errors&format.version=2");
 	URL_IS(pSrc, 1, NONE, NONE,
-		HB "?read.time.min=2026-01-05T14%3A24&read.time.max=2026-01-06T14%3A24&format.type=cdf");
+		HB "?read.time.min=2026-01-05T14:24&read.time.max=2026-01-06T14:24&format.type=cdf");
 	URL_IS(pSrc, 0, K("formats.csv", "das.version=das2", "time.res=10"), NONE,
-		HB "?read.time.min=2026-01-06T14%3A12&read.time.max=2026-01-06T14%3A24&bin.time.max=10&format.version=2&format.type=csv");
+		HB "?read.time.min=2026-01-06T14:12&read.time.max=2026-01-06T14:24&bin.time.max=10&format.version=2&format.type=csv");
 
 	DasReq* pReq = new_DasReq_src(pSrc, 1);
 	CHECK(pReq && streq(DasSrc_mime(pSrc, pReq), "application/x-cdf"), "cdf example means a cdf: %s",
@@ -665,7 +670,7 @@ static void test_juno(void)
 	/* example 7 with the resolution changed.  The parameter order is the
 	   interface order now that the example is settings, not raw text. */
 	URL_IS(pSrc, 7, K("resolution=10"), NONE,
-		JB "&end_time=2016-177T00%3A00&start_time=2016-176T00%3A00&resolution=10&params=B");
+		JB "&end_time=2016-177T00:00&start_time=2016-176T00:00&resolution=10&params=B");
 
 	del_DasSrc(pSrc);
 }
@@ -713,10 +718,10 @@ static void test_flagslot(void)
 
 	/* forward: the choice fills the slot, the item's pval when it has one */
 	URL_IS(pSrc, -1, K("time=2023-11-03T19:20,2023-11-03T20:20", "anode=8", "filter=x2a2", "quiet"), NONE,
-		SB "?read.time.min=2023-11-03T19%3A20&read.time.max=2023-11-03T20%3A20"
-		"&read.params=anode%3D8%20apid%3Dx2a2%20Quiet");
+		SB "?read.time.min=2023-11-03T19:20&read.time.max=2023-11-03T20:20"
+		"&read.params=anode=8%20apid=x2a2%20Quiet");
 	URL_IS(pSrc, -1, K("time=2023-11-03,2023-11-04", "filter=science"), NONE,
-		SB "?read.time.min=2023-11-03&read.time.max=2023-11-04&read.params=apid%3Dx2a3");
+		SB "?read.time.min=2023-11-03&read.time.max=2023-11-04&read.params=apid=x2a3");
 	/* the default choice sends nothing, as for any other control */
 	URL_IS(pSrc, -1, K("time=2023-11-03,2023-11-04", "anode=0"), NONE,
 		SB "?read.time.min=2023-11-03&read.time.max=2023-11-04");
@@ -733,8 +738,8 @@ static void test_flagslot(void)
 		del_DasReq(pReq);
 	}
 	URL_IS(pSrc, 0, NONE, NONE,
-		SB "?read.time.min=2023-11-03T19%3A20&read.time.max=2023-11-03T20%3A20"
-		"&read.params=anode%3D8%20apid%3Dx2a2%20Quiet");
+		SB "?read.time.min=2023-11-03T19:20&read.time.max=2023-11-03T20:20"
+		"&read.params=anode=8%20apid=x2a2%20Quiet");
 
 	pReq = new_DasReq_src(pSrc, 1);
 	CHECK(pReq != NULL, "example 1 req");
@@ -746,6 +751,68 @@ static void test_flagslot(void)
 		      && streq(sVal, "bogus=1"), "an unknown token stays raw");
 		del_DasReq(pReq);
 	}
+	del_DasSrc(pSrc);
+}
+
+/* Multi-select flags, the das2 set: constraint.  subsep_0.7.json is the
+   node das-cat proposed the feature with, its four examples are the
+   cases it asked for. */
+#define XB "https://example.org/das/server?server=dataset&dataset=Test/SubSep" \
+           "&start_time=2017-168&end_time=2017-169"
+
+/* Elements of one flag split by another flag's control, and a switch on a
+   joining flag that has no element to give */
+#define MB "http://127.0.0.1:8765/data/multi"
+static const char* g_sMultiSrc =
+"{\"type\":\"HttpStreamSrc\",\"version\":\"0.7\",\"label\":\"multi\","
+ "\"protocol\":{\"method\":\"GET\",\"baseUrls\":[\"" MB "\"],"
+  "\"httpParams\":{\"params\":{\"type\":\"FlagSet\",\"flagSep\":\";\",\"flags\":{"
+   "\"mfr\":{\"prefix\":\"-mfr \",\"subSep\":\"\"},\"quiet\":{\"value\":\"-q\"},"
+   "\"sensor\":{\"subSep\":\",\"}}}}},"
+ "\"interface\":{\"options\":{\"props\":{"
+  "\"mfr_1\":{\"type\":\"boolean\",\"value\":false,\"set\":{\"param\":\"params\",\"flag\":\"mfr\",\"pval\":\"1\"}},"
+  "\"quiet\":{\"type\":\"boolean\",\"value\":false,\"set\":{\"param\":\"params\",\"flag\":\"quiet\"}},"
+  "\"mfr_2\":{\"type\":\"boolean\",\"value\":false,\"set\":{\"param\":\"params\",\"flag\":\"mfr\",\"pval\":\"2\"}},"
+  "\"bx\":{\"type\":\"boolean\",\"value\":false,\"set\":{\"param\":\"params\",\"flag\":\"sensor\",\"pval\":\"Bx\"}},"
+  "\"by\":{\"type\":\"boolean\",\"value\":false,\"set\":{\"param\":\"params\",\"flag\":\"sensor\",\"pval\":\"By\"}},"
+  "\"bad\":{\"type\":\"boolean\",\"value\":false,\"set\":{\"param\":\"params\",\"flag\":\"sensor\"}}}}}}";
+
+static void test_subsep(void)
+{
+	printf("Multi-select flags (subSep):\n");
+	DasSrc* pSrc = loadSrc(SUBSEP, "site:/test/subsep");
+	CHECK(pSrc != NULL, "load");
+	if(pSrc == NULL) return;
+
+	/* das-cat's table: definition order, one prefix, "" joins tight */
+	URL_IS(pSrc, 0, NONE, NONE, XB "&params=fan=090,270%20outputType=flux");
+	URL_IS(pSrc, 1, NONE, NONE, XB "&params=-lfdr%20LEx");
+	URL_IS(pSrc, 2, NONE, NONE, XB "&params=fan=180");
+	URL_IS(pSrc, 3, NONE, NONE, XB);
+
+	/* from keys, two joining flags side by side; off sends nothing */
+	URL_IS(pSrc, -1, K("lfdr_ez", "fan_270", "fan_090", "fan_180=false"), NONE,
+		XB "&params=fan=090,270%20-lfdr%20Ez");
+	URL_IS(pSrc, -1, K("fan_090=false"), NONE, XB);
+	/* a raw parameter still replaces what the controls built */
+	{ const char* aRaw[] = {"params", "fan=999", NULL};
+	  char sUrl[2048];
+	  const char* aKey[] = {"fan_090", NULL};
+	  bool bOk = urlFor(pSrc, -1, aKey, aRaw, sUrl, sizeof(sUrl));
+	  CHECK(bOk && streq(sUrl, XB "&params=fan=999"), "raw replaces, got %s", bOk ? sUrl : "(no url)");
+	}
+	del_DasSrc(pSrc);
+
+	pSrc = new_DasSrc_json(g_sMultiSrc, strlen(g_sMultiSrc), "site:/test/multi", NULL);
+	CHECK(pSrc != NULL, "inline load");
+	if(pSrc == NULL) return;
+	/* mfr's elements stay one piece though quiet sits between them, and a
+	   flag with no prefix joins as well */
+	URL_IS(pSrc, -1, K("mfr_2", "quiet", "mfr_1", "by", "bx"), NONE,
+		MB "?params=-mfr%2012%3B-q%3BBx,By");
+	URL_IS(pSrc, -1, K("by"), NONE, MB "?params=By");
+	/* a switch on a joining flag must name its element */
+	URL_FAILS(pSrc, -1, K("bad"));
 	del_DasSrc(pSrc);
 }
 
@@ -925,6 +992,7 @@ int main(int argc, char** argv)
 	test_hsk();
 	test_juno();
 	test_flagslot();
+	test_subsep();
 	test_req();
 	test_node();
 	test_pick();

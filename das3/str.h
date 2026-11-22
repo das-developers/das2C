@@ -259,11 +259,16 @@ DAS_API const char* dasxml_escape(const char* src, char* dest, size_t uOutLen);
 
 /** Percent encode a string for use in a URL query.
  *
- * Everything but the RFC 3986 unreserved characters, letters, digits and
- * "-._~", is encoded, including the ':' in time strings.  Servers decode
- * before use so over-encoding is harmless, and it is what most encoders
- * do.  Works like snprintf: the output is always NUL terminated when uOut
- * is at least 1, and the return value says how much room was needed.
+ * Letters, digits, "-._~" and ":/@,=" pass through, so times and packed
+ * values stay readable: `2026-01-02T14:30`, `fan=090,270`.  RFC 3986
+ * allows all of these in a query.  Everything else is encoded, notably
+ * space, '&', '#', '%', '+' (which servers read as a space) and ';'
+ * (which older query parsers split on, as they do on '&'), plus control
+ * characters and every byte above 127.  The result is for a value, or a
+ * name, inside a query; it is not meant for a path.
+ *
+ * Works like snprintf: the output is always NUL terminated when uOut is
+ * at least 1, and the return value says how much room was needed.
  *
  * @param sIn The text to encode.
  * @param sOut Receives the encoding.  Three times the input length plus

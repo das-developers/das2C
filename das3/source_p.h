@@ -84,7 +84,7 @@ struct das_src_t {
 
 	DasJdo* pDoc;               /* owned, the parsed copy of the node document */
 	const DasJdo* pIface;       /* "interface", may be NULL */
-	bool bLegacy;               /* the 2018 layout, see _DasSrc_isLegacy() */
+	bool bLegacy;               /* 2018 layout, set but not read */
 
 	DasSrcGroup* aGroup;        /* owned, in section then presentation order */
 	size_t uGroup;
