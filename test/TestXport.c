@@ -292,7 +292,7 @@ static void testFile(const char* sDir)
 }
 
 /* ************************************************************************* */
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(__EMSCRIPTEN__)   /* wasm: no processes or sockets */
 /* Catches the sub-command exit warning, the one transport message above
    debug level */
 static char g_sLastWarn[256] = {'\0'};
@@ -379,7 +379,7 @@ static void testIoMode(void)
 	del_DasIO(pIo);
 	CHECK(new_DasIO("TestXport", NULL, NULL) == NULL, "no transport, no DasIO");
 
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(__EMSCRIPTEN__)
 	int aFd[2];
 	if(socketpair(AF_UNIX, SOCK_STREAM, 0, aFd) != 0){ FAIL("socketpair"); return; }
 	CHECK(new_DasIO("TestXport", new_DasXport_sock(aFd[0], "rw"), NULL) == NULL,
@@ -455,7 +455,7 @@ int main(int argc, char** argv)
 	testBuf();
 	testElastic();
 	testFile(argv[1]);
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(__EMSCRIPTEN__)
 	testCmd();
 	testSock();
 #endif

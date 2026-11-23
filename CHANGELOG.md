@@ -8,7 +8,7 @@ if desired.
 Newest release first.
 
 
-## 3.0.6 - unreleased
+## 3.0.6 - 2026-11-22
 
 Catalog names are now taken literally and paths start in one place, the
 seed.  Callers of `DasCat_setPrefix()` need a small edit, see below.
@@ -129,6 +129,9 @@ seed.  Callers of `DasCat_setPrefix()` need a small edit, see below.
 
 - The CMake and Windows das_fetch tests still used the removed `-C`
   option.
+
+- The emscripten tests add TestAccum, TestXport, TestSource and TestOob,
+  less the parts that need http.c, catalog.c, sockets or sub-processes.
 
 
 ## 3.0.5 - 2026-11-18

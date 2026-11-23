@@ -150,6 +150,8 @@ bool test_reused_id(const char* sFile, size_t uExpectDs, ptrdiff_t nExpectRec, i
 	return true;
 }
 
+/* http.c is not in the wasm build, so the opt-in server tests leave with it */
+#ifndef DASCONF_NO_NET
 bool test_plain_url(const char* sInitialUrl, int nTest)
 {
 	printf("INFO: Contacting remote HTTP URL %s\n\n", sInitialUrl);
@@ -223,6 +225,7 @@ bool test_secure_url(const char* sInitialUrl, int nTest)
 
 	return true;
 }
+#endif /* DASCONF_NO_NET */
 
 int main(int argc, char** argv)
 {
@@ -265,6 +268,7 @@ int main(int argc, char** argv)
 	
 	/* Remote-server queries are OPT-IN via --uiowa: they hit live das2 servers, so
 	   they don't belong in a hermetic build regression (bare `make test`). */
+#ifndef DASCONF_NO_NET
 	if((argc > 1) &&(strcmp(argv[1], "--uiowa") == 0)){
 
 		const char* sInitialUrl = "https://jupiter.physics.uiowa.edu/das/server"
@@ -283,6 +287,7 @@ int main(int argc, char** argv)
 
 		if(!test_secure_url(sInitialUrl, 11)) return 13;
 	}
+#endif
 	
 	return 0;
 }

@@ -168,10 +168,13 @@ SRCS:=$(notdir $(WASM_SRCS))
 HDRS:=$(notdir $(LIB_HDRS))
 
 # Test programs that need nothing from the excluded sources.  Anything that
-# opens a URL, reads credentials, or needs SPICE stays out.
+# opens a URL, reads credentials, or needs SPICE stays out.  TestAccum,
+# TestXport and TestSource compile out their network, process and DasCat
+# parts under __EMSCRIPTEN__ or DASCONF_NO_NET; TestCat is DasCat throughout.
 TEST_PROGS:=TestLog TestArgs TestValue TestDatum TestGen TestForm TestCplx TestVar \
- TestVarSubset TestDim TestDesc TestUnits TestTT2000 TestArray TestDs TestIter \
- TestRaggedEncode TestFilter TestUri TestV3Read TestFeed TestWalk
+ TestVarSubset TestDim TestDesc TestUnits TestTT2000 TestArray TestDs TestAccum \
+ TestIter TestRaggedEncode TestFilter TestUri TestV3Read TestFeed TestXport \
+ TestWalk TestSource TestOob
 
 ##############################################################################
 # Build definitions
@@ -416,6 +419,8 @@ test: build_test
 	@$(NODE) $(BD)/TestArray.js
 	@echo "INFO: Running unit test for dataset shape/length merge, $(BD)/TestDs..."
 	@$(NODE) $(BD)/TestDs.js
+	@echo "INFO: Running unit test for in-memory accumulation, $(BD)/TestAccum..."
+	@$(NODE) $(BD)/TestAccum.js
 	@echo "INFO: Running unit test for stream parsing over all fixtures, $(BD)/TestV3Read..."
 	$(NODE) $(BD)/TestV3Read.js test/streams/tag_test.dNt $(V2_FIXTURES) $(V3_FIXTURES)
 	@echo "INFO: Running unit test for push parsing vs. pull parsing, $(BD)/TestFeed..."
@@ -431,8 +436,14 @@ test: build_test
 	$(NODE) $(BD)/TestFilter.js
 	@echo "INFO: Running unit test for URI templates, $(BD)/TestUri..."
 	$(NODE) $(BD)/TestUri.js $(BD)/uri_tplt
+	@echo "INFO: Running unit test for byte transports, $(BD)/TestXport..."
+	@$(NODE) $(BD)/TestXport.js $(BD)
 	@echo "INFO: Running unit test for catalog walks over local nodes, $(BD)/TestWalk..."
 	@$(NODE) $(BD)/TestWalk.js
+	@echo "INFO: Running unit test for source descriptions and requisitions, $(BD)/TestSource..."
+	@$(NODE) $(BD)/TestSource.js
+	@echo "INFO: Running unit test for exception names and out-of-band writers, $(BD)/TestOob..."
+	@$(NODE) $(BD)/TestOob.js
 	@echo "INFO: ==============================================="
 	@echo "INFO: All wasm test programs completed without errors"
 	@echo "INFO: ==============================================="

@@ -1352,6 +1352,9 @@ static void test_req(void)
 	del_DasReq(pReq);
 }
 
+/* These two load nodes through DasCat, and catalog.c is not in the wasm
+   build.  The rest of the file needs only source.c, req.c and node.c. */
+#ifndef DASCONF_NO_NET
 static void test_node(void)
 {
 	printf("From a node tree:\n");
@@ -1450,6 +1453,7 @@ static void test_pick(void)
 	free(sDoc);
 	del_DasCat(pCat);
 }
+#endif /* DASCONF_NO_NET */
 
 int main(int argc, char** argv)
 {
@@ -1468,8 +1472,10 @@ int main(int argc, char** argv)
 	test_xor();
 	test_suffix();
 	test_req();
+#ifndef DASCONF_NO_NET
 	test_node();
 	test_pick();
+#endif
 	printf("%d checks passed, %d failed\n", g_nPass, g_nFail);
 	return g_nFail ? 1 : 0;
 }
