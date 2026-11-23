@@ -58,7 +58,14 @@ struct das_srcprop_t {
 	const DasJdo* pJdo;         /* the property dict: value, set, type, label... */
 	das_srcproptype type;
 	const char* sTypeName;      /* borrowed, "" when inferred */
-	char* sValue;               /* owned scalar copy, NULL when null or absent */
+	char* sValue;               /* owned scalar copy, NULL when null or absent.
+	                               For a multi property the items joined
+	                               with commas, NULL for an empty list */
+	bool bMulti;                /* "multi": the value is a list, see "Several
+	                               values" in source.h */
+	size_t uMultiLo;            /* item count bounds, inclusive, for a list
+	                               that is given at all; 0 and SIZE_MAX */
+	size_t uMultiHi;            /* when the node only says true */
 	DasSrcCtrl* pCtrl;          /* owned, NULL for a fixed property */
 };
 

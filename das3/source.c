@@ -123,6 +123,74 @@ static char* _dassrc_scalarDup(const DasJdo* p)
 	return _dassrc_strdupz(sBuf);
 }
 
+/* The value of a list property, a JSON array, as its items joined with
+   commas; NULL for an empty array, there is no default selection */
+static char* _dassrc_listDup(const DasJdo* p)
+{
+	char sBuf[SCALAR_SZ];
+	if(!_das_json_value(p, sBuf, sizeof(sBuf))) return NULL;
+	return _dassrc_strdupz(sBuf);
+}
+
+/* Split a list value at its commas.  Items are trimmed of blanks and may
+ * come out empty, the caller decides what that means.  Returns one
+ * allocation, the item pointers followed by the text they point into, to
+ * be freed with free(); NULL when out of memory.  "" has no items. */
+static char** _dassrc_newSplit(const char* sVal, size_t* puItems)
+{
+	*puItems = 0;
+	size_t uMax = 1;
+	for(const char* p = sVal; *p; ++p) if(*p == ',') ++uMax;
+	size_t uText = strlen(sVal) + 1;
+	char** aItem = (char**)malloc(uMax * sizeof(char*) + uText);
+	if(aItem == NULL) return NULL;
+	char* sText = (char*)(aItem + uMax);
+	memcpy(sText, sVal, uText);
+
+	char* pBeg = sText;
+	while(*pBeg == ' ') ++pBeg;
+	if(*pBeg == '\0') return aItem;
+	while(pBeg != NULL){
+		char* pComma = strchr(pBeg, ',');
+		if(pComma) *pComma = '\0';
+		while(*pBeg == ' ') ++pBeg;
+		char* pEnd = pBeg + strlen(pBeg);
+		while((pEnd > pBeg) && (pEnd[-1] == ' ')) --pEnd;
+		*pEnd = '\0';
+		aItem[*puItems] = pBeg;
+		*puItems += 1;
+		pBeg = pComma ? pComma + 1 : NULL;
+	}
+	return aItem;
+}
+
+/* True for a value that says nothing: "", and for a list also blanks
+   alone, which split into no items */
+static bool _dassrc_noValue(const char* sVal, bool bList)
+{
+	if(bList) while(*sVal == ' ') ++sVal;
+	return *sVal == '\0';
+}
+
+/* True if two list values hold the same items, in any order and letter
+   case.  Lists never repeat an item, so equal counts and one way
+   containment is enough. */
+static bool _dassrc_sameItems(const char* sA, const char* sB)
+{
+	size_t uA = 0, uB = 0;
+	char** aA = _dassrc_newSplit(sA, &uA);
+	char** aB = _dassrc_newSplit(sB, &uB);
+	bool bSame = (aA != NULL) && (aB != NULL) && (uA == uB);
+	for(size_t i = 0; bSame && (i < uA); ++i){
+		bool bHit = false;
+		for(size_t j = 0; !bHit && (j < uB); ++j) bHit = _dassrc_strieq(aA[i], aB[j]);
+		bSame = bHit;
+	}
+	free(aA);
+	free(aB);
+	return bSame;
+}
+
 static bool _dassrc_parseBool(const char* s, bool* pOut)
 {
 	if(s == NULL) return false;
@@ -240,7 +308,7 @@ static void _DasSrcProp_resolveType(DasSrcProp* p)
 	if(_dassrc_typeByName(p->sTypeName, &(p->type))){
 		if(p->type != DASSRCPROPTYPE_ENUM) return;
 	}
-	if(_dassrc_jisbool(pVal) || (pC && (_dassrc_jstr(pC->pSet, "flag") != NULL))){
+	if(_dassrc_jisbool(pVal) || (pC && !p->bMulti && (_dassrc_jstr(pC->pSet, "flag") != NULL))){
 		p->type = DASSRCPROPTYPE_BOOL; return;
 	}
 	const char* sParamType = pC ? _dassrc_jstr(pC->pParam, "type") : NULL;
@@ -250,6 +318,43 @@ static void _DasSrcProp_resolveType(DasSrcProp* p)
 	}
 	if((pVal != NULL)&&(pVal->type == DASJSONTYPE_NUM)){ p->type = DASSRCPROPTYPE_REAL; return; }
 	p->type = DASSRCPROPTYPE_TEXT;
+}
+
+/* "multi": true, or [lo, hi] item count bounds.  Anything else, false
+ * included, leaves an ordinary one value property. */
+static void _DasSrcProp_fillMulti(DasSrcProp* p)
+{
+	p->uMultiLo = 1;
+	p->uMultiHi = 1;
+	const DasJdo* pM = _dassrc_jget(p->pJdo, "multi");
+	if(pM == NULL) return;
+	if(_dassrc_jtrue(pM)){
+		p->bMulti = true; p->uMultiLo = 0; p->uMultiHi = SIZE_MAX;
+		return;
+	}
+	if(!_dassrc_jisary(pM)) return;
+
+	char sLo[32], sHi[32];
+	const DasJsonAryEl* pEl = DasJdo_aryFirst(pM);
+	char* pEnd = NULL;
+	if((pEl == NULL)||(pEl->next == NULL)||(pEl->next->next != NULL)||
+	   !_das_json_scalar(pEl->value, sLo, sizeof(sLo))||
+	   !_das_json_scalar(pEl->next->value, sHi, sizeof(sHi))){
+		daslog_warnf("Property %s has a multi member that is neither true nor "
+		              "[least, most], treating it as true", p->sKey);
+		p->bMulti = true; p->uMultiLo = 0; p->uMultiHi = SIZE_MAX;
+		return;
+	}
+	long nLo = strtol(sLo, &pEnd, 10);
+	bool bOk = (pEnd != sLo) && (*pEnd == '\0') && (nLo >= 0);
+	long nHi = strtol(sHi, &pEnd, 10);
+	bOk = bOk && (pEnd != sHi) && (*pEnd == '\0') && (nHi >= nLo) && (nHi > 0);
+	p->bMulti = true;
+	p->uMultiLo = bOk ? (size_t)nLo : 0;
+	p->uMultiHi = bOk ? (size_t)nHi : SIZE_MAX;
+	if(!bOk)
+		daslog_warnf("Property %s has unusable multi bounds [%s, %s], not "
+		              "bounding it", p->sKey, sLo, sHi);
 }
 
 /* Enum entries are usually dicts carrying value plus per item pval or flag
@@ -358,7 +463,9 @@ static void _dassrc_walkProp(_walk_t* pW, DasSrcGroup* pG, const char* sName, co
 	else
 		snprintf(p->sKey, uKey, "%s.%s.%s", g_sSecName[pG->sec], pG->sName, sName);
 
-	p->sValue = _dassrc_scalarDup(_dassrc_jget(pJdo, "value"));
+	_DasSrcProp_fillMulti(p);
+	p->sValue = p->bMulti ? _dassrc_listDup(_dassrc_jget(pJdo, "value")) :
+	                        _dassrc_scalarDup(_dassrc_jget(pJdo, "value"));
 
 	const DasJdo* pSet = _dassrc_jget(pJdo, "set");
 	if(_dassrc_jisdict(pSet)){
@@ -384,6 +491,13 @@ static void _dassrc_walkProp(_walk_t* pW, DasSrcGroup* pG, const char* sName, co
 		}
 	}
 	_DasSrcProp_resolveType(p);
+	if(p->bMulti && (p->type == DASSRCPROPTYPE_BOOL)){
+		/* on or off has nothing to list */
+		daslog_warnf("Property %s is a boolean, ignoring its multi member", p->sKey);
+		p->bMulti = false;
+		p->uMultiLo = 1;
+		p->uMultiHi = 1;
+	}
 
 	if(_das_src_propEq(sName, "enabled") && (pG->nEnable < 0)){
 		pG->nEnable = (int)(pW->uProp - pG->uFirst);
@@ -717,7 +831,7 @@ static bool _DasSrc_loadExamples(DasSrc* pThis)
 				              pP->name->string, pThis->sUrl);
 				continue;
 			}
-			if(!_das_json_scalar(pP->value, sVal, sizeof(sVal))) continue;
+			if(!_das_json_value(pP->value, sVal, sizeof(sVal))) continue;
 			if(DasReq_set(pReq, sKey, sVal) != DAS_OKAY) return false;
 		}
 	}
@@ -1021,6 +1135,13 @@ const char* DasSrcProp_typeName(const DasSrcProp* pThis){ return pThis->sTypeNam
 const char* DasSrcProp_value(const DasSrcProp* pThis){ return pThis->sValue; }
 const DasSrcCtrl* DasSrcProp_ctrl(const DasSrcProp* pThis){ return pThis->pCtrl; }
 
+bool DasSrcProp_multi(const DasSrcProp* pThis, size_t* puMin, size_t* puMax)
+{
+	if(puMin) *puMin = pThis->uMultiLo;
+	if(puMax) *puMax = pThis->uMultiHi;
+	return pThis->bMulti;
+}
+
 /* Units for display.  Current nodes put a units string on the property;
  * both layouts may carry a units property with a "value" at the group
  * level. */
@@ -1099,12 +1220,9 @@ bool DasSrcCtrl_range(const DasSrcCtrl* pThis, const char** psLo, const char** p
 	return true;
 }
 
-das_errcode DasSrcCtrl_check(const DasSrcCtrl* pThis, const char* sVal, char* sWhy, size_t uWhy)
+/* One value, or one item of a list, against the property's type */
+static das_errcode _DasSrcCtrl_checkOne(const DasSrcCtrl* pThis, const char* sVal, char* sWhy, size_t uWhy)
 {
-	if(sVal == NULL) sVal = "";
-	if(sWhy && uWhy) sWhy[0] = '\0';
-	char sDummy[1];
-	if(sWhy == NULL){ sWhy = sDummy; uWhy = 1; }
 	const char* sKey = pThis->pProp->sKey;
 	char* pEnd = NULL;
 
@@ -1145,6 +1263,53 @@ das_errcode DasSrcCtrl_check(const DasSrcCtrl* pThis, const char* sVal, char* sW
 	default:
 		return DAS_OKAY;
 	}
+}
+
+das_errcode DasSrcCtrl_check(const DasSrcCtrl* pThis, const char* sVal, char* sWhy, size_t uWhy)
+{
+	if(sVal == NULL) sVal = "";
+	if(sWhy && uWhy) sWhy[0] = '\0';
+	char sDummy[1];
+	if(sWhy == NULL){ sWhy = sDummy; uWhy = 1; }
+	const DasSrcProp* p = pThis->pProp;
+	if(!p->bMulti) return _DasSrcCtrl_checkOne(pThis, sVal, sWhy, uWhy);
+
+	size_t uItems = 0;
+	char** aItem = _dassrc_newSplit(sVal, &uItems);
+	if(aItem == NULL){ snprintf(sWhy, uWhy, "Out of memory"); return DASERR_SRC; }
+	das_errcode nRet = DAS_OKAY;
+	for(size_t u = 0; (nRet == DAS_OKAY) && (u < uItems); ++u){
+		if(aItem[u][0] == '\0'){
+			snprintf(sWhy, uWhy, "'%s' has an empty item, %s takes values separated by "
+			         "single commas", sVal, p->sKey);
+			nRet = DASERR_SRC;
+			break;
+		}
+		nRet = _DasSrcCtrl_checkOne(pThis, aItem[u], sWhy, uWhy);
+		/* Enum items are matched without regard to case, so Ex and ex are
+		   one item.  Free text goes to the server as typed, a and A may be
+		   two things there. */
+		for(size_t v = 0; (nRet == DAS_OKAY) && (v < u); ++v){
+			bool bSame = (pThis->uEnum > 0) ? _dassrc_strieq(aItem[u], aItem[v]) :
+			                                  (strcmp(aItem[u], aItem[v]) == 0);
+			if(!bSame) continue;
+			snprintf(sWhy, uWhy, "'%s' is given twice for %s", aItem[u], p->sKey);
+			nRet = DASERR_SRC;
+		}
+	}
+	/* No items is nothing selected, which is not a count to bound */
+	if((nRet == DAS_OKAY) && (uItems > 0) && ((uItems < p->uMultiLo)||(uItems > p->uMultiHi))){
+		if(p->uMultiHi == SIZE_MAX)
+			snprintf(sWhy, uWhy, "%s takes at least %zu values, %zu given", p->sKey, p->uMultiLo, uItems);
+		else if(p->uMultiLo == p->uMultiHi)
+			snprintf(sWhy, uWhy, "%s takes %zu values, %zu given", p->sKey, p->uMultiLo, uItems);
+		else
+			snprintf(sWhy, uWhy, "%s takes %zu to %zu values, %zu given", p->sKey,
+			         p->uMultiLo ? p->uMultiLo : 1, p->uMultiHi, uItems);
+		nRet = DASERR_SRC;
+	}
+	free(aItem);
+	return nRet;
 }
 
 /* ************************************************************************* */
@@ -1257,6 +1422,121 @@ const char* DasSrc_exampleLblAt(const DasSrc* pThis, size_t uIdx)
 	return (uIdx < pThis->uExample) ? DasReq_label(pThis->aExample[uIdx]) : NULL;
 }
 
+/* ************************************************************************* */
+/* Exclusive sets */
+
+/* Groups whose enable toggles carry the same "xorGroup" name are radio
+ * buttons: the formats of nearly every node, but any groups may be.  A
+ * node writes each member as an ordinary boolean that knows nothing of
+ * the others, so two could be switched on and both would send, or the
+ * settings of a format not chosen would travel with the one that was.
+ * Servers take such requests and do something with them, which is worse
+ * than refusing.  So what a requisition says of the members is settled
+ * here, once, and DasSrc_check(), DasSrc_reqUrl() and DasSrc_mime() all
+ * read the result:
+ *
+ *   - The last member a requisition switches on is on, the others are
+ *     off, whatever they default to and whatever was said of them
+ *     before.  (Entry order is the order of saying, see DasReq_set().)
+ *   - If it switches none on, the node's defaults stand, less any member
+ *     it switches off.
+ *
+ * One state per group of the source, in group order. */
+#define XOR_NONE  0   /* not a member of any exclusive set */
+#define XOR_OFF   1
+#define XOR_ON    2
+
+#define SAID_NOTHING 0
+#define SAID_OFF     1
+#define SAID_ON      2
+
+typedef struct {
+	char cState;   /* XOR_* */
+	char cSaid;    /* SAID_*, the requisition's last word on the toggle */
+	bool bDefOn;   /* on in the node */
+	size_t uAt;    /* the entry that said it */
+} _xor_t;
+
+static bool _DasSrcProp_isEnable(const DasSrcProp* p)
+{
+	const DasSrcGroup* pG = p->pGroup;
+	return (pG->nEnable >= 0) && (p == pG->pSrc->aProp + pG->uFirst + (size_t)pG->nEnable);
+}
+
+/* aX has one zeroed item per group.  pReq may be NULL for the node's own
+ * defaults, and need not have been checked. */
+static void _DasSrc_xorStates(const DasSrc* pThis, const DasReq* pReq, _xor_t* aX)
+{
+	for(size_t g = 0; g < pThis->uGroup; ++g){
+		const DasSrcGroup* pG = pThis->aGroup + g;
+		if(pG->sXor == NULL) continue;
+		bool b = false;
+		const DasSrcProp* pOn = DasSrcGroup_enableProp(pG);
+		aX[g].bDefOn = (pOn != NULL) && _dassrc_parseBool(pOn->sValue, &b) && b;
+		aX[g].cState = aX[g].bDefOn ? XOR_ON : XOR_OFF;
+	}
+
+	for(size_t u = 0; (pReq != NULL) && (u < pReq->uEntry); ++u){
+		const struct das_req_entry* pE = pReq->aEntry + u;
+		if(pE->bDerived || (_DasSrc_coordGroup(pThis, pE->sKey) != NULL)) continue;
+		const DasSrcProp* aMatch[1];
+		if(_DasSrc_match(pThis, pE->sKey, aMatch, 1) != 1) continue;
+		size_t g = (size_t)(aMatch[0]->pGroup - pThis->aGroup);
+		if((aX[g].cState == XOR_NONE) || !_DasSrcProp_isEnable(aMatch[0])) continue;
+		bool b = false;
+		if(pE->sVal[0] == '\0') aX[g].cSaid = SAID_NOTHING;   /* took it back */
+		else if(_dassrc_parseBool(pE->sVal, &b)) aX[g].cSaid = b ? SAID_ON : SAID_OFF;
+		else continue;                                        /* check refuses it */
+		aX[g].uAt = u;
+	}
+
+	for(size_t g = 0; g < pThis->uGroup; ++g){
+		if(aX[g].cState == XOR_NONE) continue;
+		const char* sSet = pThis->aGroup[g].sXor;
+		bool bWinner = false, bMe = (aX[g].cSaid == SAID_ON);
+		for(size_t h = 0; h < pThis->uGroup; ++h){
+			if((h == g) || (aX[h].cSaid != SAID_ON) || (pThis->aGroup[h].sXor == NULL)) continue;
+			if(strcmp(pThis->aGroup[h].sXor, sSet) != 0) continue;
+			bWinner = true;
+			if(aX[h].uAt > aX[g].uAt) bMe = false;
+		}
+		if(bMe) aX[g].cState = XOR_ON;
+		else if(bWinner || (aX[g].cSaid == SAID_OFF)) aX[g].cState = XOR_OFF;
+	}
+}
+
+static _xor_t* _DasSrc_newXorStates(const DasSrc* pThis, const DasReq* pReq)
+{
+	_xor_t* aX = (_xor_t*)calloc(pThis->uGroup ? pThis->uGroup : 1, sizeof(_xor_t));
+	if(aX != NULL) _DasSrc_xorStates(pThis, pReq, aX);
+	return aX;
+}
+
+/* A property that has no say in this request: any but the toggle of a
+ * member that is off. */
+static bool _DasSrcProp_xorIdle(const DasSrc* pThis, const _xor_t* aX, const DasSrcProp* p)
+{
+	return (aX[p->pGroup - pThis->aGroup].cState == XOR_OFF) && !_DasSrcProp_isEnable(p);
+}
+
+/* True if some member of the set g belongs to is on */
+static bool _DasSrc_xorAnyOn(const DasSrc* pThis, const _xor_t* aX, size_t g)
+{
+	for(size_t h = 0; h < pThis->uGroup; ++h){
+		if((aX[h].cState != XOR_ON) || (strcmp(pThis->aGroup[h].sXor, pThis->aGroup[g].sXor) != 0)) continue;
+		return true;
+	}
+	return false;
+}
+
+/* The key of a property's group, the property's key less its last part */
+static void _DasSrcProp_groupKey(const DasSrcProp* p, char* sBuf, size_t uLen)
+{
+	_dassrc_strcpyz(sBuf, p->sKey, uLen);
+	char* pDot = strrchr(sBuf, '.');
+	if(pDot != NULL) *pDot = '\0';
+}
+
 void DasSrc_stampReq(const DasSrc* pThis, DasReq* pReq)
 {
 	DasReq_setSrc(pReq, pThis->sPath, pThis->sUrl, DasSrc_version(pThis));
@@ -1273,13 +1553,16 @@ DasReq* new_DasReq_src(const DasSrc* pThis, int nExample)
 		return new_DasReq_copy(pThis->aExample[nExample]);
 	}
 	DasReq* pReq = new_DasReq();
-	if(pReq == NULL) return NULL;
+	_xor_t* aX = _DasSrc_newXorStates(pThis, NULL);
+	if((pReq == NULL)||(aX == NULL)){ free(aX); del_DasReq(pReq); return NULL; }
 	DasSrc_stampReq(pThis, pReq);
 	for(size_t u = 0; u < pThis->uProp; ++u){
 		const DasSrcProp* p = pThis->aProp + u;
 		if((p->pCtrl == NULL)||!p->pCtrl->bRequired||(p->sValue != NULL)) continue;
-		if(DasReq_set(pReq, p->sKey, "") != DAS_OKAY){ del_DasReq(pReq); return NULL; }
+		if(_DasSrcProp_xorIdle(pThis, aX, p)) continue;   /* asked for when chosen */
+		if(DasReq_set(pReq, p->sKey, "") != DAS_OKAY){ free(aX); del_DasReq(pReq); return NULL; }
 	}
+	free(aX);
 	return pReq;
 }
 
@@ -1380,9 +1663,12 @@ das_errcode DasSrc_check(const DasSrc* pThis, DasReq* pReq, size_t* puBad)
 	bool* aPresent = (bool*)calloc(uProp * 2, sizeof(bool));
 	if(aPresent == NULL) return DASERR_SRC;
 	bool* aCovered = aPresent + uProp;
+	_xor_t* aX = _DasSrc_newXorStates(pThis, pReq);
+	if(aX == NULL){ free(aPresent); return DASERR_SRC; }
 
 	size_t uBad = 0;
 	char sWhy[1024];
+	char sGroup[256];
 	size_t uClient = pReq->uEntry;   /* derived entries are appended past here */
 	for(size_t u = 0; u < uClient; ++u){
 		const char* sKey = pReq->aEntry[u].sKey;
@@ -1417,7 +1703,45 @@ das_errcode DasSrc_check(const DasSrc* pThis, DasReq* pReq, size_t* puBad)
 			_DasReq_setVerdict(pReq, u, DASREQVERDICT_BAD, sWhy); ++uBad; continue;
 		}
 		aPresent[uP] = true;
-		if(sVal[0] == '\0'){
+
+		/* A setting of a format that is not the one chosen, or of any
+		   member of an exclusive set that is off.  Sending it would be a
+		   request no form could have made; dropping it would hide that
+		   the user and the request disagree. */
+		size_t uG = (size_t)(p->pGroup - pThis->aGroup);
+		if(_DasSrcProp_xorIdle(pThis, aX, p)){
+			if(_dassrc_noValue(sVal, p->bMulti)){
+				_DasReq_setVerdict(pReq, u, DASREQVERDICT_OK, NULL);
+				continue;
+			}
+			_DasSrcProp_groupKey(p, sGroup, sizeof(sGroup));
+			snprintf(sWhy, sizeof(sWhy), "%s is a setting of %s, which is not selected.  Select it "
+			         "with %s=true, or take the setting back with %s=", p->sKey, sGroup, sGroup, sKey);
+			_DasReq_setVerdict(pReq, u, DASREQVERDICT_BAD, sWhy); ++uBad; continue;
+		}
+		/* Radio buttons have no "none": switching off the member that is
+		   on, and no other on, would send nothing and the server would
+		   answer with the very thing that was switched off */
+		if((aX[uG].cSaid == SAID_OFF) && (aX[uG].uAt == u) && aX[uG].bDefOn &&
+		   _DasSrcProp_isEnable(p) && !_DasSrc_xorAnyOn(pThis, aX, uG)){
+			size_t n = snprintf(sWhy, sizeof(sWhy), "%s cannot be switched off by itself, one of "
+			         "the '%s' choices is always on.  Switch on one of:", p->sKey, p->pGroup->sXor);
+			int nOthers = 0;
+			for(size_t h = 0; h < pThis->uGroup; ++h){
+				const DasSrcProp* pOn = DasSrcGroup_enableProp(pThis->aGroup + h);
+				if((h == uG)||(aX[h].cState == XOR_NONE)||(pOn == NULL)) continue;
+				if(strcmp(pThis->aGroup[h].sXor, p->pGroup->sXor) != 0) continue;
+				_DasSrcProp_groupKey(pOn, sGroup, sizeof(sGroup));
+				n = _dassrc_catf(sWhy, sizeof(sWhy), n, "%s %s", nOthers ? "," : "", sGroup);
+				++nOthers;
+			}
+			if(nOthers == 0)
+				snprintf(sWhy, sizeof(sWhy), "%s cannot be switched off, it is the only '%s' "
+				         "choice this source has", p->sKey, p->pGroup->sXor);
+			_DasReq_setVerdict(pReq, u, DASREQVERDICT_BAD, sWhy); ++uBad; continue;
+		}
+
+		if(_dassrc_noValue(sVal, p->bMulti)){
 			if(p->pCtrl->bRequired && (p->sValue == NULL)){
 				snprintf(sWhy, sizeof(sWhy), "%s is required, give it a value", p->sKey);
 				_DasReq_setVerdict(pReq, u, DASREQVERDICT_BAD, sWhy); ++uBad;
@@ -1448,6 +1772,7 @@ das_errcode DasSrc_check(const DasSrc* pThis, DasReq* pReq, size_t* puBad)
 	for(size_t u = 0; u < pThis->uProp; ++u){
 		const DasSrcProp* p = pThis->aProp + u;
 		if((p->pCtrl == NULL)||!p->pCtrl->bRequired||(p->sValue != NULL)||aPresent[u]) continue;
+		if(_DasSrcProp_xorIdle(pThis, aX, p)) continue;
 		int n = _DasReq_add(pReq, p->sKey, "", true);
 		if(n < 0) break;
 		pReq->aEntry[n].nProp = (int)u;
@@ -1456,18 +1781,30 @@ das_errcode DasSrc_check(const DasSrc* pThis, DasReq* pReq, size_t* puBad)
 		++uBad;
 	}
 	free(aPresent);
+	free(aX);
 	if(puBad) *puBad = uBad;
 	return uBad ? DASERR_SRC : DAS_OKAY;
 }
 
-/* The format group a requisition turns on, else the node's default */
+/* The format group a requisition turns on, else the node's default.
+ * Formats in an exclusive set, the usual case, are settled by
+ * _DasSrc_xorStates(); nodes from before xorGroup go by the first format
+ * switched on. */
 static const DasSrcGroup* _DasSrc_chosenFormat(const DasSrc* pThis, const DasReq* pReq)
 {
+	_xor_t* aX = _DasSrc_newXorStates(pThis, pReq);
+	if(aX == NULL) return NULL;
 	const DasSrcGroup* pDef = NULL;
-	for(size_t g = 0; g < DasSrc_numGroups(pThis, DASSRCSEC_FORMAT); ++g){
+	const DasSrcGroup* pXor = NULL;
+	const DasSrcGroup* pAsked = NULL;
+	for(size_t g = 0; (pAsked == NULL) && (g < DasSrc_numGroups(pThis, DASSRCSEC_FORMAT)); ++g){
 		const DasSrcGroup* pG = DasSrc_groupAt(pThis, DASSRCSEC_FORMAT, g);
 		const DasSrcProp* pOn = DasSrcGroup_enableProp(pG);
 		if(pOn == NULL) continue;
+		if(pG->sXor != NULL){
+			if((pXor == NULL) && (aX[pG - pThis->aGroup].cState == XOR_ON)) pXor = pG;
+			continue;
+		}
 		bool b = false;
 		if((pDef == NULL) && _dassrc_parseBool(pOn->sValue, &b) && b) pDef = pG;
 		if(pReq == NULL) continue;
@@ -1475,10 +1812,12 @@ static const DasSrcGroup* _DasSrc_chosenFormat(const DasSrc* pThis, const DasReq
 			if(pReq->aEntry[u].bDerived) continue;
 			const DasSrcProp* aMatch[1];
 			if(_DasSrc_match(pThis, pReq->aEntry[u].sKey, aMatch, 1) != 1) continue;
-			if((aMatch[0] == pOn) && _dassrc_parseBool(pReq->aEntry[u].sVal, &b) && b) return pG;
+			if((aMatch[0] == pOn) && _dassrc_parseBool(pReq->aEntry[u].sVal, &b) && b) pAsked = pG;
 		}
 	}
-	return pDef;
+	free(aX);
+	if(pAsked != NULL) return pAsked;
+	return pXor ? pXor : pDef;
 }
 
 const char* DasSrc_mime(const DasSrc* pThis, const DasReq* pReq)
@@ -1522,16 +1861,34 @@ const char* DasSrc_baseUrlAt(const DasSrc* pThis, size_t uIdx)
  * is joined with its flagSep when the URL is built, not as controls are
  * visited, because a flag with a subSep gathers elements from controls
  * anywhere in the node into one piece.  A plain value set afterwards
- * replaces the pieces, as a raw parameter replaces what controls built. */
+ * replaces the pieces, as a raw parameter replaces what controls built.
+ *
+ * Pieces are kept in the order the parameter's "flags" object lists the
+ * flags, not the order controls are visited in.  What is sent is then a
+ * matter of the protocol section alone: a node may move a control from
+ * the options to a data variable, or reorder a form, and every request
+ * it makes stays byte for byte what it was.  Servers that cache by the
+ * request text need that.  Pieces of one flag (a flag that repeats) keep
+ * the order they came in.
+ *
+ * A parameter that is not a flag set takes several values the same way:
+ * with its own subSep it is a single merged piece, keyed by the parameter
+ * entry where a flag's piece is keyed by the flag entry; with "repeat"
+ * every value is a piece and each goes out as its own NAME=VALUE pair. */
 typedef struct {
-	const DasJdo* pFlag;  /* merge key, the flag's entry; NULL when not merged */
+	const DasJdo* pFlag;  /* merge key, the flag's entry or the parameter's;
+	                         NULL when not merged */
+	size_t uRank;         /* the flag's place among the parameter's flags */
 	char* sVal;           /* owned, prefix then element(s) */
+	const char* sSuffix;  /* borrowed from the document, what closes the
+	                         piece once every element is in, or NULL */
 } _piece_t;
 
 typedef struct {
 	const char* sName;
-	char* sVal;           /* owned, plain value, NULL when only flags */
+	char* sVal;           /* owned, plain value, NULL when only pieces */
 	const char* sFlagSep; /* borrowed from the document */
+	bool bRepeat;         /* pieces are separate pairs, not one joined value */
 	_piece_t* aPiece; size_t uPiece; size_t uCap;
 } _param_t;
 
@@ -1569,6 +1926,7 @@ static void _dassrc_outDropPieces(_param_t* p)
 	p->aPiece = NULL;
 	p->uPiece = 0;
 	p->uCap = 0;
+	p->bRepeat = false;
 }
 
 static bool _dassrc_outSet(_out_t* pO, const char* sName, const char* sVal)
@@ -1584,14 +1942,19 @@ static bool _dassrc_outSet(_out_t* pO, const char* sName, const char* sVal)
 }
 
 /* Send a flag.  With sSubSep, a second element for the same flag joins
- * the first piece instead of starting another. */
+ * the first piece instead of starting another.  Without it every call is
+ * a piece of its own, which is how a flag that repeats sends a list:
+ * prefix and item, flagSep, prefix and item.  A suffix is kept apart
+ * from the text until the value is written, since a joined piece is not
+ * finished when it is started. */
 static bool _dassrc_outAddFlag(
 	_out_t* pO, const char* sName, const char* sFlagSep, const DasJdo* pFlag,
-	const char* sPrefix, const char* sSubSep, const char* sElem
+	size_t uRank, const char* sPrefix, const char* sSuffix, const char* sSubSep,
+	const char* sElem
 ){
 	_param_t* p = _dassrc_outGet(pO, sName);
 	if(p == NULL) return false;
-	p->sFlagSep = sFlagSep;
+	if(sFlagSep != NULL) p->sFlagSep = sFlagSep;
 
 	if(sSubSep != NULL){
 		for(size_t u = 0; u < p->uPiece; ++u){
@@ -1611,10 +1974,18 @@ static bool _dassrc_outAddFlag(
 		p->aPiece = a;
 		p->uCap = uCap;
 	}
-	_piece_t* pP = p->aPiece + p->uPiece;
+	char* sNew = dasstr_newf("%s%s", sPrefix ? sPrefix : "", sElem);
+	if(sNew == NULL) return false;
+
+	/* after every piece of the same or an earlier flag */
+	size_t uAt = p->uPiece;
+	while((uAt > 0) && (p->aPiece[uAt - 1].uRank > uRank)) --uAt;
+	memmove(p->aPiece + uAt + 1, p->aPiece + uAt, (p->uPiece - uAt) * sizeof(_piece_t));
+	_piece_t* pP = p->aPiece + uAt;
 	pP->pFlag = sSubSep ? pFlag : NULL;
-	pP->sVal = dasstr_newf("%s%s", sPrefix ? sPrefix : "", sElem);
-	if(pP->sVal == NULL) return false;
+	pP->uRank = uRank;
+	pP->sVal = sNew;
+	pP->sSuffix = sSuffix;
 	p->uPiece += 1;
 	return true;
 }
@@ -1626,7 +1997,10 @@ static char* _dassrc_outJoin(const _param_t* p)
 	const char* sSep = p->sFlagSep ? p->sFlagSep : " ";
 	size_t uSep = strlen(sSep);
 	size_t uLen = (p->sVal ? strlen(p->sVal) : 0) + 1;
-	for(size_t u = 0; u < p->uPiece; ++u) uLen += uSep + strlen(p->aPiece[u].sVal);
+	for(size_t u = 0; u < p->uPiece; ++u){
+		uLen += uSep + strlen(p->aPiece[u].sVal);
+		if(p->aPiece[u].sSuffix) uLen += strlen(p->aPiece[u].sSuffix);
+	}
 
 	char* s = (char*)malloc(uLen);
 	if(s == NULL) return NULL;
@@ -1637,6 +2011,11 @@ static char* _dassrc_outJoin(const _param_t* p)
 		size_t uVal = strlen(p->aPiece[u].sVal);
 		memcpy(s + n, p->aPiece[u].sVal, uVal);
 		n += uVal;
+		if(p->aPiece[u].sSuffix){
+			uVal = strlen(p->aPiece[u].sSuffix);
+			memcpy(s + n, p->aPiece[u].sSuffix, uVal);
+			n += uVal;
+		}
 	}
 	s[n] = '\0';
 	return s;
@@ -1652,6 +2031,77 @@ static void _dassrc_outClear(_out_t* pO)
 	memset(pO, 0, sizeof(_out_t));
 }
 
+/* Where a flag stands among its parameter's flags, counting from 0.
+   The caller has already found the flag, so it is there. */
+static size_t _dassrc_flagRank(const DasJdo* pParam, const char* sFlag)
+{
+	size_t uRank = 0;
+	for(const DasJsonDictEl* pEl = DasJdo_dictFirst(_dassrc_jget(pParam, "flags")); pEl; pEl = pEl->next){
+		if(strcmp(pEl->name->string, sFlag) == 0) break;
+		++uRank;
+	}
+	return uRank;
+}
+
+/* The protocol's own list of what may follow a flag's prefix, or be the
+ * value of a parameter: "enum" on the flag or parameter entry, a plain
+ * list of strings.  The protocol section then names every string the
+ * server takes there, and what a control sends (an interface enum item's
+ * pval or value, a typed value) has to be one of them.  Compared as text
+ * and exactly, the server will.  An entry with no list takes anything,
+ * which is right for a time, a number or free text.  True when sVal may
+ * be sent to pTarget.
+ *
+ * Not to be confused with a control's set.enum, the choices a person
+ * sees.  Those may be other words; this list is the wire. */
+static bool _dassrc_inProtoEnum(const DasJdo* pTarget, const char* sVal)
+{
+	const DasJdo* pVals = _dassrc_jget(pTarget, "enum");
+	if(!_dassrc_jisary(pVals)) return true;
+	char sItem[SCALAR_SZ];
+	for(const DasJsonAryEl* pEl = DasJdo_aryFirst(pVals); pEl; pEl = pEl->next)
+		if(_das_json_scalar(pEl->value, sItem, sizeof(sItem)) && (strcmp(sItem, sVal) == 0))
+			return true;
+	return false;
+}
+
+/* Say why a value was refused by _dassrc_inProtoEnum().  A control with
+   choices of its own can only get here if the node's two sections
+   disagree; one without lets the user type, so the user is told. */
+static void _dassrc_notInProtoEnum(
+	const DasSrcCtrl* pC, const char* sVal, const char* sFlag, char* sWhy, size_t uWhy
+){
+	size_t n = 0;
+	if(sFlag != NULL)
+		n = _dassrc_catf(sWhy, uWhy, n, "%s would send '%s', which flag '%s' under protocol "
+		                 "parameter %s does not list in its enum", pC->pProp->sKey, sVal, sFlag, pC->sParam);
+	else
+		n = _dassrc_catf(sWhy, uWhy, n, "%s would send '%s', which protocol parameter %s does "
+		                 "not list in its enum", pC->pProp->sKey, sVal, pC->sParam);
+	if(pC->uEnum > 0) _dassrc_catf(sWhy, uWhy, n, ", the node is broken");
+}
+
+/* What a control's value is joined into, if anything: the entry of a
+ * flag with a subSep, or of a parameter of its own with one.  NULL for a
+ * control whose value travels by itself.
+ *
+ * A joined value is one value as far as the server can tell, '-hfr ABEx'
+ * or 'read.data=a,b', so its parts are sent together or not at all, see
+ * DasSrc_reqUrl().  An enum whose items each pick a flag has no single
+ * target and is not looked into; such items are switches. */
+static const DasJdo* _DasSrcCtrl_joinTarget(const DasSrcCtrl* pC)
+{
+	const DasJdo* pT = pC->pParam;
+	const char* sFlag = _dassrc_jstr(pC->pSet, "flag");
+	if(sFlag != NULL){
+		char sPath[DASID_SZ + 8];
+		snprintf(sPath, sizeof(sPath), "flags/%s", sFlag);
+		pT = _dassrc_jget(pC->pParam, sPath);
+	}
+	if((_dassrc_jstr(pT, "subSep") == NULL) || _dassrc_jtrue(_dassrc_jget(pT, "repeat"))) return NULL;
+	return pT;
+}
+
 /* One control's value to protocol parameters, by its set block:
  *
  *   - enum: the chosen item's "pval" if it has one, else its value, and
@@ -1659,17 +2109,29 @@ static void _dassrc_outClear(_out_t* pO)
  *   - boolean: the block fires for one state only, "value" (true unless
  *     said otherwise); the other state is the default and sends nothing.
  *     With neither pval nor flag the state itself is sent as true/false.
- *   - flag: with the flag's prefix, appended to the parameter with the
- *     parameter's flagSep.  A switch sends the flag's value (its entry
+ *   - flag: with the flag's prefix before it and the flag's suffix, if it
+ *     has one, after it, appended to the parameter with the parameter's
+ *     flagSep.  A switch sends the flag's value (its entry
  *     under the parameter's flags, else the flag name), a slot sends the
  *     control's value, see _DasSrcCtrl_flagIsSlot()
  *   - flag with a subSep (the das2 set: constraint): a multi-select.  A
  *     switch sends its pval, a slot its value, and everything sent to
  *     that flag is joined with subSep behind one prefix, in the order the
- *     controls appear in the node.  "" joins with nothing between.
- *   - otherwise the value as given, or the block's pval
+ *     controls appear in the node.  "" joins with nothing between.  (The
+ *     flags themselves go out in the order the parameter lists them.)
+ *   - flag with "repeat": true: each value is a flag of its own, prefix
+ *     and all, which is what any flag without a subSep does when two
+ *     controls feed it.  Saying so is required only of a list control,
+ *     see _DasSrcCtrl_translate().
+ *   - otherwise the value as given, or the block's pval, to a parameter
+ *     of its own.  The parameter may carry subSep or repeat as a flag
+ *     does, and then gathers values instead of keeping the last one.
+ *   - a flag with a prefix, or a parameter of its own, may list an
+ *     "enum" of its own.  Whatever is about to follow the prefix, or be
+ *     the parameter's value or one element of it, must then be in that
+ *     list, see _dassrc_inProtoEnum().
  */
-static bool _DasSrcCtrl_translate(const DasSrcCtrl* pC, const char* sVal, _out_t* pO, char* sWhy, size_t uWhy)
+static bool _DasSrcCtrl_translateOne(const DasSrcCtrl* pC, const char* sVal, _out_t* pO, char* sWhy, size_t uWhy)
 {
 	const DasSrcProp* p = pC->pProp;
 	char sFlag[DASID_SZ] = {'\0'};
@@ -1703,6 +2165,10 @@ static bool _DasSrcCtrl_translate(const DasSrcCtrl* pC, const char* sVal, _out_t
 			_dassrc_strcpyz(sPVal, bUser ? "true" : "false", sizeof(sPVal));
 			bHavePVal = true;
 		}
+		/* A fixed string or a flag is sent for one state, and a block
+		   that does not say which means on.  Off would otherwise send
+		   the very string that means on. */
+		else if(!_dassrc_jisbool(pTrig) && !bUser) return true;
 	}
 
 	if(sFlag[0] != '\0'){
@@ -1715,6 +2181,16 @@ static bool _DasSrcCtrl_translate(const DasSrcCtrl* pC, const char* sVal, _out_t
 			return false;
 		}
 		const char* sSubSep = _dassrc_jstr(pF, "subSep");
+		bool bRepeat = _dassrc_jtrue(_dassrc_jget(pF, "repeat"));
+		if(p->bMulti && bSlot && ((sSubSep == NULL) == !bRepeat)){
+			/* Joined or repeated is a different request to the server, so
+			   the node has to say which; guessing would hide a typo */
+			snprintf(sWhy, uWhy, "%s holds a list, so flag '%s' under protocol parameter %s "
+			         "must have exactly one of subSep and repeat, the node is broken",
+			         p->sKey, sFlag, pC->sParam);
+			return false;
+		}
+		if(bRepeat) sSubSep = NULL;
 		char sFVal[SCALAR_SZ];
 		if(bSlot)
 			_dassrc_strcpyz(sFVal, bHavePVal ? sPVal : sVal, sizeof(sFVal));
@@ -1730,35 +2206,115 @@ static bool _DasSrcCtrl_translate(const DasSrcCtrl* pC, const char* sVal, _out_t
 		}
 		else if(!_das_json_scalar(_dassrc_jget(pF, "value"), sFVal, sizeof(sFVal)))
 			_dassrc_strcpyz(sFVal, sFlag, sizeof(sFVal));
+		/* A plain switch sends the flag's own text, there is nothing to
+		   look up; anything that follows a prefix is held to the list */
+		if((bSlot || (sSubSep != NULL)) && !_dassrc_inProtoEnum(pF, sFVal)){
+			_dassrc_notInProtoEnum(pC, sFVal, sFlag, sWhy, uWhy);
+			return false;
+		}
 		const char* sSep = _dassrc_jstr(pC->pParam, "flagSep");
 		if(sSep == NULL) sSep = _dassrc_jstr(pC->pParam, "flag_sep");   /* 2018 layout */
 		if(sSep == NULL) sSep = " ";
-		if(!_dassrc_outAddFlag(pO, pC->sParam, sSep, pF, _dassrc_jstr(pF, "prefix"), sSubSep, sFVal)){
+		if(!_dassrc_outAddFlag(pO, pC->sParam, sSep, pF, _dassrc_flagRank(pC->pParam, sFlag),
+		                       _dassrc_jstr(pF, "prefix"), _dassrc_jstr(pF, "suffix"), sSubSep, sFVal)){
 			snprintf(sWhy, uWhy, "Out of memory");
 			return false;
 		}
 		return true;
 	}
-	if(!_dassrc_outSet(pO, pC->sParam, bHavePVal ? sPVal : sVal)){ snprintf(sWhy, uWhy, "Out of memory"); return false; }
-	return true;
+
+	/* A parameter of its own.  One that says how several values travel
+	   collects them, from a list or from any number of controls; without
+	   that the last value set is the value, as it always was. */
+	const char* sSubSep = _dassrc_jstr(pC->pParam, "subSep");
+	bool bRepeat = _dassrc_jtrue(_dassrc_jget(pC->pParam, "repeat"));
+	if(p->bMulti && ((sSubSep == NULL) == !bRepeat)){
+		snprintf(sWhy, uWhy, "%s holds a list, so protocol parameter %s must have exactly "
+		         "one of subSep and repeat, the node is broken", p->sKey, pC->sParam);
+		return false;
+	}
+	if(!_dassrc_inProtoEnum(pC->pParam, bHavePVal ? sPVal : sVal)){
+		_dassrc_notInProtoEnum(pC, bHavePVal ? sPVal : sVal, NULL, sWhy, uWhy);
+		return false;
+	}
+	bool bOk = true;
+	if(bRepeat){
+		bOk = _dassrc_outAddFlag(pO, pC->sParam, NULL, NULL, 0, NULL, NULL, NULL, bHavePVal ? sPVal : sVal);
+		if(bOk) _dassrc_outFind(pO, pC->sParam)->bRepeat = true;
+	}
+	else if(sSubSep != NULL)
+		bOk = _dassrc_outAddFlag(pO, pC->sParam, NULL, pC->pParam, 0, NULL, NULL, sSubSep, bHavePVal ? sPVal : sVal);
+	else
+		bOk = _dassrc_outSet(pO, pC->sParam, bHavePVal ? sPVal : sVal);
+	if(!bOk) snprintf(sWhy, uWhy, "Out of memory");
+	return bOk;
 }
 
-/* The value a requisition gives a property: the last good non-empty
- * entry that resolved to it, derived or not */
-static const char* _dassrc_reqValueFor(const DasReq* pReq, size_t uProp)
+/* A control's value to protocol parameters.  A list goes one item at a
+ * time: enumerated items in the node's order, so a selection has one
+ * spelling on the wire however it was typed, others as given. */
+static bool _DasSrcCtrl_translate(const DasSrcCtrl* pC, const char* sVal, _out_t* pO, char* sWhy, size_t uWhy)
+{
+	if(!pC->pProp->bMulti) return _DasSrcCtrl_translateOne(pC, sVal, pO, sWhy, uWhy);
+
+	size_t uItems = 0;
+	char** aItem = _dassrc_newSplit(sVal, &uItems);
+	if(aItem == NULL){ snprintf(sWhy, uWhy, "Out of memory"); return false; }
+	bool bOk = true;
+	if(pC->uEnum > 0){
+		for(size_t e = 0; bOk && (e < pC->uEnum); ++e){
+			for(size_t u = 0; u < uItems; ++u){
+				if(!_dassrc_strieq(aItem[u], pC->aEnum[e])) continue;
+				bOk = _DasSrcCtrl_translateOne(pC, pC->aEnum[e], pO, sWhy, uWhy);
+				break;
+			}
+		}
+	}
+	else{
+		for(size_t u = 0; bOk && (u < uItems); ++u)
+			if(aItem[u][0] != '\0') bOk = _DasSrcCtrl_translateOne(pC, aItem[u], pO, sWhy, uWhy);
+	}
+	free(aItem);
+	return bOk;
+}
+
+/* The value a requisition gives a property: the last good entry that
+ * resolved to it, derived or not.  An empty one takes back what came
+ * before, so 'lfdr=' after an example that set options.lfdr leaves the
+ * list unset, though the two spellings are two entries.  NULL when the
+ * requisition leaves the property alone. */
+static const char* _dassrc_reqValueFor(const DasReq* pReq, size_t uProp, bool bList)
 {
 	const char* sVal = NULL;
 	for(size_t u = 0; u < pReq->uEntry; ++u){
 		const struct das_req_entry* pE = pReq->aEntry + u;
-		if((pE->nProp != (int)uProp)||(pE->verdict != DASREQVERDICT_OK)||(pE->sVal[0] == '\0')) continue;
-		sVal = pE->sVal;
+		if((pE->nProp != (int)uProp)||(pE->verdict != DASREQVERDICT_OK)) continue;
+		sVal = _dassrc_noValue(pE->sVal, bList) ? NULL : pE->sVal;
 	}
 	return sVal;
+}
+
+/* As _dassrc_reqValueFor(), with the toggles of an exclusive set giving
+ * what was settled for the set and not what was said of each: the format
+ * an example switched on is off once another is chosen, though its entry
+ * still says true.  A toggle the requisition already has right, or that
+ * is where the node has it, is passed through untouched. */
+static const char* _DasSrc_valueFor(const DasSrc* pThis, const DasReq* pReq, const _xor_t* aX, size_t uProp)
+{
+	const DasSrcProp* p = pThis->aProp + uProp;
+	const char* sVal = _dassrc_reqValueFor(pReq, uProp, p->bMulti);
+	char cState = aX[p->pGroup - pThis->aGroup].cState;
+	if((cState == XOR_NONE) || !_DasSrcProp_isEnable(p)) return sVal;
+
+	bool b = false;
+	if(_dassrc_parseBool(sVal ? sVal : p->sValue, &b) && (b == (cState == XOR_ON))) return sVal;
+	return (cState == XOR_ON) ? "true" : "false";
 }
 
 static bool _DasSrcProp_sameAsDefault(const DasSrcProp* p, const char* sVal)
 {
 	if(p->sValue == NULL) return false;
+	if(p->bMulti) return _dassrc_sameItems(sVal, p->sValue);
 	if(p->type == DASSRCPROPTYPE_BOOL){
 		bool bA = false, bB = false;
 		return _dassrc_parseBool(sVal, &bA) && _dassrc_parseBool(p->sValue, &bB) && (bA == bB);
@@ -1792,6 +2348,42 @@ size_t DasSrc_reqUrl(const DasSrc* pThis, DasReq* pReq, size_t uBase, char* sBuf
 		return 0;
 	}
 
+	/* Joined values first: which of them does this request send at all?
+	   One is sent when any control feeding it is off its default or is
+	   required.  Then every control feeding it sends, defaults included.
+	   '-hfr Ew' does not mean "sensor Ew, bands as usual" to a server, it
+	   means no bands, so the default bands have to travel with it. */
+	const DasJdo** aLive = (const DasJdo**)calloc(pThis->uCtrl ? pThis->uCtrl : 1, sizeof(DasJdo*));
+	_xor_t* aX = _DasSrc_newXorStates(pThis, pReq);
+	if((aLive == NULL)||(aX == NULL)){ free(aLive); free(aX); return 0; }
+
+	/* Two members of an exclusive set on, which only the node can do: a
+	   requisition that switches one on switches the rest off.  Either
+	   would be a guess. */
+	for(size_t g = 0; g < pThis->uGroup; ++g){
+		for(size_t h = g + 1; (aX[g].cState == XOR_ON) && (h < pThis->uGroup); ++h){
+			if((aX[h].cState != XOR_ON) || (strcmp(pThis->aGroup[g].sXor, pThis->aGroup[h].sXor) != 0)) continue;
+			daslog_errorf("Source %s has both %s and %s of the exclusive set '%s' on by default, "
+			              "the node is broken.  Switch one of them on to say which is meant.",
+			              pThis->sUrl, pThis->aGroup[g].sName, pThis->aGroup[h].sName, pThis->aGroup[g].sXor);
+			free(aLive); free(aX);
+			return 0;
+		}
+	}
+
+	size_t uLive = 0;
+	for(size_t u = 0; u < pThis->uProp; ++u){
+		const DasSrcProp* p = pThis->aProp + u;
+		const DasSrcCtrl* pC = p->pCtrl;
+		const DasJdo* pT = pC ? _DasSrcCtrl_joinTarget(pC) : NULL;
+		if((pT == NULL) || _DasSrcProp_xorIdle(pThis, aX, p)) continue;
+		const char* sVal = _DasSrc_valueFor(pThis, pReq, aX, u);
+		bool bSends = (sVal != NULL) ? (pC->bRequired || !_DasSrcProp_sameAsDefault(p, sVal)) :
+		                               (pC->bRequired && (p->sValue != NULL));
+		for(size_t v = 0; bSends && (v < uLive); ++v) if(aLive[v] == pT) bSends = false;
+		if(bSends) aLive[uLive++] = pT;
+	}
+
 	_out_t out = {NULL, 0, 0};
 	char sWhy[1024];
 	for(size_t u = 0; u < pThis->uProp; ++u){
@@ -1799,27 +2391,51 @@ size_t DasSrc_reqUrl(const DasSrc* pThis, DasReq* pReq, size_t uBase, char* sBuf
 		const DasSrcCtrl* pC = p->pCtrl;
 		if(pC == NULL) continue;
 
-		const char* sVal = _dassrc_reqValueFor(pReq, u);
+		/* Nothing of a format not chosen is sent, typed or default.
+		   (Typed settings were refused by the check above.) */
+		if(_DasSrcProp_xorIdle(pThis, aX, p)) continue;
+
+		bool bLive = false;
+		const DasJdo* pT = _DasSrcCtrl_joinTarget(pC);
+		for(size_t v = 0; (pT != NULL) && (v < uLive); ++v) if(aLive[v] == pT) bLive = true;
+
+		const char* sVal = _DasSrc_valueFor(pThis, pReq, aX, u);
 		bool bDefault = false;
 		if(sVal == NULL){
-			if(!pC->bRequired || (p->sValue == NULL)) continue;
+			if((!pC->bRequired && !bLive) || (p->sValue == NULL)) continue;
 			sVal = p->sValue;
 			bDefault = true;
 		}
 		/* A required default fills a hole, it never replaces what another
-		   control already put in a shared parameter */
-		if(bDefault && _dassrc_outFind(&out, pC->sParam)) continue;
+		   control already put in a shared parameter.  Part of a joined
+		   value replaces nothing, it adds. */
+		if(bDefault && !bLive && _dassrc_outFind(&out, pC->sParam)) continue;
 
 		/* A value equal to the default carries no information unless the
-		   server insists on hearing it */
-		if(!bDefault && !pC->bRequired && _DasSrcProp_sameAsDefault(p, sVal)) continue;
+		   server insists on hearing it, or it is part of a joined value
+		   that is going out anyway */
+		if(!bDefault && !pC->bRequired && !bLive && _DasSrcProp_sameAsDefault(p, sVal)) continue;
+
+		/* A switch adds its element to a joined value in one state only,
+		   on unless its set block says otherwise.  In the other state it
+		   has nothing to add, which is not the same as having no element
+		   to give, the node error _DasSrcCtrl_translateOne() reports. */
+		if(bLive && (p->type == DASSRCPROPTYPE_BOOL)){
+			bool bState = false;
+			_dassrc_parseBool(sVal, &bState);
+			const DasJdo* pTrig = _dassrc_jget(pC->pSet, "value");
+			if(bState != (_dassrc_jisbool(pTrig) ? _dassrc_jtrue(pTrig) : true)) continue;
+		}
 
 		if(!_DasSrcCtrl_translate(pC, sVal, &out, sWhy, sizeof(sWhy))){
 			daslog_errorf("%s", sWhy);
 			_dassrc_outClear(&out);
+			free(aLive); free(aX);
 			return 0;
 		}
 	}
+	free(aLive);
+	free(aX);
 
 	for(size_t u = 0; u < pReq->uRaw; ++u){
 		if(!_dassrc_outSet(&out, pReq->aRaw[u].sName, pReq->aRaw[u].sVal)){ _dassrc_outClear(&out); return 0; }
@@ -1850,17 +2466,22 @@ size_t DasSrc_reqUrl(const DasSrc* pThis, DasReq* pReq, size_t uBase, char* sBuf
 	size_t uNeed = strlen(sBase);
 	const char* sJoin = strchr(sBase, '?') ? "&" : "?";
 	for(size_t i = 0; i < out.u; ++i){
-		char* sVal = _dassrc_outJoin(out.a + i);
-		if(sVal == NULL){ _dassrc_outClear(&out); return 0; }
-		size_t uEnc = dasurl_encode(sVal, NULL, 0) + 1;
-		char* sEnc = (char*)malloc(uEnc);
-		if(sEnc == NULL){ free(sVal); _dassrc_outClear(&out); return 0; }
-		dasurl_encode(sVal, sEnc, uEnc);
-		free(sVal);
-		u = _dassrc_catf(sBuf, uLen, u, "%s%s=%s", sJoin, out.a[i].sName, sEnc);
-		uNeed += strlen(sJoin) + strlen(out.a[i].sName) + 1 + strlen(sEnc);
-		free(sEnc);
-		sJoin = "&";
+		/* one pair, or one per piece for a parameter that repeats */
+		size_t uPairs = out.a[i].bRepeat ? out.a[i].uPiece : 1;
+		for(size_t v = 0; v < uPairs; ++v){
+			char* sVal = out.a[i].bRepeat ? _dassrc_strdupz(out.a[i].aPiece[v].sVal) :
+			                                _dassrc_outJoin(out.a + i);
+			if(sVal == NULL){ _dassrc_outClear(&out); return 0; }
+			size_t uEnc = dasurl_encode(sVal, NULL, 0) + 1;
+			char* sEnc = (char*)malloc(uEnc);
+			if(sEnc == NULL){ free(sVal); _dassrc_outClear(&out); return 0; }
+			dasurl_encode(sVal, sEnc, uEnc);
+			free(sVal);
+			u = _dassrc_catf(sBuf, uLen, u, "%s%s=%s", sJoin, out.a[i].sName, sEnc);
+			uNeed += strlen(sJoin) + strlen(out.a[i].sName) + 1 + strlen(sEnc);
+			free(sEnc);
+			sJoin = "&";
+		}
 	}
 	_dassrc_outClear(&out);
 	return uNeed;

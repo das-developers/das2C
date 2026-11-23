@@ -268,7 +268,8 @@
     "type": "enum",
     "enum": [
      "das",
-     "ccsds"
+     "cdf",
+     "csv"
     ]
    },
    "format.secfrac": {

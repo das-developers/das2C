@@ -172,7 +172,16 @@ DAS_API void DasReq_setLabel(DasReq* pThis, const char* sLabel);
  * The key and value are stored as given.  Nothing is resolved or checked
  * here, there is no source to ask; the entry's verdict becomes unchecked
  * and the next DasSrc_check() validates it.  Setting a key that is already
- * present replaces its value.  Keys compare case insensitively.
+ * present replaces its value and moves the entry to the end.  Keys compare
+ * case insensitively.
+ *
+ * The order of entries is the order things were last said.  Keys are
+ * kept as given and only resolved against a source later, see
+ * @ref src_keys, so one property can be held under two keys: an
+ * example's "options.lfdr" and a user's shortend "lfdr", version. Two
+ * members of an exclusive set, such as the formats, can likewise both be
+ * switched on.  Where entries disagree like this the later one counts, as
+ * with radio buttons.
  *
  * @param pThis The requisition
  * @param sKey Any spelling from @ref src_keys, or a coordinate name

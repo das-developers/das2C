@@ -37,6 +37,33 @@ seed.  Callers of `DasCat_setPrefix()` need a small edit, see below.
   joined with `subSep` behind the flag's prefix once, in node order:
   `fan=090,270`, or `-lfdr LEx` with `subSep` "".
 
+- An interface property with `"multi"` holds a list, `lfdr=Ex,Ew`.
+
+- FlagSet entries in the protocol parameters can declair a 'subSep'
+  to help handly tricky protocols that put to much structure in a 
+  single get param
+
+- Flags are now sent in the order the protocol section lists them
+
+- The protocol section's `enum` lists are enforced, a string that is
+  not listed will not parse to URL.  
+  **Nodes with incomplete lists lose those choices** need to be 
+  regenerated (older dasflex nodes: `cdf`, `csv`).
+
+- A value joined with `subSep` is sent whole: when one control feeding
+  it is off its default, the others send their defaults too.
+
+- An empty value takes a setting back: `lfdr=` drops what an example
+  set.
+
+- Exclusive sets (`xorGroup`, mostly formats) are enforced.  The last
+  member switched on wins and a setting of an unselected member is
+  refused.  
+  **Requests that mixed formats stop working**, e.g. `formats.csv
+  das.version=das2`.
+
+- A flag may have a `"suffix"`, sent after its value: `--win=2.5s`.
+
 - Query URLs are easier to read: `dasurl_encode()` leaves `: / @ , =`
   plain, so times print as `2026-01-02T14:30`.  Servers decode either
   form the same way.
@@ -52,6 +79,9 @@ seed.  Callers of `DasCat_setPrefix()` need a small edit, see below.
 - `dasarg_isOpt()` matched flags by prefix, so `--clean` matched
   `--cleanup`.
 
+- A boolean control with a `pval` or `flag` and no `set.value` fired in
+  both states.  It fires when switched on.
+
 ### API changes
 
 - `DasCat_setSeed(NULL, uri)` seeds a node of the das catalog by name,
@@ -61,6 +91,12 @@ seed.  Callers of `DasCat_setPrefix()` need a small edit, see below.
   `DASCAT_SITE_PREFIX`.  Use `DasCat_setSeed()`.
 
 - New: `DasCat_seedUri()`, `DASMISS_BADNAME`, `dasarg_optVal()`.
+
+- `DasReq_set()` on a key already present moves the entry to the end,
+  so entry order is the order things were last said.
+
+- New: `DasSrcProp_multi()`.  `DasSrcProp_value()` gives a list default
+  as comma separated items.
 
 - `dasarg_getOptVal()` and `dasarg_isOpt()` accept `--opt=VALUE` and
   `--opt VALUE`, as GNU getopt does.
@@ -79,11 +115,17 @@ seed.  Callers of `DasCat_setPrefix()` need a small edit, see below.
 - das_fetch: `url -o params` prints the source's base URLs, then one
   decoded query parameter per line, for reading.
 
+- das_fetch: `KEY=a,b` sets a list property, and `node` shows list
+  types and item count bounds.
+
 ### Build and test
 
 - New TestArgs for the command line helpers.
 
 - New fixture `test/das_fetch/subsep_0.7.json` for multi-select flags.
+
+- New fixture `test/das_fetch/multi_0.7.json`, and TestSource cases for
+  lists, flag order, protocol `enum` lists, exclusive sets and suffixes.
 
 - The CMake and Windows das_fetch tests still used the removed `-C`
   option.

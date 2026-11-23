@@ -84,6 +84,29 @@ bool _das_json_scalar(const DasJdo* p, char* sBuf, size_t uLen)
 	}
 }
 
+bool _das_json_value(const DasJdo* p, char* sBuf, size_t uLen)
+{
+	if((p == NULL)||(uLen == 0)) return false;
+	if(p->type != DASJSONTYPE_ARY) return _das_json_scalar(p, sBuf, uLen);
+
+	char sItem[1024];
+	size_t u = 0;
+	bool bAny = false;
+	for(const DasJsonAryEl* pEl = DasJdo_aryFirst(p); pEl; pEl = pEl->next){
+		if(!_das_json_scalar(pEl->value, sItem, sizeof(sItem))) continue;
+		size_t uItem = strlen(sItem);
+		/* whole items only: the comma if any, the item, the NUL */
+		if(u + (bAny ? 1 : 0) + uItem + 1 > uLen) break;
+		if(bAny) sBuf[u++] = ',';
+		memcpy(sBuf + u, sItem, uItem);
+		u += uItem;
+		bAny = true;
+	}
+	if(!bAny) return false;
+	sBuf[u] = '\0';
+	return true;
+}
+
 /* ************************************************************************* */
 /* Life cycle */
 
@@ -241,6 +264,20 @@ das_errcode DasReq_set(DasReq* pThis, const char* sKey, const char* sVal)
 		pE->verdict = DASREQVERDICT_UNCHECKED;
 		free(pE->sWhy);
 		pE->sWhy = NULL;
+
+		/* Said again is said last.  Keys are kept as given and resolved by
+		   the source later, so one property can sit here under two keys,
+		   an example's "options.lfdr" and a user's shorthand "lfdr", and
+		   two members of an exclusive set can both be on.  The later entry
+		   counts, and "later" has to mean when it was last set, not when the
+		   key first showed up: an example that turned on CDF must not outrank
+		   the CSV the user picks and then unpicks.  Position is the only clock
+		   a requisition has, and it survives the JSON form. */
+		if((size_t)n + 1 < pThis->uEntry){
+			struct das_req_entry tmp = *pE;
+			memmove(pE, pE + 1, (pThis->uEntry - (size_t)n - 1) * sizeof(struct das_req_entry));
+			pThis->aEntry[pThis->uEntry - 1] = tmp;
+		}
 		return DAS_OKAY;
 	}
 	return (_DasReq_add(pThis, sKey, sVal, false) < 0) ? DASERR_SRC : DAS_OKAY;
@@ -493,7 +530,7 @@ DasReq* new_DasReq_text(const char* sJson, size_t uLen)
 	for(const DasJsonDictEl* pEl = DasJdo_dictFirst(pSet); bOk && pEl; pEl = pEl->next){
 		if(strchr(pEl->name->string, '/')) _dasreq_pathToKey(pEl->name->string, sKey, sizeof(sKey));
 		else{ strncpy(sKey, pEl->name->string, sizeof(sKey) - 1); sKey[sizeof(sKey)-1] = '\0'; }
-		if(!_das_json_scalar(pEl->value, sVal, sizeof(sVal))) sVal[0] = '\0';
+		if(!_das_json_value(pEl->value, sVal, sizeof(sVal))) sVal[0] = '\0';
 		bOk = (DasReq_set(pThis, sKey, sVal) == DAS_OKAY);
 	}
 	const DasJdo* pRaw = DasJdo_subtree(pDoc, "params");

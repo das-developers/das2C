@@ -1,0 +1,517 @@
+{
+	"type": "HttpStreamSrc",
+	"version": "0.7",
+	"label": "multi test source",
+	"title": "Synthetic node for multi-valued properties, modeled on Cassini RPWS Survey, Voyager PWS and a server that takes repeated keys",
+	"protocol": {
+		"method": "GET",
+		"baseUrls": [
+			"https://example.org/das/server?server=dataset&dataset=Test/Multi"
+		],
+		"httpParams": {
+			"start_time": {
+				"required": true,
+				"type": "isotime"
+			},
+			"end_time": {
+				"required": true,
+				"type": "isotime"
+			},
+			"read.data": {
+				"required": false,
+				"subSep": ","
+			},
+			"parameter": {
+				"required": false,
+				"repeat": true,
+				"enum": [
+					"bx",
+					"by",
+					"bz"
+				]
+			},
+			"plain": {
+				"required": false
+			},
+			"params": {
+				"required": false,
+				"type": "FlagSet",
+				"flagSep": " ",
+				"flags": {
+					"bg_div": {
+						"prefix": "-b "
+					},
+					"lfdr": {
+						"prefix": "-lfdr ",
+						"subSep": "",
+						"enum": [
+							"Ex",
+							"Ew"
+						]
+					},
+					"mfr": {
+						"prefix": "-mfr ",
+						"subSep": "",
+						"enum": [
+							"1",
+							"2",
+							"3",
+							"Ex",
+							"Ew"
+						]
+					},
+					"hfr": {
+						"prefix": "-hfr ",
+						"subSep": "",
+						"enum": [
+							"A",
+							"B",
+							"C",
+							"1",
+							"2"
+						]
+					},
+					"nix": {
+						"prefix": "-n ",
+						"subSep": " ",
+						"enum": [
+							"mfdr_mfr2",
+							"bad_data",
+							"hf1pwr",
+							"fake_data"
+						]
+					},
+					"dft": {
+						"prefix": "",
+						"enum": [
+							"fft512",
+							"fft3x512"
+						]
+					},
+					"notches": {
+						"prefix": "",
+						"subSep": " "
+					},
+					"fan": {
+						"prefix": "fan=",
+						"subSep": ",",
+						"enum": [
+							"090",
+							"180",
+							"270"
+						]
+					},
+					"drop": {
+						"prefix": "--drop=",
+						"repeat": true
+					},
+					"quiet": {
+						"value": "-q"
+					},
+					"loud": {
+						"value": "-v"
+					},
+					"neither": {
+						"prefix": "-x "
+					},
+					"both": {
+						"prefix": "-y ",
+						"subSep": ",",
+						"repeat": true
+					}
+				}
+			}
+		}
+	},
+	"interface": {
+		"coords": {
+			"time": {
+				"label": "Time",
+				"props": {
+					"min": {
+						"label": "Minimum",
+						"value": "2017-168",
+						"set": {
+							"param": "start_time",
+							"required": true
+						}
+					},
+					"max": {
+						"label": "Maximum",
+						"value": "2017-169",
+						"set": {
+							"param": "end_time",
+							"required": true
+						}
+					}
+				}
+			}
+		},
+		"data": {
+			"bac_tscs": {
+				"label": "Bac TSCS",
+				"props": {
+					"enabled": {
+						"type": "boolean",
+						"value": false,
+						"set": {
+							"param": "read.data",
+							"value": true,
+							"pval": "ts2_l2_bac_tscs"
+						}
+					}
+				}
+			},
+			"bac_fac": {
+				"label": "Bac FAC",
+				"props": {
+					"enabled": {
+						"type": "boolean",
+						"value": false,
+						"set": {
+							"param": "read.data",
+							"value": true,
+							"pval": "ts2_l2_bac_fac"
+						}
+					}
+				}
+			}
+		},
+		"options": {
+			"label": "Options",
+			"props": {
+				"bg_div": {
+					"label": "Background division",
+					"type": "integer",
+					"value": null,
+					"set": {
+						"param": "params",
+						"flag": "bg_div",
+						"range": [
+							1,
+							100
+						]
+					}
+				},
+				"lfdr": {
+					"label": "LFDR sensors",
+					"type": "enum",
+					"multi": true,
+					"value": [],
+					"set": {
+						"param": "params",
+						"flag": "lfdr",
+						"enum": [
+							{
+								"value": "Ex"
+							},
+							{
+								"value": "Ew"
+							}
+						]
+					}
+				},
+				"mfr_bands": {
+					"label": "MFR bands",
+					"type": "enum",
+					"multi": true,
+					"value": [],
+					"set": {
+						"param": "params",
+						"flag": "mfr",
+						"enum": [
+							{
+								"value": "1"
+							},
+							{
+								"value": "2"
+							},
+							{
+								"value": "3"
+							}
+						]
+					}
+				},
+				"mfr_sensors": {
+					"label": "MFR sensors",
+					"type": "enum",
+					"multi": true,
+					"value": [],
+					"set": {
+						"param": "params",
+						"flag": "mfr",
+						"enum": [
+							{
+								"value": "Ex"
+							},
+							{
+								"value": "Ew"
+							}
+						]
+					}
+				},
+				"hfr_bands": {
+					"label": "HFR bands",
+					"type": "enum",
+					"multi": true,
+					"value": [],
+					"set": {
+						"param": "params",
+						"flag": "hfr",
+						"enum": [
+							{
+								"value": "A"
+							},
+							{
+								"value": "B"
+							},
+							{
+								"value": "C"
+							},
+							{
+								"value": "HF1",
+								"pval": "1"
+							},
+							{
+								"value": "HF2",
+								"pval": "2"
+							}
+						]
+					}
+				},
+				"nix": {
+					"label": "Data to remove",
+					"type": "enum",
+					"multi": true,
+					"value": [],
+					"set": {
+						"param": "params",
+						"flag": "nix",
+						"enum": [
+							{
+								"value": "mfdr_mfr2"
+							},
+							{
+								"value": "bad_data"
+							},
+							{
+								"value": "hf1pwr"
+							},
+							{
+								"value": "fake_data"
+							}
+						]
+					}
+				},
+				"dft": {
+					"label": "DFT method",
+					"type": "enum",
+					"value": null,
+					"set": {
+						"param": "params",
+						"flag": "dft",
+						"enum": [
+							{
+								"value": "fft512"
+							},
+							{
+								"value": "fft3x512"
+							}
+						]
+					}
+				},
+				"notches": {
+					"label": "Notches",
+					"title": "Frequencies to remove from the output",
+					"units": "kHz",
+					"type": "real",
+					"multi": [
+						1,
+						3
+					],
+					"value": [],
+					"set": {
+						"param": "params",
+						"flag": "notches",
+						"range": [
+							0.0,
+							14.41
+						]
+					}
+				},
+				"fan": {
+					"label": "Fans",
+					"type": "enum",
+					"multi": true,
+					"value": [
+						"090",
+						"270"
+					],
+					"set": {
+						"param": "params",
+						"flag": "fan",
+						"enum": [
+							{
+								"value": "090"
+							},
+							{
+								"value": "180"
+							},
+							{
+								"value": "270"
+							}
+						]
+					}
+				},
+				"drop": {
+					"label": "Drop",
+					"type": "string",
+					"multi": true,
+					"value": null,
+					"set": {
+						"param": "params",
+						"flag": "drop"
+					}
+				},
+				"verbosity": {
+					"label": "Verbosity",
+					"type": "enum",
+					"multi": true,
+					"value": [],
+					"set": {
+						"param": "params",
+						"enum": [
+							{
+								"value": "quiet",
+								"flag": "quiet"
+							},
+							{
+								"value": "loud",
+								"flag": "loud"
+							}
+						]
+					}
+				},
+				"parameters": {
+					"label": "Parameters",
+					"type": "enum",
+					"multi": [
+						1,
+						2
+					],
+					"value": [],
+					"set": {
+						"param": "parameter",
+						"enum": [
+							{
+								"value": "bx"
+							},
+							{
+								"value": "by"
+							},
+							{
+								"value": "bz"
+							}
+						]
+					}
+				},
+				"pair": {
+					"label": "Pair",
+					"type": "integer",
+					"multi": [
+						2,
+						2
+					],
+					"value": [],
+					"set": {
+						"param": "read.data"
+					}
+				},
+				"neither": {
+					"label": "Broken, flag says neither",
+					"type": "string",
+					"multi": true,
+					"value": [],
+					"set": {
+						"param": "params",
+						"flag": "neither"
+					}
+				},
+				"both": {
+					"label": "Broken, flag says both",
+					"type": "string",
+					"multi": true,
+					"value": [],
+					"set": {
+						"param": "params",
+						"flag": "both"
+					}
+				},
+				"plain": {
+					"label": "Broken, parameter says neither",
+					"type": "string",
+					"multi": true,
+					"value": [],
+					"set": {
+						"param": "plain"
+					}
+				}
+			}
+		},
+		"examples": [
+			{
+				"label": "Receivers, bands and sensors of one flag from two properties",
+				"settings": {
+					"options/props/lfdr": [
+						"Ew",
+						"Ex"
+					],
+					"options/props/mfr_sensors": [
+						"Ex"
+					],
+					"options/props/mfr_bands": [
+						"2",
+						"1"
+					],
+					"options/props/hfr_bands": [
+						"HF2",
+						"A"
+					],
+					"options/props/nix": [
+						"hf1pwr",
+						"bad_data"
+					]
+				}
+			},
+			{
+				"label": "Two notch frequencies after a bare word flag",
+				"settings": {
+					"options/props/dft": "fft512",
+					"options/props/notches": [
+						2.4,
+						2.5
+					]
+				}
+			},
+			{
+				"label": "Repeated keys, a repeated flag and booleans joined on a plain parameter",
+				"settings": {
+					"data/bac_tscs/props/enabled": true,
+					"data/bac_fac/props/enabled": true,
+					"options/props/drop": [
+						"a b",
+						"c"
+					],
+					"options/props/parameters": [
+						"bz",
+						"bx"
+					]
+				}
+			},
+			{
+				"label": "Nothing optional",
+				"settings": {}
+			}
+		]
+	}
+}

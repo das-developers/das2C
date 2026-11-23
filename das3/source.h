@@ -121,13 +121,42 @@ extern "C" {
  * is how zoom and pan become server requests without any source specific
  * code in the client.
  *
+ * @par Rules a requisition is held to
+ *
+ * How a node's settings become a request (flags, joined values, the
+ * strings a server takes) belongs to the node format and is described
+ * in doc/httpstreamsrc.md of the das-cat repository,
+ * https://github.com/das-developers/das-cat.  A client meets those
+ * rules in three places:
+ *
+ *   - @anchor src_xor **One of several.**  Groups whose `enabled`
+ *     toggles share a DasSrcGroup_xorGroup() name are radio buttons, as
+ *     a source's formats usually are.  The last one a requisition
+ *     switches on is on and the rest are off; "last" is entry order,
+ *     and DasReq_set() moves a key it is given again to the end.  A
+ *     value for a setting of a member that is off is refused, and the
+ *     verdict names both ways out: `formats.csv=true`, or `csv.delim=`
+ *     to take the value back.  Switching off the one that is on without
+ *     choosing another is refused too.  new_DasReq_src() leaves out
+ *     the required settings of members that are off.  Grey the settings
+ *     of members that are off.  A form may set every toggle on each
+ *     click or only the one clicked, the answer is the same.
+ *   - @anchor src_multi **Lists.**  DasSrcProp_multi() is true for a
+ *     property that holds several values: draw check boxes or a list
+ *     editor.  A requisition gives the items separated by commas,
+ *     `lfdr=Ex,Ew`, and DasSrcProp_value() gives a default the same way.
+ *   - @anchor src_protoenum **Refused strings.**  A node may list the
+ *     strings its server takes.  DasSrc_reqUrl() makes no URL for a
+ *     value that is not listed, and says which.  Raw parameters,
+ *     DasReq_setRaw(), are not checked.
+ *
  * @par Drawing a form
  *
  * @code
  * for(int sec = 0; sec < DASSRCSEC_SIZE; ++sec){
  *    for(size_t g = 0; g < DasSrc_numGroups(pSrc, sec); ++g){
  *       const DasSrcGroup* pG = DasSrc_groupAt(pSrc, sec, g);
- *       const DasSrcProp* pOn = DasSrcGroup_enableProp(pG);   // the gate, or NULL
+ *       const DasSrcProp* pOn = DasSrcGroup_enableProp(pG);   // the toggle, or NULL
  *
  *       for(size_t p = 0; p < DasSrcGroup_numProps(pG); ++p){
  *          const DasSrcProp* pProp = DasSrcGroup_propAt(pG, p);
@@ -360,7 +389,9 @@ DAS_API const DasSrcProp* DasSrcGroup_enableProp(const DasSrcGroup* pThis);
 
 /** The name of the exclusive set this group's enable toggle belongs to,
  * or NULL.  Formats are in one, "format": exactly one is on at a time,
- * so they are radio buttons rather than check boxes.  @memberof DasSrcGroup */
+ * so they are radio buttons rather than check boxes.  The rule is
+ * enforced when a requisition is checked, see @ref src_xor.
+ * @memberof DasSrcGroup */
 DAS_API const char* DasSrcGroup_xorGroup(const DasSrcGroup* pThis);
 
 /** The number of MIME types a format group may produce, 0 for other
@@ -469,8 +500,24 @@ DAS_API const char* DasSrcProp_typeName(const DasSrcProp* pThis);
  * valid range of a coordinate.  For an adjustable one it is the value in
  * effect when a requisition says nothing, the default.  NULL when the
  * node gives null or nothing, which for a required control means the
- * client must supply one.  @memberof DasSrcProp */
+ * client must supply one.  A list property, see DasSrcProp_multi(), gives
+ * its items separated by commas, and NULL for an empty list.
+ * @memberof DasSrcProp */
 DAS_API const char* DasSrcProp_value(const DasSrcProp* pThis);
+
+/** True for a property that holds a list of values, see @ref src_multi.
+ *
+ * @param pThis The property
+ * @param puMin If not NULL, receives the fewest items a list may have
+ *        when one is given, 0 when the node does not say.  An empty
+ *        list, nothing selected, is always allowed unless the control
+ *        is required.
+ * @param puMax If not NULL, receives the most items a list may have,
+ *        SIZE_MAX when the node does not say.
+ * @returns true for a list property; false for an ordinary one, with the
+ *        outputs set to 1 and 1.
+ * @memberof DasSrcProp */
+DAS_API bool DasSrcProp_multi(const DasSrcProp* pThis, size_t* puMin, size_t* puMax);
 
 /** The control for an adjustable property, NULL for a fixed one.
  * @memberof DasSrcProp */
@@ -526,6 +573,12 @@ DAS_API bool DasSrcCtrl_range(const DasSrcCtrl* pThis, const char** psLo, const 
  * stated range, because servers are the authority on what they hold and
  * ranges in nodes are routinely out of date.  Times also accept the word
  * "now".  Text is always acceptable.
+ *
+ * For a list property, see @ref src_multi, the value is split at commas
+ * and every item is checked as above.  A repeated item, an empty item,
+ * and an item count outside the node's bounds are refused too; the count
+ * is the node author's rule about the request, not a claim about what
+ * the server holds, so unlike a range it is enforced.
  *
  * DasSrc_check() calls this for every entry, so applications rarely
  * need to, but a settings panel may want to validate as the user types.
@@ -594,7 +647,9 @@ DAS_API void DasSrc_stampReq(const DasSrc* pThis, DasReq* pReq);
  *      entry stays so that a form's one box stays one box.
  *   3. Each value is checked with DasSrcCtrl_check().  An empty value
  *      is bad for a required control with no default, and otherwise
- *      means "not set".
+ *      means "not set": it takes back whatever an earlier entry for the
+ *      same property gave, which is how a key after an example unsets
+ *      one of the example's settings.
  *   4. Every required control not covered by an entry or a default gets
  *      a derived entry with an empty value and a bad verdict, so a form
  *      can mark a box the user never touched.
@@ -647,9 +702,12 @@ DAS_API const char* DasSrc_baseUrlAt(const DasSrc* pThis, size_t uIdx);
  * protocol value, or a flag packed into a parameter shared with others
  * of its set.  A value equal to the default is not sent unless the
  * control is required; required controls with defaults are sent even
- * when the requisition is silent.  Raw parameters go on last and
- * override.  Finally every protocol parameter the node marks required
- * must be present.  Values are percent encoded, see dasurl_encode().
+ * when the requisition is silent.  A list property, @ref src_multi,
+ * sends each of its items.  Raw parameters go on last and override.
+ * Finally every protocol parameter the node marks required must be
+ * present.  Values are percent encoded, see dasurl_encode().  The rules
+ * in full, the order of flags and how values are joined among them, are
+ * in doc/httpstreamsrc.md of the das-cat repository.
  *
  * Works like snprintf: the return value is the length the whole URL
  * needs, and the buffer holds as much as fits, NUL terminated.

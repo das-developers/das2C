@@ -411,7 +411,17 @@ static void prnHelpQuery(bool bData)
 "                                    skip it: time=,2026-03-02\n"
 "      lshell=true  or just  lshell  turn on a data variable or a boolean\n"
 "                                    option\n"
-"      csv  or  formats.csv          select an output format\n"
+"      nix=bad_data,hf1pwr           several values for a key whose type\n"
+"                                    is a list, separated by commas.\n"
+"                                    Quote the argument if you put blanks\n"
+"                                    after the commas.\n"
+"      csv  or  formats.csv          select an output format.  Formats\n"
+"                                    are one of several: the last one\n"
+"                                    named is used, and settings of the\n"
+"                                    others (csv.delimiter=Tab with cdf)\n"
+"                                    are refused\n"
+"      delimiter=                    an empty value takes back what an\n"
+"                                    example or an earlier key set\n"
 "      1  or  examples.1             start from example 1 of the source,\n"
 "                                    then apply the other keys to it\n"
 "\n"
@@ -668,6 +678,16 @@ static void prnField(FILE* pOut, const char* sLabel, const char* sText)
  * the library inferred */
 static const char* propTypeName(const DasSrcProp* p)
 {
+	/* A list is named for its items, KEY=a,b sets one */
+	if(DasSrcProp_multi(p, NULL, NULL)){
+		switch(DasSrcProp_type(p)){
+		case DASSRCPROPTYPE_INT:  return "integer list";
+		case DASSRCPROPTYPE_REAL: return "real list";
+		case DASSRCPROPTYPE_TIME: return "isotime list";
+		case DASSRCPROPTYPE_ENUM: return "enum list";
+		default:               return "string list";
+		}
+	}
 	const char* s = DasSrcProp_typeName(p);
 	if((s != NULL)&&(s[0] != '\0')) return s;
 	switch(DasSrcProp_type(p)){
@@ -680,8 +700,26 @@ static const char* propTypeName(const DasSrcProp* p)
 	}
 }
 
+/* How many items a list may have, when the node bounds it: " (up to 24)".
+   Appended to the allowed values only if it fits whole. */
+static void propCount(const DasSrcProp* p, char* sBuf, size_t uLen)
+{
+	size_t uLo = 0, uHi = 0;
+	if(!DasSrcProp_multi(p, &uLo, &uHi)) return;
+	char sCount[48] = {'\0'};
+	if(uHi == SIZE_MAX){
+		if(uLo > 1) snprintf(sCount, sizeof(sCount), "(%zu or more)", uLo);
+	}
+	else if(uLo == uHi) snprintf(sCount, sizeof(sCount), "(%zu values)", uLo);
+	else if(uLo > 1)    snprintf(sCount, sizeof(sCount), "(%zu to %zu)", uLo, uHi);
+	else                snprintf(sCount, sizeof(sCount), "(up to %zu)", uHi);
+	size_t u = strlen(sBuf);
+	if((sCount[0] == '\0')||(u + strlen(sCount) + 2 > uLen)) return;
+	snprintf(sBuf + u, uLen - u, "%s%s", u ? " " : "", sCount);
+}
+
 /* Allowed values for display: enum entries, a range, or true/false */
-static void propValues(const DasSrcProp* p, char* sBuf, size_t uLen)
+static void propValuesOne(const DasSrcProp* p, char* sBuf, size_t uLen)
 {
 	sBuf[0] = '\0';
 	const DasSrcCtrl* pC = DasSrcProp_ctrl(p);
@@ -704,6 +742,12 @@ static void propValues(const DasSrcProp* p, char* sBuf, size_t uLen)
 		return;
 	}
 	if(DasSrcProp_type(p) == DASSRCPROPTYPE_BOOL) strcpyz(sBuf, "true, false", uLen);
+}
+
+static void propValues(const DasSrcProp* p, char* sBuf, size_t uLen)
+{
+	propValuesOne(p, sBuf, uLen);
+	propCount(p, sBuf, uLen);
 }
 
 /* The examples table: number and what it provides.  'url PATH N' shows

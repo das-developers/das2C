@@ -30,6 +30,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
+#include <stdint.h>
 
 #include <das3/core.h>
 #include <das3/source.h>
@@ -41,6 +42,7 @@
 #define HSK    "test/das_fetch/hsk_flex_0.7.json"
 #define JUNO   "test/das_fetch/juno_survey_0.6.json"
 #define SUBSEP "test/das_fetch/subsep_0.7.json"
+#define MULTI  "test/das_fetch/multi_0.7.json"
 
 #define GB "http://127.0.0.1:8765/data/geomag.d2s"
 #define HB "https://space.physics.uiowa.edu/das/stream/source/tracers/tracers-2/l1a/cdpu/hsk/flex"
@@ -457,8 +459,10 @@ static void test_geomag(void)
 		GB "?read.time.min=2026-01-01&read.time.max=2026-01-02&read.time.inter=30");
 	URL_IS(pSrc, 0, K("lshell=no"), NONE,
 		GB "?read.time.min=2026-01-01&read.time.max=2026-01-02&read.time.inter=60");
-	URL_IS(pSrc, 0, K("csv", "delimiter=Tab", "csv.headers=false", "serial=text"), NONE,
-		GB "?read.time.min=2026-01-01&read.time.max=2026-01-02&read.time.inter=60&format.serial=text&format.type=csv&format.headers=1&format.delim=tab");
+	URL_IS(pSrc, 0, K("csv", "delimiter=Tab", "csv.headers=false"), NONE,
+		GB "?read.time.min=2026-01-01&read.time.max=2026-01-02&read.time.inter=60&format.type=csv&format.headers=1&format.delim=tab");
+	/* serial is a setting of the das format, which csv just switched off */
+	URL_FAILS(pSrc, 0, K("csv", "delimiter=Tab", "serial=text"));
 	URL_IS(pSrc, 0, K("data.lshell", "coord.time.inter=30"), NONE,
 		GB "?read.time.min=2026-01-01&read.time.max=2026-01-02&read.time.inter=30&read.data=lshell");
 	const char* aRaw[] = {"read.time.inter", "5", "extra", "1", NULL};
@@ -572,8 +576,8 @@ static void test_hsk(void)
 		HB "?read.time.min=2026-01-06T14:12&read.time.max=2026-01-06T14:24&read.data=nmi_errors,irq3_errors,hsk_task_errors&format.version=2");
 	URL_IS(pSrc, 1, NONE, NONE,
 		HB "?read.time.min=2026-01-05T14:24&read.time.max=2026-01-06T14:24&format.type=cdf");
-	URL_IS(pSrc, 0, K("formats.csv", "das.version=das2", "time.res=10"), NONE,
-		HB "?read.time.min=2026-01-06T14:12&read.time.max=2026-01-06T14:24&bin.time.max=10&format.version=2&format.type=csv");
+	URL_IS(pSrc, 0, K("formats.csv", "time.res=10"), NONE,
+		HB "?read.time.min=2026-01-06T14:12&read.time.max=2026-01-06T14:24&bin.time.max=10&format.type=csv");
 
 	DasReq* pReq = new_DasReq_src(pSrc, 1);
 	CHECK(pReq && streq(DasSrc_mime(pSrc, pReq), "application/x-cdf"), "cdf example means a cdf: %s",
@@ -816,6 +820,471 @@ static void test_subsep(void)
 	del_DasSrc(pSrc);
 }
 
+/* List properties, "multi".  multi_0.7.json has the shapes das-cat makes
+   from das2 set: params once they are lists instead of one switch per
+   element, plus the two ways a parameter of its own takes several. */
+#define LB "https://example.org/das/server?server=dataset&dataset=Test/Multi" \
+           "&start_time=2017-168&end_time=2017-169"
+
+static const char* g_sBoolList =
+"{\"type\":\"HttpStreamSrc\",\"version\":\"0.7\",\"label\":\"boollist\","
+ "\"protocol\":{\"method\":\"GET\",\"baseUrls\":[\"" MB "\"],"
+  "\"httpParams\":{\"params\":{\"type\":\"FlagSet\",\"flags\":{\"quiet\":{\"value\":\"-q\"}}},"
+   "\"keep\":{\"subSep\":\":\"}}},"
+ "\"interface\":{\"options\":{\"props\":{"
+  "\"toggle\":{\"type\":\"boolean\",\"multi\":true,\"value\":false,"
+   "\"set\":{\"param\":\"params\",\"flag\":\"quiet\",\"value\":true}},"
+  "\"odd\":{\"type\":\"string\",\"multi\":\"yes\",\"value\":null,\"set\":{\"param\":\"keep\"}},"
+  "\"junk\":{\"type\":\"string\",\"multi\":[3,1],\"value\":null,\"set\":{\"param\":\"keep\"}},"
+  "\"untyped\":{\"multi\":true,\"value\":[\"b\",\"a\"],\"set\":{\"param\":\"keep\",\"required\":true}}}}}}";
+
+static void test_multi(void)
+{
+	printf("List properties (multi):\n");
+	DasSrc* pSrc = loadSrc(MULTI, "site:/test/multi");
+	CHECK(pSrc != NULL, "load");
+	if(pSrc == NULL) return;
+
+	/* what a form needs to know */
+	size_t uLo = 99, uHi = 99;
+	const DasSrcProp* p = byKey(pSrc, "options.lfdr");
+	CHECK(p && DasSrcProp_multi(p, &uLo, &uHi) && (uLo == 0) && (uHi == SIZE_MAX), "lfdr is an unbounded list");
+	CHECK(p && (DasSrcProp_type(p) == DASSRCPROPTYPE_ENUM) && (DasSrcProp_value(p) == NULL),
+	      "its type is the item type, an empty list is no default");
+	p = byKey(pSrc, "options.notches");
+	CHECK(p && DasSrcProp_multi(p, &uLo, &uHi) && (uLo == 1) && (uHi == 3), "notches takes 1 to 3");
+	CHECK(p && (DasSrcProp_type(p) == DASSRCPROPTYPE_REAL), "notches items are reals, not toggles");
+	p = byKey(pSrc, "options.fan");
+	CHECK(p && streq(DasSrcProp_value(p), "090,270"), "a default list reads as comma items");
+	p = byKey(pSrc, "options.bg_div");
+	CHECK(p && !DasSrcProp_multi(p, &uLo, &uHi) && (uLo == 1) && (uHi == 1), "an ordinary property is not a list");
+	p = byKey(pSrc, "options.drop");
+	CHECK(p && DasSrcProp_multi(p, NULL, NULL) && (DasSrcProp_type(p) == DASSRCPROPTYPE_TEXT), "a text list on a flag");
+
+	/* checks: every item, no repeats, no holes, the count */
+	const DasSrcCtrl* pC = ctrlByKey(pSrc, "options.nix");
+	char sWhy[256];
+	CHECK(chk(pC, "bad_data") == DAS_OKAY && chk(pC, "HF1PWR, bad_data") == DAS_OKAY, "items in any order and case");
+	CHECK(chk(pC, "") == DAS_OKAY, "nothing selected is fine");
+	CHECK(DasSrcCtrl_check(pC, "bad_data,nope", sWhy, sizeof(sWhy)) == DASERR_SRC && strstr(sWhy, "'nope'") != NULL,
+	      "the bad item is named: %s", sWhy);
+	CHECK(DasSrcCtrl_check(pC, "bad_data,BAD_DATA", sWhy, sizeof(sWhy)) == DASERR_SRC && strstr(sWhy, "twice") != NULL,
+	      "a repeat is refused: %s", sWhy);
+	CHECK(chk(pC, "bad_data,") == DASERR_SRC && chk(pC, ",bad_data") == DASERR_SRC, "an empty item is refused");
+	pC = ctrlByKey(pSrc, "options.notches");
+	CHECK(chk(pC, "1") == DAS_OKAY && chk(pC, "1, 2.5 ,3e0") == DAS_OKAY, "one to three reals");
+	CHECK(DasSrcCtrl_check(pC, "1,2,3,4", sWhy, sizeof(sWhy)) == DASERR_SRC && strstr(sWhy, "1 to 3") != NULL,
+	      "too many: %s", sWhy);
+	CHECK(chk(pC, "1,two") == DASERR_SRC, "each item is a real");
+	pC = ctrlByKey(pSrc, "options.pair");
+	CHECK(chk(pC, "1") == DASERR_SRC && chk(pC, "1,2") == DAS_OKAY && chk(pC, "1,2,3") == DASERR_SRC, "exactly two");
+
+	/* the examples, which the node writes as JSON lists */
+	URL_IS(pSrc, 0, NONE, NONE, LB "&params=-lfdr%20ExEw%20-mfr%2012Ex%20-hfr%20A2%20-n%20bad_data%20hf1pwr");
+	URL_IS(pSrc, 1, NONE, NONE, LB "&params=fft512%202.4%202.5");
+	URL_IS(pSrc, 2, NONE, NONE,
+		LB "&read.data=ts2_l2_bac_tscs,ts2_l2_bac_fac&params=--drop=a%20b%20--drop=c&parameter=bx&parameter=bz");
+	URL_IS(pSrc, 3, NONE, NONE, LB);
+	DasReq* pReq = new_DasReq_src(pSrc, 0);
+	CHECK(pReq && streq(DasReq_val(pReq, "options.mfr_bands"), "2,1"), "an example list keeps the node's order");
+	del_DasReq(pReq);
+
+	/* enum items in node order whatever was typed; text items as typed */
+	URL_IS(pSrc, -1, K("nix=fake_data,mfdr_mfr2"), NONE, LB "&params=-n%20mfdr_mfr2%20fake_data");
+	URL_IS(pSrc, -1, K("drop=z,a"), NONE, LB "&params=--drop=z%20--drop=a");
+	/* bands and sensors are two properties of one flag: one prefix, property
+	   order, though the sensor was given first */
+	URL_IS(pSrc, -1, K("mfr_sensors=Ew", "mfr_bands=3"), NONE, LB "&params=-mfr%203Ew");
+	/* a list beside ordinary flags of the same parameter */
+	URL_IS(pSrc, -1, K("bg_div=5", "lfdr=Ex", "dft=fft3x512"), NONE, LB "&params=-b%205%20-lfdr%20Ex%20fft3x512");
+	/* the default selection, in any order, is not news to the server */
+	URL_IS(pSrc, -1, K("fan=270,090"), NONE, LB);
+	URL_IS(pSrc, -1, K("fan=090"), NONE, LB "&params=fan=090");
+	/* items that are switches */
+	URL_IS(pSrc, -1, K("verbosity=loud"), NONE, LB "&params=-v");
+	/* a raw parameter replaces a repeated one whole */
+	{ const char* aRaw[] = {"parameter", "all", NULL};
+	  char sUrl[2048];
+	  const char* aKey[] = {"parameters=bx,by", NULL};
+	  bool bOk = urlFor(pSrc, -1, aKey, aRaw, sUrl, sizeof(sUrl));
+	  CHECK(bOk && streq(sUrl, LB "&parameter=all"), "raw replaces a repeat, got %s", bOk ? sUrl : "(no url)");
+	}
+	/* a list needs to be told how it travels */
+	URL_FAILS(pSrc, -1, K("neither=a"));
+	URL_FAILS(pSrc, -1, K("both=a"));
+	URL_FAILS(pSrc, -1, K("plain=a"));
+	del_DasSrc(pSrc);
+
+	/* odd spellings of multi, quietly: the load warns about each */
+	daslog_setLevel(DASLOG_CRITICAL);
+	pSrc = new_DasSrc_json(g_sBoolList, strlen(g_sBoolList), "site:/test/boollist", NULL);
+	daslog_setLevel(DASLOG_WARN);
+	CHECK(pSrc != NULL, "inline load");
+	if(pSrc == NULL) return;
+	p = byKey(pSrc, "options.toggle");
+	CHECK(p && !DasSrcProp_multi(p, NULL, NULL), "a boolean is never a list");
+	p = byKey(pSrc, "options.odd");
+	CHECK(p && !DasSrcProp_multi(p, NULL, NULL), "only true or a pair makes a list");
+	p = byKey(pSrc, "options.junk");
+	CHECK(p && DasSrcProp_multi(p, &uLo, &uHi) && (uLo == 0) && (uHi == SIZE_MAX), "bad bounds are no bounds");
+	p = byKey(pSrc, "options.untyped");
+	CHECK(p && DasSrcProp_multi(p, NULL, NULL) && (DasSrcProp_type(p) == DASSRCPROPTYPE_TEXT), "untyped list is text");
+	/* a required list with a default is sent when nothing is asked, and
+	   as part of a joined value it goes out beside what other controls
+	   put there: joined means added to, not replaced */
+	URL_IS(pSrc, -1, NONE, NONE, MB "?keep=b:a");
+	URL_IS(pSrc, -1, K("toggle", "junk=x,y"), NONE, MB "?params=-q&keep=x:y:b:a");
+	URL_IS(pSrc, -1, K("untyped=c", "junk=x,y"), NONE, MB "?keep=x:y:c");
+	del_DasSrc(pSrc);
+}
+
+/* Flags go out in the order the protocol lists them, wherever their
+   controls sit in the interface, and a joined value goes out whole. */
+#define OB "http://127.0.0.1:8765/data/order"
+static const char* g_sOrderSrc =
+"{\"type\":\"HttpStreamSrc\",\"version\":\"0.7\",\"label\":\"order\","
+ "\"protocol\":{\"method\":\"GET\",\"baseUrls\":[\"" OB "\"],"
+  "\"httpParams\":{"
+   "\"params\":{\"type\":\"FlagSet\",\"flagSep\":\" \",\"flags\":{"
+    "\"rate\":{\"prefix\":\"\"},\"no_ex\":{\"value\":\"--Ex=false\"},"
+    "\"drop\":{\"prefix\":\"-d \",\"repeat\":true},"
+    "\"hfr\":{\"prefix\":\"-hfr \",\"subSep\":\"\"},\"last\":{\"value\":\"-z\"}}},"
+   "\"sel\":{\"subSep\":\",\"}}},"
+ "\"interface\":{"
+  "\"data\":{\"Ex\":{\"props\":{\"enabled\":{\"type\":\"boolean\",\"value\":true,"
+    "\"set\":{\"param\":\"params\",\"flag\":\"no_ex\",\"value\":false}}}}},"
+  "\"options\":{\"props\":{"
+   "\"last\":{\"type\":\"boolean\",\"value\":false,\"set\":{\"param\":\"params\",\"flag\":\"last\"}},"
+   "\"hfr_sensors\":{\"type\":\"enum\",\"multi\":true,\"value\":[\"Ex\"],"
+    "\"set\":{\"param\":\"params\",\"flag\":\"hfr\",\"enum\":[\"Eu\",\"Ex\"]}},"
+   "\"hfr_bands\":{\"type\":\"enum\",\"multi\":true,\"value\":[\"A\",\"B\"],"
+    "\"set\":{\"param\":\"params\",\"flag\":\"hfr\",\"enum\":[\"A\",\"B\",\"C\"]}},"
+   "\"drop\":{\"type\":\"string\",\"multi\":true,\"value\":[],\"set\":{\"param\":\"params\",\"flag\":\"drop\"}},"
+   "\"rate\":{\"type\":\"enum\",\"value\":null,"
+    "\"set\":{\"param\":\"params\",\"flag\":\"rate\",\"enum\":[\"--10khz\",\"--80khz\"]}},"
+   "\"bx\":{\"type\":\"boolean\",\"value\":true,\"set\":{\"param\":\"sel\",\"pval\":\"bx\"}},"
+   "\"by\":{\"type\":\"boolean\",\"value\":true,\"set\":{\"param\":\"sel\",\"pval\":\"by\"}},"
+   "\"bz\":{\"type\":\"boolean\",\"value\":false,\"set\":{\"param\":\"sel\",\"pval\":\"bz\"}}"
+  "}}}}";
+
+static void test_order(void)
+{
+	printf("Flag order and joined values:\n");
+	DasSrc* pSrc = new_DasSrc_json(g_sOrderSrc, strlen(g_sOrderSrc), "site:/test/order", NULL);
+	CHECK(pSrc != NULL, "inline load");
+	if(pSrc == NULL) return;
+
+	/* Ex is a data toggle and comes first in the interface, 'last' leads
+	   the options and rate ends them; the protocol's order is rate, no_ex,
+	   drop, hfr, last */
+	URL_IS(pSrc, -1, K("last", "rate=--80khz", "Ex=false"), NONE, OB "?params=--80khz%20--Ex=false%20-z");
+	/* a repeating flag keeps the order its items came in, in its own place */
+	URL_IS(pSrc, -1, K("last", "drop=z,a", "rate=--10khz"), NONE, OB "?params=--10khz%20-d%20z%20-d%20a%20-z");
+
+	/* nothing off its default: nothing is sent, joined or not */
+	URL_IS(pSrc, -1, NONE, NONE, OB);
+	URL_IS(pSrc, -1, K("hfr_bands=B,A", "bx", "by=true", "bz=false"), NONE, OB);
+	/* one part of a joined value off its default sends all of it: the
+	   other list's default, and for switches the ones that are on.
+	   Elements join in the order the controls appear, sensors first here. */
+	URL_IS(pSrc, -1, K("hfr_bands=C"), NONE, OB "?params=-hfr%20ExC");
+	URL_IS(pSrc, -1, K("hfr_sensors=Eu"), NONE, OB "?params=-hfr%20EuAB");
+	URL_IS(pSrc, -1, K("bz"), NONE, OB "?sel=bx,by,bz");
+	URL_IS(pSrc, -1, K("bx=false"), NONE, OB "?sel=by");
+	/* every part taken away: a joined value with nothing in it is not sent */
+	URL_IS(pSrc, -1, K("bx=false", "by=false"), NONE, OB);
+
+	/* an empty value takes back what an earlier entry set, however the
+	   two were spelled; for a list, blanks alone are empty too */
+	URL_IS(pSrc, -1, K("options.rate=--80khz", "rate="), NONE, OB);
+	URL_IS(pSrc, -1, K("options.drop=a", "drop= "), NONE, OB);
+	URL_IS(pSrc, -1, K("rate=", "options.rate=--80khz"), NONE, OB "?params=--80khz");
+
+	/* free text items differ by case, enum items do not */
+	URL_IS(pSrc, -1, K("drop=a,A"), NONE, OB "?params=-d%20a%20-d%20A");
+	URL_FAILS(pSrc, -1, K("hfr_bands=a,A"));
+	del_DasSrc(pSrc);
+}
+
+/* The protocol lists its own strings, an "enum" on a flag or parameter.  The node here has the
+   shapes das-cat writes: a choice whose wire text is wrapped (rate), a
+   default that is asked for by sending nothing and so has no wire text
+   (frame SYS3), typed text into a listed slot, a listed parameter of its
+   own, and two places where the sections disagree. */
+#define VB "http://127.0.0.1:8765/data/values"
+static const char* g_sProtoEnumSrc =
+"{\"type\":\"HttpStreamSrc\",\"version\":\"0.7\",\"label\":\"enum\","
+ "\"protocol\":{\"method\":\"GET\",\"baseUrls\":[\"" VB "\"],"
+  "\"httpParams\":{"
+   "\"params\":{\"type\":\"FlagSet\",\"flagSep\":\" \",\"flags\":{"
+    "\"rate\":{\"prefix\":\"\",\"enum\":[\"--10khz\",\"--80khz\"]},"
+    "\"frame\":{\"prefix\":\"\",\"enum\":[\"IRC\",\"JSE\"]},"
+    "\"len\":{\"prefix\":\"-l \",\"enum\":[128,256]},"
+    "\"hfr\":{\"prefix\":\"-hfr \",\"subSep\":\"\",\"enum\":[\"A\",\"B\",\"1\",\"Ex\"]},"
+    "\"odd\":{\"prefix\":\"-o \",\"enum\":[\"y\"]},"
+    "\"quiet\":{\"value\":\"-q\",\"enum\":[\"never read\"]}}},"
+   "\"fmt\":{\"enum\":[\"csv\",\"bin\"]},"
+   "\"sel\":{\"subSep\":\",\",\"enum\":[\"bx\",\"by\"]}}},"
+ "\"interface\":{"
+  "\"data\":{\"B\":{\"props\":{\"frame\":{\"type\":\"enum\",\"value\":\"SYS3\","
+    "\"set\":{\"param\":\"params\",\"flag\":\"frame\",\"enum\":[\"SYS3\",\"IRC\",\"JSE\"]}}}}},"
+  "\"options\":{\"props\":{"
+   "\"rate\":{\"type\":\"enum\",\"value\":null,\"set\":{\"param\":\"params\",\"flag\":\"rate\","
+    "\"enum\":[{\"value\":\"10khz\",\"pval\":\"--10khz\"},{\"value\":\"80khz\",\"pval\":\"--80khz\"}]}},"
+   "\"len\":{\"type\":\"integer\",\"value\":null,\"set\":{\"param\":\"params\",\"flag\":\"len\"}},"
+   "\"hfr\":{\"type\":\"enum\",\"multi\":true,\"value\":[],\"set\":{\"param\":\"params\",\"flag\":\"hfr\","
+    "\"enum\":[\"A\",\"B\",{\"value\":\"HF1\",\"pval\":\"1\"},\"Ex\",\"Ew\"]}},"
+   "\"odd\":{\"type\":\"enum\",\"value\":null,\"set\":{\"param\":\"params\",\"flag\":\"odd\",\"enum\":[\"x\",\"y\"]}},"
+   "\"quiet\":{\"type\":\"boolean\",\"value\":false,\"set\":{\"param\":\"params\",\"flag\":\"quiet\"}},"
+   "\"fmt\":{\"type\":\"string\",\"value\":null,\"set\":{\"param\":\"fmt\"}},"
+   "\"bx\":{\"type\":\"boolean\",\"value\":false,\"set\":{\"param\":\"sel\",\"pval\":\"bx\"}},"
+   "\"bz\":{\"type\":\"boolean\",\"value\":false,\"set\":{\"param\":\"sel\",\"pval\":\"bz\"}}"
+  "}}}}";
+
+static void test_protoEnum(void)
+{
+	printf("Strings the protocol lists:\n");
+	DasSrc* pSrc = new_DasSrc_json(g_sProtoEnumSrc, strlen(g_sProtoEnumSrc), "site:/test/values", NULL);
+	CHECK(pSrc != NULL, "inline load");
+	if(pSrc == NULL) return;
+
+	/* what the user types is the interface's word, what is sent is the
+	   protocol's; choices fold case, the wire text is the node's spelling */
+	URL_IS(pSrc, -1, K("rate=80khz"), NONE, VB "?params=--80khz");
+	URL_IS(pSrc, -1, K("frame=jse"), NONE, VB "?params=JSE");
+	URL_FAILS(pSrc, -1, K("rate=--80khz"));      /* the wire text is not a choice */
+
+	/* the default the server gives when nothing is sent needs no entry */
+	URL_IS(pSrc, -1, K("frame=SYS3"), NONE, VB);
+	URL_IS(pSrc, -1, K("frame=IRC", "frame=SYS3"), NONE, VB);
+
+	/* typed values are held to the list as text, numbers in the list too */
+	URL_IS(pSrc, -1, K("len=256"), NONE, VB "?params=-l%20256");
+	URL_FAILS(pSrc, -1, K("len=512"));
+	URL_IS(pSrc, -1, K("fmt=csv"), NONE, VB "?fmt=csv");
+	URL_FAILS(pSrc, -1, K("fmt=CSV"));
+	URL_FAILS(pSrc, -1, K("fmt=json"));
+
+	/* every element of a joined value, by what it sends: HF1 goes as 1 */
+	URL_IS(pSrc, -1, K("hfr=HF1,A,Ex"), NONE, VB "?params=-hfr%20A1Ex");
+	URL_IS(pSrc, -1, K("bx"), NONE, VB "?sel=bx");
+
+	/* the interface offers what the protocol does not list: a broken
+	   node, found when that choice is made and not before */
+	URL_IS(pSrc, -1, K("odd=y"), NONE, VB "?params=-o%20y");
+	URL_FAILS(pSrc, -1, K("odd=x"));
+	URL_FAILS(pSrc, -1, K("hfr=A,Ew"));
+	URL_FAILS(pSrc, -1, K("bz"));
+
+	/* a plain switch sends its own text, a list beside it is not read */
+	URL_IS(pSrc, -1, K("quiet"), NONE, VB "?params=-q");
+
+	del_DasSrc(pSrc);
+}
+
+/* Exclusive sets, xorGroup.  The hsk node has the formats every dasFlex
+   node has (cdf, das the default, csv) and its example 1 switches cdf
+   on.  The inline node has what formats do not: a set among data
+   variables, a member whose toggle sends something when it goes off, and
+   a required setting inside a member that is off by default. */
+#define XRB "http://127.0.0.1:8765/data/xor"
+static const char* g_sXorSrc =
+"{\"type\":\"HttpStreamSrc\",\"version\":\"0.7\",\"label\":\"xor\","
+ "\"protocol\":{\"method\":\"GET\",\"baseUrls\":[\"" XRB "\"],"
+  "\"httpParams\":{"
+   "\"start_time\":{\"required\":true,\"type\":\"isotime\"},"
+   "\"mode\":{\"enum\":[\"wave\"]},"
+   "\"key\":{\"type\":\"string\"},"
+   "\"params\":{\"type\":\"FlagSet\",\"flagSep\":\" \",\"flags\":{"
+    "\"nospec\":{\"value\":\"--no-spec\"},"
+    "\"len\":{\"prefix\":\"len=\"}}}}},"
+ "\"interface\":{"
+  "\"coords\":{\"time\":{\"props\":{\"min\":{\"type\":\"isotime\",\"value\":null,"
+    "\"set\":{\"param\":\"start_time\",\"required\":true}}}}},"
+  "\"data\":{"
+   "\"spec\":{\"props\":{"
+    "\"enabled\":{\"type\":\"boolean\",\"xorGroup\":\"product\",\"value\":true,"
+     "\"set\":{\"value\":false,\"param\":\"params\",\"flag\":\"nospec\"}},"
+    "\"len\":{\"type\":\"integer\",\"value\":null,\"set\":{\"param\":\"params\",\"flag\":\"len\"}}}},"
+   "\"wave\":{\"props\":{"
+    "\"enabled\":{\"type\":\"boolean\",\"xorGroup\":\"product\",\"value\":false,"
+     "\"set\":{\"value\":true,\"param\":\"mode\",\"pval\":\"wave\"}},"
+    "\"key\":{\"type\":\"string\",\"value\":null,\"set\":{\"param\":\"key\",\"required\":true}}}},"
+   "\"extra\":{\"props\":{"
+    "\"enabled\":{\"type\":\"boolean\",\"value\":false,\"set\":{\"param\":\"extra\",\"pval\":\"1\"}}}}"
+  "}}}";
+
+/* a node with two members on, and one with none */
+static const char* g_sXorTwoSrc =
+"{\"type\":\"HttpStreamSrc\",\"version\":\"0.7\",\"label\":\"two\","
+ "\"protocol\":{\"method\":\"GET\",\"baseUrls\":[\"" XRB "\"],\"httpParams\":{\"fmt\":{}}},"
+ "\"interface\":{\"formats\":{"
+  "\"a\":{\"props\":{\"enabled\":{\"type\":\"boolean\",\"xorGroup\":\"format\",\"value\":%s,"
+   "\"set\":{\"param\":\"fmt\",\"pval\":\"a\"}}}},"
+  "\"b\":{\"props\":{\"enabled\":{\"type\":\"boolean\",\"xorGroup\":\"format\",\"value\":%s,"
+   "\"set\":{\"param\":\"fmt\",\"pval\":\"b\"}}}}}}}";
+
+static void test_xor(void)
+{
+	printf("Exclusive sets (xorGroup):\n");
+	DasSrc* pSrc = loadSrc(HSK, NULL);
+	CHECK(pSrc != NULL, "hsk loads");
+	if(pSrc == NULL) return;
+
+#define HT "?read.time.min=2026-01-06T14:12&read.time.max=2026-01-06T14:24"
+#define HT1 "?read.time.min=2026-01-05T14:24&read.time.max=2026-01-06T14:24"
+
+	/* one is on: the last one said, not the first in the node */
+	URL_IS(pSrc, 0, K("formats.csv", "formats.cdf"), NONE, HB HT "&format.type=cdf");
+	URL_IS(pSrc, 0, K("formats.cdf", "formats.csv"), NONE, HB HT "&format.type=csv");
+	/* back to the default says nothing, as if no format had been named */
+	URL_IS(pSrc, 0, K("csv", "das"), NONE, HB HT);
+	URL_IS(pSrc, 0, K("csv", "csv="), NONE, HB HT);
+	URL_IS(pSrc, 0, K("csv", "csv=false"), NONE, HB HT);
+
+	/* example 1 switched cdf on; choosing another format on top of it
+	   switches cdf off though the example's entry still says true */
+	URL_IS(pSrc, 1, NONE, NONE, HB HT1 "&format.type=cdf");
+	URL_IS(pSrc, 1, K("formats.csv"), NONE, HB HT1 "&format.type=csv");
+	URL_IS(pSrc, 1, K("das"), NONE, HB HT1);
+	/* said again is said last: cdf was in the requisition first */
+	URL_IS(pSrc, 1, K("formats.csv", "formats.cdf"), NONE, HB HT1 "&format.type=cdf");
+	URL_IS(pSrc, 1, K("formats.cdf=false"), NONE, HB HT1);   /* cdf off, das as the node has it */
+
+	/* the settings of a format go with it or not at all */
+	URL_IS(pSrc, 0, K("csv", "csv.delimiter=Tab"), NONE, HB HT "&format.type=csv&format.delim=tab");
+	URL_FAILS(pSrc, 0, K("csv.delimiter=Tab"));                   /* csv is not selected */
+	URL_FAILS(pSrc, 0, K("csv", "das.version=das2"));             /* das no longer is */
+	URL_FAILS(pSrc, 0, K("csv", "csv.delimiter=Tab", "cdf"));     /* nor csv, now */
+	URL_IS(pSrc, 0, K("csv", "csv.delimiter=Tab", "cdf", "csv.delimiter="), NONE, HB HT "&format.type=cdf");
+	URL_IS(pSrc, 0, K("das.version=das2"), NONE, HB HT "&format.version=2");
+
+	/* radio buttons have no "none" */
+	URL_FAILS(pSrc, 0, K("das=false"));
+	URL_IS(pSrc, 0, K("das=false", "csv"), NONE, HB HT "&format.type=csv");
+	URL_IS(pSrc, 0, K("csv=false"), NONE, HB HT);    /* off already, nothing asked */
+
+	/* the reason is on the entry, and names the way out */
+	DasReq* pReq = new_DasReq_src(pSrc, 0);
+	DasReq_set(pReq, "formats.cdf", "true");
+	DasReq_set(pReq, "csv.delimiter", "Tab");
+	size_t uBad = 0;
+	CHECK(DasSrc_check(pSrc, pReq, &uBad) != DAS_OKAY && uBad == 1, "one bad entry, got %zu", uBad);
+	int n = DasReq_find(pReq, "csv.delimiter");
+	CHECK(n >= 0 && DasReq_verdictAt(pReq, (size_t)n) == DASREQVERDICT_BAD &&
+	      strstr(DasReq_whyAt(pReq, (size_t)n), "formats.csv=true") &&
+	      strstr(DasReq_whyAt(pReq, (size_t)n), "csv.delimiter="),
+	      "why: %s", (n >= 0) ? DasReq_whyAt(pReq, (size_t)n) : "(no entry)");
+	CHECK(streq(DasSrc_mime(pSrc, pReq), "application/x-cdf"), "mime of the format chosen: %s", DasSrc_mime(pSrc, pReq));
+	DasReq_set(pReq, "formats.csv", "true");
+	CHECK(streq(DasSrc_mime(pSrc, pReq), "text/csv"), "mime follows the last choice: %s", DasSrc_mime(pSrc, pReq));
+	DasReq_set(pReq, "formats.cdf", "true");
+	CHECK(streq(DasSrc_mime(pSrc, pReq), "application/x-cdf"), "and a choice made again: %s", DasSrc_mime(pSrc, pReq));
+	CHECK(streq(DasReq_keyAt(pReq, DasReq_numKeys(pReq) - 1), "formats.cdf"), "a key set again moves to the end");
+	del_DasReq(pReq);
+
+	pReq = new_DasReq_src(pSrc, 0);
+	DasReq_set(pReq, "das", "false");
+	CHECK(DasSrc_check(pSrc, pReq, &uBad) != DAS_OKAY && uBad == 1, "das off alone is refused");
+	n = DasReq_find(pReq, "das");
+	CHECK(n >= 0 && strstr(DasReq_whyAt(pReq, (size_t)n), "formats.cdf, formats.csv"),
+	      "why: %s", (n >= 0) ? DasReq_whyAt(pReq, (size_t)n) : "(no entry)");
+	del_DasReq(pReq);
+	del_DasSrc(pSrc);
+
+	/* A set among data variables */
+	pSrc = new_DasSrc_json(g_sXorSrc, strlen(g_sXorSrc), "site:/test/xor", NULL);
+	CHECK(pSrc != NULL, "inline load");
+	if(pSrc == NULL) return;
+
+	/* a blank requisition asks for what the node's own state requires,
+	   not for the key of a member that is off */
+	pReq = new_DasReq_src(pSrc, -1);
+	CHECK(pReq && DasReq_numKeys(pReq) == 1 && streq(DasReq_keyAt(pReq, 0), "coords.time.min"),
+	      "blank requisition lists %zu keys", pReq ? DasReq_numKeys(pReq) : 0);
+	del_DasReq(pReq);
+
+	URL_IS(pSrc, -1, K("time.min=2026-01-01"), NONE, XRB "?start_time=2026-01-01");
+	URL_IS(pSrc, -1, K("time.min=2026-01-01", "spec.len=64"), NONE, XRB "?start_time=2026-01-01&params=len=64");
+	/* switching wave on switches spec off, and spec's toggle is one that
+	   sends when it goes off */
+	URL_IS(pSrc, -1, K("time.min=2026-01-01", "wave", "wave.key=k"), NONE,
+		XRB "?start_time=2026-01-01&params=--no-spec&mode=wave&key=k");
+	URL_FAILS(pSrc, -1, K("time.min=2026-01-01", "wave"));                       /* now key is required */
+	URL_FAILS(pSrc, -1, K("time.min=2026-01-01", "wave", "wave.key=k", "spec.len=64"));
+	URL_FAILS(pSrc, -1, K("time.min=2026-01-01", "wave.key=k"));
+	URL_FAILS(pSrc, -1, K("time.min=2026-01-01", "spec=false"));
+	/* a group outside the set is its own business */
+	URL_IS(pSrc, -1, K("time.min=2026-01-01", "extra", "wave", "spec"), NONE,
+		XRB "?start_time=2026-01-01&extra=1");
+	URL_FAILS(pSrc, -1, K("time.min=2026-01-01", "extra", "wave", "key=k", "spec"));   /* key is wave's */
+	del_DasSrc(pSrc);
+
+	/* Two on in the node: no guess, until the requisition says which */
+	char sNode[1024];
+	snprintf(sNode, sizeof(sNode), g_sXorTwoSrc, "true", "true");
+	pSrc = new_DasSrc_json(sNode, strlen(sNode), "site:/test/two", NULL);
+	CHECK(pSrc != NULL, "inline load");
+	if(pSrc != NULL){
+		URL_FAILS(pSrc, -1, NONE);
+		URL_IS(pSrc, -1, K("b"), NONE, XRB);          /* b is where the node has it */
+		URL_IS(pSrc, -1, K("b=false"), NONE, XRB);   /* and so does this: a is left */
+		del_DasSrc(pSrc);
+	}
+	/* None on in the node: none is a state, and a member may go back off */
+	snprintf(sNode, sizeof(sNode), g_sXorTwoSrc, "false", "false");
+	pSrc = new_DasSrc_json(sNode, strlen(sNode), "site:/test/none", NULL);
+	CHECK(pSrc != NULL, "inline load");
+	if(pSrc != NULL){
+		URL_IS(pSrc, -1, NONE, NONE, XRB);
+		URL_IS(pSrc, -1, K("a", "b"), NONE, XRB "?fmt=b");
+		URL_IS(pSrc, -1, K("a", "a=false"), NONE, XRB);
+		del_DasSrc(pSrc);
+	}
+}
+
+/* A flag's suffix: text after the value, as a prefix is text before it.
+   das2 DSDFs write it as output text after the '@'. */
+#define FB "http://127.0.0.1:8765/data/suffix"
+static const char* g_sSuffixSrc =
+"{\"type\":\"HttpStreamSrc\",\"version\":\"0.7\",\"label\":\"suffix\","
+ "\"protocol\":{\"method\":\"GET\",\"baseUrls\":[\"" FB "\"],"
+  "\"httpParams\":{\"params\":{\"type\":\"FlagSet\",\"flagSep\":\" \",\"flags\":{"
+   "\"win\":{\"prefix\":\"--win=\",\"suffix\":\"s\"},"
+   "\"chan\":{\"prefix\":\"(\",\"suffix\":\")\",\"subSep\":\"+\"},"
+   "\"tag\":{\"prefix\":\"-t.\",\"suffix\":\".\",\"repeat\":true},"
+   "\"bw\":{\"prefix\":\"\",\"suffix\":\"Hz\",\"enum\":[10,20]},"
+   "\"quiet\":{\"value\":\"-q\"}}}}},"
+ "\"interface\":{\"options\":{\"props\":{"
+  "\"quiet\":{\"type\":\"boolean\",\"value\":false,\"set\":{\"param\":\"params\",\"flag\":\"quiet\"}},"
+  "\"bw\":{\"type\":\"integer\",\"value\":null,\"set\":{\"param\":\"params\",\"flag\":\"bw\"}},"
+  "\"tag\":{\"type\":\"string\",\"multi\":true,\"value\":[],\"set\":{\"param\":\"params\",\"flag\":\"tag\"}},"
+  "\"chan\":{\"type\":\"enum\",\"multi\":true,\"value\":[],\"set\":{\"param\":\"params\",\"flag\":\"chan\","
+   "\"enum\":[\"a\",\"b\",\"c\"]}},"
+  "\"win\":{\"type\":\"real\",\"value\":null,\"set\":{\"param\":\"params\",\"flag\":\"win\"}}"
+ "}}}}";
+
+static void test_suffix(void)
+{
+	printf("Flag suffixes:\n");
+	DasSrc* pSrc = new_DasSrc_json(g_sSuffixSrc, strlen(g_sSuffixSrc), "site:/test/suffix", NULL);
+	CHECK(pSrc != NULL, "inline load");
+	if(pSrc == NULL) return;
+
+	URL_IS(pSrc, -1, K("win=2.5"), NONE, FB "?params=--win=2.5s");
+	/* a joined value is closed once, after its last element */
+	URL_IS(pSrc, -1, K("chan=c,a"), NONE, FB "?params=%28a%2Bc%29");
+	/* a flag that repeats is closed every time */
+	URL_IS(pSrc, -1, K("tag=x,y"), NONE, FB "?params=-t.x.%20-t.y.");
+	/* the protocol's list is of what goes between the two, not the whole */
+	URL_IS(pSrc, -1, K("bw=20"), NONE, FB "?params=20Hz");
+	URL_FAILS(pSrc, -1, K("bw=30"));
+	/* all of them, in the order the protocol lists the flags */
+	URL_IS(pSrc, -1, K("quiet", "bw=10", "tag=x", "chan=b", "win=1"), NONE,
+		FB "?params=--win=1s%20%28b%29%20-t.x.%2010Hz%20-q");
+	del_DasSrc(pSrc);
+}
+
 static void test_req(void)
 {
 	printf("Requisitions without a source:\n");
@@ -993,6 +1462,11 @@ int main(int argc, char** argv)
 	test_juno();
 	test_flagslot();
 	test_subsep();
+	test_multi();
+	test_order();
+	test_protoEnum();
+	test_xor();
+	test_suffix();
 	test_req();
 	test_node();
 	test_pick();

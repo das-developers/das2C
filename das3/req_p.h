@@ -84,4 +84,11 @@ void _DasReq_clearVerdicts(DasReq* pThis);
  * numbers as unterminated text and a default of 86.4 should stay 86.4. */
 bool _das_json_scalar(const DasJdo* pJdo, char* sBuf, size_t uLen);
 
+/* As _das_json_scalar(), and an array of scalars (aka strings, numbers or
+ * booleans) comes out as its items joined with commas, the spelling a
+ * requisition uses for the value of a multi-valued property, see "Several 
+ * values" in source.h.  Items that are not scalars are skipped.  Returns
+ * false for an empty array, as for null: neither is a value. */
+bool _das_json_value(const DasJdo* pJdo, char* sBuf, size_t uLen);
+
 #endif /* _das_req_p_h_ */

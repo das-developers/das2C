@@ -12,6 +12,7 @@
 #   juno_survey_0.6.json  2018 era HttpStreamSrc 0.6, flag_set with space
 #                         separator, base URL that already has a query string
 #   subsep_0.7.json       0.7 multi-select flags (subSep), from das-cat
+#   multi_0.7.json        0.7 list properties ("multi"), joined and repeated
 #
 # Each case is: arguments, then the exact URL expected on stdout.  Error cases
 # check the exit code instead.
@@ -83,8 +84,9 @@ expect_url $G 0 lshell=no -- \
 	"$GB?read.time.min=2026-01-01&read.time.max=2026-01-02&read.time.inter=60"
 
 # format group by name, enum pval substitution (Tab -> tab), boolean with pval
-expect_url $G 0 csv delimiter=Tab csv.headers=false serial=text -- \
-	"$GB?read.time.min=2026-01-01&read.time.max=2026-01-02&read.time.inter=60&format.serial=text&format.type=csv&format.headers=1&format.delim=tab"
+expect_url $G 0 csv delimiter=Tab csv.headers=false -- \
+	"$GB?read.time.min=2026-01-01&read.time.max=2026-01-02&read.time.inter=60&format.type=csv&format.headers=1&format.delim=tab"
+expect_rc 4 url $G 0 csv delimiter=Tab serial=text               # serial is a das setting, das is off now
 
 # example by bare number, by examples.N, and as the default when nothing is asked
 expect_url $G 0 time.inter=30 -- \
@@ -174,8 +176,26 @@ expect_url $H 0 version=das2 nmi_errors irq3_errors data.hsk_task_errors -- \
 	"$HB?read.time.min=2026-01-06T14:12&read.time.max=2026-01-06T14:24&read.data=nmi_errors,irq3_errors,hsk_task_errors&format.version=2"
 expect_url $H 1 -- \
 	"$HB?read.time.min=2026-01-05T14:24&read.time.max=2026-01-06T14:24&format.type=cdf"
-expect_url $H 0 formats.csv das.version=das2 time.res=10 -- \
-	"$HB?read.time.min=2026-01-06T14:12&read.time.max=2026-01-06T14:24&bin.time.max=10&format.version=2&format.type=csv"
+expect_url $H 0 formats.csv time.res=10 -- \
+	"$HB?read.time.min=2026-01-06T14:12&read.time.max=2026-01-06T14:24&bin.time.max=10&format.type=csv"
+
+# --- formats are an exclusive set (xorGroup): the last one named is on ---
+expect_url $H 0 formats.csv formats.cdf -- \
+	"$HB?read.time.min=2026-01-06T14:12&read.time.max=2026-01-06T14:24&format.type=cdf"
+expect_url $H 0 formats.cdf formats.csv -- \
+	"$HB?read.time.min=2026-01-06T14:12&read.time.max=2026-01-06T14:24&format.type=csv"
+# on top of an example that chose cdf
+expect_url $H 1 csv -- \
+	"$HB?read.time.min=2026-01-05T14:24&read.time.max=2026-01-06T14:24&format.type=csv"
+expect_url $H 1 csv cdf -- \
+	"$HB?read.time.min=2026-01-05T14:24&read.time.max=2026-01-06T14:24&format.type=cdf"
+expect_url $H 1 das -- \
+	"$HB?read.time.min=2026-01-05T14:24&read.time.max=2026-01-06T14:24"
+expect_rc 4 url $H 0 formats.csv das.version=das2                # a setting of the format not chosen
+expect_rc 4 url $H 0 csv.delimiter=Tab                           # the same, csv was never chosen
+expect_rc 4 url $H 0 das=false                                   # no format at all is not a choice
+expect_url $H 0 csv csv.delimiter=Tab cdf csv.delimiter= -- \
+	"$HB?read.time.min=2026-01-06T14:12&read.time.max=2026-01-06T14:24&format.type=cdf"
 
 # --- 0.6 juno: '&' joiner, space separated flags, protocol level examples ---
 
@@ -196,6 +216,55 @@ S=$FX/subsep_0.7.json
 SB="https://example.org/das/server?server=dataset&dataset=Test/SubSep&start_time=2017-168&end_time=2017-169"
 expect_url $S 0 -- "$SB&params=fan=090,270%20outputType=flux"
 expect_url $S lfdr_ex lfdr_l fan_180 -- "$SB&params=fan=180%20-lfdr%20LEx"
+
+# --- 0.7 multi: list properties, KEY=a,b ---------------------------------
+
+M=$FX/multi_0.7.json
+MB="https://example.org/das/server?server=dataset&dataset=Test/Multi&start_time=2017-168&end_time=2017-169"
+# enum items go out in node order, two properties fill one flag, an item's
+# pval is what travels (HF2 -> 2)
+expect_url $M 0 -- "$MB&params=-lfdr%20ExEw%20-mfr%2012Ex%20-hfr%20A2%20-n%20bad_data%20hf1pwr"
+expect_url $M 1 -- "$MB&params=fft512%202.4%202.5"
+# a plain parameter joins with its subSep or repeats; a flag repeats prefix and all
+expect_url $M 2 -- "$MB&read.data=ts2_l2_bac_tscs,ts2_l2_bac_fac&params=--drop=a%20b%20--drop=c&parameter=bx&parameter=bz"
+expect_url $M 3 -- "$MB"
+expect_url $M lfdr=ew,EX 'nix=fake_data, mfdr_mfr2' -- "$MB&params=-lfdr%20ExEw%20-n%20mfdr_mfr2%20fake_data"
+# the default list in any order is the default, and is not sent
+expect_url $M fan=270,090 -- "$MB"
+expect_url $M fan=180 -- "$MB&params=fan=180"
+# each chosen item may be a switch of its own
+expect_url $M verbosity=loud,quiet -- "$MB&params=-q%20-v"
+# a list and booleans may feed one joined parameter
+expect_url $M bac_fac pair=4,3 -- "$MB&read.data=ts2_l2_bac_fac,4,3"
+# an empty value takes back the example's list, whatever spelling set it
+expect_url $M 0 lfdr= mfr_bands= mfr_sensors= -- "$MB&params=-hfr%20A2%20-n%20bad_data%20hf1pwr"
+expect_url $M 'fan= ' -- "$MB"                                # blanks alone are an empty list
+expect_url $M drop=a,A -- "$MB&params=--drop=a%20--drop=A"    # free text items differ by case
+expect_rc 4 url $M lfdr=Ex,ex                                 # enum items do not
+expect_rc 4 url $M notches=1,2,3,4                            # more than the node allows
+expect_rc 4 url $M pair=1                                     # fewer
+expect_rc 4 url $M notches=1,,2                               # empty item
+expect_rc 4 url $M notches=2,2                                # repeated item
+expect_rc 4 url $M notches=1,x                                # an item of the wrong type
+expect_rc 4 url $M lfdr=Ex,Ez                                 # an item not in the enum
+expect_rc 4 url $M neither=a                                  # flag says neither join nor repeat
+expect_rc 4 url $M both=a                                     # flag says both
+expect_rc 4 url $M plain=a                                    # parameter says neither
+
+if $FETCH node $M 2>/dev/null | grep -q "notches  *real list  *kHz .*0.0 to 14.41 (up to 3)"; then
+	nPass=$((nPass + 1))
+else
+	echo " FAIL: das_fetch node $M did not list notches as a bounded real list"; nFail=$((nFail + 1))
+fi
+
+expect_url -o params $M 2 -- \
+"https://example.org/das/server?server=dataset&dataset=Test/Multi
+   start_time=2017-168
+   end_time=2017-169
+   read.data=ts2_l2_bac_tscs,ts2_l2_bac_fac
+   params=--drop=a b --drop=c
+   parameter=bx
+   parameter=bz"
 
 # --- url -o params: every base, then the query's parameters decoded ------
 
