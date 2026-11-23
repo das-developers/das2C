@@ -405,11 +405,9 @@ static void _DasSrcCtrl_clear(DasSrcCtrl* p)
 	free(p->sHi);
 }
 
-/* A member of a group dict is a property if it is a dict that looks like
- * one.  In the current layout every member of "props" qualifies; in the
- * 2018 layout properties sit beside the group's name and title
- * strings, and a units dict with a value counts as the units property
- * just as it does under props today. */
+/* A member of a group's "props" is a property if it is a dict that looks
+ * like one; anything else there is skipped.  A units dict with a value
+ * counts as the units property. */
 static bool _dassrc_isPropDict(const DasJdo* p)
 {
 	if(!_dassrc_jisdict(p)) return false;
@@ -419,7 +417,7 @@ static bool _dassrc_isPropDict(const DasJdo* p)
 static const DasJdo* _dassrc_groupProps(const DasJdo* pGroup)
 {
 	const DasJdo* pProps = _dassrc_jget(pGroup, "props");
-	return _dassrc_jisdict(pProps) ? pProps : pGroup;   /* 2018 layout: no props */
+	return _dassrc_jisdict(pProps) ? pProps : NULL;
 }
 
 /* Count and fill share one walk.  With pSrc NULL only the counts are
@@ -561,9 +559,7 @@ static void _dassrc_walkSection(_walk_t* pW, das_srcsec sec, const DasJdo* pSec)
 
 static void _dassrc_walkIface(_walk_t* pW, const DasJdo* pIface)
 {
-	const DasJdo* pCoords = _dassrc_jget(pIface, "coords");
-	if(pCoords == NULL) pCoords = _dassrc_jget(pIface, "coordinates");   /* 2018 layout */
-	_dassrc_walkSection(pW, DASSRCSEC_COORD, pCoords);
+	_dassrc_walkSection(pW, DASSRCSEC_COORD, _dassrc_jget(pIface, "coords"));
 	_dassrc_walkSection(pW, DASSRCSEC_DATA, _dassrc_jget(pIface, "data"));
 	_dassrc_walkSection(pW, DASSRCSEC_FORMAT, _dassrc_jget(pIface, "formats"));
 
@@ -608,20 +604,9 @@ static bool _dassrc_exPathToKey(const char* sPath, char* sKey, size_t uLen)
 	return nTok > 0;
 }
 
-/* The flag value a control sends, without any prefix: the parameter's
- * flags entry for it, or the flag name itself */
-static const char* _DasSrcCtrl_flagVal(const DasSrcCtrl* pC, const char* sFlag, char* sBuf, size_t uLen)
-{
-	char sPath[DASID_SZ + 8];
-	snprintf(sPath, sizeof(sPath), "flags/%s", sFlag);
-	const DasJdo* pF = _dassrc_jget(pC->pParam, sPath);
-	if(!_das_json_scalar(_dassrc_jget(pF, "value"), sBuf, uLen)) _dassrc_strcpyz(sBuf, sFlag, uLen);
-	return sBuf;
-}
-
 /* A flag named by a control's set block works one of two ways.  On a
- * boolean it is a switch: when on, the flag sends its own value, see
- * _DasSrcCtrl_flagVal().  On anything else it is a slot: the control's
+ * boolean it is a switch: when on, the flag sends its own value.  On
+ * anything else it is a slot: the control's
  * value follows the flag's prefix, so an anode chooser set to 8 sends
  * "anode=8".  A flag named by an enum item instead is always a switch,
  * the item picks which flag goes out. */
@@ -631,189 +616,16 @@ static bool _DasSrcCtrl_flagIsSlot(const DasSrcCtrl* pC)
 	       (pC->pProp->type != DASSRCPROPTYPE_BOOL);
 }
 
-/* ---- 2018 layout, begin: protocol level examples, read back into
-   controls.  Delete down to the end marker. ---- */
-
-/* The prefix of a control's set block flag, "" when none */
-static const char* _DasSrcCtrl_flagPrefix(const DasSrcCtrl* pC)
-{
-	const char* sFlag = _dassrc_jstr(pC->pSet, "flag");
-	if(sFlag == NULL) return "";
-	char sPath[DASID_SZ + 8];
-	snprintf(sPath, sizeof(sPath), "flags/%s", sFlag);
-	const char* sPre = _dassrc_jstr(_dassrc_jget(pC->pParam, sPath), "prefix");
-	return sPre ? sPre : "";
-}
-
-/* The interface value whose protocol value is sPVal: an enum item with
- * that pval, else an item spelled sPVal, else sPVal as is.  The inverse of
- * the enum step in _DasSrcCtrl_translate(). */
-static const char* _DasSrcCtrl_fromPVal(const DasSrcCtrl* pC, const char* sPVal, char* sBuf, size_t uLen)
-{
-	_dassrc_strcpyz(sBuf, sPVal, uLen);
-	const DasJdo* pEnum = _dassrc_jget(pC->pSet, "enum");
-	if(!_dassrc_jisary(pEnum)) return sBuf;
-	char sItem[SCALAR_SZ], sP[SCALAR_SZ];
-	for(const DasJsonAryEl* pEl = DasJdo_aryFirst(pEnum); pEl; pEl = pEl->next){
-		const DasJdo* pItem = _dassrc_jisdict(pEl->value) ? _dassrc_jget(pEl->value, "value") : pEl->value;
-		if(!_das_json_scalar(pItem, sItem, sizeof(sItem))) continue;
-		bool bHit = _das_json_scalar(_dassrc_jget(pEl->value, "pval"), sP, sizeof(sP)) ?
-		            _dassrc_strieq(sP, sPVal) : _dassrc_strieq(sItem, sPVal);
-		if(bHit){ _dassrc_strcpyz(sBuf, sItem, uLen); break; }
-	}
-	return sBuf;
-}
-
-/* A 2018 example is raw protocol parameters.  Each is mapped back onto
- * the control that would have produced it, so the requisition looks the
- * same as one from a current node.  Parameters no control explains are
- * kept as raw parameters, nothing is dropped. */
-static bool _DasSrc_exampleFromParams(DasSrc* pThis, DasReq* pReq, const DasJdo* pParams)
-{
-	char sVal[SCALAR_SZ], sFlagVal[SCALAR_SZ], sPVal[SCALAR_SZ];
-	for(const DasJsonDictEl* pP = DasJdo_dictFirst(pParams); pP; pP = pP->next){
-		const char* sName = pP->name->string;
-		if(!_das_json_scalar(pP->value, sVal, sizeof(sVal))) continue;
-
-		/* the controls feeding this parameter */
-		bool bFlagSet = false, bHandled = false;
-		for(size_t u = 0; u < pThis->uProp; ++u){
-			const DasSrcCtrl* pC = pThis->aProp[u].pCtrl;
-			if((pC == NULL)||(strcmp(pC->sParam, sName) != 0)) continue;
-			if(_dassrc_jstr(pC->pSet, "flag") != NULL){ bFlagSet = true; break; }
-		}
-
-		if(bFlagSet){
-			const char* sSep = NULL;
-			for(size_t u = 0; (sSep == NULL) && (u < pThis->uProp); ++u){
-				const DasSrcCtrl* pC = pThis->aProp[u].pCtrl;
-				if((pC == NULL)||(strcmp(pC->sParam, sName) != 0)) continue;
-				sSep = _dassrc_jstr(pC->pParam, "flagSep");
-				if(sSep == NULL) sSep = _dassrc_jstr(pC->pParam, "flag_sep");
-			}
-			if((sSep == NULL)||(sSep[0] == '\0')) sSep = " ";
-
-			char sLeft[SCALAR_SZ] = {'\0'};   /* tokens no control owns */
-			char* pTok = sVal;
-			while(pTok && *pTok){
-				char* pNext = strstr(pTok, sSep);
-				if(pNext){ *pNext = '\0'; pNext += strlen(sSep); }
-				bool bFound = false;
-				for(size_t u = 0; !bFound && (u < pThis->uProp); ++u){
-					const DasSrcCtrl* pC = pThis->aProp[u].pCtrl;
-					if((pC == NULL)||(strcmp(pC->sParam, sName) != 0)) continue;
-					const char* sFlag = _dassrc_jstr(pC->pSet, "flag");
-					if(sFlag == NULL) continue;
-
-					/* A slot is recognized by its prefix alone; without one,
-					   a token could belong to any slot and is left raw */
-					if(_DasSrcCtrl_flagIsSlot(pC)){
-						const char* sPre = _DasSrcCtrl_flagPrefix(pC);
-						size_t uPre = strlen(sPre);
-						if((uPre == 0)||(strlen(pTok) <= uPre)) continue;
-						char sHead[SCALAR_SZ];
-						_dassrc_strcpyz(sHead, pTok, (uPre + 1 < sizeof(sHead)) ? uPre + 1 : sizeof(sHead));
-						if(!_dassrc_strieq(sHead, sPre)) continue;
-						_DasSrcCtrl_fromPVal(pC, pTok + uPre, sFlagVal, sizeof(sFlagVal));
-						if(DasReq_set(pReq, pThis->aProp[u].sKey, sFlagVal) != DAS_OKAY) return false;
-						bFound = true;
-						continue;
-					}
-
-					_DasSrcCtrl_flagVal(pC, sFlag, sFlagVal, sizeof(sFlagVal));
-					if(_dassrc_strieq(sFlagVal, pTok)){
-						if(DasReq_set(pReq, pThis->aProp[u].sKey, "true") != DAS_OKAY) return false;
-						bFound = true;
-					}
-				}
-				if(!bFound && (pTok[0] != '\0')){
-					size_t n = strlen(sLeft);
-					snprintf(sLeft + n, sizeof(sLeft) - n, "%s%s", n ? sSep : "", pTok);
-				}
-				pTok = pNext;
-			}
-			if(sLeft[0] != '\0')
-				if(DasReq_setRaw(pReq, sName, sLeft) != DAS_OKAY) return false;
-			continue;
-		}
-
-		for(size_t u = 0; !bHandled && (u < pThis->uProp); ++u){
-			const DasSrcProp* p = pThis->aProp + u;
-			const DasSrcCtrl* pC = p->pCtrl;
-			if((pC == NULL)||(strcmp(pC->sParam, sName) != 0)) continue;
-
-			const DasJdo* pEnum = _dassrc_jget(pC->pSet, "enum");
-			if(_dassrc_jisary(pEnum)){
-				/* which choice sends this protocol value? */
-				for(const DasJsonAryEl* pEl = DasJdo_aryFirst(pEnum); !bHandled && pEl; pEl = pEl->next){
-					const DasJdo* pItem = _dassrc_jisdict(pEl->value) ? _dassrc_jget(pEl->value, "value") : pEl->value;
-					char sItem[SCALAR_SZ];
-					if(!_das_json_scalar(pItem, sItem, sizeof(sItem))) continue;
-					bool bHit = _das_json_scalar(_dassrc_jget(pEl->value, "pval"), sPVal, sizeof(sPVal)) ?
-					            _dassrc_strieq(sPVal, sVal) : _dassrc_strieq(sItem, sVal);
-					if(bHit){
-						if(DasReq_set(pReq, p->sKey, sItem) != DAS_OKAY) return false;
-						bHandled = true;
-					}
-				}
-				continue;
-			}
-			if(_das_json_scalar(_dassrc_jget(pC->pSet, "pval"), sPVal, sizeof(sPVal))){
-				/* a fixed protocol value stands for one state of a toggle */
-				if(_dassrc_strieq(sPVal, sVal)){
-					bool bOn = true;
-					const DasJdo* pTrig = _dassrc_jget(pC->pSet, "value");
-					if(_dassrc_jisbool(pTrig)) bOn = _dassrc_jtrue(pTrig);
-					if(DasReq_set(pReq, p->sKey, bOn ? "true" : "false") != DAS_OKAY) return false;
-					bHandled = true;
-				}
-				continue;
-			}
-			if(DasReq_set(pReq, p->sKey, sVal) != DAS_OKAY) return false;
-			bHandled = true;
-		}
-		if(!bHandled)
-			if(DasReq_setRaw(pReq, sName, sVal) != DAS_OKAY) return false;
-	}
-	return true;
-}
-/* ---- 2018 layout, end ---- */
-
 static bool _DasSrc_loadExamples(DasSrc* pThis)
 {
 	const DasJdo* pEx = _dassrc_jget(pThis->pIface, "examples");
-	const DasJdo* pProto = _dassrc_jget(pThis->pDoc, "protocol");
-	bool bLegacyEx = false;   /* 2018 layout, through the if below */
-	if(!_dassrc_jisary(pEx)){
-		pEx = _dassrc_jget(pProto, "examples");
-		bLegacyEx = _dassrc_jisdict(pEx);
-		if(!bLegacyEx) return true;
-	}
+	if(!_dassrc_jisary(pEx)) return true;
 	size_t uMax = _dassrc_jlen(pEx);
 	if(uMax == 0) return true;
 	pThis->aExample = (DasReq**)calloc(uMax, sizeof(DasReq*));
 	if(pThis->aExample == NULL) return false;
 
 	char sKey[256], sVal[SCALAR_SZ];
-	/* ---- 2018 layout, begin ---- */
-	if(bLegacyEx){
-		for(const DasJsonDictEl* pEl = DasJdo_dictFirst(pEx); pEl; pEl = pEl->next){
-			DasReq* pReq = new_DasReq();
-			if(pReq == NULL) return false;
-			pThis->aExample[pThis->uExample] = pReq;
-			pThis->uExample += 1;
-			const char* sLabel = _dassrc_jstr(pEl->value, "title");
-			if(sLabel == NULL) sLabel = _dassrc_jstr(pEl->value, "name");
-			if(sLabel == NULL) sLabel = pEl->name->string;
-			DasReq_setLabel(pReq, sLabel);
-			DasSrc_stampReq(pThis, pReq);
-			const DasJdo* pParams = _dassrc_jget(pEl->value, "http_params");
-			if(_dassrc_jisdict(pParams) && !_DasSrc_exampleFromParams(pThis, pReq, pParams)) return false;
-		}
-		return true;
-	}
-	/* ---- 2018 layout, end ---- */
-
 	for(const DasJsonAryEl* pEl = DasJdo_aryFirst(pEx); pEl; pEl = pEl->next){
 		DasReq* pReq = new_DasReq();
 		if(pReq == NULL) return false;
@@ -896,13 +708,8 @@ DasSrc* new_DasSrc_json(const char* sDoc, size_t uLen, const char* sPathUri, con
 	pStream->pProto = _dassrc_jget(pDoc, "protocol");
 	if(!_dassrc_jisdict(pStream->pProto)) pStream->pProto = NULL;
 	pStream->pParams = _dassrc_jget(pStream->pProto, "httpParams");
-	if(pStream->pParams == NULL) pStream->pParams = _dassrc_jget(pStream->pProto, "http_params");   /* 2018 layout */
 	pStream->pBaseUrls = _dassrc_jget(pStream->pProto, "baseUrls");
-	if(pStream->pBaseUrls == NULL) pStream->pBaseUrls = _dassrc_jget(pStream->pProto, "base_urls");   /* 2018 layout */
 	if(!_dassrc_jisary(pStream->pBaseUrls)) pStream->pBaseUrls = NULL;
-	/* 2018 layout, both lines; nothing reads bLegacy */
-	pThis->bLegacy = (_dassrc_jget(pStream->pProto, "http_params") != NULL) ||
-	                 (_dassrc_jget(pThis->pIface, "coordinates") != NULL);
 
 	/* Two passes over the same walk: count, allocate exactly that many,
 	 * fill.  Groups, properties and controls are three blocks, so a source
@@ -994,12 +801,10 @@ const char* DasSrc_name(const DasSrc* pThis)
 const char* DasSrc_title(const DasSrc* pThis){ return _DasSrc_docStr(pThis, "title"); }
 const char* DasSrc_version(const DasSrc* pThis){ return _DasSrc_docStr(pThis, "version"); }
 
-/* The protocol section's login block; older nodes call it "authentication" */
+/* The protocol section's login block */
 static const DasJdo* _DasSrc_auth(const DasSrc* pThis)
 {
-	const DasJdo* pProto = _dassrc_jget(pThis->pDoc, "protocol");
-	const DasJdo* pAuth = _dassrc_jget(pProto, "authorization");
-	return pAuth ? pAuth : _dassrc_jget(pProto, "authentication");   /* 2018 layout */
+	return _dassrc_jget(pThis->pDoc, "protocol/authorization");
 }
 
 bool DasSrc_needsAuth(const DasSrc* pThis)
@@ -1823,14 +1628,7 @@ static const DasSrcGroup* _DasSrc_chosenFormat(const DasSrc* pThis, const DasReq
 const char* DasSrc_mime(const DasSrc* pThis, const DasReq* pReq)
 {
 	const DasSrcGroup* pG = _DasSrc_chosenFormat(pThis, pReq);
-	if((pG != NULL) && (pG->uMime > 0)) return pG->aMime[0];
-
-	/* 2018 nodes state a default format outside the interface.  2018 layout,
-	   down to the return. */
-	const char* s = _dassrc_jstr(pThis->pDoc, "format/default/mime");
-	if(s == NULL) s = _dassrc_jstr(pThis->pDoc, "protocol/format/default/mime");
-	if(s == NULL) s = _dassrc_jstr(pThis->pDoc, "interface/format/default/mime");
-	return s ? s : "";
+	return ((pG != NULL) && (pG->uMime > 0)) ? pG->aMime[0] : "";
 }
 
 /* ************************************************************************* */
@@ -2213,7 +2011,6 @@ static bool _DasSrcCtrl_translateOne(const DasSrcCtrl* pC, const char* sVal, _ou
 			return false;
 		}
 		const char* sSep = _dassrc_jstr(pC->pParam, "flagSep");
-		if(sSep == NULL) sSep = _dassrc_jstr(pC->pParam, "flag_sep");   /* 2018 layout */
 		if(sSep == NULL) sSep = " ";
 		if(!_dassrc_outAddFlag(pO, pC->sParam, sSep, pF, _dassrc_flagRank(pC->pParam, sFlag),
 		                       _dassrc_jstr(pF, "prefix"), _dassrc_jstr(pF, "suffix"), sSubSep, sFVal)){

@@ -71,8 +71,6 @@ struct das_node_t {
 	bool bOwner;           /* handed out by a constructor: owns the tree below
 	                          it, freed only by del_DasNode() */
 	void* pDom;            /* the parsed document, a DasJdo, current layout */
-	void* pShim;           /* elements added on load that the parser did not
-	                          allocate, see _dasnode_upgrade().  May be NULL */
 };
 
 /* Catalog nodes have extra arrays to cache nodes */

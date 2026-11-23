@@ -97,8 +97,7 @@ extern "C" {
  *   - A bare property name, `serial`, when exactly one group has it.
  *   - The property names `min`, `max`, `res` and `inter` may be written
  *     out as `minimum`, `maximum`, `resolution` and `interval`, and
- *     `enable` as `enabled`.  Nodes from 2018 spell them the long way,
- *     later nodes the short way, and users may type either.
+ *     `enable` as `enabled`.
  *
  * Matching is case insensitive.  A spelling that fits more than one
  * property is rejected with a message naming the candidates, never
@@ -172,13 +171,6 @@ extern "C" {
  *
  * The verdicts to mark boxes with come from DasSrc_check(), read back by
  * entry through DasReq_verdictAt() and DasReq_whyAt().
- *
- * @par Two node layouts
- *
- * Source nodes from 2018 and from current servers differ in spelling and
- * in where examples live.  Both are read and nothing here depends on
- * which one a source uses: examples from either come out as requisitions
- * in interface terms.
  * @{
  */
 
@@ -246,7 +238,7 @@ typedef struct das_srcctrl_t DasSrcCtrl;
 /** The children of a catalog node that new_DasSrc_node() can load
  *
  * Catalog paths provided by application programs usually end at a
- * Collection or SourceSet whose children are the actual data sources.
+ * SourceSet whose children are the actual data sources.
  * Multiple sources are listed because different clients understand how
  * to fully utilize different data source types.  This is the set of
  * them this library interacts with, HttpStreamSrc nodes today.  Which
@@ -614,8 +606,7 @@ DAS_API const char* DasSrc_exampleLblAt(const DasSrc* pThis, size_t uIdx);
  * With DASSRC_BLANK_REQ the requisition lists every required key with an
  * empty value, so a form knows what must be filled and a check on it
  * fails usefully.  With an example number it carries that example's
- * settings instead, in interface terms whatever the node layout, and the
- * example's label.  Either way it is stamped for this source.
+ * settings instead, in interface terms, and the example's label.  Either way it is stamped for this source.
  *
  * Nothing stops a client from making a requisition with new_DasReq()
  * and never involving the source until it checks; this is the
@@ -690,9 +681,9 @@ DAS_API const char* DasSrc_mime(const DasSrc* pThis, const DasReq* pReq);
  * @memberof DasSrc */
 DAS_API size_t DasSrc_numBaseUrls(const DasSrc* pThis);
 
-/** Base URL number uIdx, before any parameters, or NULL.  Old nodes
- * carry a query string in it already; DasSrc_reqUrl() appends either
- * way.  @memberof DasSrc */
+/** Base URL number uIdx, before any parameters, or NULL.  It may hold a
+ * query string already, as das2 server URLs do; DasSrc_reqUrl() appends
+ * either way.  @memberof DasSrc */
 DAS_API const char* DasSrc_baseUrlAt(const DasSrc* pThis, size_t uIdx);
 
 /** The request URL for a requisition.

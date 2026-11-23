@@ -238,8 +238,7 @@ DAS_API const char* DasNode_summary(const DasNode* pThis);
 /** Get the node's "version" field, if provided
  *
  * This is the version of the node *definition* (ex: "0.5" for catalogs,
- * "0.6" or "0.7" for HttpStreamSrc) not a data version.  Clients need it
- * because the interface layout of source nodes changed between 0.6 and 0.7.
+ * "0.7" for HttpStreamSrc), not a data version.
  * @returns the version string or NULL
  * @memberof DasNode
  */

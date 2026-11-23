@@ -1,0 +1,23 @@
+{
+ "type": "SourceSet",
+ "version": "0.5",
+ "name": "nodas3",
+ "title": "No source provides das3 streams, offline test copy",
+ "separator": "/",
+ "catalog": {
+  "das2": {
+   "type": "HttpStreamSrc",
+   "label": "das2 only server",
+   "purpose": "primary-stream",
+   "provides": ["application/vnd.das2.das2stream"],
+   "urls": ["test/das_fetch/subsep_0.7.json"]
+  },
+  "json": {
+   "type": "HttpStreamSrc",
+   "label": "JSON only server",
+   "purpose": "primary-stream",
+   "provides": ["application/json"],
+   "urls": ["test/das_fetch/multi_0.7.json"]
+  }
+ }
+}

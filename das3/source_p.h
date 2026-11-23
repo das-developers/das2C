@@ -91,7 +91,6 @@ struct das_src_t {
 
 	DasJdo* pDoc;               /* owned, the parsed copy of the node document */
 	const DasJdo* pIface;       /* "interface", may be NULL */
-	bool bLegacy;               /* 2018 layout, set but not read */
 
 	DasSrcGroup* aGroup;        /* owned, in section then presentation order */
 	size_t uGroup;
@@ -113,8 +112,8 @@ struct das_src_t {
 typedef struct das_stream_src {
 	DasSrc base;
 	const DasJdo* pProto;       /* "protocol", NULL makes the source unqueryable */
-	const DasJdo* pParams;      /* protocol "httpParams" or "http_params" */
-	const DasJdo* pBaseUrls;    /* protocol "baseUrls" or "base_urls" array */
+	const DasJdo* pParams;      /* protocol "httpParams" */
+	const DasJdo* pBaseUrls;    /* protocol "baseUrls" array */
 } DasStreamSrc;
 
 /* Key grammar helpers, see "Keys" in source.h.  They live next to the

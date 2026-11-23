@@ -8,6 +8,27 @@ if desired.
 Newest release first.
 
 
+## 3.0.7 - unreleased
+
+### Behavior
+
+- 2018 catalog nodes (HttpStreamSrc 0.6 and earlier, and 2018
+  Collections) are no longer read.  das2.org and its GitHub mirror serve
+  only current nodes. 
+
+### Utilities
+
+- das_fetch: the help's Juno examples match the current node
+
+### Build and test
+
+- The 2018 fixtures `test/das_fetch/juno_survey_0.6.json` and
+  `test/das_fetch/cat/old.json` are gone, with their TestSource and
+  das_fetch_test.sh cases.  test_flagslot's example is interface
+  settings now.  A new SourceSet fixture, `test/das_fetch/cat/nodas3.json`,
+  covers das_fetch settling on a das2 stream when nothing provides das3.
+
+
 ## 3.0.6 - 2026-11-22
 
 Catalog names are now taken literally and paths start in one place, the

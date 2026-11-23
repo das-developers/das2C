@@ -5,13 +5,12 @@
 # saved from the uiowa servers with their base URLs pointed at localhost,
 # and the 'url' command resolves a query without contacting anything.
 #
-# Three node generations are covered:
+# The fixtures:
 #   geomag_flex_0.7.json  dasflex HttpStreamSrc 0.7, required interval param,
 #                         FlagSet data toggle, csv/cdf/das format groups
 #   hsk_flex_0.7.json     0.7 with 73 data variables and a das2/das3 version enum
-#   juno_survey_0.6.json  2018 era HttpStreamSrc 0.6, flag_set with space
-#                         separator, base URL that already has a query string
-#   subsep_0.7.json       0.7 multi-select flags (subSep), from das-cat
+#   subsep_0.7.json       0.7 multi-select flags (subSep), from das-cat, base
+#                         URL that already has a query string
 #   multi_0.7.json        0.7 list properties ("multi"), joined and repeated
 #
 # Each case is: arguments, then the exact URL expected on stdout.  Error cases
@@ -59,10 +58,8 @@ expect_rc() {
 
 G=$FX/geomag_flex_0.7.json
 H=$FX/hsk_flex_0.7.json
-J=$FX/juno_survey_0.6.json
 GB="http://127.0.0.1:8765/data/geomag.d2s"
 HB="https://space.physics.uiowa.edu/das/stream/source/tracers/tracers-2/l1a/cdpu/hsk/flex"
-JB="http://127.0.0.1:8765/data/juno_survey.d2s?server=dataset&dataset=Juno/WAV/Survey"
 
 # --- 0.7 geomag: ranges, shortcuts, aliases, flags, examples, formats --------
 
@@ -197,19 +194,6 @@ expect_rc 4 url $H 0 das=false                                   # no format at 
 expect_url $H 0 csv csv.delimiter=Tab cdf csv.delimiter= -- \
 	"$HB?read.time.min=2026-01-06T14:12&read.time.max=2026-01-06T14:24&format.type=cdf"
 
-# --- 0.6 juno: '&' joiner, space separated flags, protocol level examples ---
-
-expect_url $J time=2021-02-21,2021-02-22 b lfrl das2_text -- \
-	"$JB&end_time=2021-02-22&start_time=2021-02-21&params=B%20LFRL&ascii=true"
-expect_url $J time=2021-02-21,2021-02-22,0 ascii option.xmas=true -- \
-	"$JB&end_time=2021-02-22&start_time=2021-02-21&resolution=0&params=ASCII%20XMAS"
-
-# a 0.6 example is raw parameters, read back into interface terms, so the
-# URL comes out in interface order; user keys still win, required defaults
-# must not clobber the example's values
-expect_url $J 7 resolution=10 -- \
-	"$JB&end_time=2016-177T00:00&start_time=2016-176T00:00&resolution=10&params=B"
-
 # --- 0.7 subsep: multi-select flags, elements joined behind one prefix ------
 
 S=$FX/subsep_0.7.json
@@ -297,7 +281,6 @@ expect_url -o url $S 3 -- "$SB"
 # per type, so das3 wins here.  A -t list is a set.  An item with a '/' is
 # a whole media type, one without is looked for anywhere in the type.
 T=$FX/cat/twin.json
-O=$FX/cat/old.json
 expect_url -s $T=site:/uiowa/twin 0 -- \
 	"$HB?read.time.min=2026-01-06T14:12&read.time.max=2026-01-06T14:24"
 expect_url -s $T=site:/uiowa/twin -t text/csv 0 -- \
@@ -339,12 +322,14 @@ else
 	echo " FAIL: das_fetch node -o sources did not list the children"; nFail=$((nFail + 1))
 fi
 
-# a 2018 Collection has no provides lists, convention stands in
-expect_url -s $O=site:/uiowa/old -t application/vnd.das2.das2stream time=2021-02-21,2021-02-22 -- \
-	"$JB&end_time=2021-02-22&start_time=2021-02-21"
-expect_url -s $O=site:/uiowa/old time=2021-02-21,2021-02-22 -- \
-	"$JB&end_time=2021-02-22&start_time=2021-02-21"                    # nothing provides das3, the das2 ask settles it
-expect_rc 3 url -s $O=site:/uiowa/old -t text/csv time=2021-02-21,2021-02-22
+# nodas3.json offers a das2 stream and JSON, so with no -t the das3 ask
+# finds nothing and the das2 ask settles it; the JSON source is not a
+# second candidate
+N=$FX/cat/nodas3.json
+NB="https://example.org/das/server?server=dataset&dataset=Test/SubSep&start_time=2017-170&end_time=2017-171"
+expect_url -s $N=site:/uiowa/nodas3 time=2017-170,2017-171 -- "$NB"
+expect_url -s $N=site:/uiowa/nodas3 -t application/vnd.das2.das2stream time=2017-170,2017-171 -- "$NB"
+expect_rc 3 url -s $N=site:/uiowa/nodas3 -t text/csv time=2017-170,2017-171
 
 # -m may be repeated, and the deeper mount wins whatever the order
 expect_url -m $T=site:/uiowa/twin -m $G=site:/uiowa/twin/flex -t '*/*' site:/uiowa/twin/flex 0 -- \
@@ -408,7 +393,7 @@ else
 fi
 
 # node and json commands run on every fixture and print the key table header
-for f in $G $H $J; do
+for f in $G $H $S $M; do
 	if $FETCH node $f 2>/dev/null | grep -q "^  Key "; then
 		nPass=$((nPass + 1))
 	else

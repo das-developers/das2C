@@ -34,13 +34,13 @@ extern "C" {
  *
  * A das catalog is a tree of small JSON documents, mostly on web servers,
  * leading from a well known root down to data source definitions.  Each
- * document is a node.  Container nodes (Catalog, Collection, SourceSet)
- * list their children by name along with the URLs each child can be
- * loaded from.  Leaf nodes (HttpStreamSrc, FileTimeAgg) describe how to
- * get data.  The tree is federated: the root at das2.org names a few top
- * level trees, and any node may have children maintained by a different
- * organization.  A path is resolved one network request per level, and
- * only the levels on the way to the node asked for are loaded.
+ * document is a node.  Container nodes (Catalog, SourceSet) list their
+ * children by name along with the URLs each child can be loaded from.  Leaf
+ * nodes (HttpStreamSrc, FileTimeAgg) describe how to get data.  The tree is
+ * federated: the root at das2.org names a few top level trees, and any node
+ * may have children maintained by a different organization.  A path is
+ * resolved one network request per level, and only the levels on the way to
+ * the node asked for are loaded.
  *
  * @par Names
  *

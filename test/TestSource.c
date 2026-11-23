@@ -15,13 +15,12 @@
  * version 2.1 along with das2C; if not, see <http://www.gnu.org/licenses/>.
  */
 
-/* Sources, requisitions and URLs from the three saved source nodes under
- * test/das_fetch, entirely offline.  Run from the repository top.
+/* Sources, requisitions and URLs from the saved source nodes under
+ * test/das_fetch and small inline ones, entirely offline.  Run from the
+ * repository top.
  *
- * geomag is the current layout with examples and mirrors, hsk the current
- * layout at scale (73 variables), juno_survey the 2018 layout with long
- * property names, flag packed options and protocol level examples.  The
- * URL cases are the ones utilities/das_fetch.c has always been held to,
+ * geomag has examples and mirrors, hsk is a node at scale (73 variables).
+ * The URL cases are the ones utilities/das_fetch.c has always been held to,
  * now asked of the library directly. */
 
 #define _POSIX_C_SOURCE 200112L
@@ -40,13 +39,11 @@
 
 #define GEOMAG "test/das_fetch/geomag_flex_0.7.json"
 #define HSK    "test/das_fetch/hsk_flex_0.7.json"
-#define JUNO   "test/das_fetch/juno_survey_0.6.json"
 #define SUBSEP "test/das_fetch/subsep_0.7.json"
 #define MULTI  "test/das_fetch/multi_0.7.json"
 
 #define GB "http://127.0.0.1:8765/data/geomag.d2s"
 #define HB "https://space.physics.uiowa.edu/das/stream/source/tracers/tracers-2/l1a/cdpu/hsk/flex"
-#define JB "http://127.0.0.1:8765/data/juno_survey.d2s?server=dataset&dataset=Juno/WAV/Survey"
 
 static int g_nFail = 0;
 static int g_nPass = 0;
@@ -587,105 +584,11 @@ static void test_hsk(void)
 	del_DasSrc(pSrc);
 }
 
-static void test_juno(void)
-{
-	printf("juno_survey, 2018 layout:\n");
-	DasSrc* pSrc = loadSrc(JUNO, "tag:das2.org,2012:site:/uiowa/juno/wav/survey/das2");
-	CHECK(pSrc != NULL, "load");
-	if(pSrc == NULL) return;
-
-	CHECK(DasSrc_needsAuth(pSrc), "restricted, old 'authentication' spelling");
-	CHECK(streq(DasSrc_authRealm(pSrc), "Juno Magnetospheric Working Group"),
-		"realm '%s'", DasSrc_authRealm(pSrc));
-	CHECK(ctrlCount(pSrc, DASSRCSEC_COORD) == 3, "three time controls");
-	CHECK(ctrlCount(pSrc, DASSRCSEC_OPTION) >= 8, "flag options found");
-	CHECK(ctrlCount(pSrc, DASSRCSEC_DATA) == 0, "nothing settable in data");
-	CHECK(DasSrc_numGroups(pSrc, DASSRCSEC_DATA) > 0, "but the variables are listed");
-	CHECK(DasSrc_numGroups(pSrc, DASSRCSEC_OPTION) == 1, "one options group");
-	CHECK(DasSrc_group(pSrc, DASSRCSEC_OPTION, "") != NULL, "named by the empty string");
-
-	/* the fixed frequency axis is visible before any download */
-	const DasSrcGroup* pG = DasSrc_group(pSrc, DASSRCSEC_COORD, "frequency");
-	CHECK(pG != NULL, "frequency group");
-	if(pG){
-		CHECK(DasSrcGroup_numCtrls(pG) == 0, "nothing to set");
-		const DasSrcProp* pU = DasSrcGroup_prop(pG, "units");
-		CHECK(pU && (DasSrcProp_ctrl(pU) == NULL) && DasSrcProp_value(pU)[0], "units %s",
-		      pU ? DasSrcProp_value(pU) : "(none)");
-	}
-	/* time first even though the node lists frequency first */
-	CHECK(streq(DasSrcGroup_name(DasSrc_groupAt(pSrc, DASSRCSEC_COORD, 0)), "time"), "time first");
-
-	/* Keys use the node's long spelling, matching folds it */
-	const DasSrcProp* p = byKey(pSrc, "coords.time.minimum");
-	CHECK(p != NULL, "coords.time.minimum keyed as spelled");
-	CHECK(byKey(pSrc, "coords.time.min") == NULL, "not rewritten to min");
-	if(p){
-		const DasSrcCtrl* pC = DasSrcProp_ctrl(p);
-		CHECK(pC && streq(DasSrcCtrl_param(pC), "start_time"), "param");
-		CHECK(pC && DasSrcCtrl_isRequired(pC), "required from the set block");
-		CHECK(streq(DasSrcProp_value(p), "2018-10-02T11:00"), "default kept");
-		const char* sLo = NULL; const char* sHi = NULL;
-		CHECK(pC && DasSrcCtrl_range(pC, &sLo, &sHi) && streq(sHi, "now"), "set range to now");
-		CHECK(DasSrcProp_type(p) == DASSRCPROPTYPE_TIME, "type from the old parameter dict");
-		CHECK(streq(DasSrcProp_units(p), "UTC"), "UTC from the old units dict");
-		char sBuf[64];
-		CHECK(streq(DasSrcProp_title(p, sBuf, sizeof(sBuf)), "Minimum Time value to output"),
-		      "composed from the group name, got '%s'", DasSrcProp_title(p, sBuf, sizeof(sBuf)));
-	}
-	p = byKey(pSrc, "coords.time.resolution");
-	CHECK(p && streq(DasSrcProp_value(p), "86.4"), "number default in source notation");
-	CHECK(p && streq(DasSrcProp_units(p), "s"), "units string on the property");
-
-	p = byKey(pSrc, "options.lfrl");
-	CHECK(p != NULL, "options.lfrl");
-	if(p){
-		CHECK(streq(DasSrcGroup_name(DasSrcProp_group(p)), ""), "options have no group name");
-		CHECK(DasSrcProp_type(p) == DASSRCPROPTYPE_BOOL, "flag toggle is boolean");
-		CHECK(streq(DasSrcCtrl_param(DasSrcProp_ctrl(p)), "params"), "packed parameter");
-		CHECK(streq(DasSrcProp_value(p), "false"), "default false");
-	}
-	p = byKey(pSrc, "options.das2_text");
-	CHECK(p && (DasSrcProp_type(p) == DASSRCPROPTYPE_BOOL), "boolean from a boolean default");
-
-	/* 2018 examples come out in interface terms */
-	CHECK(DasSrc_numExamples(pSrc) >= 8, "examples, got %zu", DasSrc_numExamples(pSrc));
-	CHECK(streq(DasSrc_exampleLblAt(pSrc, 0), "Perijove 16"), "label from the title: %s", DasSrc_exampleLblAt(pSrc, 0));
-	DasReq* pReq = new_DasReq_src(pSrc, 0);
-	CHECK(pReq != NULL, "example 0 req");
-	if(pReq){
-		CHECK(streq(DasReq_val(pReq, "coords.time.minimum"), "2018-10-02T11:00"), "start_time mapped back");
-		CHECK(streq(DasReq_val(pReq, "coords.time.resolution"), "86.4"), "resolution mapped back");
-		CHECK(DasReq_numRaw(pReq) == 0, "nothing left raw, %zu", DasReq_numRaw(pReq));
-		del_DasReq(pReq);
-	}
-	pReq = new_DasReq_src(pSrc, 7);
-	CHECK(pReq != NULL, "example 7 req");
-	if(pReq){
-		CHECK(streq(DasReq_val(pReq, "options.b"), "true"), "params=B became the b toggle");
-		CHECK(DasReq_numRaw(pReq) == 0, "nothing left raw");
-		del_DasReq(pReq);
-	}
-
-	URL_IS(pSrc, -1, K("time=2021-02-21,2021-02-22", "b", "lfrl", "das2_text"), NONE,
-		JB "&end_time=2021-02-22&start_time=2021-02-21&params=B%20LFRL&ascii=true");
-	URL_IS(pSrc, -1, K("time=2021-02-21,2021-02-22,0", "ascii", "option.xmas=true"), NONE,
-		JB "&end_time=2021-02-22&start_time=2021-02-21&resolution=0&params=ASCII%20XMAS");
-	/* example 7 with the resolution changed.  The parameter order is the
-	   interface order now that the example is settings, not raw text. */
-	URL_IS(pSrc, 7, K("resolution=10"), NONE,
-		JB "&end_time=2016-177T00:00&start_time=2016-176T00:00&resolution=10&params=B");
-
-	del_DasSrc(pSrc);
-}
-
 /* Enum controls feeding a FlagSet parameter.  An enum whose set block
    names a flag fills that flag's slot: the choice follows the prefix
    ("anode=8").  A boolean's flag stays a switch that sends the flag's own
    value.  Shaped like the TRACERS EPD anode source, whose anode chooser
-   (data section) and AppID filter (options) share one parameter.  The
-   example is 2018 style, raw http_params, so it also tests reading the
-   packed value back into controls. */
+   (data section) and AppID filter (options) share one parameter. */
 #define SB "http://127.0.0.1:8765/data/slot"
 static const char* g_sSlotSrc =
 "{\"type\":\"HttpStreamSrc\",\"version\":\"0.7\",\"name\":\"slot\",\"title\":\"Flag slots\","
@@ -694,13 +597,11 @@ static const char* g_sSlotSrc =
    "\"read.time.min\":{\"required\":true,\"type\":\"isotime\"},"
    "\"read.time.max\":{\"required\":true,\"type\":\"isotime\"},"
    "\"read.params\":{\"type\":\"FlagSet\",\"flagSep\":\" \",\"flags\":{"
-    "\"anode\":{\"prefix\":\"anode=\"},\"apid\":{\"prefix\":\"apid=\"},\"quiet\":{\"value\":\"Quiet\"}}}},"
-  "\"examples\":{"
-   "\"one\":{\"title\":\"Anode 8\",\"http_params\":{\"read.time.min\":\"2023-11-03T19:20\","
-    "\"read.time.max\":\"2023-11-03T20:20\",\"read.params\":\"anode=8 apid=x2a2 Quiet\"}},"
-   "\"two\":{\"title\":\"By pval\",\"http_params\":{\"read.time.min\":\"2023-11-03\","
-    "\"read.time.max\":\"2023-11-04\",\"read.params\":\"apid=x2a3 bogus=1\"}}}},"
+    "\"anode\":{\"prefix\":\"anode=\"},\"apid\":{\"prefix\":\"apid=\"},\"quiet\":{\"value\":\"Quiet\"}}}}},"
  "\"interface\":{"
+  "\"examples\":[{\"label\":\"Anode 8\",\"settings\":{"
+   "\"coords/time/props/min\":\"2023-11-03T19:20\",\"coords/time/props/max\":\"2023-11-03T20:20\","
+   "\"data/flux/props/anode\":\"8\",\"options/props/filter\":\"x2a2\",\"options/props/quiet\":true}}],"
   "\"coords\":{\"time\":{\"props\":{"
    "\"min\":{\"set\":{\"param\":\"read.time.min\",\"required\":true}},"
    "\"max\":{\"set\":{\"param\":\"read.time.max\",\"required\":true}}}}},"
@@ -730,31 +631,18 @@ static void test_flagslot(void)
 	URL_IS(pSrc, -1, K("time=2023-11-03,2023-11-04", "anode=0"), NONE,
 		SB "?read.time.min=2023-11-03&read.time.max=2023-11-04");
 
-	/* reverse: packed tokens map back onto their controls */
+	/* an example fills the same slots from its settings */
 	DasReq* pReq = new_DasReq_src(pSrc, 0);
 	CHECK(pReq != NULL, "example 0 req");
 	if(pReq){
-		CHECK(streq(DasReq_val(pReq, "data.flux.anode"), "8"), "anode=8 -> '%s'",
+		CHECK(streq(DasReq_val(pReq, "data.flux.anode"), "8"), "anode -> '%s'",
 		      DasReq_val(pReq, "data.flux.anode") ? DasReq_val(pReq, "data.flux.anode") : "(unset)");
-		CHECK(streq(DasReq_val(pReq, "options.filter"), "x2a2"), "apid=x2a2 -> filter");
-		CHECK(streq(DasReq_val(pReq, "options.quiet"), "true"), "Quiet -> quiet switch");
-		CHECK(DasReq_numRaw(pReq) == 0, "nothing left raw, %zu", DasReq_numRaw(pReq));
+		CHECK(DasReq_numRaw(pReq) == 0, "nothing raw, %zu", DasReq_numRaw(pReq));
 		del_DasReq(pReq);
 	}
 	URL_IS(pSrc, 0, NONE, NONE,
 		SB "?read.time.min=2023-11-03T19:20&read.time.max=2023-11-03T20:20"
 		"&read.params=anode=8%20apid=x2a2%20Quiet");
-
-	pReq = new_DasReq_src(pSrc, 1);
-	CHECK(pReq != NULL, "example 1 req");
-	if(pReq){
-		CHECK(streq(DasReq_val(pReq, "options.filter"), "science"), "pval x2a3 back to its item");
-		CHECK(DasReq_val(pReq, "data.flux.anode") == NULL, "anode untouched");
-		const char* sVal = NULL;
-		CHECK((DasReq_numRaw(pReq) == 1) && streq(DasReq_rawAt(pReq, 0, &sVal), "read.params")
-		      && streq(sVal, "bogus=1"), "an unknown token stays raw");
-		del_DasReq(pReq);
-	}
 	del_DasSrc(pSrc);
 }
 
@@ -1384,11 +1272,11 @@ static void test_node(void)
 	   rest still builds */
 	const char* sDoc =
 		"{\"type\":\"HttpStreamSrc\",\"protocol\":{\"baseUrls\":[\"http://x/y\"],\"httpParams\":{}},"
-		"\"interface\":{\"options\":{"
+		"\"interface\":{\"options\":{\"props\":{"
 		"  \"good\":{\"value\":false,\"set\":{\"param\":\"g\",\"value\":true}},"
 		"  \"broken\":{\"value\":false,\"set\":{\"value\":true}},"
 		"  \"doc_only\":{\"value\":\"x\"}"
-		"}}}";
+		"}}}}";
 	daslog_setLevel(DASLOG_ERROR);
 	DasSrc* pSrc2 = new_DasSrc_json(sDoc, strlen(sDoc), NULL, NULL);
 	daslog_setLevel(DASLOG_WARN);
@@ -1430,28 +1318,6 @@ static void test_pick(void)
 	CHECK(pSrc != NULL && streq(DasSrc_path(pSrc), "tag:das2.org,2012:site:/uiowa/twin/das3"), "source from the chosen child");
 	del_DasSrc(pSrc);
 	del_DasCat(pCat);
-
-	pCat = new_DasCat(NULL, "TestSource");
-	DasCat_setSeed(pCat, "test/das_fetch/cat/old.json", "tag:das2.org,2012:site:/uiowa/old");
-	DasNode* pOld = DasCat_resolve(pCat, NULL, NULL);
-	CHECK(pOld != NULL, "old loads");
-	if(pOld == NULL){ del_DasCat(pCat); return; }
-	CHECK(DasSrc_loadable(pOld, aNames, 4) == 2, "a 2018 Collection lists both HttpStreamSrc children");
-
-	/* Presented in the current layout: the provides list each convention
-	   implies is there, the convention is untouched, and the DOM still
-	   serializes with the additions in place */
-	CHECK(streq(DasNode_subNameAt(pOld, 0), "das2") && streq(DasNode_subNameAt(pOld, 1), "hapi"), "fixture order");
-	const char* sMime = DasJdo_str(DasJdo_subtree(DasNode_subStubAt(pOld, 0), "provides/0"));
-	CHECK(sMime != NULL && streq(sMime, "application/vnd.das2.das2stream"), "das2/2.2 presents as a das2 stream");
-	sMime = DasJdo_str(DasJdo_subtree(DasNode_subStubAt(pOld, 1), "provides/0"));
-	CHECK(sMime != NULL && streq(sMime, "application/vnd.hapi.stream"), "hapi/2.0 presents as a hapi stream");
-	CHECK(DasJdo_subtree(DasNode_subStubAt(pOld, 1), "convention") != NULL, "the convention stays");
-	size_t uDoc = 0;
-	char* sDoc = (char*)DasJdo_newMiniStr(DasNode_jdo(pOld, NULL), &uDoc);
-	CHECK(sDoc != NULL && strstr(sDoc, "\"provides\":[\"application/vnd.hapi.stream\"]") != NULL, "the added list serializes");
-	free(sDoc);
-	del_DasCat(pCat);
 }
 #endif /* DASCONF_NO_NET */
 
@@ -1463,7 +1329,6 @@ int main(int argc, char** argv)
 	test_helpers();
 	test_geomag();
 	test_hsk();
-	test_juno();
 	test_flagslot();
 	test_subsep();
 	test_multi();
