@@ -8,7 +8,7 @@ if desired.
 Newest release first.
 
 
-## 3.0.7 - unreleased
+## 3.0.7 - 2026-11-24
 
 ### Behavior
 
@@ -27,6 +27,14 @@ Newest release first.
   das_fetch_test.sh cases.  test_flagslot's example is interface
   settings now.  A new SourceSet fixture, `test/das_fetch/cat/nodas3.json`,
   covers das_fetch settling on a das2 stream when nothing provides das3.
+
+- `DFT=no` in the make and nmake builds leaves `das3/dft.c`, `das2_psd` and
+  the FFTW library out, as `buildfiles/emscripten.mak` already could.  FFTW
+  is GPL, and a libdas3 built this way links nothing under the GPL.  The
+  CMake build has no such option yet.
+
+- The vcpkg baseline moved to 2026-11-11, which brings expat 2.10.0 and its
+  four security fixes to the Windows builds.
 
 
 ## 3.0.6 - 2026-11-22
