@@ -14,6 +14,13 @@
 # Add SPICE=yes and/or CDF=yes to any of the above to build in the SPICE and
 # CDF programs.
 #
+# Add DFT=no to leave das3\dft.c, and with it FFTW, out of the library and
+# the DLL, as buildfiles\emscripten.mak can.  das2_psd is then not built,
+# it is the one program that needs dft.c.  FFTW is GPL, so a program or
+# module linked with it is too, see THIRD-PARTY.txt.  Run the clean target
+# when changing DFT: nmake can't tell that the setting changed, and util.c
+# has to be compiled again.
+#
 # The utility programs link against das3.dll, so the dependencies below are
 # in the DLL once instead of in every program.  The test programs link
 # against the static library, libdas3.lib, since some of them reach past the
@@ -120,7 +127,18 @@ ZLIB_LIB=$(ED)\zs.lib
 ZLIB_LIB=$(ED)\zlib.lib
 !endif
 
-EX_LIBS=$(EXPAT_LIB) $(ED)\fftw3.lib $(ZLIB_LIB) $(ED)\libssl.lib \
+# With DFT=no nothing calls FFTW, so it isn't linked.  DAS_NO_DFT keeps
+# daslib_init() in util.c from calling into dft.c, which is left out of the
+# source lists further down.  vcpkg still installs fftw3, it's in vcpkg.json.
+!if "$(DFT)"=="no"
+FFTW_LIB=
+DFT_DEFS=/DDAS_NO_DFT
+!else
+FFTW_LIB=$(ED)\fftw3.lib
+DFT_DEFS=
+!endif
+
+EX_LIBS=$(EXPAT_LIB) $(FFTW_LIB) $(ZLIB_LIB) $(ED)\libssl.lib \
  $(ED)\libcrypto.lib $(ED)\pthreadVC3.lib Advapi32.lib User32.lib Crypt32.lib \
  ws2_32.lib
 
@@ -132,7 +150,7 @@ OPTFLAGS=/O2 /Z7
 
 # WISDOM_FILE is where das3\dft.c looks for this computer's fftw wisdom
 CFLAGS=$(CFLAGS) /MD $(OPTFLAGS) /DWISDOM_FILE=C:/ProgramData/fftw3/wisdom.dat \
- /I . /I $(LIBRARY_INC)
+ $(DFT_DEFS) /I . /I $(LIBRARY_INC)
 
 # The utilities see the library through das3.dll
 UCFLAGS=$(CFLAGS) /DDAS_USE_DLL
@@ -157,6 +175,12 @@ _TSRCS=$(_TSRCS) $(SPICE_TEST_SRCS)
 
 !if "$(CDF)"=="yes"
 _USRCS=$(_USRCS) $(CDF_UTIL_SRCS)
+!endif
+
+# See DFT=no at the top
+!if "$(DFT)"=="no"
+_SRCS=$(_SRCS:das3/dft.c=)
+_USRCS=$(_USRCS:utilities/das2_psd.c=)
 !endif
 
 # Derived lists, see buildfiles\sources.mak

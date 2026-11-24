@@ -8,7 +8,8 @@
 #   make PREFIX=/opt/das dev_install   Adds libdas3.a and headers
 #
 # The SPICE and CDF programs are built by default, add SPICE=no and/or CDF=no
-# to any of the above to leave them out.
+# to any of the above to leave them out.  DFT=no leaves out the transform
+# code and FFTW, see the top level Makefile.
 #
 # Dependencies are found or fetched as follows:
 #
@@ -106,6 +107,13 @@ ifeq ($(CDF),yes)
 UTIL_PROGS:=$(UTIL_PROGS) $(CDF_PROGS)
 endif
 
+# DFT=no, see the top level Makefile.  dft.c is the only source that calls
+# FFTW, and das2_psd the only program that needs dft.c.
+ifneq ($(DFT),yes)
+SRCS:=$(filter-out dft.c,$(SRCS))
+UTIL_PROGS:=$(filter-out das2_psd,$(UTIL_PROGS))
+endif
+
 ##############################################################################
 # Build definitions
 
@@ -113,6 +121,15 @@ endif
 WARNINGS:=-Wall -Werror -Wno-deprecated-declarations
 
 DEFINES:=-DWISDOM_FILE=/etc/fftw/wisdom -D_XOPEN_SOURCE=600
+
+# Without dft.c nothing calls FFTW, so it isn't linked.  DAS_NO_DFT keeps
+# daslib_init() in util.c from calling into dft.c.
+ifeq ($(DFT),yes)
+FFTW_LNK:=-lfftw3
+else
+FFTW_LNK:=
+DEFINES:=$(DEFINES) -DDAS_NO_DFT
+endif
 
 # Optimization and debug info.  Override on the command line, packagers pass
 # their own flags here.
@@ -133,19 +150,26 @@ BREW_PREFIX:=$(shell brew --prefix 2>/dev/null)
 FFTW_DIR?=$(BREW_PREFIX)/opt/fftw
 OPENSSL_DIR?=$(BREW_PREFIX)/opt/openssl@3
 
+# With DFT=no Homebrew's fftw is not looked for and may be absent
+FFTW_INCDIR:=
+FFTW_LIBDIR:=
+ifeq ($(DFT),yes)
 ifeq ($(wildcard $(FFTW_DIR)/include/fftw3.h),)
 $(warning fftw3.h not found under $(FFTW_DIR), run: brew install fftw, or set FFTW_DIR)
+endif
+FFTW_INCDIR:=-I$(FFTW_DIR)/include
+FFTW_LIBDIR:=-L$(FFTW_DIR)/lib
 endif
 ifeq ($(wildcard $(OPENSSL_DIR)/include/openssl/ssl.h),)
 $(warning openssl not found under $(OPENSSL_DIR), run: brew install openssl@3, or set OPENSSL_DIR)
 endif
 
 CFLAGS= $(WARNINGS) $(OPTFLAGS) $(DEFINES) -fPIC -std=c99 -I. \
- -I$(FFTW_DIR)/include -I$(OPENSSL_DIR)/include
+ $(FFTW_INCDIR) -I$(OPENSSL_DIR)/include
 
 CTESTFLAGS=$(CFLAGS)
 
-LFLAGS= -L$(FFTW_DIR)/lib -L$(OPENSSL_DIR)/lib -lfftw3 -lexpat -lssl -lcrypto \
+LFLAGS= $(FFTW_LIBDIR) -L$(OPENSSL_DIR)/lib $(FFTW_LNK) -lexpat -lssl -lcrypto \
  -lz -lm -lpthread
 
 else
@@ -153,7 +177,7 @@ else
 CFLAGS:=-std=c99 $(WARNINGS) -I. -Wno-format-security $(DEFINES) $(CFLAGS)
 CTESTFLAGS=-std=c99 -I. $(CFLAGS)
 
-LFLAGS:=$(LDFLAGS) -lfftw3 -lexpat -lssl -lcrypto -lz -lm -lpthread
+LFLAGS:=$(LDFLAGS) $(FFTW_LNK) -lexpat -lssl -lcrypto -lz -lm -lpthread
 
 endif
 

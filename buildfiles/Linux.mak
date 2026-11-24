@@ -74,6 +74,13 @@ ifeq ($(CDF),yes)
 UTIL_PROGS:=$(UTIL_PROGS) $(CDF_PROGS)
 endif
 
+# DFT=no, see the top level Makefile.  dft.c is the only source that calls
+# FFTW, and das2_psd the only program that needs dft.c.
+ifneq ($(DFT),yes)
+SRCS:=$(filter-out dft.c,$(SRCS))
+UTIL_PROGS:=$(filter-out das2_psd,$(UTIL_PROGS))
+endif
+
 ##############################################################################
 # Build definitions
 
@@ -96,7 +103,16 @@ WARNINGS:=-Wall -Werror -Wno-deprecated-declarations -Wno-stringop-truncation \
 #-Wno-format-security
 
 
-DEFINES:=-DWISDOM_FILE=/etc/fftw/wisdom -D_XOPEN_SOURCE=600 -Wno-format-truncation 
+DEFINES:=-DWISDOM_FILE=/etc/fftw/wisdom -D_XOPEN_SOURCE=600 -Wno-format-truncation
+
+# Without dft.c nothing calls FFTW, so it isn't linked.  DAS_NO_DFT keeps
+# daslib_init() in util.c from calling into dft.c.
+ifeq ($(DFT),yes)
+FFTW_LNK:=-lfftw3
+else
+FFTW_LNK:=
+DEFINES:=$(DEFINES) -DDAS_NO_DFT
+endif
 
 # Optimization and debug info.  Override on the command line, packagers pass
 # their distribution's flags here.  The symbols stay in: rpm and deb builds
@@ -121,14 +137,14 @@ CTESTFLAGS=$(CFLAGS)
 
 # LDFLAGS is for packagers, rpm and deb builds pass their hardening flags
 # (PIE, full RELRO) here.  Unset in a plain build.
-LFLAGS= $(LDFLAGS) -lfftw3 -lexpat -lssl -lcrypto -lz -lm -lpthread
+LFLAGS= $(LDFLAGS) $(FFTW_LNK) -lexpat -lssl -lcrypto -lz -lm -lpthread
 
 else
 
 CFLAGS:=-std=c99 $(WARNINGS) -I. -Wno-format-security $(DEFINES) $(CFLAGS)
 CTESTFLAGS=-std=c99 -I. $(CFLAGS)
 
-LFLAGS:=$(LDFLAGS) -lfftw3 -lexpat -lssl -lcrypto -lz -lm -lpthread
+LFLAGS:=$(LDFLAGS) $(FFTW_LNK) -lexpat -lssl -lcrypto -lz -lm -lpthread
 
 endif
 

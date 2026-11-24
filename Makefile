@@ -43,6 +43,15 @@ endif
 SPICE?=yes
 CDF?=yes
 
+# The transform code, das3/dft.c, and the FFTW library it calls are part of
+# the standard build as well.  DFT=no (or any value but "yes") leaves both
+# out, as buildfiles/emscripten.mak can: libdas3 then has no DasDft or DasPsd
+# functions, and das2_psd, the one program that needs them, is not built.
+# FFTW is GPL, so a program or module linked with it is too, see
+# THIRD-PARTY.txt.  Run make clean when changing DFT: util.c has to be
+# compiled again and make can't tell.
+DFT?=yes
+
 BLD_CSPICE=0
 ifeq ($(SPICE),yes)
 ifeq ($(CSPICE_INC),)

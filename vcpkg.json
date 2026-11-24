@@ -4,7 +4,7 @@
   "description": "Space physics data stream library and utilities",
   "homepage": "https://github.com/das-developers/das2C",
   "license": "LGPL-2.1-only",
-  "builtin-baseline": "664933b8d385dfc01f4e0cdff4c7c74e71f6a740",
+  "builtin-baseline": "efecf268f3a3ec78f4bf1f0c36759bdb23c6f653",
   "dependencies": [
     "expat",
     "fftw3",
